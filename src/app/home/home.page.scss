@@ -1,10 +1,9 @@
 #container {
   text-align: center;
-
   position: absolute;
-  left: 0;
-  right: 0;
   top: 50%;
+  width: 60%;
+  min-width: 300px;
   transform: translateY(-50%);
 }
 

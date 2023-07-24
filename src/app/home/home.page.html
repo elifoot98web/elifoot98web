@@ -1,20 +1,47 @@
-<ion-header [translucent]="true">
-  <ion-toolbar>
+<!-- <ion-header [translucent]="true">
+  <ion-toolbar color="light">
     <ion-title>
-      Blank
+      EliKG98.exe
     </ion-title>
   </ion-toolbar>
-</ion-header>
+</ion-header> -->
 
 <ion-content [fullscreen]="true">
   <ion-header collapse="condense">
     <ion-toolbar>
-      <ion-title size="large">Blank</ion-title>
+      <ion-title size="large">EliKG98.exe</ion-title>
     </ion-toolbar>
   </ion-header>
 
   <div id="container">
-    <strong>Ready to create an app?</strong>
-    <p>Start with Ionic <a target="_blank" rel="noopener noreferrer" href="https://ionicframework.com/docs/components">UI Components</a></p>
+    <ion-card id="central-card" color="primary">
+      <ion-card-header>
+        <ion-card-title>EliKG98.exe</ion-card-title>
+      </ion-card-header>
+      <ion-card-content *ngIf="contraSenha.length === 0" color="primary">
+        <ion-item color="primary">
+          <ion-input class="ion-margin-top" 
+          color="primary" 
+          [(ngModel)]="senha" 
+          label="Senha" 
+          labelPlacement="stacked" 
+          type="tel" 
+          placeholder="Senha no formato xxx-xxx-xxx-xxx-xxx-xxx"
+          [maskito]="senhaMask"
+          [maskitoElement]="maskPredicate"></ion-input>
+        </ion-item>
+        <ion-select [(ngModel)]="regType" aria-label="tipo de registro" label="Tipo de Registro" labelPlacement="stacked" fill="outline" interface="popover" multiple="false" placeholder="selecione...">
+          <ion-select-option *ngFor="let reg of tipoRegistro" [value]="reg.id">{{reg.nome}}</ion-select-option>
+        </ion-select>
+        <ion-button [disabled]="!canGenerateKey" class="ion-margin-top" color="secondary" (click)="gerarContraSenha()" expand="block" shape="round">
+          Gerar Contra-Senha
+        </ion-button>
+      </ion-card-content>
+
+      <ion-card-content *ngIf="contraSenha.length !== 0" color="primary">
+        <h1>ContraSenha:</h1>
+        <h2>{{contraSenha}}</h2>
+      </ion-card-content>
+    </ion-card>
   </div>
 </ion-content>
