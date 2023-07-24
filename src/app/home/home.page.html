@@ -1,12 +1,12 @@
-<!-- <ion-header [translucent]="true">
-  <ion-toolbar color="light">
+<ion-header [translucent]="true">
+  <ion-toolbar color="tertiary">
     <ion-title>
-      EliKG98.exe
+      Eli98kg3.exe
     </ion-title>
   </ion-toolbar>
-</ion-header> -->
+</ion-header>
 
-<ion-content [fullscreen]="true">
+<ion-content color="primary" [fullscreen]="true">
   <ion-header collapse="condense">
     <ion-toolbar>
       <ion-title size="large">EliKG98.exe</ion-title>
@@ -15,10 +15,10 @@
 
   <div id="container">
     <ion-card id="central-card" color="primary">
-      <ion-card-header>
-        <ion-card-title>EliKG98.exe</ion-card-title>
+      <ion-card-header color="tertiary">
+        <ion-card-title color="tertiary"><ion-text color="light">Gerador de Contra-Senha</ion-text></ion-card-title>
       </ion-card-header>
-      <ion-card-content *ngIf="contraSenha.length === 0" color="primary">
+      <ion-card-content *ngIf="contraSenha.length === 0" color="secondary">
         <ion-item color="primary">
           <ion-input class="ion-margin-top" 
           color="primary" 
@@ -26,21 +26,27 @@
           label="Senha" 
           labelPlacement="stacked" 
           type="tel" 
-          placeholder="Senha no formato xxx-xxx-xxx-xxx-xxx-xxx"
+          placeholder="xxx-xxx-xxx-xxx-xxx-xxx"
           [maskito]="senhaMask"
           [maskitoElement]="maskPredicate"></ion-input>
         </ion-item>
-        <ion-select [(ngModel)]="regType" aria-label="tipo de registro" label="Tipo de Registro" labelPlacement="stacked" fill="outline" interface="popover" multiple="false" placeholder="selecione...">
-          <ion-select-option *ngFor="let reg of tipoRegistro" [value]="reg.id">{{reg.nome}}</ion-select-option>
-        </ion-select>
-        <ion-button [disabled]="!canGenerateKey" class="ion-margin-top" color="secondary" (click)="gerarContraSenha()" expand="block" shape="round">
+        <ion-item color="primary">
+          <ion-select [(ngModel)]="regType" color="primary" aria-label="tipo de registro" label="Tipo de Registro" labelPlacement="stacked" interface="popover" multiple="false" placeholder="selecione...">
+            <ion-select-option color="primary" *ngFor="let reg of tipoRegistro" [value]="reg">{{reg.nome}}</ion-select-option>
+          </ion-select>
+        </ion-item>
+        <ion-button [disabled]="!canGenerateKey" class="ion-margin-top" color="secondary" (click)="gerarContraSenha()" expand="full">
           Gerar Contra-Senha
         </ion-button>
       </ion-card-content>
 
       <ion-card-content *ngIf="contraSenha.length !== 0" color="primary">
+        <h1>Senha: </h1> <h2>{{senha}}</h2>
         <h1>ContraSenha:</h1>
-        <h2>{{contraSenha}}</h2>
+        <h2><strong>{{contraSenha}}</strong></h2>
+        <ion-button class="ion-margin-top" color="secondary" (click)="reloadApp()" expand="block">
+          Gerar nova contra-senha
+        </ion-button>
       </ion-card-content>
     </ion-card>
   </div>

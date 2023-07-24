@@ -9,7 +9,7 @@ import { MaskitoElementPredicateAsync, MaskitoOptions } from '@maskito/core';
 })
 export class HomePage {
   
-  regType: number = 0;
+  regType: { id: number, nome: string } = { id: 0, nome: '' };
   senha: string = '';
   contraSenha: string = '';
   tipoRegistro = [
@@ -41,7 +41,7 @@ export class HomePage {
     });
     await loading.present();
     try {
-    const contraSenha = await elikgMain(this.senha, this.regType.toString());
+    const contraSenha = await elikgMain(this.senha, this.regType.id.toString());
     console.log({ contraSenha });
     this.contraSenha = contraSenha;
     await loading.dismiss();
@@ -57,8 +57,12 @@ export class HomePage {
     } 
   }
 
+  reloadApp() {
+    window.location.reload();
+  }
+
   get canGenerateKey(): boolean {
-    return this.regType > 0 && this.isSenhaWellFormed;
+    return this.regType.id > 0 && this.regType.id < 10 && this.isSenhaWellFormed;
   }
 
   get isSenhaWellFormed(): boolean {
