@@ -36,6 +36,7 @@
           </ion-select>
         </ion-item>
         <ion-button [disabled]="!canGenerateKey" class="ion-margin-top" color="primary" (click)="gerarContraSenha()" expand="full">
+          <ion-icon slot="start" name="key"></ion-icon>
           Gerar Contra-Senha
         </ion-button>
       </ion-card-content>
@@ -44,7 +45,12 @@
         <h1>Senha: </h1> <h2>{{senha}}</h2>
         <h1>ContraSenha:</h1>
         <h2><strong>{{contraSenha}}</strong></h2>
+        <ion-button class="ion-margin-top" color="primary" (click)="copyContraSenha()" expand="block">
+          <ion-icon slot="start" name="copy"></ion-icon>
+          Copiar Contra-Senha
+        </ion-button>
         <ion-button class="ion-margin-top" color="primary" (click)="reloadApp()" expand="block">
+          <ion-icon slot="start" name="reload"></ion-icon>
           Gerar nova contra-senha
         </ion-button>
       </ion-card-content>

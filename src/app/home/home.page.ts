@@ -1,5 +1,5 @@
 import { Component } from '@angular/core';
-import { AlertController, LoadingController } from '@ionic/angular';
+import { AlertController, LoadingController, ToastController } from '@ionic/angular';
 import { MaskitoElementPredicateAsync, MaskitoOptions } from '@maskito/core';
 
 @Component({
@@ -13,15 +13,15 @@ export class HomePage {
   senha: string = '';
   contraSenha: string = '';
   tipoRegistro = [
-    { id: 1, nome: 'Registro simples' },
-    { id: 2, nome: 'Registro VIP' },
-    { id: 3, nome: 'Registro Super-VIP' },
-    { id: 4, nome: 'Registro para amigo dos autores' },
-    { id: 5, nome: 'Registro para grande amigo dos autores' },
-    { id: 6, nome: 'Registro para experimentadores' },
-    { id: 7, nome: 'Registro experimentador especial' },
-    { id: 8, nome: 'Registro para autor 1' },
-    { id: 9, nome: 'Registro para autor 2' },
+    { id: 1, nome: 'Simples' },
+    { id: 2, nome: 'VIP' },
+    { id: 3, nome: 'Super-VIP' },
+    { id: 4, nome: 'Amigo dos autores' },
+    { id: 5, nome: 'Grande amigo dos autores' },
+    { id: 6, nome: 'Experimentadores' },
+    { id: 7, nome: 'Experimentador especial' },
+    { id: 8, nome: 'Autor 1' },
+    { id: 9, nome: 'Autor 2' },
   ]
   
   readonly senhaMask: MaskitoOptions = {
@@ -32,7 +32,7 @@ export class HomePage {
   
   readonly maskPredicate: MaskitoElementPredicateAsync = async (el) => (el as HTMLIonInputElement).getInputElement();
 
-  constructor(private loadingCtrl: LoadingController, private alertController: AlertController) {}
+  constructor(private loadingCtrl: LoadingController, private alertController: AlertController, private toastController: ToastController) {}
 
   async gerarContraSenha() {
     const loading = await this.loadingCtrl.create({
@@ -59,6 +59,16 @@ export class HomePage {
 
   reloadApp() {
     window.location.reload();
+  }
+
+  async copyContraSenha() {
+    navigator.clipboard.writeText(this.contraSenha);
+    const toast = await this.toastController.create({
+      message: 'Contra-senha copiada para a área de transferência.',
+      duration: 2000,
+      position: 'middle'
+    });
+    toast.present();
   }
 
   get canGenerateKey(): boolean {
