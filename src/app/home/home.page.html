@@ -43,7 +43,7 @@
 
       <ion-card-content *ngIf="contraSenha.length !== 0" color="light">
         <h1>Senha: </h1> <h2>{{senha}}</h2>
-        <h1>ContraSenha:</h1>
+        <h1>ContraSenha ({{regType.nome}}):</h1>
         <h2><strong>{{contraSenha}}</strong></h2>
         <ion-button class="ion-margin-top" color="primary" (click)="copyContraSenha()" expand="block">
           <ion-icon slot="start" name="copy"></ion-icon>
