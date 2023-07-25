@@ -32,7 +32,13 @@
               }
             ],
             "styles": ["src/theme/variables.scss", "src/global.scss"],
-            "scripts": []
+            "scripts": [
+              {
+                "input": "src/scripts/elikg.js",
+                "inject": false,
+                "bundleName": "elikg"
+              }
+            ]
           },
           "configurations": {
             "production": {

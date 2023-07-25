@@ -1,11 +1,8 @@
-var dosCI
-var contraSenha = "" 
-var shouldConsole = true       
-var initialized = false
 var elikgMain = async (senha, tipo) => {
+    let initialized = false
     emulators.pathPrefix = "assets/elikg/js-dos/";
     console.log("Carregando jsdos + elikg")
-    dosCI = await Dos(document.getElementById("jsdos"), {
+    let dosCI = await Dos(document.getElementById("jsdos"), {
         style: "none",
     }).run("assets/elikg/elikg2.jsdos");
     
@@ -43,7 +40,7 @@ var elikgMain = async (senha, tipo) => {
                 console.log("Carregamento concluído")
             } else if(str.startsWith("Contra-senha: ")) {
                 shouldConsole = false;
-                contraSenha = str.replace("Contra-senha: ", "").trim()
+                let contraSenha = str.replace("Contra-senha: ", "").trim()
                 clearTimeout(timeout)
                 dosCI.exit()
                 resolve(contraSenha)
