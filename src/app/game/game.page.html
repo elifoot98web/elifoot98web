@@ -1,0 +1,20 @@
+<ion-header [translucent]="true">
+  <ion-toolbar color="tertiary">
+    <ion-title></ion-title>
+    <ion-buttons slot="end">
+      <ion-button color="secondary" (click)="saveGame()">
+        <ion-icon slot="end" name="save-outline"></ion-icon>
+        Salvar Progresso
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  <ion-header collapse="condense">
+    <ion-toolbar>
+      <ion-title size="large"></ion-title>
+    </ion-toolbar>
+  </ion-header>
+  <div [ngClass]="{ hidden: isHidden, full: !isHidden }" id="game-container"></div>
+</ion-content>

@@ -37,6 +37,11 @@
                 "input": "src/scripts/elikg.js",
                 "inject": false,
                 "bundleName": "elikg"
+              },
+              {
+                "input": "src/scripts/game.js",
+                "inject": false,
+                "bundleName": "elikg"
               }
             ]
           },

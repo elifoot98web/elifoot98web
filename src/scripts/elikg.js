@@ -1,6 +1,6 @@
 var elikgMain = async (senha, tipo) => {
     let initialized = false
-    emulators.pathPrefix = "assets/elikg/js-dos/";
+    emulators.pathPrefix = "assets/js-dos/";
     console.log("Carregando jsdos + elikg")
     let dosCI = await Dos(document.getElementById("jsdos"), {
         style: "none",

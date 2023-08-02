@@ -24,3 +24,16 @@
 @import "@ionic/angular/css/text-alignment.css";
 @import "@ionic/angular/css/text-transformation.css";
 @import "@ionic/angular/css/flex-utils.css";
+
+.emulator-options {
+    display: none;
+}
+
+.alert-whitespace {
+    white-space: pre-line;
+}
+
+.alert-wrapper {
+    min-width: 70% !important; 
+    width: 80% !important;
+}

@@ -61,6 +61,10 @@ export class HomePage {
     window.location.reload();
   }
 
+  openGame() {
+    window.location.href = 'game';
+  }
+
   async copyContraSenha() {
     navigator.clipboard.writeText(this.contraSenha);
     const toast = await this.toastController.create({
