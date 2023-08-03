@@ -1,4 +1,5 @@
 var dosInstance
+var keyboardBtn
 var elifootMain = async () => {
     emulators.pathPrefix = "assets/js-dos/";
     console.log("Carregando jsdos + elikg");
@@ -11,6 +12,9 @@ var elifootMain = async () => {
     // let dosInstance = await Dos(document.getElementById("game-container"))
     // await dos.layers.save();
     // let dosCI = await dosInstance.run("assets/elifoot/elifoot.jsdos");
+
+    const settingsBtn = document.getElementsByClassName("emulator-options")[0]
+    keyboardBtn = settingsBtn.children[1];
 }
 
 var saveGameFileSystem = async () => {
@@ -19,3 +23,11 @@ var saveGameFileSystem = async () => {
     }
 } 
 
+
+
+var toggleKeyboard = () => {
+    let mouseEvent = new MouseEvent('mousedown', { button: 0 });
+    if(keyboardBtn && keyboardBtn.dispatchEvent) {
+        keyboardBtn.dispatchEvent(mouseEvent);
+    }
+}

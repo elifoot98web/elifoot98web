@@ -36,7 +36,7 @@ export class GamePage implements OnInit {
                '- Caso um erro de "eli.cod" apareça, recarregue a página até que ele suma.\n' +
                '- Pressione ESC para livrar o mouse da janela do jogo.\n' +
                '- Por conta de como o Elifoot 98 verifica a integridade do registro, não é possível salvar o registro no emulador web da aplicação entre sessões diferentes do navegador. É necessário registrar novamente sempre que necessario.\n' +
-               '- Ainda não é possível jogar no celular por conta da emulação do mouse. Estou verificando alternativas.\n',
+               '- Ainda não é possível jogar 100% no celular por conta da emulação do mouse e teclado. Estou verificando alternativas.\n',
       backdropDismiss: false,
       cssClass: 'alert-whitespace',
       buttons: [{
@@ -51,6 +51,10 @@ export class GamePage implements OnInit {
 
   async saveGame() {
     await saveGameFileSystem()
+  }
+
+  toggleKeyboard() {
+    toggleKeyboard()
   }
 
 }
