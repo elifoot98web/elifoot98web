@@ -37,3 +37,9 @@
     min-width: 70% !important; 
     width: 80% !important;
 }
+
+@media (max-width: 599px), (max-height: 700px) {
+    .hidden-mob {
+      display: none;
+    }
+}

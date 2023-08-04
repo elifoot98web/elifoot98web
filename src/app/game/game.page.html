@@ -1,16 +1,17 @@
 <ion-header [translucent]="true">
   <ion-toolbar color="tertiary">
     <ion-buttons slot="start">
-      <ion-button (click)="toggleKeyboard()">
-        <ion-icon slot="start" name="create-outline"></ion-icon>
-        Teclado
-      </ion-button>
+      
     </ion-buttons>
-    <ion-title></ion-title>
+    <ion-title>Elifoot 98 Web</ion-title>
     <ion-buttons slot="end">
-      <ion-button color="secondary" (click)="saveGame()">
+      <ion-button fill="solid" color="secondary" (click)="toggleKeyboard()">
+        Alternar Teclado
+        <ion-icon slot="end" src="../../assets/icon/keyboard.svg"></ion-icon>
+      </ion-button>
+      <ion-button fill="solid" color="primary" (click)="saveGame()">
         <ion-icon slot="end" name="save-outline"></ion-icon>
-        Salvar Progresso
+        Salvar
       </ion-button>
     </ion-buttons>
   </ion-toolbar>
@@ -19,7 +20,7 @@
 <ion-content [fullscreen]="true">
   <div [ngClass]="{ hidden: isHidden, full: !isHidden }" id="game-container"></div>
 </ion-content>
-<ion-footer>
+<ion-footer class="hidden-mob">
   <ion-toolbar color="tertiary">
     <ion-card-subtitle class="ion-padding-start ion-padding-top">Feito nas pressas, na terra dos altos coqueiros.</ion-card-subtitle>
     <ion-card-subtitle class="ion-padding-start ion-padding-bottom">Este site NÃO coleta nenhuma informação, NÃO utiliza cookies ou qualquer outro mecanismo de rastreamento.</ion-card-subtitle>
