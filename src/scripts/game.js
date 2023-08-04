@@ -7,11 +7,13 @@ var elifootMain = async () => {
         style: "none"
     })
     const dosCI = await dosInstance.run("assets/elifoot/elifoot98.jsdos");
+    
+    return dosCI
 }
 
 var saveGameFileSystem = async () => {
     if(dosInstance != null && dosInstance.layers != null && dosInstance.layers.save != null && typeof dosInstance.layers.save === "function") {
-        await dosInstance.layers.save()
+        return await dosInstance.layers.save()
     }
 } 
 

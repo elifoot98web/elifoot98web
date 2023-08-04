@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { AlertController, LoadingController } from '@ionic/angular';
+import { SaveGameService } from '../services/save-game.service';
 
 @Component({
   selector: 'app-game',
@@ -9,8 +10,10 @@ import { AlertController, LoadingController } from '@ionic/angular';
 export class GamePage implements OnInit {
 
   isHidden = true;
-
-  constructor(private loadingController: LoadingController, private alertController: AlertController) { }
+  dosCI: any = null;
+  constructor(private loadingController: LoadingController, 
+    private alertController: AlertController, 
+    private saveGameService: SaveGameService) { }
 
   async ngOnInit() {
     const loading = await this.loadingController.create({
@@ -19,7 +22,7 @@ export class GamePage implements OnInit {
     });
     await loading.present();
     console.time("carregando game...")
-    await elifootMain()
+    this.dosCI = await elifootMain()
     console.timeEnd("carregando game...")
     setTimeout(async () => {
       this.isHidden = false
@@ -50,8 +53,14 @@ export class GamePage implements OnInit {
   }
 
   async saveGame() {
-    await saveGameFileSystem()
+    await this.saveGameService.saveGame()
   }
+
+  async downloadGameSaves() {
+    await this.saveGameService.downloadGameSaves(this.dosCI)
+  }
+
+
 
   toggleKeyboard() {
     toggleKeyboard()

@@ -36,12 +36,12 @@
               {
                 "input": "src/scripts/elikg.js",
                 "inject": false,
-                "bundleName": "elikg"
+                "bundleName": "elifootweb"
               },
               {
                 "input": "src/scripts/game.js",
                 "inject": false,
-                "bundleName": "elikg"
+                "bundleName": "elifootweb"
               }
             ]
           },
