@@ -15,15 +15,16 @@ export class SaveGameService {
     const rawChanges = await dosCI.persist()
     let zip = new JSZip()
     zip = await zip.loadAsync(rawChanges, { createFolders: true })
+    
+    // remove non save game files
     let filesToRemove = zip.filter((_, file) => {
       return !file.name.toLowerCase().includes('eli98/jogos/') && file.name.toLowerCase() !=('eli98/')
     })
-
-    console.log({filesToRemove})
     filesToRemove.forEach(file => {
       zip.remove(file.name)
     })
 
+    // Preparing to move files to the root of the zip
     zip.forEach((_, file) => {
       if (file.name.toLowerCase().includes('.e98')) {
         file.name = file.name.replace('eli98/jogos/', '')
@@ -31,10 +32,11 @@ export class SaveGameService {
     })
 
     let originalFiles = zip.files
-    console.log({originalFiles})
     
+    // Clearing file list
     zip.files = {}
     
+    // Adding only save game files
     for(let filePath in originalFiles) {
       const file = originalFiles[filePath]
       if (file.name.toLowerCase().endsWith('.e98')) {
@@ -42,10 +44,18 @@ export class SaveGameService {
       }
     }
 
-    console.log({zip})
-    let content = await zip.generateAsync({ type: 'uint8array' })
+
+    // generate zip file
+    let content = await zip.generateAsync({ 
+      type: 'uint8array', 
+      compression: 'DEFLATE',
+      compressionOptions: {
+        level: 9
+      }
+    })
     const dateTime = new Date()
-    const dateTimeString = `${dateTime.getDate()}-${dateTime.getMonth()}-${dateTime.getFullYear()}_${dateTime.getHours()}-${dateTime.getMinutes()}-${dateTime.getSeconds()}`
+    dateTime.toISOString()
+    const dateTimeString = `${dateTime.getFullYear()}-${dateTime.getMonth()}-${dateTime.getDate()}_${dateTime.getHours()}-${dateTime.getMinutes()}-${dateTime.getSeconds()}`
     this.saveUint8ArrayAsFile(content, `saveGames_${dateTimeString}.zip`)
   }
 

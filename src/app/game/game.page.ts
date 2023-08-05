@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ViewChild } from '@angular/core';
 import { AlertController, LoadingController } from '@ionic/angular';
 import { SaveGameService } from '../services/save-game.service';
 
@@ -8,9 +8,13 @@ import { SaveGameService } from '../services/save-game.service';
   styleUrls: ['./game.page.scss'],
 })
 export class GamePage implements OnInit {
+  @ViewChild('popover') popover: any;
 
+  isPopoverOpen = false;
   isHidden = true;
   dosCI: any = null;
+  autoSaveInterval: any = null;
+
   constructor(private loadingController: LoadingController, 
     private alertController: AlertController, 
     private saveGameService: SaveGameService) { }
@@ -54,16 +58,37 @@ export class GamePage implements OnInit {
 
   async saveGame() {
     await this.saveGameService.saveGame()
+    this.isPopoverOpen = false;
   }
 
   async downloadGameSaves() {
     await this.saveGameService.downloadGameSaves(this.dosCI)
+    this.isPopoverOpen = false;
+  }
+  
+  toggleKeyboard() {
+    toggleSoftKeyboard()
+    this.isPopoverOpen = false;
   }
 
+  async toggleAutoSave(e: any) {
+    console.log(`autosave: ${e.detail.checked ? 'on' : 'off'}`)
+    clearInterval(this.autoSaveInterval)
+    if (e.detail.checked) {
+      this.autoSaveInterval = setInterval(async () => {
+        await this.saveGameService.saveGame()
+      }, 5*60*1000)
+      await this.saveGameService.saveGame()
+    }
+  }
 
-
-  toggleKeyboard() {
-    toggleKeyboard()
+  showPopover(e: Event) {
+    this.popover.event = null
+    this.popover.event = e;
+    this.isPopoverOpen = false;
+    setTimeout(() => {
+      this.isPopoverOpen = true;
+    }, 50);
   }
 
 }

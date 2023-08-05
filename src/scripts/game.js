@@ -17,7 +17,7 @@ var saveGameFileSystem = async () => {
     }
 } 
 
-var toggleKeyboard = () => {
+var toggleSoftKeyboard = () => {
     let keyboardDiv = document.getElementsByClassName("emulator-keyboard")[0]
     if(keyboardDiv.style.display == "none") {
         keyboardDiv.style.display = "block"

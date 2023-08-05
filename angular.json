@@ -43,6 +43,9 @@
                 "inject": false,
                 "bundleName": "elifootweb"
               }
+            ],
+            "allowedCommonJsDependencies": [
+              "jszip"
             ]
           },
           "configurations": {
