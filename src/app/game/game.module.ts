@@ -7,6 +7,7 @@ import { IonicModule } from '@ionic/angular';
 import { GamePageRoutingModule } from './game-routing.module';
 
 import { GamePage } from './game.page';
+import { SaveGameService } from '../services/save-game.service';
 
 @NgModule({
   imports: [
@@ -15,6 +16,7 @@ import { GamePage } from './game.page';
     IonicModule,
     GamePageRoutingModule
   ],
-  declarations: [GamePage]
+  declarations: [GamePage],
+  providers: [SaveGameService]
 })
 export class GamePageModule {}

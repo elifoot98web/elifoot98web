@@ -1,5 +1,6 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ViewChild } from '@angular/core';
 import { AlertController, LoadingController } from '@ionic/angular';
+import { SaveGameService } from '../services/save-game.service';
 
 @Component({
   selector: 'app-game',
@@ -7,10 +8,16 @@ import { AlertController, LoadingController } from '@ionic/angular';
   styleUrls: ['./game.page.scss'],
 })
 export class GamePage implements OnInit {
+  @ViewChild('popover') popover: any;
 
+  isPopoverOpen = false;
   isHidden = true;
+  dosCI: any = null;
+  autoSaveInterval: any = null;
 
-  constructor(private loadingController: LoadingController, private alertController: AlertController) { }
+  constructor(private loadingController: LoadingController, 
+    private alertController: AlertController, 
+    private saveGameService: SaveGameService) { }
 
   async ngOnInit() {
     const loading = await this.loadingController.create({
@@ -19,7 +26,7 @@ export class GamePage implements OnInit {
     });
     await loading.present();
     console.time("carregando game...")
-    await elifootMain()
+    this.dosCI = await elifootMain()
     console.timeEnd("carregando game...")
     setTimeout(async () => {
       this.isHidden = false
@@ -50,11 +57,38 @@ export class GamePage implements OnInit {
   }
 
   async saveGame() {
-    await saveGameFileSystem()
+    await this.saveGameService.saveGame()
+    this.isPopoverOpen = false;
   }
 
+  async downloadGameSaves() {
+    await this.saveGameService.downloadGameSaves(this.dosCI)
+    this.isPopoverOpen = false;
+  }
+  
   toggleKeyboard() {
-    toggleKeyboard()
+    toggleSoftKeyboard()
+    this.isPopoverOpen = false;
+  }
+
+  async toggleAutoSave(e: any) {
+    console.log(`autosave: ${e.detail.checked ? 'on' : 'off'}`)
+    clearInterval(this.autoSaveInterval)
+    if (e.detail.checked) {
+      this.autoSaveInterval = setInterval(async () => {
+        await this.saveGameService.saveGame()
+      }, 5*60*1000)
+      await this.saveGameService.saveGame()
+    }
+  }
+
+  showPopover(e: Event) {
+    this.popover.event = null
+    this.popover.event = e;
+    this.isPopoverOpen = false;
+    setTimeout(() => {
+      this.isPopoverOpen = true;
+    }, 50);
   }
 
 }
