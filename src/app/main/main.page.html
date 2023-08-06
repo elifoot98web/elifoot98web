@@ -1,7 +1,58 @@
-<ion-content [fullscreen]="true">
-  <ion-header collapse="condense">
-    <ion-toolbar>
-      <ion-title size="large">main</ion-title>
+<ion-header mode="ios">
+  <ion-toolbar color="tertiary">
+    <ion-title>
+      Elifoot 98 Web
+    </ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true" color="light">
+  <ion-header color="light" mode="ios" collapse="condense">
+    <ion-toolbar color="light">
+      <ion-title size="large"><ion-text color="tertiary">Elifoot 98 Web</ion-text></ion-title>
     </ion-toolbar>
   </ion-header>
+  
+  <ion-grid fixed class="center-vertical">
+    <ion-row>
+      <ion-col size="12" size-lg="6">
+        <ion-card button href="../game" color="secondary">
+          <ion-img src="../../assets/gamescreen.png"></ion-img>
+          <ion-card-header color="secondary">
+            <ion-toolbar color="secondary">
+              <ion-card-title>Jogar no navegador</ion-card-title>
+              <ion-buttons slot="end">
+                <ion-button fill="solid" color="secondary">
+                  <ion-icon slot="icon-only" name="game-controller-outline"></ion-icon>
+                </ion-button>
+              </ion-buttons>
+            </ion-toolbar>
+          </ion-card-header>
+        </ion-card>
+      </ion-col>
+      <ion-col size="12" size-lg="6">
+        <ion-card button href="../ativador" color="primary">
+          <ion-img src="../../assets/ativadorscreen.png"></ion-img>
+          <ion-card-header color="tertiary">
+            <ion-toolbar color="tertiary">
+              <ion-card-title>Abrir Ativador</ion-card-title>
+              <ion-buttons slot="end">
+                <ion-button fill="solid" color="tertiary">
+                  <ion-icon slot="icon-only" name="key-outline"></ion-icon>
+                </ion-button>
+              </ion-buttons>
+            </ion-toolbar>
+          </ion-card-header>
+        </ion-card>
+      </ion-col>
+    </ion-row>
+  </ion-grid>
+
 </ion-content>
+
+<ion-footer>
+  <ion-toolbar color="tertiary">
+    <ion-card-subtitle class="ion-padding-start ion-padding-top">Feito nas pressas, na terra dos altos coqueiros.</ion-card-subtitle>
+    <ion-card-subtitle class="ion-padding-start ion-padding-bottom">Este site NÃO coleta nenhuma informação, NÃO utiliza cookies ou qualquer outro mecanismo de rastreamento.</ion-card-subtitle>
+  </ion-toolbar>
+</ion-footer>
