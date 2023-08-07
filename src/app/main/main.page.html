@@ -1,6 +1,6 @@
 <ion-header mode="ios">
   <ion-toolbar color="tertiary">
-    <ion-title>
+    <ion-title class="not-selectable">
       Elifoot 98 Web
     </ion-title>
   </ion-toolbar>
@@ -9,18 +9,18 @@
 <ion-content [fullscreen]="true" color="light">
   <ion-header color="light" mode="ios" collapse="condense">
     <ion-toolbar color="light">
-      <ion-title size="large"><ion-text color="tertiary">Elifoot 98 Web</ion-text></ion-title>
+      <ion-title size="large" class="not-selectable"><ion-text color="tertiary">Elifoot 98 Web</ion-text></ion-title>
     </ion-toolbar>
   </ion-header>
   
   <ion-grid fixed class="center-vertical">
     <ion-row>
-      <ion-col size="12" size-lg="6">
-        <ion-card button href="../game" color="secondary">
+      <ion-col size="12" size-lg="5">
+        <ion-card button href="../game" color="secondary" class="center-vertical">
           <ion-img src="../../assets/gamescreen.png"></ion-img>
           <ion-card-header color="secondary">
             <ion-toolbar color="secondary">
-              <ion-card-title>Jogar no navegador</ion-card-title>
+              <ion-card-title>Jogar no navegador (BETA)</ion-card-title>
               <ion-buttons slot="end">
                 <ion-button fill="solid" color="secondary">
                   <ion-icon slot="icon-only" name="game-controller-outline"></ion-icon>
@@ -30,12 +30,13 @@
           </ion-card-header>
         </ion-card>
       </ion-col>
-      <ion-col size="12" size-lg="6">
-        <ion-card button href="../ativador" color="primary">
+      <ion-col size-lg="2" class="ion-hide-lg-down"></ion-col>
+      <ion-col size="12" size-lg="5">
+        <ion-card button href="../ativador" color="primary" class="center-vertical">
           <ion-img src="../../assets/ativadorscreen.png"></ion-img>
           <ion-card-header color="tertiary">
             <ion-toolbar color="tertiary">
-              <ion-card-title>Abrir Ativador</ion-card-title>
+              <ion-card-title>Gerador de Contra-Senha (Ativador)</ion-card-title>
               <ion-buttons slot="end">
                 <ion-button fill="solid" color="tertiary">
                   <ion-icon slot="icon-only" name="key-outline"></ion-icon>

@@ -45,6 +45,7 @@
               }
             ],
             "allowedCommonJsDependencies": [
+              "localforage",
               "jszip"
             ]
           },
