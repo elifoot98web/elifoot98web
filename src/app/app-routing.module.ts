@@ -16,7 +16,7 @@ const routes: Routes = [
   },
   {
     path: '',
-    redirectTo: 'game',
+    redirectTo: 'main',
     pathMatch: 'full'
   },
 ];

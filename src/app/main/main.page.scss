@@ -1,0 +1,12 @@
+.center-vertical {
+    position: relative;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.not-selectable {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}

@@ -8,6 +8,7 @@ import { GamePageRoutingModule } from './game-routing.module';
 
 import { GamePage } from './game.page';
 import { SaveGameService } from '../services/save-game.service';
+import { LocalStorageService } from '../services/local-storage.service';
 
 @NgModule({
   imports: [
@@ -17,6 +18,6 @@ import { SaveGameService } from '../services/save-game.service';
     GamePageRoutingModule
   ],
   declarations: [GamePage],
-  providers: [SaveGameService]
+  providers: [SaveGameService, LocalStorageService]
 })
 export class GamePageModule {}

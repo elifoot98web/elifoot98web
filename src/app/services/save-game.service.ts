@@ -11,11 +11,12 @@ export class SaveGameService {
     await saveGameFileSystem()
   }
 
-  async downloadGameSaves(dosCI: any): Promise<void> {
+  async downloadGameSaves(dosCI: any): Promise<boolean> {
     const rawChanges = await dosCI.persist()
     let zip = new JSZip()
     zip = await zip.loadAsync(rawChanges, { createFolders: true })
     
+    let hasSaves = false
     // remove non save game files
     let filesToRemove = zip.filter((_, file) => {
       return !file.name.toLowerCase().includes('eli98/jogos/') && file.name.toLowerCase() !=('eli98/')
@@ -27,9 +28,14 @@ export class SaveGameService {
     // Preparing to move files to the root of the zip
     zip.forEach((_, file) => {
       if (file.name.toLowerCase().includes('.e98')) {
+        hasSaves = true
         file.name = file.name.replace('eli98/jogos/', '')
       }
     })
+
+    if(!hasSaves){
+      return false
+    }
 
     let originalFiles = zip.files
     
@@ -44,7 +50,6 @@ export class SaveGameService {
       }
     }
 
-
     // generate zip file
     let content = await zip.generateAsync({ 
       type: 'uint8array', 
@@ -53,10 +58,13 @@ export class SaveGameService {
         level: 9
       }
     })
+    
+    // save zip file
     const dateTime = new Date()
     dateTime.toISOString()
     const dateTimeString = `${dateTime.getFullYear()}-${dateTime.getMonth()}-${dateTime.getDate()}_${dateTime.getHours()}-${dateTime.getMinutes()}-${dateTime.getSeconds()}`
     this.saveUint8ArrayAsFile(content, `saveGames_${dateTimeString}.zip`)
+    return true
   }
 
   private saveUint8ArrayAsFile(uint8Array: Uint8Array, fileName: string): void {
