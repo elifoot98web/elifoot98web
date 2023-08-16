@@ -1,8 +1,9 @@
 # Elifoot 98 web
 [![Deploy to Firebase Hosting](https://github.com/jlcvp/elifoot98web/actions/workflows/firebase-hosting-merge.yml/badge.svg)](https://github.com/jlcvp/elifoot98web/actions/workflows/firebase-hosting-merge.yml)
 
-## Versão Live
-### [https://elifoot-98.web.app](https://elifoot-98.web.app) 
+## Versão Live 
+### [https://elifoot-98.web.app](https://elifoot-98.web.app)
+[<img alt="alt_text" src="https://github.com/jlcvp/elifoot98web/assets/2317417/ed9337b7-bc92-40f9-8434-019ccd4dad5f" />](https://elifoot-98.web.app)  
 
 ## Informações Gerais
 Projeto hobbysta desenvolvido em tempo livre com propósitos puramente nostálgicos.  
