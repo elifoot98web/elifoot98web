@@ -38,6 +38,10 @@
     width: 80% !important;
 }
 
+.smooth-canvas {
+    image-rendering: auto !important;
+}
+
 @media (max-width: 599px), (max-height: 700px) {
     .hidden-mob {
       display: none;
