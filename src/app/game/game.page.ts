@@ -10,7 +10,8 @@ import { LocalStorageService } from '../services/local-storage.service';
 })
 export class GamePage implements OnInit {
   @ViewChild('popover') popover: any;
-
+  
+  smoothFilterActive = false;
   isPopoverOpen = false;
   isHidden = true;
   dosCI: any = null;
@@ -107,6 +108,19 @@ export class GamePage implements OnInit {
         await this.saveGameService.saveGame()
       }, 5*60*1000)
       await this.saveGameService.saveGame()
+    }
+  }
+
+  async toggleSmoothFilter(e: any) {
+    const activateSmoothFilter = e.detail.checked
+    this.smoothFilterActive = activateSmoothFilter
+    console.log(`smooth filter: ${activateSmoothFilter ? 'on' : 'off'}`)
+
+    const canvas = document.getElementsByClassName('emulator-canvas')[0] as HTMLCanvasElement
+    if(activateSmoothFilter) {
+      canvas.classList.add('smooth-canvas')
+    } else {
+      canvas.classList.remove('smooth-canvas')
     }
   }
 
