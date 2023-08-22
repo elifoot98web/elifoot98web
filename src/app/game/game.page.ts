@@ -2,6 +2,8 @@ import { Component, OnInit, ViewChild } from '@angular/core';
 import { AlertController, LoadingController } from '@ionic/angular';
 import { SaveGameService } from '../services/save-game.service';
 import { LocalStorageService } from '../services/local-storage.service';
+import { PatchService } from '../services/patch.service';
+import * as JSZip from 'jszip';
 
 @Component({
   selector: 'app-game',
@@ -19,6 +21,7 @@ export class GamePage implements OnInit {
   constructor(private loadingController: LoadingController, 
     private alertController: AlertController, 
     private saveGameService: SaveGameService,
+    private patchService: PatchService,
     private storageService: LocalStorageService) { }
 
   async ngOnInit() {
@@ -118,5 +121,85 @@ export class GamePage implements OnInit {
       this.isPopoverOpen = true;
     }, 50);
   }
+
+  async applyPatch(patch: JSZip) {
+    clearInterval(this.autoSaveInterval)
+    const loading = await this.loadingController.create({
+      message: 'Aplicando patch...',
+      backdropDismiss: false
+    });
+    await loading.present();
+    try {
+      await this.saveGameService.saveGame()
+      await this.patchService.applyPatch(this.dosCI, patch)
+      await loading.dismiss()
+      const alert = await this.alertController.create({
+        header: 'Patch aplicado',
+        message: 'O patch foi aplicado com sucesso. O jogo será reiniciado.',
+        backdropDismiss: false,
+        buttons: [{
+          text: 'Recarregar',
+          handler: async () => {
+            window.location.reload()
+          }
+        }]
+      });
+      await alert.present();
+      await this.dosCI.exit()
+    } catch (e: any) {
+      console.error(e)
+      await this.showErrorAlert(e)
+    }
+
+  }
+
+  clearCustomPatch() {
+    
+  }
+
+  async onPatchFileSelected(e: any) {
+    const file: File = e.target.files[0]
+    this.isPopoverOpen = false;
+    const loading = await this.loadingController.create({
+      message: 'Validando patch...',
+      backdropDismiss: false
+    });
+    await loading.present();
+
+    try {
+      const patch = await this.patchService.processPatchFile(file)
+      const numberOfFiles = Object.keys(patch.files).length
+      await loading.dismiss()
+      const alert = await this.alertController.create({
+        header: 'Patch carregado',
+        message: `${numberOfFiles} equipes serão carregadas. Tem certeza que deseja aplicar o patch?`,
+        backdropDismiss: false,
+        buttons: [{
+          text: 'Não',
+          role: 'cancel'
+        }, {
+          text: 'Sim',
+          handler: async () => {
+            await this.applyPatch(patch)
+          }
+        }]
+      });
+      await alert.present();
+    } catch (e: any) {
+      console.error(e)
+      await this.showErrorAlert(e)
+    }
+  }
+
+  async showErrorAlert(errorMsg: Error) {
+    const alert = await this.alertController.create({
+      header: 'Erro',
+      message: errorMsg.message,
+      backdropDismiss: false,
+      buttons: ['OK']
+    });
+    await alert.present();
+  }
+  
 
 }
