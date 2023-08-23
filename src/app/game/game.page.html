@@ -48,15 +48,29 @@
                 <ion-label>Mostrar Avisos</ion-label> 
                 <ion-icon slot="end" name="information-circle-outline"></ion-icon>
               </ion-item>
-              <ion-item button detail="false" (click)="fileInput.click()">
-                <ion-label>Carregar Patch</ion-label> 
-                <ion-icon slot="end" name="cloud-upload-outline"></ion-icon>
-                <input style="display:none;" type="file" accept=".zip" #fileInput (change)="onPatchFileSelected($event)" />
-              </ion-item>
+              <ion-item button detail="true" id="nested-trigger"><ion-label>Opções de Patch</ion-label></ion-item>
+              <ion-popover trigger="nested-trigger" [dismissOnSelect]="true" side="end">
+                <ng-template>
+                  <ion-content>
+                    <ion-list>
+                      <ion-item button detail="false" (click)="fileInput.click()">
+                        <ion-label>Carregar Patch</ion-label> 
+                        <ion-icon slot="end" name="cloud-upload-outline"></ion-icon>
+                      </ion-item>
+                      <ion-item button detail="false" (click)="promptClearCustomPatch()">
+                        <ion-label>Remover Patch</ion-label> 
+                        <ion-icon slot="end" name="cloud-offline-outline"></ion-icon>
+                      </ion-item>
+                    </ion-list>
+                  </ion-content>
+                </ng-template>
+              </ion-popover>
+              
             </ion-list>
           </ion-content>
         </ng-template>
       </ion-popover>
+      <input style="display:none;" type="file" accept=".zip" #fileInput (change)="onPatchFileSelected($event)" />
     </ion-buttons>
   </ion-toolbar>
 </ion-header>
