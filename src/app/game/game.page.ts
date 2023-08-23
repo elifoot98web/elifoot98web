@@ -2,6 +2,8 @@ import { Component, OnInit, ViewChild } from '@angular/core';
 import { AlertController, LoadingController } from '@ionic/angular';
 import { SaveGameService } from '../services/save-game.service';
 import { LocalStorageService } from '../services/local-storage.service';
+import { PatchService } from '../services/patch.service';
+import * as JSZip from 'jszip';
 
 @Component({
   selector: 'app-game',
@@ -20,6 +22,7 @@ export class GamePage implements OnInit {
   constructor(private loadingController: LoadingController, 
     private alertController: AlertController, 
     private saveGameService: SaveGameService,
+    private patchService: PatchService,
     private storageService: LocalStorageService) { }
 
   async ngOnInit() {
@@ -56,7 +59,7 @@ export class GamePage implements OnInit {
           '- Por conta de como o Elifoot 98 verifica a integridade do registro, não é possível salvar o registro no emulador web da aplicação entre sessões diferentes do navegador. É necessário registrar novamente sempre que necessario.\n' +
           '- Jogar no celular ainda não está 100% por conta da emulação do mouse e teclado. O android também sofre um pouco mais severamente com o problema do "eli.cod". Estou verificando alternativas.\n',
         backdropDismiss: false,
-        cssClass: 'alert-whitespace',
+        cssClass: 'alert-whitespace wide-alert',
         buttons: [{
           text: 'Entendi',
           handler: () => {
@@ -78,12 +81,12 @@ export class GamePage implements OnInit {
 
   async saveGame() {
     await this.saveGameService.saveGame()
-    this.isPopoverOpen = false;
+    this.hidePopover()
   }
 
   async downloadGameSaves() {
     const hasSaved = await this.saveGameService.downloadGameSaves(this.dosCI)
-    this.isPopoverOpen = false;
+    this.hidePopover()
     if (!hasSaved) {
       const alert = await this.alertController.create({
         header: 'Aviso',
@@ -97,7 +100,7 @@ export class GamePage implements OnInit {
   
   toggleKeyboard() {
     toggleSoftKeyboard()
-    this.isPopoverOpen = false;
+    this.hidePopover()
   }
 
   async toggleAutoSave(e: any) {
@@ -127,10 +130,142 @@ export class GamePage implements OnInit {
   showPopover(e: Event) {
     this.popover.event = null
     this.popover.event = e;
-    this.isPopoverOpen = false;
+    this.hidePopover()
     setTimeout(() => {
       this.isPopoverOpen = true;
     }, 50);
   }
 
+  async applyPatch(patch: JSZip) {
+    clearInterval(this.autoSaveInterval)
+    const loading = await this.loadingController.create({
+      message: 'Aplicando patch...',
+      backdropDismiss: false
+    });
+    await loading.present();
+    try {
+      await this.saveGameService.saveGame()
+      await this.patchService.applyPatch(this.dosCI, patch)
+      await loading.dismiss()
+      const alert = await this.alertController.create({
+        header: 'Patch aplicado',
+        message: 'O patch foi aplicado com sucesso.\nO jogo será reiniciado.',
+        cssClass: 'alert-whitespace',
+        backdropDismiss: false,
+        buttons: [{
+          text: 'Recarregar',
+          handler: async () => {
+            window.location.reload()
+          }
+        }]
+      });
+      await alert.present();
+      await this.dosCI.exit()
+    } catch (e: any) {
+      console.error(e)
+      await this.showErrorAlert(e)
+    }
+
+  }
+
+  async promptClearCustomPatch() {
+    const alert = await this.alertController.create({
+      header: 'Aviso',
+      message: 'Tem certeza que deseja remover o patch customizado? \nOs times e bandeiras serão revertidos ao estado original',
+      backdropDismiss: false,
+      cssClass: 'alert-whitespace',
+      buttons: [{
+        text: 'Não',
+        role: 'cancel'
+      }, {
+        text: 'Sim',
+        handler: async () => {
+          await this.clearCustomPatch()
+        }
+      }]
+    })
+    await alert.present()
+  }
+
+  async onPatchFileSelected(e: any) {
+    const file: File = e.target.files[0]
+    console.log("oopa", {file})
+    this.hidePopover()
+    const loading = await this.loadingController.create({
+      message: 'Validando patch...',
+      backdropDismiss: false
+    });
+    await loading.present();
+
+    try {
+      const patch = await this.patchService.processPatchFile(file)
+      const numberOfFiles = Object.keys(patch.files).length
+      await loading.dismiss()
+      const alert = await this.alertController.create({
+        header: 'Confirmação',
+        message: `${numberOfFiles} arquivos do patch serão carregados, incluindo bandeiras, equipes e arquivos de configuração\n Continuar?`,
+        backdropDismiss: false,
+        cssClass: 'alert-whitespace',
+        buttons: [{
+          text: 'Não',
+          role: 'cancel'
+        }, {
+          text: 'Sim',
+          handler: async () => {
+            await this.applyPatch(patch)
+          }
+        }]
+      });
+      await alert.present();
+    } catch (e: any) {
+      console.error(e)
+      await loading.dismiss()
+      await this.showErrorAlert(e)
+    }
+  }
+
+  private hidePopover() {
+    this.isPopoverOpen = false;
+  }
+
+  private async showErrorAlert(errorMsg: Error) {
+    const alert = await this.alertController.create({
+      header: 'Erro',
+      message: errorMsg.message,
+      backdropDismiss: false,
+      buttons: ['OK']
+    });
+    await alert.present();
+  }
+  
+  private async clearCustomPatch() {
+    this.hidePopover()
+    const loading = await this.loadingController.create({
+      message: 'Limpando patch...',
+      backdropDismiss: false
+    })
+    await loading.present()
+    try {
+      this.patchService.clearPatch(this.dosCI)
+      await loading.dismiss()
+      const alert = await this.alertController.create({
+        header: 'Patch Removido',
+        message: 'O patch foi removido com sucesso. O jogo será reiniciado.',
+        backdropDismiss: false,
+        buttons: [{
+          text: 'Recarregar',
+          handler: async () => {
+            window.location.reload()
+          }
+        }]
+      })
+      await alert.present()
+
+      await this.dosCI.exit()
+    } catch (e: any) {
+      console.error(e)
+      await loading.dismiss()
+      await this.showErrorAlert(e)
+    }
+  }
 }
