@@ -79,6 +79,9 @@ export class PatchService {
       } else if (file.name.toLowerCase().endsWith('country.txe')) {
         file.name = 'COUNTRY.TXE'
         supportFiles[file.name] = file
+      } else if (file.name.toLowerCase().endsWith('referee.txe')) {
+        file.name = 'REFEREE.TXE'
+        supportFiles[file.name] = file
       } else if (file.name.toLowerCase().includes('ctrgroup') && file.name.toLowerCase().endsWith('.txe')) {
         const rootedName = file.name.split('/').pop() || "undefined.TXE"
         file.name = `CTRGROUP/${rootedName}`
@@ -144,6 +147,7 @@ export class PatchService {
         file.name.toLowerCase() == 'elifoot.bat' ||
         file.name.toLowerCase() == 'patch.bat' ||
         file.name.toLowerCase() == 'country.txe' ||
+        file.name.toLowerCase() == 'referee.txe' ||
         file.name.toLowerCase().startsWith('eli98/flags') ||
         file.name.toLowerCase().startsWith('eli98/equipas') ||
         file.name.toLowerCase().startsWith('eli98/ctrgroup')
