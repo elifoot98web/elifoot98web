@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import * as JSZip from 'jszip';
-import { DosCI } from '../interfaces/jsdos';
+import { DosCI } from '../models/jsdos';
 import { lastValueFrom } from 'rxjs';
 
 @Injectable({

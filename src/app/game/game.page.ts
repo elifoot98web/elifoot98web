@@ -1,9 +1,13 @@
 import { Component, OnInit, ViewChild } from '@angular/core';
-import { AlertController, LoadingController } from '@ionic/angular';
+import { AlertController, IonModal, LoadingController } from '@ionic/angular';
 import { SaveGameService } from '../services/save-game.service';
 import { LocalStorageService } from '../services/local-storage.service';
 import { PatchService } from '../services/patch.service';
 import * as JSZip from 'jszip';
+import { HostedGame } from '../models/hostedGame';
+import { AuthenticationService } from '../services/authentication.service';
+import { ReCaptchaV3Service } from 'ng-recaptcha';
+import { lastValueFrom } from 'rxjs';
 
 @Component({
   selector: 'app-game',
@@ -12,18 +16,26 @@ import * as JSZip from 'jszip';
 })
 export class GamePage implements OnInit {
   @ViewChild('popover') popover: any;
-  
+  @ViewChild('hostGameModal') modal!: IonModal;
+
   smoothFilterActive = false;
   isPopoverOpen = false;
+  isHostGameModalOpen = false;
   isHidden = true;
   dosCI: any = null;
   autoSaveInterval: any = null;
+  hostedGame: HostedGame = {
+    hostName: '',
+    players: []
+  };
 
   constructor(private loadingController: LoadingController, 
     private alertController: AlertController, 
     private saveGameService: SaveGameService,
     private patchService: PatchService,
-    private storageService: LocalStorageService) { }
+    private storageService: LocalStorageService,
+    private authService: AuthenticationService,
+    private recaptchaV3Service: ReCaptchaV3Service) { }
 
   async ngOnInit() {
     const loading = await this.loadingController.create({
@@ -222,6 +234,48 @@ export class GamePage implements OnInit {
       await loading.dismiss()
       await this.showErrorAlert(e)
     }
+  }
+
+  openHostGameModal() {
+    this.hidePopover()
+    this.isHostGameModalOpen = true
+  }
+
+  onDismissHostGameModal(event: any) {
+    this.isHostGameModalOpen = false
+    console.log("Dismissed", {event})
+  }
+
+  modalClose() {
+    this.modal.dismiss()
+    this.isHostGameModalOpen = false
+  }
+
+  async startHost() {
+    const loading = await this.loadingController.create({
+      message: 'Validando navegador...',
+      backdropDismiss: false
+    })
+    await loading.present()
+    
+    try {
+      const token = await lastValueFrom(this.recaptchaV3Service.execute('login'))
+      loading.message = 'Autenticando...'
+      const userId = await this.authService.annonymousLogin()
+      loading.message = 'Criando Sala...'
+      this.hostedGame.id = userId
+      
+      await loading.dismiss()
+    } catch (e: any) {
+      console.error(e)
+      await loading.dismiss()
+      await this.showErrorAlert(e)
+    }
+
+  }
+
+  get isHostGameFormValid(): boolean {
+    return this.hostedGame.hostName.length > 0
   }
 
   private hidePopover() {
