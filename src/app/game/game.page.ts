@@ -4,10 +4,10 @@ import { SaveGameService } from '../services/save-game.service';
 import { LocalStorageService } from '../services/local-storage.service';
 import { PatchService } from '../services/patch.service';
 import * as JSZip from 'jszip';
-import { HostedGame } from '../models/hostedGame';
+import { HostInfo } from '../models/hostInfo';
 import { AuthenticationService } from '../services/authentication.service';
-import { ReCaptchaV3Service } from 'ng-recaptcha';
-import { lastValueFrom } from 'rxjs';
+import { environment } from 'src/environments/environment';
+import { MultiplayerService } from '../services/multiplayer.service';
 
 @Component({
   selector: 'app-game',
@@ -24,10 +24,10 @@ export class GamePage implements OnInit {
   isHidden = true;
   dosCI: any = null;
   autoSaveInterval: any = null;
-  hostedGame: HostedGame = {
-    hostName: '',
-    players: []
-  };
+  recaptchaKey = environment.recaptchaSiteKey
+  playerName = ''
+  private recaptchaToken = ''
+  private playerId = ''
 
   constructor(private loadingController: LoadingController, 
     private alertController: AlertController, 
@@ -35,7 +35,7 @@ export class GamePage implements OnInit {
     private patchService: PatchService,
     private storageService: LocalStorageService,
     private authService: AuthenticationService,
-    private recaptchaV3Service: ReCaptchaV3Service) { }
+    private multiplayerService: MultiplayerService) { }
 
   async ngOnInit() {
     const loading = await this.loadingController.create({
@@ -259,12 +259,24 @@ export class GamePage implements OnInit {
     await loading.present()
     
     try {
-      const token = await lastValueFrom(this.recaptchaV3Service.execute('login'))
+      // Validate recaptcha token on api server
+      const recaptchaValid = await this.authService.validateRecaptcha(this.recaptchaToken)
+      if (!recaptchaValid) {
+        throw new Error('Recaptcha inválido, tente novamente.')
+      }
+      // Autenticate user anonymously on firebase
       loading.message = 'Autenticando...'
       const userId = await this.authService.annonymousLogin()
+
+      // Create room on firestore
       loading.message = 'Criando Sala...'
-      this.hostedGame.id = userId
-      
+      this.playerId = userId
+      const hostInfo: HostInfo = {
+        playerId: this.playerId,
+        playerName: this.playerName
+      }
+      const canvas = document.getElementsByClassName('emulator-canvas')[0] as HTMLCanvasElement
+      await this.multiplayerService.createRoom(hostInfo, canvas)
       await loading.dismiss()
     } catch (e: any) {
       console.error(e)
@@ -275,7 +287,12 @@ export class GamePage implements OnInit {
   }
 
   get isHostGameFormValid(): boolean {
-    return this.hostedGame.hostName.length > 0
+    return this.playerName.length > 0 && this.recaptchaToken.length > 0
+  }
+
+  captchaResolved(token: string) {
+    console.log("captcha resolved", {token})
+    this.recaptchaToken = token || "" 
   }
 
   private hidePopover() {

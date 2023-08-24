@@ -10,4 +10,8 @@ export interface AppEnvironment {
         measurementId: string;
     };
     production: boolean;
+    multiplayer: {
+        iceServers: string[]
+        iceCandidatePoolSize: number
+    }
 }

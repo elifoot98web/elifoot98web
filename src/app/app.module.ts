@@ -13,9 +13,6 @@ import { registerLocaleData } from '@angular/common';
 import localePtBr from '@angular/common/locales/pt';
 import { FIREBASE_OPTIONS } from '@angular/fire/compat';
 import { provideAuth,getAuth } from '@angular/fire/auth';
-import { RECAPTCHA_V3_SITE_KEY, RecaptchaV3Module } from 'ng-recaptcha';
-
-
 registerLocaleData(localePtBr, 'pt-BR');
 @NgModule({
   declarations: [AppComponent],
@@ -26,14 +23,12 @@ registerLocaleData(localePtBr, 'pt-BR');
     AppRoutingModule,
     MaskitoModule,
     HttpClientModule,
-    RecaptchaV3Module,
     provideFirebaseApp(() => initializeApp(environment.firebase)),
     provideAuth(() => getAuth())
   ],
   providers: [
     { provide: RouteReuseStrategy, useClass: IonicRouteStrategy },
     { provide: LOCALE_ID, useValue: 'pt-BR' },
-    { provide: RECAPTCHA_V3_SITE_KEY, useValue: environment.recaptchaSiteKey },
     { provide: FIREBASE_OPTIONS, useValue: environment.firebase }
   ],
   bootstrap: [AppComponent],

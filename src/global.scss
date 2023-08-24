@@ -42,6 +42,14 @@
     image-rendering: auto !important;
 }
 
+.full-width {
+    width: 100%;
+}
+
+.flex-container {
+    display: flex;
+}
+
 @media (max-width: 599px), (max-height: 700px) {
     .hidden-mob {
       display: none;

@@ -96,8 +96,12 @@
       <ion-content class="ion-padding">
         <ion-item>
           <ion-label position="floating">Nome do jogador</ion-label>
-          <ion-input [(ngModel)]="hostedGame.hostName" type="text"></ion-input>
+          <ion-input [(ngModel)]="playerName" type="text"></ion-input>
         </ion-item>
+        <div class="full-width flex-container ion-padding ion-justify-content-center">
+          <re-captcha (resolved)="captchaResolved($event)" siteKey="{{recaptchaKey}}"></re-captcha>
+        </div>
+        
         <ion-button class="ion-margin-top" [disabled]="!isHostGameFormValid" (click)="startHost()" expand="block" shape="round">
           Criar Sala
         </ion-button>
