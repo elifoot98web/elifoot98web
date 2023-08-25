@@ -4,7 +4,7 @@ import { SaveGameService } from '../services/save-game.service';
 import { LocalStorageService } from '../services/local-storage.service';
 import { PatchService } from '../services/patch.service';
 import * as JSZip from 'jszip';
-import { HostInfo } from '../models/hostInfo';
+import { GameHostingInfo } from '../models/hostInfo';
 import { AuthenticationService } from '../services/authentication.service';
 import { environment } from 'src/environments/environment';
 import { MultiplayerService } from '../services/multiplayer.service';
@@ -15,20 +15,26 @@ import { MultiplayerService } from '../services/multiplayer.service';
   styleUrls: ['./game.page.scss'],
 })
 export class GamePage implements OnInit {
-  @ViewChild('popover') popover: any;
+  recaptchaKey = environment.recaptchaSiteKey
+
+  @ViewChild('optionsPopover') optionsPopover: any;
   @ViewChild('hostGameModal') modal!: IonModal;
   @ViewChild('stream-container') videoContainer!: HTMLVideoElement;
-
+  
   smoothFilterActive = false;
-  isPopoverOpen = false;
+  isOptionsMenuOpen = false;
   isHostGameModalOpen = false;
   isHidden = true;
   dosCI: any = null;
   autoSaveInterval: any = null;
-  recaptchaKey = environment.recaptchaSiteKey
-  playerName = ''
+
+  gameHostingInfo: GameHostingInfo = {
+    playerId: '',
+    playerName: 'Player 1',
+    roomId: '',
+    gameState: 'NOT_CREATED'
+  }
   private recaptchaToken = ''
-  private playerId = ''
 
   constructor(private loadingController: LoadingController, 
     private alertController: AlertController, 
@@ -94,12 +100,12 @@ export class GamePage implements OnInit {
 
   async saveGame() {
     await this.saveGameService.saveGame()
-    this.hidePopover()
+    this.hideOptionsPopover()
   }
 
   async downloadGameSaves() {
     const hasSaved = await this.saveGameService.downloadGameSaves(this.dosCI)
-    this.hidePopover()
+    this.hideOptionsPopover()
     if (!hasSaved) {
       const alert = await this.alertController.create({
         header: 'Aviso',
@@ -113,7 +119,7 @@ export class GamePage implements OnInit {
   
   toggleKeyboard() {
     toggleSoftKeyboard()
-    this.hidePopover()
+    this.hideOptionsPopover()
   }
 
   async toggleAutoSave(e: any) {
@@ -140,12 +146,12 @@ export class GamePage implements OnInit {
     }
   }
 
-  showPopover(e: Event) {
-    this.popover.event = null
-    this.popover.event = e;
-    this.hidePopover()
+  showOptionsPopover(e: Event) {
+    this.optionsPopover.event = null
+    this.optionsPopover.event = e;
+    this.hideOptionsPopover()
     setTimeout(() => {
-      this.isPopoverOpen = true;
+      this.isOptionsMenuOpen = true;
     }, 50);
   }
 
@@ -203,7 +209,7 @@ export class GamePage implements OnInit {
   async onPatchFileSelected(e: any) {
     const file: File = e.target.files[0]
     console.log("oopa", {file})
-    this.hidePopover()
+    this.hideOptionsPopover()
     const loading = await this.loadingController.create({
       message: 'Validando patch...',
       backdropDismiss: false
@@ -216,7 +222,7 @@ export class GamePage implements OnInit {
       await loading.dismiss()
       const alert = await this.alertController.create({
         header: 'Confirmação',
-        message: `${numberOfFiles} arquivos do patch serão carregados, incluindo bandeiras, equipes e arquivos de configuração\n Continuar?`,
+        message: `${numberOfFiles} arquivos do patch serão carregados, podendo incluir, além de equipes, bandeiras e arquivos de configuração\n Continuar?`,
         backdropDismiss: false,
         cssClass: 'alert-whitespace',
         buttons: [{
@@ -238,17 +244,12 @@ export class GamePage implements OnInit {
   }
 
   openHostGameModal() {
-    this.hidePopover()
+    this.hideOptionsPopover()
     this.isHostGameModalOpen = true
-    const canvas = document.getElementsByClassName('emulator-canvas')[0] as HTMLCanvasElement
-    console.log("Canvas", {canvas})
-    const video = document.querySelector('#stream-container') as HTMLVideoElement
-    console.log("Video", {video})
   }
 
-  onDismissHostGameModal(event: any) {
+  onDismissHostGameModal(_: any) {
     this.isHostGameModalOpen = false
-    console.log("Dismissed", {event})
   }
 
   modalClose() {
@@ -275,15 +276,14 @@ export class GamePage implements OnInit {
 
       // Create room on firestore
       loading.message = 'Criando Sala...'
-      this.playerId = userId
-      const hostInfo: HostInfo = {
-        playerId: this.playerId,
-        playerName: this.playerName
-      }
+      
+      this.gameHostingInfo.playerId = userId
+      
       const canvas = document.getElementsByClassName('emulator-canvas')[0] as HTMLCanvasElement
       const canvasStream = canvas.captureStream(24)
-      const roomId = await this.multiplayerService.createRoom(hostInfo, canvasStream)
-      console.log({roomId})
+      const roomId = await this.multiplayerService.createRoom(this.gameHostingInfo, canvasStream)
+      this.gameHostingInfo.roomId = roomId
+      this.gameHostingInfo.gameState = 'AWAITING_REMOTE_PLAYER'
       await loading.dismiss()
     } catch (e: any) {
       console.error(e)
@@ -294,16 +294,19 @@ export class GamePage implements OnInit {
   }
 
   get isHostGameFormValid(): boolean {
-    return this.playerName.length > 0 && this.recaptchaToken.length > 0
+    return this.gameHostingInfo.playerName.length > 0 && this.recaptchaToken.length > 0
   }
 
-  captchaResolved(token: string) {
-    console.log("captcha resolved", {token})
+  captchaSolved(token: string) {
     this.recaptchaToken = token || "" 
   }
 
-  private hidePopover() {
-    this.isPopoverOpen = false;
+  copyToClipboard(text: string) {
+    navigator.clipboard.writeText(text)
+  }
+
+  private hideOptionsPopover() {
+    this.isOptionsMenuOpen = false;
   }
 
   private async showErrorAlert(errorMsg: Error) {
@@ -317,7 +320,7 @@ export class GamePage implements OnInit {
   }
   
   private async clearCustomPatch() {
-    this.hidePopover()
+    this.hideOptionsPopover()
     const loading = await this.loadingController.create({
       message: 'Limpando patch...',
       backdropDismiss: false

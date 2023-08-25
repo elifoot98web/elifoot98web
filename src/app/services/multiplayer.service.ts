@@ -1,5 +1,5 @@
 import { Injectable, OnDestroy } from '@angular/core';
-import { HostInfo } from '../models/hostInfo';
+import { GameHostingInfo } from '../models/hostInfo';
 import { AngularFirestore, AngularFirestoreDocument } from '@angular/fire/compat/firestore';
 import { environment } from 'src/environments/environment';
 import { GameRoom } from '../models/gameRoom';
@@ -21,7 +21,7 @@ export class MultiplayerService implements OnDestroy {
 
   // This code is based on https://github.com/webrtc/FirebaseRTC
 
-  async createRoom(hostInfo: HostInfo, canvasStream: MediaStream) {
+  async createRoom(hostInfo: GameHostingInfo, canvasStream: MediaStream) {
     const roomId: string = this.uidGenerator()
     
     this.roomRef = await this.afStore.collection('rooms').doc<GameRoom>(roomId)
