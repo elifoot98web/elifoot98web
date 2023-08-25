@@ -17,6 +17,7 @@ import { MultiplayerService } from '../services/multiplayer.service';
 export class GamePage implements OnInit {
   @ViewChild('popover') popover: any;
   @ViewChild('hostGameModal') modal!: IonModal;
+  @ViewChild('stream-container') videoContainer!: HTMLVideoElement;
 
   smoothFilterActive = false;
   isPopoverOpen = false;
@@ -239,6 +240,10 @@ export class GamePage implements OnInit {
   openHostGameModal() {
     this.hidePopover()
     this.isHostGameModalOpen = true
+    const canvas = document.getElementsByClassName('emulator-canvas')[0] as HTMLCanvasElement
+    console.log("Canvas", {canvas})
+    const video = document.querySelector('#stream-container') as HTMLVideoElement
+    console.log("Video", {video})
   }
 
   onDismissHostGameModal(event: any) {
@@ -276,7 +281,8 @@ export class GamePage implements OnInit {
         playerName: this.playerName
       }
       const canvas = document.getElementsByClassName('emulator-canvas')[0] as HTMLCanvasElement
-      const roomId = await this.multiplayerService.createRoom(hostInfo, canvas)
+      const canvasStream = canvas.captureStream(24)
+      const roomId = await this.multiplayerService.createRoom(hostInfo, canvasStream)
       console.log({roomId})
       await loading.dismiss()
     } catch (e: any) {

@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, OnDestroy } from '@angular/core';
 import { HostInfo } from '../models/hostInfo';
 import { AngularFirestore, AngularFirestoreDocument } from '@angular/fire/compat/firestore';
 import { environment } from 'src/environments/environment';
@@ -8,21 +8,25 @@ import ShortUniqueId from 'short-unique-id';
 @Injectable({
   providedIn: 'root'
 })
-export class MultiplayerService {
+export class MultiplayerService implements OnDestroy {
   private peerConnection!: RTCPeerConnection
   private roomRef!: AngularFirestoreDocument<GameRoom>
   private uidGenerator = new ShortUniqueId({ dictionary: 'alphanum_lower' });
-  private remoteStream = new MediaStream()
+  
   constructor(private afStore: AngularFirestore) {}
 
-  async createRoom(hostInfo: HostInfo, canvas: HTMLCanvasElement) {
+  ngOnDestroy() {
+    
+  }
+
+  async createRoom(hostInfo: HostInfo, canvasStream: MediaStream) {
     const roomId: string = this.uidGenerator()
     this.roomRef = await this.afStore.collection('rooms').doc<GameRoom>(roomId)
     
     // Setup peer connection
     this.setupConnection()
     
-    const stream = canvas.captureStream()
+    const stream = canvasStream // 24 fps
     stream.getTracks().forEach((track, i) => {
       console.log('Adding Track: #'+i, {track})
       this.peerConnection.addTrack(track, stream)
@@ -84,7 +88,8 @@ export class MultiplayerService {
     return roomId
   }
 
-  async joinRoom(roomId: string, videoElement: HTMLVideoElement) {
+  async joinRoom(roomId: string): Promise<MediaStream> {
+    console.log(`Entrando na sala com ID: ${roomId}`)
     this.roomRef = await this.afStore.collection('rooms').doc<GameRoom>(roomId)
     const roomSnapshot = await this.roomRef.ref.get()
 
@@ -106,15 +111,14 @@ export class MultiplayerService {
     });
 
     // Setup media source
-    this.remoteStream = new MediaStream()
-    videoElement.srcObject = this.remoteStream
+    const remoteStream = new MediaStream()
    
     // Capture incoming stream
     this.peerConnection.addEventListener('track', event => {
-      console.log('Got remote track:', event.streams[0]);
+      console.log('###### Got remote track:', { event });
       event.streams[0].getTracks().forEach(track => {
-        console.log('Add a track to the remoteStream:', track);
-        this.remoteStream.addTrack(track);
+        console.log('Add a track to the remoteStream:', {remoteStream, track});
+        remoteStream.addTrack(track);
       });
     });
 
@@ -137,6 +141,8 @@ export class MultiplayerService {
       },
     };
     await this.roomRef.update(roomWithAnswer);
+
+    return remoteStream
   }
 
   private setupConnection() {
@@ -172,6 +178,9 @@ export class MultiplayerService {
     });
   }
 
+
+  private setupIceCandidateCapture(collectionRef: any) {
+    return
+  }
+
 }
-
-

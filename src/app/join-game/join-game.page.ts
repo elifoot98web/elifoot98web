@@ -7,7 +7,6 @@ import { MultiplayerService } from '../services/multiplayer.service';
   styleUrls: ['./join-game.page.scss'],
 })
 export class JoinGamePage implements OnInit {
-  @ViewChild('streamContainer') videoContainer!: HTMLVideoElement
   roomId = ''
   roomConnected = false
   
@@ -17,11 +16,16 @@ export class JoinGamePage implements OnInit {
   }
 
   get canJoin() {
-    return this.roomId.length == 6
+    return this.roomId.length >= 6
   }
 
   async joinGame() {
-    await this.multiplayerService.joinRoom(this.roomId, this.videoContainer)
+    const video = document.querySelector('#stream-container') as HTMLVideoElement
+    if(!video) throw new Error('Video element not found')
+    
+    const stream = await this.multiplayerService.joinRoom(this.roomId)
+    console.log('Remote Stream:', { stream })
+    video.srcObject = stream
     this.roomConnected = true
   }
 
