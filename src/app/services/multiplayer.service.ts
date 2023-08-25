@@ -55,7 +55,8 @@ export class MultiplayerService {
       }
     }
 
-    await this.roomRef.set(roomWithOffer)
+    console.log(`Criando sala com ID: ${roomId}`)
+    await this.roomRef.ref.set(roomWithOffer)
     console.log(`New room created with SDP offer. Room ID: ${roomId}`)
     console.log({roomWithOffer})
 
@@ -79,6 +80,8 @@ export class MultiplayerService {
         }
       });
     });
+
+    return roomId
   }
 
   async joinRoom(roomId: string, videoElement: HTMLVideoElement) {

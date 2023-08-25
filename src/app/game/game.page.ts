@@ -276,7 +276,8 @@ export class GamePage implements OnInit {
         playerName: this.playerName
       }
       const canvas = document.getElementsByClassName('emulator-canvas')[0] as HTMLCanvasElement
-      await this.multiplayerService.createRoom(hostInfo, canvas)
+      const roomId = await this.multiplayerService.createRoom(hostInfo, canvas)
+      console.log({roomId})
       await loading.dismiss()
     } catch (e: any) {
       console.error(e)
