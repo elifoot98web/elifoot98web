@@ -138,6 +138,29 @@ export class MultiplayerService implements OnDestroy {
         {
           urls: environment.multiplayer.iceServers,
         },
+        {
+          urls: "stun:stun.relay.metered.ca:80",
+        },
+        {
+          urls: "turn:a.relay.metered.ca:80",
+          username: "631c75ecc434a6d0a9c26c92",
+          credential: "8hamzirIerfjeAXw",
+        },
+        {
+          urls: "turn:a.relay.metered.ca:80?transport=tcp",
+          username: "631c75ecc434a6d0a9c26c92",
+          credential: "8hamzirIerfjeAXw",
+        },
+        {
+          urls: "turn:a.relay.metered.ca:443",
+          username: "631c75ecc434a6d0a9c26c92",
+          credential: "8hamzirIerfjeAXw",
+        },
+        {
+          urls: "turn:a.relay.metered.ca:443?transport=tcp",
+          username: "631c75ecc434a6d0a9c26c92",
+          credential: "8hamzirIerfjeAXw",
+        },
       ],
       iceCandidatePoolSize: environment.multiplayer.iceCandidatePoolSize,
     }
