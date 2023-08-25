@@ -16,35 +16,29 @@ export class MultiplayerService implements OnDestroy {
   constructor(private afStore: AngularFirestore) {}
 
   ngOnDestroy() {
-    
+    console.log("###### SERVICE DESTROYED")
   }
 
   async createRoom(hostInfo: HostInfo, canvasStream: MediaStream) {
     const roomId: string = this.uidGenerator()
+    
     this.roomRef = await this.afStore.collection('rooms').doc<GameRoom>(roomId)
     
     // Setup peer connection
     this.setupConnection()
     
+    // Add local stream tracks to peer connection
     const stream = canvasStream // 24 fps
     stream.getTracks().forEach((track, i) => {
-      console.log('Adding Track: #'+i, {track})
+      console.log(`Adding Track: #${i} to stream`, {stream, track})
       this.peerConnection.addTrack(track, stream)
     })
 
 
     // Collecting ICE candidates
-    const callerCandidatesCollection = this.roomRef.collection('callerCandidates')
-    this.peerConnection.addEventListener('icecandidate', event => {
-      if (!event.candidate) {
-        console.log('Got final candidate!')
-        return
-      }
-      console.log('Got candidate: ', event.candidate)
-      callerCandidatesCollection.add(event.candidate.toJSON())
-    })
+    this.collectCallerIceCandidates()
 
-    // Finally creating a room
+    // Creating room offer
     const offer = await this.peerConnection.createOffer()
     await this.peerConnection.setLocalDescription(offer)
     console.log('Created offer:', offer)
@@ -60,7 +54,7 @@ export class MultiplayerService implements OnDestroy {
     }
 
     console.log(`Criando sala com ID: ${roomId}`)
-    await this.roomRef.ref.set(roomWithOffer)
+    await this.roomRef.set(roomWithOffer)
     console.log(`New room created with SDP offer. Room ID: ${roomId}`)
     console.log({roomWithOffer})
 
@@ -75,15 +69,7 @@ export class MultiplayerService implements OnDestroy {
     });
 
     // Listen for remote ICE candidates below
-    this.roomRef.collection('calleeCandidates').ref.onSnapshot(snapshot => {
-      snapshot.docChanges().forEach(async change => {
-        if (change.type === 'added') {
-          let data = change.doc.data();
-          console.log(`Got new remote ICE candidate: ${JSON.stringify(data)}`);
-          await this.peerConnection.addIceCandidate(new RTCIceCandidate(data));
-        }
-      });
-    });
+    this.setupCalleeIceCandidatesListening()
 
     return roomId
   }
@@ -98,27 +84,26 @@ export class MultiplayerService implements OnDestroy {
     }
 
     this.setupConnection()
+    
 
-    // Code for collecting ICE candidates below
-    const calleeCandidatesCollection = this.roomRef.collection('calleeCandidates');
-    this.peerConnection.addEventListener('icecandidate', event => {
-      if (!event.candidate) {
-        console.log('Got final candidate!');
-        return;
-      }
-      console.log('Got candidate: ', event.candidate);
-      calleeCandidatesCollection.add(event.candidate.toJSON());
-    });
+
+    // Code for collecting callee ICE candidates below
+    this.collectCalleeIceCandidates()
 
     // Setup media source
     const remoteStream = new MediaStream()
-   
+    console.log('Created remote stream:', {remoteStream})
     // Capture incoming stream
     this.peerConnection.addEventListener('track', event => {
+      // const video = document.querySelector('#stream-container') as HTMLVideoElement
+      // if(!video) throw new Error('Video element not found')
+      // video.srcObject = event.streams[0]
       console.log('###### Got remote track:', { event });
-      event.streams[0].getTracks().forEach(track => {
-        console.log('Add a track to the remoteStream:', {remoteStream, track});
-        remoteStream.addTrack(track);
+      event.streams.forEach(stream => {
+        stream.getTracks().forEach(track => {
+          console.log('Add a track to the remoteStream:', {remoteStream, track});
+          remoteStream.addTrack(track);
+        })  
       });
     });
 
@@ -155,6 +140,7 @@ export class MultiplayerService implements OnDestroy {
       iceCandidatePoolSize: environment.multiplayer.iceCandidatePoolSize,
     }
     this.peerConnection = new RTCPeerConnection(config)
+    console.log("Peer Connection Created with config:", {peerConnection: this.peerConnection, config})
     this.registerPeerConnectionListeners()
   }
 
@@ -165,6 +151,7 @@ export class MultiplayerService implements OnDestroy {
     });
   
     this.peerConnection.addEventListener('connectionstatechange', () => {
+      // TODO Handle disconection
       console.log(`Connection state change: ${this.peerConnection.connectionState}`);
     });
   
@@ -178,9 +165,39 @@ export class MultiplayerService implements OnDestroy {
     });
   }
 
-
-  private setupIceCandidateCapture(collectionRef: any) {
-    return
+  private collectCallerIceCandidates() {
+    const callerCandidatesCollection = this.roomRef.collection('callerCandidates')
+    this.peerConnection.addEventListener('icecandidate', event => {
+      if (!event.candidate) {
+        console.log('Got final caller candidate!')
+        return
+      }
+      console.log('Got caller candidate: ', event.candidate)
+      callerCandidatesCollection.add(event.candidate.toJSON())
+    })
   }
 
+  private collectCalleeIceCandidates() {
+    const calleeCandidatesCollection = this.roomRef.collection('calleeCandidates');
+    this.peerConnection.addEventListener('icecandidate', event => {
+      if (!event.candidate) {
+        console.log('Got final candidate!');
+        return;
+      }
+      console.log('Got candidate: ', event.candidate);
+      calleeCandidatesCollection.add(event.candidate.toJSON());
+    });
+  }
+
+  private setupCalleeIceCandidatesListening() {
+    this.roomRef.collection('calleeCandidates').ref.onSnapshot(snapshot => {
+      snapshot.docChanges().forEach(async change => {
+        if (change.type === 'added') {
+          let data = change.doc.data();
+          console.log(`Got new callee remote ICE candidate: ${JSON.stringify(data)}`);
+          await this.peerConnection.addIceCandidate(new RTCIceCandidate(data));
+        }
+      });
+    });
+  }
 }
