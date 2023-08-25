@@ -13,5 +13,5 @@
       Entrar na Sala
     </ion-button>
   </ng-container>
-  <video class=" ion-padding video-container" id="stream-container" autoplay playsinline></video>
+  <video class="ion-padding video-container {{!roomConnected ? 'ion-hide': ''}}" id="stream-container" autoplay playsinline></video>
 </ion-content>
