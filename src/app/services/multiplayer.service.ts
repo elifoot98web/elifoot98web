@@ -19,6 +19,8 @@ export class MultiplayerService implements OnDestroy {
     console.log("###### SERVICE DESTROYED")
   }
 
+  // This code is based on https://github.com/webrtc/FirebaseRTC
+
   async createRoom(hostInfo: HostInfo, canvasStream: MediaStream) {
     const roomId: string = this.uidGenerator()
     
