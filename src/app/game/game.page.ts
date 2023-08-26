@@ -34,6 +34,7 @@ export class GamePage implements OnInit {
     roomId: '',
     gameState: 'NOT_CREATED'
   }
+
   private recaptchaToken = ''
 
   constructor(private loadingController: LoadingController, 
@@ -280,8 +281,10 @@ export class GamePage implements OnInit {
       this.gameHostingInfo.playerId = userId
       
       const canvas = document.getElementsByClassName('emulator-canvas')[0] as HTMLCanvasElement
-      const canvasStream = canvas.captureStream(24)
-      const roomId = await this.multiplayerService.createRoom(this.gameHostingInfo, canvasStream)
+      const canvasStream = canvas.captureStream(30)
+      const roomId = await this.multiplayerService.createRoom(this.gameHostingInfo, canvasStream, (connectionState) => {
+        this.onConnectionStateChange(connectionState)
+      })
       this.gameHostingInfo.roomId = roomId
       this.gameHostingInfo.gameState = 'AWAITING_REMOTE_PLAYER'
       await loading.dismiss()
@@ -347,6 +350,12 @@ export class GamePage implements OnInit {
       console.error(e)
       await loading.dismiss()
       await this.showErrorAlert(e)
+    }
+  }
+
+  private onConnectionStateChange(state: RTCPeerConnectionState) {
+    if(state === 'connected') {
+      this.gameHostingInfo.gameState = 'PLAYER_CONNECTED'
     }
   }
 }

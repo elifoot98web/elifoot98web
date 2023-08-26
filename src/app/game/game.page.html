@@ -117,6 +117,22 @@
             Aguardando Jogador <ion-spinner class="ion-margin-start"></ion-spinner>
           </div>
         </ng-container>
+
+        <ng-container *ngIf="gameHostingInfo.gameState === 'PLAYER_CONNECTED'">
+          <h2 class="ion-text-center">
+            Sala criada: <ion-text color="primary">{{ gameHostingInfo.roomId }}</ion-text>
+            <!-- copy to clipboard -->
+            <ion-button fill="solid" (click)="copyToClipboard(gameHostingInfo.roomId)" fill="clear" size="small">
+              <ion-icon slot="start" name="copy-outline"></ion-icon>
+              <ion-label>Copiar</ion-label>
+            </ion-button>
+          </h2>
+
+          <div class="ion-text-center flex-container ion-align-items-center ion-justify-content-center">
+            <p>Jogador Connectado <ion-icon class="ion-margin-start" color="primary" name="checkmark-circle-outline"></ion-icon></p>            
+          </div>
+        </ng-container>
+
       </ion-content>
     </ng-template>
   </ion-modal>

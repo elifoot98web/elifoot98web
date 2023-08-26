@@ -21,13 +21,13 @@ export class MultiplayerService implements OnDestroy {
 
   // This code is based on https://github.com/webrtc/FirebaseRTC
 
-  async createRoom(hostInfo: GameHostingInfo, canvasStream: MediaStream) {
+  async createRoom(hostInfo: GameHostingInfo, canvasStream: MediaStream, onConnectionStateChange: (event: RTCPeerConnectionState) => void) {
     const roomId: string = this.uidGenerator()
     
     this.roomRef = await this.afStore.collection('rooms').doc<GameRoom>(roomId)
     
     // Setup peer connection
-    this.setupConnection()
+    this.setupConnection(onConnectionStateChange)
     
     // Add local stream tracks to peer connection
     const stream = canvasStream // 24 fps
@@ -132,7 +132,7 @@ export class MultiplayerService implements OnDestroy {
     return remoteStream
   }
 
-  private setupConnection() {
+  private setupConnection(connectionStateChangeListener: (connectionState: RTCPeerConnectionState) => void = () => {}) {
     const config = {
       iceServers: [
         {
@@ -166,10 +166,10 @@ export class MultiplayerService implements OnDestroy {
     }
     this.peerConnection = new RTCPeerConnection(config)
     console.log("Peer Connection Created with config:", {peerConnection: this.peerConnection, config})
-    this.registerPeerConnectionListeners()
+    this.registerPeerConnectionListeners(connectionStateChangeListener)
   }
 
-  private registerPeerConnectionListeners() {
+  private registerPeerConnectionListeners(connectionStateChangeListener: (connectionState: RTCPeerConnectionState) => void = () => {}) {
     this.peerConnection.addEventListener('icegatheringstatechange', () => {
       console.log(
           `ICE gathering state changed: ${this.peerConnection.iceGatheringState}`);
@@ -177,6 +177,7 @@ export class MultiplayerService implements OnDestroy {
   
     this.peerConnection.addEventListener('connectionstatechange', () => {
       // TODO Handle disconection
+      connectionStateChangeListener(this.peerConnection.connectionState)
       console.log(`Connection state change: ${this.peerConnection.connectionState}`);
     });
   
