@@ -1,4 +1,4 @@
-import { Injectable, OnDestroy } from '@angular/core';
+import { Injectable } from '@angular/core';
 import { GameHostingInfo } from '../models/hostInfo';
 import { AngularFirestore, AngularFirestoreDocument } from '@angular/fire/compat/firestore';
 import { environment } from 'src/environments/environment';
@@ -8,16 +8,12 @@ import ShortUniqueId from 'short-unique-id';
 @Injectable({
   providedIn: 'root'
 })
-export class MultiplayerService implements OnDestroy {
+export class MultiplayerService {
   private peerConnection!: RTCPeerConnection
   private roomRef!: AngularFirestoreDocument<GameRoom>
   private uidGenerator = new ShortUniqueId({ dictionary: 'alphanum_lower' });
   
   constructor(private afStore: AngularFirestore) {}
-
-  ngOnDestroy() {
-    console.log("###### SERVICE DESTROYED")
-  }
 
   // This code is based on https://github.com/webrtc/FirebaseRTC
 
@@ -191,6 +187,10 @@ export class MultiplayerService implements OnDestroy {
     });
   }
 
+  /**
+   * Collecting caller ICE candidates
+   * This code is used by the host(caller) to collect its own ICE candidates from the STUN servers
+   *  */ 
   private collectCallerIceCandidates() {
     const callerCandidatesCollection = this.roomRef.collection('callerCandidates')
     this.peerConnection.addEventListener('icecandidate', event => {
@@ -198,23 +198,29 @@ export class MultiplayerService implements OnDestroy {
         console.log('Got final caller candidate!')
         return
       }
-      console.log('Got caller candidate: ', event.candidate)
       callerCandidatesCollection.add(event.candidate.toJSON())
     })
   }
 
+    /**
+   * Collecting callee ICE candidates
+   * This code is used by the guest(callee) to collect its own ICE candidates from the STUN servers
+   *  */ 
   private collectCalleeIceCandidates() {
     const calleeCandidatesCollection = this.roomRef.collection('calleeCandidates');
     this.peerConnection.addEventListener('icecandidate', event => {
       if (!event.candidate) {
-        console.log('Got final candidate!');
+        console.log('Got final callee candidate!');
         return;
       }
-      console.log('Got candidate: ', event.candidate);
       calleeCandidatesCollection.add(event.candidate.toJSON());
     });
   }
 
+  /**
+   * Listening for remote ICE candidates
+   * This code is used by the host(caller) to listen for remote ICE candidates sent by the guest(callee)
+   */
   private setupCalleeIceCandidatesListening() {
     this.roomRef.collection('calleeCandidates').ref.onSnapshot(snapshot => {
       snapshot.docChanges().forEach(async change => {
