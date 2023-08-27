@@ -1,9 +1,13 @@
 import { Component, OnInit, ViewChild } from '@angular/core';
-import { AlertController, LoadingController } from '@ionic/angular';
+import { AlertController, IonModal, LoadingController } from '@ionic/angular';
 import { SaveGameService } from '../services/save-game.service';
 import { LocalStorageService } from '../services/local-storage.service';
 import { PatchService } from '../services/patch.service';
 import * as JSZip from 'jszip';
+import { GameHostingInfo } from '../models/hostInfo';
+import { AuthenticationService } from '../services/authentication.service';
+import { environment } from 'src/environments/environment';
+import { MultiplayerService } from '../services/multiplayer.service';
 
 @Component({
   selector: 'app-game',
@@ -11,19 +15,35 @@ import * as JSZip from 'jszip';
   styleUrls: ['./game.page.scss'],
 })
 export class GamePage implements OnInit {
-  @ViewChild('popover') popover: any;
+  recaptchaKey = environment.recaptchaSiteKey
+
+  @ViewChild('optionsPopover') optionsPopover: any;
+  @ViewChild('hostGameModal') modal!: IonModal;
+  @ViewChild('stream-container') videoContainer!: HTMLVideoElement;
   
   smoothFilterActive = false;
-  isPopoverOpen = false;
+  isOptionsMenuOpen = false;
+  isHostGameModalOpen = false;
   isHidden = true;
   dosCI: any = null;
   autoSaveInterval: any = null;
+
+  gameHostingInfo: GameHostingInfo = {
+    playerId: '',
+    playerName: 'Player 1',
+    roomId: '',
+    gameState: 'NOT_CREATED'
+  }
+
+  private recaptchaToken = ''
 
   constructor(private loadingController: LoadingController, 
     private alertController: AlertController, 
     private saveGameService: SaveGameService,
     private patchService: PatchService,
-    private storageService: LocalStorageService) { }
+    private storageService: LocalStorageService,
+    private authService: AuthenticationService,
+    private multiplayerService: MultiplayerService) { }
 
   async ngOnInit() {
     const loading = await this.loadingController.create({
@@ -81,12 +101,12 @@ export class GamePage implements OnInit {
 
   async saveGame() {
     await this.saveGameService.saveGame()
-    this.hidePopover()
+    this.hideOptionsPopover()
   }
 
   async downloadGameSaves() {
     const hasSaved = await this.saveGameService.downloadGameSaves(this.dosCI)
-    this.hidePopover()
+    this.hideOptionsPopover()
     if (!hasSaved) {
       const alert = await this.alertController.create({
         header: 'Aviso',
@@ -100,7 +120,7 @@ export class GamePage implements OnInit {
   
   toggleKeyboard() {
     toggleSoftKeyboard()
-    this.hidePopover()
+    this.hideOptionsPopover()
   }
 
   async toggleAutoSave(e: any) {
@@ -127,12 +147,12 @@ export class GamePage implements OnInit {
     }
   }
 
-  showPopover(e: Event) {
-    this.popover.event = null
-    this.popover.event = e;
-    this.hidePopover()
+  showOptionsPopover(e: Event) {
+    this.optionsPopover.event = null
+    this.optionsPopover.event = e;
+    this.hideOptionsPopover()
     setTimeout(() => {
-      this.isPopoverOpen = true;
+      this.isOptionsMenuOpen = true;
     }, 50);
   }
 
@@ -190,7 +210,7 @@ export class GamePage implements OnInit {
   async onPatchFileSelected(e: any) {
     const file: File = e.target.files[0]
     console.log("oopa", {file})
-    this.hidePopover()
+    this.hideOptionsPopover()
     const loading = await this.loadingController.create({
       message: 'Validando patch...',
       backdropDismiss: false
@@ -203,7 +223,7 @@ export class GamePage implements OnInit {
       await loading.dismiss()
       const alert = await this.alertController.create({
         header: 'Confirmação',
-        message: `${numberOfFiles} arquivos do patch serão carregados, incluindo bandeiras, equipes e arquivos de configuração\n Continuar?`,
+        message: `${numberOfFiles} arquivos do patch serão carregados, podendo incluir, além de equipes, bandeiras e arquivos de configuração\n Continuar?`,
         backdropDismiss: false,
         cssClass: 'alert-whitespace',
         buttons: [{
@@ -224,8 +244,72 @@ export class GamePage implements OnInit {
     }
   }
 
-  private hidePopover() {
-    this.isPopoverOpen = false;
+  openHostGameModal() {
+    this.hideOptionsPopover()
+    this.isHostGameModalOpen = true
+  }
+
+  onDismissHostGameModal(_: any) {
+    this.isHostGameModalOpen = false
+  }
+
+  modalClose() {
+    this.modal.dismiss()
+    this.isHostGameModalOpen = false
+  }
+
+  async startHost() {
+    const loading = await this.loadingController.create({
+      message: 'Validando navegador...',
+      backdropDismiss: false
+    })
+    await loading.present()
+    
+    try {
+      // Validate recaptcha token on api server
+      const recaptchaValid = await this.authService.validateRecaptcha(this.recaptchaToken)
+      if (!recaptchaValid) {
+        throw new Error('Recaptcha inválido, tente novamente.')
+      }
+      // Autenticate user anonymously on firebase
+      loading.message = 'Autenticando...'
+      const userId = await this.authService.annonymousLogin()
+
+      // Create room on firestore
+      loading.message = 'Criando Sala...'
+      
+      this.gameHostingInfo.playerId = userId
+      
+      const canvas = document.getElementsByClassName('emulator-canvas')[0] as HTMLCanvasElement
+      const canvasStream = canvas.captureStream(30)
+      const roomId = await this.multiplayerService.createRoom(this.gameHostingInfo, canvasStream, (connectionState) => {
+        this.onConnectionStateChange(connectionState)
+      })
+      this.gameHostingInfo.roomId = roomId
+      this.gameHostingInfo.gameState = 'AWAITING_REMOTE_PLAYER'
+      await loading.dismiss()
+    } catch (e: any) {
+      console.error(e)
+      await loading.dismiss()
+      await this.showErrorAlert(e)
+    }
+
+  }
+
+  get isHostGameFormValid(): boolean {
+    return this.gameHostingInfo.playerName.length > 0 && this.recaptchaToken.length > 0
+  }
+
+  captchaSolved(token: string) {
+    this.recaptchaToken = token || "" 
+  }
+
+  copyToClipboard(text: string) {
+    navigator.clipboard.writeText(text)
+  }
+
+  private hideOptionsPopover() {
+    this.isOptionsMenuOpen = false;
   }
 
   private async showErrorAlert(errorMsg: Error) {
@@ -239,7 +323,7 @@ export class GamePage implements OnInit {
   }
   
   private async clearCustomPatch() {
-    this.hidePopover()
+    this.hideOptionsPopover()
     const loading = await this.loadingController.create({
       message: 'Limpando patch...',
       backdropDismiss: false
@@ -266,6 +350,12 @@ export class GamePage implements OnInit {
       console.error(e)
       await loading.dismiss()
       await this.showErrorAlert(e)
+    }
+  }
+
+  private onConnectionStateChange(state: RTCPeerConnectionState) {
+    if(state === 'connected') {
+      this.gameHostingInfo.gameState = 'PLAYER_CONNECTED'
     }
   }
 }
