@@ -9,6 +9,7 @@
       <ion-label position="floating">Código da Sala (6 digitos)</ion-label>
       <ion-input [(ngModel)]="roomId" type="text"></ion-input>
     </ion-item>
+    <re-captcha (resolved)="captchaSolved($event)" siteKey="{{recaptchaKey}}"></re-captcha>
     <ion-button class="ion-margin-top" [disabled]="!canJoin" (click)="joinGame()" expand="block" shape="round">
       Entrar na Sala
     </ion-button>
