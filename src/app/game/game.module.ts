@@ -23,6 +23,12 @@ import { MultiplayerService } from '../services/multiplayer.service';
     RecaptchaModule,
   ],
   declarations: [GamePage],
-  providers: [SaveGameService, LocalStorageService, PatchService, AuthenticationService, MultiplayerService]
+  providers: [
+    SaveGameService, 
+    LocalStorageService, 
+    PatchService, 
+    AuthenticationService, 
+    MultiplayerService
+  ]
 })
 export class GamePageModule {}

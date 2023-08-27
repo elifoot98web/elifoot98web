@@ -39,7 +39,7 @@ export class JoinGamePage {
       }
 
       // Joining room
-      loading.message = 'Tentando conectar ao host...'
+      loading.message = 'Tentando conectar-se ao host...'
       const video = document.querySelector('#stream-container') as HTMLVideoElement
       if(!video) throw new Error('Video element not found')
       
@@ -47,6 +47,7 @@ export class JoinGamePage {
       console.log('Remote Stream:', { stream })
       video.srcObject = stream
       this.roomConnected = true
+      await loading.dismiss()
     } catch (error: any) {
       await loading.dismiss()
       await this.showErrorAlert(error)
