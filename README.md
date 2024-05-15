@@ -9,7 +9,7 @@
 Projeto hobbysta desenvolvido em tempo livre com propósitos puramente nostálgicos.  
 ### Copyright Elifoot 98
 O Elifoot 98 foi um software distribuído em regime de shareware, possuia distribuição gratuita com funcionalidades limitadas.
-https://www.elifoot.com
+[Homepage do Elifoot 98 como ela era em 2000](https://web.archive.org/web/20010124090300/http://www.ip.pt/~ip213368/)
 
 ## Modulos
 ### Game
