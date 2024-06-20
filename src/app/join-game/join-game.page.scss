@@ -1,0 +1,9 @@
+.video-container {
+    position: relative;
+    width: 80%;
+    left: 50%;
+    transform: translateX(-50%);
+    height: auto;
+    max-height: 720px;
+    background: black;
+}

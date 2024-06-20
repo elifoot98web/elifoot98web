@@ -8,14 +8,20 @@
     <ion-title class="ion-hide-md-down">Elifoot 98 Web</ion-title>
     
     <ion-buttons slot="end">
-      <ion-button fill="solid" color="primary" (click)="saveGame()">
-        <ion-icon slot="end" name="save-outline"></ion-icon>
-        Salvar Progresso
+      <ion-button color="secondary" fill="solid" (click)="openHostGameModal()">
+        <ion-icon class="ion-hide-sm-down" slot="end" name="people-circle-outline"></ion-icon>
+        <ion-icon class="ion-hide-sm-up" slot="icon-only" name="people-circle-outline"></ion-icon>
+        <ion-label class="ion-hide-sm-down">Multiplayer</ion-label>
       </ion-button>
-      <ion-button (click)="showPopover($event)">
+      <ion-button fill="solid" color="primary" (click)="saveGame()">
+        <ion-icon class="ion-hide-sm-down" slot="end" name="save-outline"></ion-icon>
+        <ion-icon class="ion-hide-sm-up" slot="icon-only" name="save-outline"></ion-icon>
+        <ion-label class="ion-hide-sm-down">Salvar Progresso</ion-label>
+      </ion-button>
+      <ion-button (click)="showOptionsPopover($event)">
         <ion-icon slot="icon-only" name="ellipsis-vertical-outline"></ion-icon>
       </ion-button>
-      <ion-popover #popover [isOpen]="isPopoverOpen" triggerAction="click">
+      <ion-popover #optionsPopover [isOpen]="isOptionsMenuOpen" triggerAction="click">
         <ng-template>
           <ion-content>
             <ion-list class="ion-no-padding">
@@ -65,18 +71,71 @@
                   </ion-content>
                 </ng-template>
               </ion-popover>
-              
             </ion-list>
           </ion-content>
         </ng-template>
       </ion-popover>
-      <input style="display:none;" type="file" accept=".zip" #fileInput (change)="onPatchFileSelected($event)" />
+      <!-- Invisible Patch input -->
+      <input style="display:none;" type="file" accept=".zip" #fileInput (change)="onPatchFileSelected($event)" /> 
     </ion-buttons>
   </ion-toolbar>
 </ion-header>
 
 <ion-content [fullscreen]="true">
   <div [ngClass]="{ hidden: isHidden, full: !isHidden }" class="smooth-canvas" id="game-container"></div>
+  <ion-modal #hostGameModal backdropDismiss="false" [isOpen]="isHostGameModalOpen" (willDismiss)="onDismissHostGameModal($event)">
+    <ng-template>
+      <ion-header>
+        <ion-toolbar color="tertiary">
+          <ion-title>Hospedar Multiplayer</ion-title>
+          <ion-buttons slot="end">
+            <ion-button (click)="modalClose()"[strong]="true">
+              <ion-icon slot="icon-only" name="close"></ion-icon>
+            </ion-button>
+          </ion-buttons>
+        </ion-toolbar>
+      </ion-header>
+      <ion-content class="ion-padding flex-container ion-align-items-center">
+        <ng-container *ngIf="gameHostingInfo.gameState === 'NOT_CREATED'">
+          <div class="full-width flex-container ion-padding ion-justify-content-center">
+            <re-captcha (resolved)="captchaSolved($event)" siteKey="{{recaptchaKey}}"></re-captcha>
+          </div>
+          <ion-button class="ion-margin-top" [disabled]="!isHostGameFormValid" (click)="startHost()" expand="block" shape="round">
+            Criar Sala
+          </ion-button>
+        </ng-container>
+        <ng-container *ngIf="gameHostingInfo.gameState === 'AWAITING_REMOTE_PLAYER'">
+          <h2 class="ion-text-center">
+            Sala criada: <ion-text color="primary">{{ gameHostingInfo.roomId }}</ion-text>
+            <!-- copy to clipboard -->
+            <ion-button fill="solid" (click)="copyToClipboard(gameHostingInfo.roomId)" fill="clear" size="small">
+              <ion-icon slot="start" name="copy-outline"></ion-icon>
+              <ion-label>Copiar</ion-label>
+            </ion-button>
+          </h2>
+          <div class="ion-text-center flex-container ion-align-items-center ion-justify-content-center">
+            Aguardando Jogador <ion-spinner class="ion-margin-start"></ion-spinner>
+          </div>
+        </ng-container>
+
+        <ng-container *ngIf="gameHostingInfo.gameState === 'PLAYER_CONNECTED'">
+          <h2 class="ion-text-center">
+            Sala criada: <ion-text color="primary">{{ gameHostingInfo.roomId }}</ion-text>
+            <!-- copy to clipboard -->
+            <ion-button fill="solid" (click)="copyToClipboard(gameHostingInfo.roomId)" fill="clear" size="small">
+              <ion-icon slot="start" name="copy-outline"></ion-icon>
+              <ion-label>Copiar</ion-label>
+            </ion-button>
+          </h2>
+
+          <div class="ion-text-center flex-container ion-align-items-center ion-justify-content-center">
+            <p>Jogador Connectado <ion-icon class="ion-margin-start" color="primary" name="checkmark-circle-outline"></ion-icon></p>            
+          </div>
+        </ng-container>
+
+      </ion-content>
+    </ng-template>
+  </ion-modal>
 </ion-content>
 <ion-footer class="hidden-mob">
   <ion-toolbar color="tertiary">

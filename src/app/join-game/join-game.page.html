@@ -1,0 +1,20 @@
+<ion-header [translucent]="true">
+  <ion-toolbar color="tertiary">
+    <ion-title class="ion-hide-md-down">Elifoot 98 Web</ion-title>
+  </ion-toolbar>
+</ion-header>
+<ion-content [fullscreen]="true">
+  <ng-container *ngIf="!roomConnected">
+    <ion-item>
+      <ion-label position="floating">Código da Sala (6 digitos)</ion-label>
+      <ion-input [(ngModel)]="roomId" type="text"></ion-input>
+    </ion-item>
+    <div class="full-width flex-container ion-padding ion-justify-content-center">
+      <re-captcha (resolved)="captchaSolved($event)" siteKey="{{recaptchaKey}}"></re-captcha>
+    </div>
+    <ion-button class="ion-margin" [disabled]="!canJoin" (click)="joinGame()" expand="block" shape="round">
+      Entrar na Sala
+    </ion-button>
+  </ng-container>
+  <video class="ion-padding video-container {{!roomConnected ? 'ion-hide': ''}}" id="stream-container" autoplay playsinline></video>
+</ion-content>
