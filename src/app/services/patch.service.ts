@@ -66,6 +66,7 @@ export class PatchService {
 
     // Flags, ctrgroup and countries files
     const supportFiles: {[key: string]: JSZip.JSZipObject} = {}
+    const equipasFiles: {[key: string]: JSZip.JSZipObject} = {}
 
     // TODO: Optimize this loop
     for(let filePath in originalFiles) {
@@ -75,7 +76,7 @@ export class PatchService {
       if (file.name.toLowerCase().endsWith('.eft')) {
         const rootedName = file.name.split('/').pop() || "undefined.eft"
         file.name = `EQUIPAS/${rootedName}`
-        patch.files[file.name] = file
+        equipasFiles[file.name] = file
       } else if (file.name.toLowerCase().endsWith('country.txe')) {
         file.name = 'COUNTRY.TXE'
         supportFiles[file.name] = file
@@ -93,13 +94,15 @@ export class PatchService {
       }
     }
 
-    // validate patch has at least 34 .eft files
-    if (Object.keys(patch.files).length < 34) {
+    // validate equipas dictionary, if filled has at least 34 .eft files
+    if (Object.keys(equipasFiles).length > 0 && Object.keys(equipasFiles).length < 34) {
       throw new Error('Não há equipes suficientes para jogar')
     }
 
-    // merge support files to patch object
+    // merge equipasFiles and support files to the patch object
+    Object.assign(patch.files, equipasFiles)
     Object.assign(patch.files, supportFiles)
+
     return patch
   }
 
