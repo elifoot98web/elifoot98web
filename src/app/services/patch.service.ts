@@ -107,7 +107,13 @@ export class PatchService {
   }
 
   private async getAssetFile(assetFilePath: string): Promise<Blob> {
-    return await lastValueFrom(this.httpClient.get(`assets/${assetFilePath}`, { responseType: 'blob' }))
+    return await lastValueFrom(this.httpClient.get(`assets/${assetFilePath}`, { 
+      responseType: 'blob',
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
+    }))
   }
 
   private getElifootBatchFile(): Promise<Blob> {
