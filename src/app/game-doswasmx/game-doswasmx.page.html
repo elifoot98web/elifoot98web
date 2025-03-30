@@ -1,0 +1,86 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-title>DOS Wasm X</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  <div id="maindiv" class="container text-center">
+    <h1 id="header">DOS Wasm X</h1>
+
+    <div id="topPanel" style="display: none;">
+      <!-- BEFORE LOAD -->
+      <div *ngIf="data.beforeEmulatorStarted">
+        <div class="mt-2 mb-2" *ngIf="data.message">
+          <div [innerHTML]="data.message"></div>
+        </div>
+        <div class="mt-2 mb-2" *ngIf="data.loading">
+          <ion-icon name="refresh" class="fa-spin"></ion-icon> Loading...
+        </div>
+        <div class="progress mt-4" id="progressOuter" *ngIf="data.showProgress">
+          <div class="progress-bar bg-info" role="progressbar" id="myProgress">1%</div>
+        </div>
+        <ion-button (click)="myApp.loadRom()" id="btnLoad" *ngIf="data.loggedIn === true" [disabled]="data.moduleInitializing">Play Game</ion-button>
+        <ion-button (click)="myApp.uploadBrowse()" id="btnUploadRom" [disabled]="data.moduleInitializing">Browse</ion-button>
+        <ion-button (click)="myApp.settingsModal()" id="btnSettings" [disabled]="data.moduleInitializing">Settings</ion-button>
+      </div>
+
+      <!-- AFTER LOAD -->
+      <div *ngIf="!data.beforeEmulatorStarted" id="afterLoadDiv">
+        <ion-button (click)="myApp.newRom()">Exit</ion-button>
+        <ion-button (click)="myApp.zoomOut()">Zoom Out</ion-button>
+        <ion-button (click)="myApp.zoomIn()">Zoom In</ion-button>
+        <ion-button (click)="myApp.fullscreen()">Fullscreen</ion-button>
+      </div>
+    </div>
+
+    <div id="canvasDiv" class="mt-2 mb-4" style="height:480px;text-align: center;margin-left: auto;margin-right: auto;display: none;">
+      <canvas id="canvas" width="640" height="480" style="height: 100%;"></canvas>
+    </div>
+
+    <div id="divInstructions" class="container text-center" style="display: none;">
+      <div class="alert alert-secondary mt-4" role="alert" *ngIf="data.initialInstallation">
+        Remember to always click the Save Drive button before exiting the page. That will commit your hard disk changes to the browser.
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <ion-modal id="settingsModal">
+    <ion-header>
+      <ion-toolbar>
+        <ion-title>Settings</ion-title>
+        <ion-buttons slot="end">
+          <ion-button (click)="dismissModal()">Close</ion-button>
+        </ion-buttons>
+      </ion-toolbar>
+    </ion-header>
+    <ion-content>
+      <div class="modal-body">
+        <ion-item>
+          <ion-label>Delete HD</ion-label>
+          <ion-button (click)="myApp.clearHardDrive()">Clear Hard Drive</ion-button>
+        </ion-item>
+        <ion-item>
+          <ion-label>RAM</ion-label>
+          <ion-select [(ngModel)]="data.ramTemp">
+            <ion-select-option value="32">32 MB (Default)</ion-select-option>
+            <ion-select-option value="64">64 MB</ion-select-option>
+            <ion-select-option value="128">128 MB</ion-select-option>
+          </ion-select>
+        </ion-item>
+      </div>
+    </ion-content>
+  </ion-modal>
+
+  <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/rivets/0.9.6/rivets.bundled.min.js"></script>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/css/toastr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.2/dist/FileSaver.min.js"></script> 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.0/nipplejs.min.js"></script>
+</ion-content>

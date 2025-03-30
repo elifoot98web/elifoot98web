@@ -15,8 +15,12 @@ const routes: Routes = [
     loadChildren: () => import('./ativador/ativador.module').then( m => m.AtivadorPageModule)
   },
   {
+    path: 'game-doswasmx',
+    loadChildren: () => import('./game-doswasmx/game-doswasmx.module').then( m => m.GameDoswasmxPageModule)
+  },
+  {
     path: '',
-    redirectTo: 'main',
+    redirectTo: 'game-doswasmx',
     pathMatch: 'full'
   },
 ];
