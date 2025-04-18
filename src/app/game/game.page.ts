@@ -97,6 +97,20 @@ export class GamePage implements OnInit {
       await alert.present();
     }
   }
+
+  async downloadFullDiskChanges() {
+    const hasSaved = await this.saveGameService.downloadFullDiskChanges(this.dosCI)
+    this.hidePopover()
+    if (!hasSaved) {
+      const alert = await this.alertController.create({
+        header: 'Aviso',
+        message: 'Não há alterações no disco para baixar',
+        backdropDismiss: false,
+        buttons: ['OK']
+      });
+      await alert.present();
+    }
+  }
   
   toggleKeyboard() {
     toggleSoftKeyboard()

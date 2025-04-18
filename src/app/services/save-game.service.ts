@@ -67,6 +67,25 @@ export class SaveGameService {
     return true
   }
 
+  async downloadFullDiskChanges(dosCI: any): Promise<boolean> {
+    const rawChanges = await dosCI.persist()
+    let zip = new JSZip()
+    zip = await zip.loadAsync(rawChanges, { createFolders: true })
+    let hasChanges = zip && zip.files && Object.keys(zip.files).length > 0;
+    if (!hasChanges) {
+      console.log('No changes to save');
+      return false;
+    }
+    
+    // Save the zip file
+    const dateTime = new Date()
+    dateTime.toISOString()
+    const dateTimeString = `${dateTime.getFullYear()}-${dateTime.getMonth()}-${dateTime.getDate()}_${dateTime.getHours()}-${dateTime.getMinutes()}-${dateTime.getSeconds()}`
+    const zipContent = await zip.generateAsync({ type: 'uint8array' });
+    this.saveUint8ArrayAsFile(zipContent, `fullDiskChanges_${dateTimeString}.zip`)
+    return true; 
+  }
+
   private saveUint8ArrayAsFile(uint8Array: Uint8Array, fileName: string): void {
     const blob = new Blob([uint8Array], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
@@ -81,5 +100,7 @@ export class SaveGameService {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   }
+
+
 
 }
