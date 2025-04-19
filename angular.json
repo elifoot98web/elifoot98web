@@ -90,7 +90,8 @@
                   "with": "src/environments/environment.githubpages.ts"
                 }
               ],
-              "outputHashing": "all"
+              "outputHashing": "all",
+              "baseHref": "elifoot98web/"
             },
             "development": {
               "buildOptimizer": false,
