@@ -19,7 +19,7 @@ export class SaveGameService {
     let hasSaves = false
     // remove non save game files
     let filesToRemove = zip.filter((_, file) => {
-      return !file.name.toLowerCase().includes('eli98/jogos/') && file.name.toLowerCase() !=('eli98/')
+      return !file.name.toLowerCase().includes('eli98/jogos/') && file.name.toLowerCase() !=('d/eli98/')
     })
     filesToRemove.forEach(file => {
       zip.remove(file.name)
@@ -29,7 +29,7 @@ export class SaveGameService {
     zip.forEach((_, file) => {
       if (file.name.toLowerCase().includes('.e98')) {
         hasSaves = true
-        file.name = file.name.replace('eli98/jogos/', '')
+        file.name = file.name.replace('d/eli98/jogos/', '')
       }
     })
 

@@ -33,16 +33,16 @@ export class PatchService {
     const localChanges = await this.getClearLocalChanges(dosCI)
 
     // Override elifoot.bat with the patched one
-    localChanges.file('ELIFOOT.BAT', patchedElifootBatBlob, { binary: true })
+    localChanges.file('d/ELIFOOT.BAT', patchedElifootBatBlob, { binary: true })
 
     // Add patch.bat
-    localChanges.file('PATCH.BAT', patchBatBlob, { binary: true })   
+    localChanges.file('d/PATCH.BAT', patchBatBlob, { binary: true })   
 
     // Merge patch file with local changes
     // Add patch files
-    localChanges.file('eli98/PATCH', 'patch', { dir: true })
+    localChanges.file('d/eli98/PATCH', 'patch', { dir: true })
     patch.forEach((_, file) => {
-      const path = `eli98/PATCH/${file.name}`
+      const path = `d/eli98/PATCH/${file.name}`
       file.name = path
       localChanges.files[path] = file
     })
@@ -152,14 +152,14 @@ export class PatchService {
     
     // clear existing patch files
     const filesToRemove = localChanges.filter((_, file) => {
-      return file.name.toLowerCase().startsWith('eli98/patch') || 
-        file.name.toLowerCase() == 'elifoot.bat' ||
-        file.name.toLowerCase() == 'patch.bat' ||
-        file.name.toLowerCase() == 'country.txe' ||
-        file.name.toLowerCase() == 'referee.txe' ||
-        file.name.toLowerCase().startsWith('eli98/flags') ||
-        file.name.toLowerCase().startsWith('eli98/equipas') ||
-        file.name.toLowerCase().startsWith('eli98/ctrgroup')
+      return file.name.toLowerCase().startsWith('d/eli98/patch') || 
+        file.name.toLowerCase().includes('elifoot.bat') ||
+        file.name.toLowerCase().includes('patch.bat') ||
+        file.name.toLowerCase().includes('d/eli98/country.txe') ||
+        file.name.toLowerCase().includes('d/eli98/referee.txe') ||
+        file.name.toLowerCase().includes('d/eli98/flags') ||
+        file.name.toLowerCase().includes('d/eli98/equipas') ||
+        file.name.toLowerCase().includes('d/eli98/ctrgroup')
     })
 
     filesToRemove.forEach(file => {

@@ -291,7 +291,7 @@ export class GamePage implements OnInit {
     })
     await loading.present()
     try {
-      this.patchService.clearPatch(this.dosCI)
+      await this.patchService.clearPatch(this.dosCI)
       await loading.dismiss()
       const alert = await this.alertController.create({
         header: 'Patch Removido',
