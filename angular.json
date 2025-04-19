@@ -91,7 +91,7 @@
                 }
               ],
               "outputHashing": "all",
-              "baseHref": "elifoot98web/"
+              "baseHref": "./elifoot98web/"
             },
             "development": {
               "buildOptimizer": false,
