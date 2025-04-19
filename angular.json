@@ -90,8 +90,7 @@
                   "with": "src/environments/environment.githubpages.ts"
                 }
               ],
-              "outputHashing": "all",
-              "baseHref": "./"
+              "outputHashing": "all"
             },
             "development": {
               "buildOptimizer": false,
