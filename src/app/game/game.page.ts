@@ -1,5 +1,5 @@
 import { Component, OnInit, ViewChild } from '@angular/core';
-import { AlertController, LoadingController } from '@ionic/angular';
+import { AlertController, LoadingController, MenuController } from '@ionic/angular';
 import { SaveGameService } from '../services/save-game.service';
 import { LocalStorageService } from '../services/local-storage.service';
 import { PatchService } from '../services/patch.service';
@@ -19,11 +19,31 @@ export class GamePage implements OnInit {
   dosCI: any = null;
   autoSaveInterval: any = null;
 
-  constructor(private loadingController: LoadingController, 
+  // Mapeamento de teclas para seus códigos
+  private keyMap: { [key: string]: number } = {
+    'F1': 0x3B,  // 59 - Formação 3-3-4
+    'F2': 0x3C,  // 60 - Formação 3-4-3
+    'F3': 0x3D,  // 61 - Formação 4-2-4
+    'F4': 0x3E,  // 62 - Formação 4-3-3
+    'F5': 0x3F,  // 63 - Formação 4-4-2
+    'F6': 0x40,  // 64 - Formação 4-5-1
+    'F7': 0x41,  // 65 - Formação 5-3-2
+    'F8': 0x42,  // 66 - Formação 5-4-1
+    'F9': 0x43,  // 67 - Formação 5-5-0
+    'F10': 0x44, // 68 - Formação 6-3-1
+    'F11': 0x85, // 133 - Formação 6-4-0
+    'A': 0x41,   // 65 - Automático
+    'M': 0x4D    // 77 - Melhores
+  };
+
+  constructor(
+    private loadingController: LoadingController, 
     private alertController: AlertController, 
     private saveGameService: SaveGameService,
     private patchService: PatchService,
-    private storageService: LocalStorageService) { }
+    private storageService: LocalStorageService,
+    private menuController: MenuController
+  ) { }
 
   async ngOnInit() {
     const loading = await this.loadingController.create({
@@ -280,6 +300,30 @@ export class GamePage implements OnInit {
       console.error(e)
       await loading.dismiss()
       await this.showErrorAlert(e)
+    }
+  }
+
+  async toggleSidebar() {
+    const menu = await this.menuController.get('landscape-menu');
+    if (menu) {
+      menu.toggle();
+    }
+  }
+
+  async toggleFormationsMenu() {
+    const menu = await this.menuController.get('formations-menu');
+    if (menu) {
+      menu.toggle();
+    }
+  }
+
+  async simulateKey(key: string) {
+    if (this.dosCI && this.keyMap[key]) {
+      this.dosCI.simulateKeyPress(this.keyMap[key]);
+      const menu = await this.menuController.get('formations-menu');
+      if (menu) {
+        menu.close();
+      }
     }
   }
 }

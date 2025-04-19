@@ -1,4 +1,4 @@
-<ion-header [translucent]="true">
+<ion-header [translucent]="true" class="portrait-only">
   <ion-toolbar color="tertiary">
     <ion-buttons class="ion-hide-md-up" slot="start">
       <ion-button fill="solid" color="secondary" (click)="toggleKeyboard()">
@@ -79,9 +79,157 @@
   </ion-toolbar>
 </ion-header>
 
-<ion-content [fullscreen]="true">
+<ion-menu side="start" menuId="landscape-menu" contentId="main-content" class="landscape-menu">
+  <ion-header>
+    <ion-toolbar color="tertiary">
+      <ion-title>Menu</ion-title>
+      <ion-buttons slot="end">
+        <ion-button (click)="toggleSidebar()">
+          <ion-icon slot="icon-only" name="close-outline"></ion-icon>
+        </ion-button>
+      </ion-buttons>
+    </ion-toolbar>
+  </ion-header>
+  <ion-content>
+    <ion-list>
+      <ion-item>
+        <ion-toggle [checked]="smoothFilterActive" (ionChange)="toggleSmoothFilter($event)">Suavizar imagem</ion-toggle> 
+      </ion-item>
+      <ion-item>
+        <ion-toggle (ionChange)="toggleAutoSave($event)">Auto-Save (5 mins)</ion-toggle> 
+      </ion-item>
+      <ion-item button (click)="saveGame()">
+        <ion-label>Salvar</ion-label> 
+        <ion-icon slot="end" name="save-outline"></ion-icon>
+      </ion-item>
+      <ion-item button (click)="downloadGameSaves()">
+        <ion-label>Baixar Jogos Salvos</ion-label> 
+        <ion-icon slot="end" name="cloud-download-outline"></ion-icon>
+      </ion-item>
+      <ion-item button (click)="downloadFullDiskChanges()">
+        <ion-label>{{'Baixar HD(Delta)'}}</ion-label> 
+        <ion-icon slot="end" name="code-download-outline"></ion-icon>
+      </ion-item>
+      <ion-item button (click)="toggleKeyboard()">
+        <ion-label>Teclado Virtual</ion-label> 
+        <ion-icon slot="end" src="../../assets/icon/keyboard.svg"></ion-icon>
+      </ion-item>
+      <ion-item button href="../ativador" target="_blank">
+        <ion-label>Abrir Ativador</ion-label> 
+        <ion-icon slot="end" name="open-outline"></ion-icon>
+      </ion-item>
+      <ion-item button (click)="showTutorial()">
+        <ion-label>Mostrar Avisos</ion-label> 
+        <ion-icon slot="end" name="information-circle-outline"></ion-icon>
+      </ion-item>
+      <ion-item button (click)="fileInput.click()">
+        <ion-label>Carregar Patch</ion-label> 
+        <ion-icon slot="end" name="cloud-upload-outline"></ion-icon>
+      </ion-item>
+      <ion-item button (click)="promptClearCustomPatch()">
+        <ion-label>Remover Patch</ion-label> 
+        <ion-icon slot="end" name="cloud-offline-outline"></ion-icon>
+      </ion-item>
+    </ion-list>
+  </ion-content>
+</ion-menu>
+
+<ion-menu side="end" menuId="formations-menu" contentId="main-content" class="formations-menu">
+  <ion-header>
+    <ion-toolbar color="tertiary">
+      <ion-title>Formações</ion-title>
+      <ion-buttons slot="end">
+        <ion-button (click)="toggleFormationsMenu()">
+          <ion-icon slot="icon-only" name="close-outline"></ion-icon>
+        </ion-button>
+      </ion-buttons>
+    </ion-toolbar>
+  </ion-header>
+  <ion-content>
+    <ion-list>
+      <ion-list-header>
+        <ion-label>Táticas</ion-label>
+      </ion-list-header>
+      <ion-item button detail="false" (click)="simulateKey('F1')" class="formation-item">
+        <ion-label>3-3-4</ion-label>
+        <ion-note slot="end" class="key-note">F1</ion-note>
+      </ion-item>
+      <ion-item button detail="false" (click)="simulateKey('F2')" class="formation-item">
+        <ion-label>3-4-3</ion-label>
+        <ion-note slot="end" class="key-note">F2</ion-note>
+      </ion-item>
+      <ion-item button detail="false" (click)="simulateKey('F3')" class="formation-item">
+        <ion-label>4-2-4</ion-label>
+        <ion-note slot="end" class="key-note">F3</ion-note>
+      </ion-item>
+      <ion-item button detail="false" (click)="simulateKey('F4')" class="formation-item">
+        <ion-label>4-3-3</ion-label>
+        <ion-note slot="end" class="key-note">F4</ion-note>
+      </ion-item>
+      <ion-item button detail="false" (click)="simulateKey('F5')" class="formation-item">
+        <ion-label>4-4-2</ion-label>
+        <ion-note slot="end" class="key-note">F5</ion-note>
+      </ion-item>
+      <ion-item button detail="false" (click)="simulateKey('F6')" class="formation-item">
+        <ion-label>4-5-1</ion-label>
+        <ion-note slot="end" class="key-note">F6</ion-note>
+      </ion-item>
+      <ion-item button detail="false" (click)="simulateKey('F7')" class="formation-item">
+        <ion-label>5-2-3</ion-label>
+        <ion-note slot="end" class="key-note">F7</ion-note>
+      </ion-item>
+      <ion-item button detail="false" (click)="simulateKey('F8')" class="formation-item">
+        <ion-label>5-3-2</ion-label>
+        <ion-note slot="end" class="key-note">F8</ion-note>
+      </ion-item>
+      <ion-item button detail="false" (click)="simulateKey('F9')" class="formation-item">
+        <ion-label>5-4-1</ion-label>
+        <ion-note slot="end" class="key-note">F9</ion-note>
+      </ion-item>
+      <ion-item button detail="false" (click)="simulateKey('F10')" class="formation-item">
+        <ion-label>5-5-0</ion-label>
+        <ion-note slot="end" class="key-note">F10</ion-note>
+      </ion-item>
+      <ion-item button detail="false" (click)="simulateKey('F11')" class="formation-item">
+        <ion-label>6-3-1</ion-label>
+        <ion-note slot="end" class="key-note">F11</ion-note>
+      </ion-item>
+      <ion-item button detail="false" (click)="simulateKey('F12')" class="formation-item">
+        <ion-label>6-4-0</ion-label>
+        <ion-note slot="end" class="key-note">F12</ion-note>
+      </ion-item>
+
+      <ion-list-header>
+        <ion-label>Especiais</ion-label>
+      </ion-list-header>
+      <ion-item button detail="false" (click)="simulateKey('A')" class="formation-item">
+        <ion-label>Automático</ion-label>
+        <ion-note slot="end" class="key-note">A</ion-note>
+      </ion-item>
+      <ion-item button detail="false" (click)="simulateKey('M')" class="formation-item">
+        <ion-label>Melhores</ion-label>
+        <ion-note slot="end" class="key-note">M</ion-note>
+      </ion-item>
+    </ion-list>
+  </ion-content>
+</ion-menu>
+
+<ion-content [fullscreen]="true" id="main-content">
   <div [ngClass]="{ hidden: isHidden, full: !isHidden }" class="smooth-canvas" id="game-container"></div>
 </ion-content>
+
+<div class="menu-button-container">
+  <button class="menu-button" (click)="toggleSidebar()">
+    <ion-icon name="menu-outline"></ion-icon>
+  </button>
+</div>
+
+<div class="formations-button-container">
+  <button class="menu-button" (click)="toggleFormationsMenu()">
+    <ion-icon name="football-outline"></ion-icon>
+  </button>
+</div>
+
 <ion-footer class="hidden-mob">
   <ion-toolbar color="tertiary">
     <ion-card-subtitle class="ion-padding-start ion-padding-top">Feito nas pressas, na terra dos altos coqueiros.</ion-card-subtitle>
