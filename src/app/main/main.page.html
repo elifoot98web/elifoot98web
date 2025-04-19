@@ -18,7 +18,7 @@
   <ion-grid fixed class="center-vertical">
     <ion-row>
       <ion-col size="12" size-lg="5">
-        <ion-card button href="../game" color="secondary" class="center-vertical">
+        <ion-card button [routerLink]="['/game']" color="secondary" class="center-vertical">
           <ion-img src="../../assets/gamescreen.png"></ion-img>
           <ion-card-header color="secondary">
             <ion-toolbar color="secondary">
@@ -34,7 +34,7 @@
       </ion-col>
       <ion-col size-lg="2" class="ion-hide-lg-down"></ion-col>
       <ion-col size="12" size-lg="5">
-        <ion-card button href="../ativador" color="primary" class="center-vertical">
+        <ion-card button [routerLink]="['/ativador']" color="primary" class="center-vertical">
           <ion-img src="../../assets/ativadorscreen.png"></ion-img>
           <ion-card-header color="tertiary">
             <ion-toolbar color="tertiary">
