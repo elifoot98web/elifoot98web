@@ -4,6 +4,7 @@ import { SaveGameService } from '../services/save-game.service';
 import { LocalStorageService } from '../services/local-storage.service';
 import { PatchService } from '../services/patch.service';
 import * as JSZip from 'jszip';
+import { environment } from 'src/environments/environment';
 
 @Component({
   selector: 'app-game',
@@ -32,7 +33,7 @@ export class GamePage implements OnInit {
     });
     await loading.present();
     console.time("carregando game...")
-    this.dosCI = await elifootMain()
+    this.dosCI = await elifootMain(environment.prefixPath, environment.gameBundleURL)
     console.timeEnd("carregando game...")
     setTimeout(async () => {
       this.isHidden = false
@@ -96,6 +97,50 @@ export class GamePage implements OnInit {
       });
       await alert.present();
     }
+  }
+
+  async downloadFullDiskChanges() {
+    const hasSaved = await this.saveGameService.downloadFullDiskChanges(this.dosCI)
+    this.hidePopover()
+    if (!hasSaved) {
+      const alert = await this.alertController.create({
+        header: 'Aviso',
+        message: 'Não há alterações no disco para baixar',
+        backdropDismiss: false,
+        buttons: ['OK']
+      });
+      await alert.present();
+    }
+  }
+
+  async clearAllData() {
+    const alert = await this.alertController.create({
+      header: 'Aviso',
+      message: 'Tem certeza que deseja limpar todos os dados? Isso irá apagar todos os jogos salvos e configurações.',
+      backdropDismiss: false,
+      cssClass: 'alert-whitespace',
+      buttons: [{
+        text: 'Não',
+        role: 'cancel'
+      }, {
+        text: 'Sim',
+        handler: async () => {
+          // show loading
+          const loading = await this.loadingController.create({
+            message: 'Limpando dados...',
+            backdropDismiss: false
+          })
+          await loading.present()
+
+          // clear all data
+          await this.saveGameService.clearAllData(this.dosCI)
+          await this.storageService.clearAllData()
+          await loading.dismiss()
+          window.location.reload()
+        }
+      }]
+    })
+    await alert.present()
   }
   
   toggleKeyboard() {
@@ -246,7 +291,7 @@ export class GamePage implements OnInit {
     })
     await loading.present()
     try {
-      this.patchService.clearPatch(this.dosCI)
+      await this.patchService.clearPatch(this.dosCI)
       await loading.dismiss()
       const alert = await this.alertController.create({
         header: 'Patch Removido',

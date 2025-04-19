@@ -1,12 +1,12 @@
 var dosInstance
-var elifootMain = async () => {
-    emulators.pathPrefix = "assets/js-dos/"
+var elifootMain = async (pathPrefix, gameBundleURL) => {
+    emulators.pathPrefix = pathPrefix
     console.log("Carregando js-dos + elifoot")
 
     dosInstance = await Dos(document.getElementById("game-container"), {
         style: "none"
     })
-    const dosCI = await dosInstance.run("assets/elifoot/elifoot98.jsdos");
+    const dosCI = await dosInstance.run(gameBundleURL);
     
     return dosCI
 }

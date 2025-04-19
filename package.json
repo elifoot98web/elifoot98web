@@ -1,13 +1,14 @@
 {
   "name": "elifoot98_web",
-  "version": "0.1",
+  "version": "1.0",
   "author": "Leonardo Pereira <jlcvp>",
-  "homepage": "https://ionicframework.com/",
+  "homepage": "https://elifoot98.com.br",
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
     "build": "ng build",
     "build:prod": "ng build --configuration production",
+    "build:githubpages": "ng build --configuration githubpages",
     "watch": "ng build --watch --configuration development",
     "watch:prod": "ng build --watch --configuration production",
     "test": "ng test",

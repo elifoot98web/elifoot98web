@@ -22,4 +22,8 @@ export class LocalStorageService {
     return await this.storage.get(key)
   }
 
+  async clearAllData(): Promise<void> {
+    await this.storage.clear()
+  }
+
 }
