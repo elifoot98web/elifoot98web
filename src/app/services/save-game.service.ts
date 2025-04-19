@@ -86,6 +86,37 @@ export class SaveGameService {
     return true; 
   }
 
+  async clearAllData(dosCI: any): Promise<void> {
+    // Clear all data from the game
+    dosCI.pause()
+    await dosCI.exit()
+
+    // clear all data from indexedDB 
+    const dbs = await indexedDB.databases();
+
+    for (const db of dbs) {
+      if(db.name?.startsWith('js-dos-cache')) {
+        const name = db.name || ''
+        await new Promise<void>((resolve, reject) => {
+          const request = indexedDB.deleteDatabase(name);
+          request.onsuccess = () => {
+            console.log(`Database ${db.name} deleted successfully`);
+            resolve()
+          };
+          request.onerror = () => {
+            console.error(`Error deleting database ${db.name}`);
+            resolve()
+          };
+          request.onblocked = () => {
+            console.warn(`Database ${db.name} deletion blocked`);
+            resolve()
+          };
+        })
+      }
+    }
+    console.log('All data cleared');
+  }
+
   private saveUint8ArrayAsFile(uint8Array: Uint8Array, fileName: string): void {
     const blob = new Blob([uint8Array], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
@@ -100,7 +131,4 @@ export class SaveGameService {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   }
-
-
-
 }
