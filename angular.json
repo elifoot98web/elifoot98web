@@ -91,7 +91,7 @@
                 }
               ],
               "outputHashing": "all",
-              "baseHref": "./"
+              "baseHref": "https://elifoot98web.github.io/elifoot98web/"
             },
             "development": {
               "buildOptimizer": false,
