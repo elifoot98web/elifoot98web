@@ -2,7 +2,7 @@
   "name": "elifoot98_web",
   "version": "1.0",
   "author": "Leonardo Pereira <jlcvp>",
-  "homepage": "https://elifoot98.com.br",
+  "homepage": "https://www.elifoot98.com.br",
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
