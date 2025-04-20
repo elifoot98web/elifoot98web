@@ -1,13 +1,13 @@
-<ion-header [translucent]="true">
+<ion-header [translucent]="true" *ngIf="!isMobile || !isLandscape">
   <ion-toolbar color="tertiary">
     <ion-buttons class="ion-hide-md-up" slot="start">
       <ion-button fill="solid" color="secondary" (click)="toggleKeyboard()">
         <ion-icon slot="icon-only" src="../../assets/icon/keyboard.svg"></ion-icon>
       </ion-button>
     </ion-buttons>
-    <ion-title class="ion-hide-md-down">Elifoot 98 Web</ion-title>
+    <ion-title class="ion-hide-md-down">Elifoot 98 Online</ion-title>
     
-    <ion-buttons slot="end">
+    <ion-buttons slot="end" *ngIf="!isMobile"> 
       <ion-button fill="solid" color="primary" (click)="saveGame()">
         <ion-icon slot="end" name="save-outline"></ion-icon>
         Salvar Progresso
@@ -62,7 +62,7 @@
                 <ion-icon slot="end" name="open-outline"></ion-icon>
               </ion-item>
               <ion-item button detail="false" (click)="showTutorial()">
-                <ion-label>Mostrar Avisos</ion-label> 
+                <ion-label>Avisos e Informações</ion-label> 
                 <ion-icon slot="end" name="information-circle-outline"></ion-icon>
               </ion-item>
               <ion-item button detail="true" id="nested-patch-options"><ion-label>Opções de Patch</ion-label></ion-item>
@@ -92,12 +92,12 @@
   </ion-toolbar>
 </ion-header>
 
-<ion-content [fullscreen]="true">
-  <div [ngClass]="{ hidden: isHidden, full: !isHidden }" class="smooth-canvas" id="game-container"></div>
+<ion-content [fullscreen]="true" class="not-selectable">
+  <div [ngClass]="{ hidden: isHidden, full: !isHidden }" class="smooth-canvas not-selectable" id="game-container"></div> 
 </ion-content>
-<ion-footer class="hidden-mob">
+<ion-footer *ngIf="!isMobile">
   <ion-toolbar color="tertiary">
-    <ion-card-subtitle class="ion-padding-start ion-padding-top">Feito nas pressas, na terra dos altos coqueiros.</ion-card-subtitle>
-    <ion-card-subtitle class="ion-padding-start ion-padding-bottom">Este site NÃO coleta nenhuma informação, NÃO utiliza cookies ou qualquer outro mecanismo de rastreamento.</ion-card-subtitle>
+    <ion-card-subtitle class="ion-padding-start ion-padding-top not-selectable">Feito nas pressas, na terra dos altos coqueiros.</ion-card-subtitle>
+    <ion-card-subtitle class="ion-padding-start ion-padding-bottom not-selectable">Este site NÃO coleta nenhuma informação, NÃO utiliza cookies ou qualquer outro mecanismo de rastreamento.</ion-card-subtitle>
   </ion-toolbar>
 </ion-footer>

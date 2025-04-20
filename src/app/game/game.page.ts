@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild } from '@angular/core';
+import { Component, HostListener, OnInit, ViewChild } from '@angular/core';
 import { AlertController, LoadingController } from '@ionic/angular';
 import { SaveGameService } from '../services/save-game.service';
 import { LocalStorageService } from '../services/local-storage.service';
@@ -21,11 +21,20 @@ const STORAGEKEY = {
 export class GamePage implements OnInit {
   @ViewChild('popover') popover: any;
   
+  @HostListener('window:resize', ['$event'])
+  onWindowResize() {
+    this.isLandscape = window.innerWidth > window.innerHeight
+    this.isMobile = this.isLandscape && window.innerHeight < 768 || window.innerWidth < 768 
+    console.log({isLandscape: this.isLandscape, isMobile: this.isMobile})
+  }
+
   disableSmoothFilter = false;
   isPopoverOpen = false;
   isHidden = true;
   dosCI: any = null;
   autoSaveInterval: any = null;
+  isLandscape = false
+  isMobile = false
 
   constructor(private loadingController: LoadingController, 
     private alertController: AlertController, 
@@ -34,6 +43,7 @@ export class GamePage implements OnInit {
     private storageService: LocalStorageService) { }
 
   async ngOnInit() {
+    this.onWindowResize()
     const loading = await this.loadingController.create({
       message: 'Carregando game...',
       backdropDismiss: false
@@ -126,26 +136,31 @@ export class GamePage implements OnInit {
   }
 
   async showTutorial() {
+      const hideTutorial = await this.storageService.get<boolean>(STORAGEKEY.HIDE_TUTORIAL)
       const alert = await this.alertController.create({
-        header: 'Avisos',
-        message: '- Sempre que terminar de jogar, clique no botão "Salvar Progresso" no topo do site para persistir o jogo salvo neste navegador\n' +
+        header: 'Informações',
+        message: 'Salvando o progresso:\n' +
+          '- Sempre que terminar de jogar, clique no botão "Salvar Progresso" no topo do site para persistir o jogo salvo neste navegador\n' +
           '- O jogo salvo é persistido 100% no armazenamento do browser.\n'+
+          '- No menu de opções, é possível ativar a opção de auto-save a cada 5 minutos.\n'+
           '- Se os dados do navegador forem apagados ao fim da sessão, ou se estiver rodando em uma janela anônima de navegação o jogo salvo será perdido entre sessões\n' +
-          '- Pressione ESC para livrar o mouse da janela do jogo.\n' +
-          '- Jogar no celular ainda não está 100% por conta da emulação do mouse e teclado. Os navegadores no sistema Android também sofrem um pouco mais com a performance.\n',
+          '\n'+
+          'Input:\n'+
+          '- No computador, pressione ESC para livrar o mouse da janela do jogo.\n' +
+          '- No celular, o cursor pode ser movido com o dedo como se a tela toda fosse um grande touchpad de notebook.\n' +
+          '- O teclado virtual pode ser aberto e fechado clicando no botão de teclado aqui do lado.\n' +
+          '- Os navegadores no sistema Android sofrem um pouco mais com a performance.\n' +
+          '- Jogar no celular ainda não está 100% por conta da emulação do mouse e teclado, mas já estou pensando numa solução.\n',
         backdropDismiss: false,
         cssClass: 'alert-whitespace wide-alert',
         buttons: [{
-          text: 'Entendi',
-          handler: () => {
-            this.isHidden = false
-          }
+          text: 'Entendi'
         }],
         inputs: [{
           type: 'checkbox',
           label: 'Não mostrar novamente',
           value: 'showTutorial',
-          checked: false,
+          checked: hideTutorial,
           handler: async (e) => {
             await this.storageService.set(STORAGEKEY.HIDE_TUTORIAL, e.checked)
           }
