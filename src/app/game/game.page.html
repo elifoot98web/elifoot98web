@@ -28,7 +28,7 @@
             <ion-label>Opções</ion-label>
           </ion-list-header>
           <ion-item detail="false">
-            <ion-toggle [checked]="disableSmoothFilter" (ionChange)="toggleSmoothFilter($event)">Desativar Suavização</ion-toggle> 
+            <ion-toggle [checked]="smoothFilterDisabled" (ionChange)="toggleSmoothFilter($event)">Desativar Suavização</ion-toggle> 
           </ion-item>
           <ion-item detail="false">
             <ion-toggle (ionChange)="toggleAutoSave($event)">Auto-Save (5 mins)</ion-toggle> 

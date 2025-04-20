@@ -60,7 +60,7 @@ export class GamePage implements OnInit {
     console.log({isLandscape: this.isLandscape, isMobile: this.isMobile})
   }
 
-  disableSmoothFilter = false;
+  smoothFilterDisabled = false;
   isPopoverOpen = false;
   isVirtualKeyboardShowing = false;
   isHidden = true;
@@ -294,7 +294,7 @@ export class GamePage implements OnInit {
 
   async toggleSmoothFilter(e: any) {
     const disableSmoothFilter = e.detail.checked
-    this.disableSmoothFilter = disableSmoothFilter
+    this.smoothFilterDisabled = disableSmoothFilter
     console.log(`smooth filter: ${!disableSmoothFilter ? 'on' : 'off'}`)
 
     const canvas = document.getElementsByClassName('emulator-canvas')[0] as HTMLCanvasElement
