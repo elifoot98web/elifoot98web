@@ -122,17 +122,27 @@ export class GamePage implements OnInit {
         { x: 10, y: 250 },
       ]
 
-      const expectedGreen = { r: 0, g: 130, b: 0, a: 255 }
-
+      const expectedGreens = [{ r: 0, g: 128, b: 0, a: 255 }, { r: 0, g: 170, b: 85, a: 255 }]
+      const tolerance = 25 // Adjust this value as needed (depends on the color range of the monitor)
       let greenCount = 0
-      for (const point of points) {
-        const color = getColorAt(point.x, point.y, imageData)
-        if (color.r === expectedGreen.r && color.g === expectedGreen.g && color.b === expectedGreen.b && color.a === expectedGreen.a) {
-          greenCount++
+      for (const expectedGreen of expectedGreens) {
+        for (const point of points) {
+          const color = getColorAt(point.x, point.y, imageData)
+          // Check if the color is within the tolerance range
+          if (
+            Math.abs(color.r - expectedGreen.r) <= tolerance &&
+            Math.abs(color.g - expectedGreen.g) <= tolerance &&
+            Math.abs(color.b - expectedGreen.b) <= tolerance &&
+            Math.abs(color.a - expectedGreen.a) <= tolerance
+          ) {
+            // Color is within the tolerance range
+            greenCount++
+          }
         }
       }
       
       if(greenCount > 2) {
+        console.log("Green check passed")
         return true
       }
       return false

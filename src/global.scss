@@ -49,6 +49,13 @@
     user-select: none;
 }
 
+canvas {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
 @media screen and (max-width: 599px), screen and (max-height: 700px) {
     .hidden-mob {
       display: none;
