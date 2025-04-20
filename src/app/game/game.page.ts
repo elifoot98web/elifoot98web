@@ -125,11 +125,10 @@ export class GamePage implements OnInit {
       const alert = await this.alertController.create({
         header: 'Avisos',
         message: '- Sempre que terminar de jogar, clique no botão "Salvar Progresso" no topo do site para persistir o jogo salvo neste navegador\n' +
-          '- O jogo salvo é persistido no cache navegador, então se você limpar o cache do navegador, o jogo salvo será perdido\n' +
-          '- Caso um erro de "eli.cod" apareça, recarregue a página até que ele suma. Estou tentando consertar.\n' +
+          '- O jogo salvo é persistido 100% no armazenamento do browser.\n'+
+          '- Se os dados do navegador forem apagados ao fim da sessão, ou se estiver rodando em uma janela anônima de navegação o jogo salvo será perdido entre sessões\n' +
           '- Pressione ESC para livrar o mouse da janela do jogo.\n' +
-          '- Por conta de como o Elifoot 98 verifica a integridade do registro, não é possível salvar o registro no emulador web da aplicação entre sessões diferentes do navegador. É necessário registrar novamente sempre que necessario.\n' +
-          '- Jogar no celular ainda não está 100% por conta da emulação do mouse e teclado. O android também sofre um pouco mais severamente com o problema do "eli.cod". Estou verificando alternativas.\n',
+          '- Jogar no celular ainda não está 100% por conta da emulação do mouse e teclado. Os navegadores no sistema Android também sofrem um pouco mais com a performance.\n',
         backdropDismiss: false,
         cssClass: 'alert-whitespace wide-alert',
         buttons: [{
