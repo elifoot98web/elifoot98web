@@ -5,6 +5,7 @@ import { LocalStorageService } from '../services/local-storage.service';
 import { PatchService } from '../services/patch.service';
 import * as JSZip from 'jszip';
 import { environment } from 'src/environments/environment';
+import { ToggleCheckEvent } from '../interfaces/toggle-event';
 
 @Component({
   selector: 'app-game',
@@ -33,13 +34,83 @@ export class GamePage implements OnInit {
     });
     await loading.present();
     console.time("carregando game...")
-    this.dosCI = await elifootMain(environment.prefixPath, environment.gameBundleURL)
+    await this.loadGame()
     console.timeEnd("carregando game...")
-    setTimeout(async () => {
-      this.isHidden = false
-      await loading.dismiss()
-      await this.handleShowTutorial()
-    }, 1500);
+    await this.loadConfig()
+    this.isHidden = false
+    await loading.dismiss()
+    await this.handleShowTutorial()
+  }
+  
+  async loadGame(): Promise<void> {
+    this.dosCI = await elifootMain(environment.prefixPath, environment.gameBundleURL)
+    let timeout = false
+    let loaded = false
+    setTimeout(() => {
+      timeout = true
+    }, 10000);
+
+    // Properly detect the green screen of the game
+    const getColorAt = (x: number, y: number, imageData: ImageData) => {
+      const { data, width } = imageData;
+      const index = (y * width + x) * 4;
+    
+      const r = data[index];
+      const g = data[index + 1];
+      const b = data[index + 2];
+      const a = data[index + 3];
+    
+      return { r, g, b, a }; // or return as rgba string if you prefer
+    }
+
+    const checkGreenScreen = async () => {
+      const imageData = await this.dosCI.screenshot()
+      const points = [
+        { x: 0, y: 25 },
+        { x: 200, y: 25 },
+        { x: 400, y: 25 },
+        { x: 10, y: 250 },
+      ]
+
+      const expectedGreen = { r: 0, g: 130, b: 0, a: 255 }
+
+      let greenCount = 0
+      for (const point of points) {
+        const color = getColorAt(point.x, point.y, imageData)
+        if (color.r === expectedGreen.r && color.g === expectedGreen.g && color.b === expectedGreen.b && color.a === expectedGreen.a) {
+          greenCount++
+        }
+      }
+      
+      if(greenCount > 2) {
+        return true
+      }
+      return false
+    }
+
+    while(!timeout && !loaded) {
+      const isGreenScreen = await checkGreenScreen()
+      if(isGreenScreen) {
+        console.log("jogo carregado")
+        loaded = true
+      } else {
+        console.log("aguardando o jogo carregar...")
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+  }
+
+  async loadConfig() {
+    const smoothFilter = await this.storageService.get<boolean>('smoothFilter')
+    const autoSave = await this.storageService.get<boolean>('autoSave')
+    
+    if (smoothFilter) {
+      this.toggleSmoothFilter({detail: {checked: smoothFilter}})
+    }
+
+    if (autoSave) {
+      this.toggleAutoSave({detail: {checked: autoSave}})
+    }
   }
 
   async handleShowTutorial() {
@@ -148,7 +219,7 @@ export class GamePage implements OnInit {
     this.hidePopover()
   }
 
-  async toggleAutoSave(e: any) {
+  async toggleAutoSave(e: any & ToggleCheckEvent) {
     console.log(`autosave: ${e.detail.checked ? 'on' : 'off'}`)
     clearInterval(this.autoSaveInterval)
     if (e.detail.checked) {
@@ -157,6 +228,7 @@ export class GamePage implements OnInit {
       }, 5*60*1000)
       await this.saveGameService.saveGame()
     }
+    await this.storageService.set('autoSave', e.detail.checked)
   }
 
   async toggleSmoothFilter(e: any) {
@@ -170,6 +242,7 @@ export class GamePage implements OnInit {
     } else {
       canvas.classList.remove('smooth-canvas')
     }
+    await this.storageService.set('smoothFilter', activateSmoothFilter)
   }
 
   showPopover(e: Event) {
