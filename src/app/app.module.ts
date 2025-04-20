@@ -13,7 +13,9 @@ import { HttpClientModule } from '@angular/common/http';
 
 @NgModule({
   declarations: [AppComponent],
-  imports: [BrowserModule, IonicModule.forRoot(), IonicStorageModule.forRoot(),
+  imports: [BrowserModule, IonicModule.forRoot({
+    mode: 'md' // Use Material Design mode on all platforms
+  }), IonicStorageModule.forRoot(),
     AppRoutingModule, MaskitoModule, HttpClientModule],
   providers: [{ provide: RouteReuseStrategy, useClass: IonicRouteStrategy }],
   bootstrap: [AppComponent],
