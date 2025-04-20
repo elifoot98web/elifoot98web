@@ -5,7 +5,9 @@ import { LocalStorageService } from '../services/local-storage.service';
 import { PatchService } from '../services/patch.service';
 import * as JSZip from 'jszip';
 import { environment } from 'src/environments/environment';
-import { ToggleCheckEvent } from '../interfaces/toggle-event';
+import { ToggleCheckEvent } from '../models/toggle-event';
+import { EmulatorKeyCode } from '../models/emulator-keycodes';
+import { EmulatorControlService } from '../services/emulator-control.service';
 
 const STORAGEKEY = {
   DISABLE_SMOOTH_FILTER: 'disableSmoothFilter',
@@ -13,14 +15,44 @@ const STORAGEKEY = {
   HIDE_TUTORIAL: 'hideTutorial'
 }
 
+const gameInputButtons = [
+  { keyCode: EmulatorKeyCode.KBD_f1, label: '3-3-4', text: 'F1' },
+  { keyCode: EmulatorKeyCode.KBD_f2, label: '3-4-3', text: 'F2' },
+  { keyCode: EmulatorKeyCode.KBD_f3, label: '4-2-4', text: 'F3' },
+  { keyCode: EmulatorKeyCode.KBD_f4, label: '4-3-3', text: 'F4' },
+  { keyCode: EmulatorKeyCode.KBD_f5, label: '4-4-2', text: 'F5' },
+  { keyCode: EmulatorKeyCode.KBD_f6, label: '4-5-1', text: 'F6' },
+  { keyCode: EmulatorKeyCode.KBD_f7, label: '5-2-3', text: 'F7' },
+  { keyCode: EmulatorKeyCode.KBD_f8, label: '5-3-2', text: 'F8' },
+  { keyCode: EmulatorKeyCode.KBD_f9, label: '5-4-1', text: 'F9' },
+  { keyCode: EmulatorKeyCode.KBD_f10, label: '5-5-0', text: 'F10' },
+  { keyCode: EmulatorKeyCode.KBD_f11, label: '6-3-1', text: 'F11' },
+  { keyCode: EmulatorKeyCode.KBD_f12, label: '6-4-0', text: 'F12' },
+];
+
+const gameInputButtonsReversed = [
+  { keyCode: EmulatorKeyCode.KBD_f12, label: '6-4-0', text: 'F12' },
+  { keyCode: EmulatorKeyCode.KBD_f11, label: '6-3-1', text: 'F11' },
+  { keyCode: EmulatorKeyCode.KBD_f10, label: '5-5-0', text: 'F10' },
+  { keyCode: EmulatorKeyCode.KBD_f9, label: '5-4-1', text: 'F9' },
+  { keyCode: EmulatorKeyCode.KBD_f8, label: '5-3-2', text: 'F8' },
+  { keyCode: EmulatorKeyCode.KBD_f7, label: '5-2-3', text: 'F7' },
+  { keyCode: EmulatorKeyCode.KBD_f6, label: '4-5-1', text: 'F6' },
+  { keyCode: EmulatorKeyCode.KBD_f5, label: '4-4-2', text: 'F5' },
+  { keyCode: EmulatorKeyCode.KBD_f4, label: '4-3-3', text: 'F4' },
+  { keyCode: EmulatorKeyCode.KBD_f3, label: '4-2-4', text: 'F3' },
+  { keyCode: EmulatorKeyCode.KBD_f2, label: '3-4-3', text: 'F2' },
+  { keyCode: EmulatorKeyCode.KBD_f1, label: '3-3-4', text: 'F1' },
+];
+
 @Component({
   selector: 'app-game',
   templateUrl: './game.page.html',
   styleUrls: ['./game.page.scss'],
 })
 export class GamePage implements OnInit {
+  EmulatorKeyCode = EmulatorKeyCode
   @ViewChild('popover') popover: any;
-  
   @HostListener('window:resize', ['$event'])
   onWindowResize() {
     this.isLandscape = window.innerWidth > window.innerHeight
@@ -30,6 +62,7 @@ export class GamePage implements OnInit {
 
   disableSmoothFilter = false;
   isPopoverOpen = false;
+  isVirtalKeyboardShowing = false;
   isHidden = true;
   dosCI: any = null;
   autoSaveInterval: any = null;
@@ -40,7 +73,8 @@ export class GamePage implements OnInit {
     private alertController: AlertController, 
     private saveGameService: SaveGameService,
     private patchService: PatchService,
-    private storageService: LocalStorageService) { }
+    private storageService: LocalStorageService,
+    private emulatorControlService: EmulatorControlService) { }
 
   async ngOnInit() {
     this.onWindowResize()
@@ -169,6 +203,14 @@ export class GamePage implements OnInit {
       await alert.present();
   }
 
+  get gameInputs() {
+    if (!this.isLandscape) {
+      return gameInputButtonsReversed
+    } else {
+      return gameInputButtons;
+    }
+  }
+
   async saveGame() {
     await this.saveGameService.saveGame()
     this.hidePopover()
@@ -233,6 +275,7 @@ export class GamePage implements OnInit {
   }
   
   toggleKeyboard() {
+    this.isVirtalKeyboardShowing = !this.isVirtalKeyboardShowing
     toggleSoftKeyboard()
     this.hidePopover()
   }
@@ -270,6 +313,11 @@ export class GamePage implements OnInit {
     setTimeout(() => {
       this.isPopoverOpen = true;
     }, 50);
+  }
+
+  sendKey(key: EmulatorKeyCode) {
+    console.log(`key pressed: ${key}`)
+    this.emulatorControlService.sendKey(this.dosCI, key)
   }
 
   async applyPatch(patch: JSZip) {

@@ -7,3 +7,37 @@
     height: 100%;
     background-color: #008200;
 }
+
+ion-fab-list.labeled ion-fab-button {
+    overflow: visible;
+    position: relative;
+    contain: layout;
+}
+
+ion-fab-list.labeled ion-fab-button ion-label {
+    position: absolute;
+    color: var(--ion-color-tertiary-contrast);
+    background: var(--ion-color-tertiary);
+    line-height: 1rem;
+    padding: 4px 8px;
+    border-radius: 8px;
+    box-shadow: var(--box-shadow);
+    height: 40px;
+    width: max-content;
+    display: flex;
+    align-items: center;
+}
+
+ion-fab-list.labeled.landscape ion-fab-button ion-label {
+    bottom: 50px;
+    font-size: x-small;
+}
+
+ion-fab-list.labeled.portrait ion-fab-button ion-label {
+    left: 50px;
+}
+
+ion-fab-list.labeled ion-fab-button::part(native) {
+    contain: initial;
+    overflow: visible;
+}

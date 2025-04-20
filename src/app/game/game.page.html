@@ -7,7 +7,7 @@
     </ion-buttons>
     <ion-title class="ion-hide-md-down">Elifoot 98 Online</ion-title>
     
-    <ion-buttons slot="end" *ngIf="!isMobile"> 
+    <ion-buttons slot="end"> 
       <ion-button fill="solid" color="primary" (click)="saveGame()">
         <ion-icon slot="end" name="save-outline"></ion-icon>
         Salvar Progresso
@@ -15,85 +15,127 @@
       <ion-button (click)="showPopover($event)">
         <ion-icon slot="icon-only" name="ellipsis-vertical-outline"></ion-icon>
       </ion-button>
-      <ion-popover #popover [isOpen]="isPopoverOpen" triggerAction="click">
-        <ng-template>
-          <ion-content>
-            <ion-list class="ion-no-padding">
-              <ion-list-header class="ion-no-padding ion-padding-start" color="light">
-                <ion-label>Opções</ion-label>
-              </ion-list-header>
-              <ion-item detail="false">
-                <ion-toggle [checked]="disableSmoothFilter" (ionChange)="toggleSmoothFilter($event)">Desativar Suavização</ion-toggle> 
-              </ion-item>
-              <ion-item detail="false">
-                <ion-toggle (ionChange)="toggleAutoSave($event)">Auto-Save (5 mins)</ion-toggle> 
-              </ion-item>
-              <ion-item button detail="true" id="nested-save-options"><ion-label>Salvar</ion-label></ion-item>
-              <ion-popover trigger="nested-save-options" [dismissOnSelect]="true" side="end">
-                <ng-template>
-                  <ion-content>
-                    <ion-list>
-                      <ion-item button detail="false" (click)="saveGame()">
-                        <ion-label>Salvar Progresso</ion-label> 
-                        <ion-icon slot="end" name="save-outline"></ion-icon>
-                      </ion-item>
-                      <ion-item button detail="false" (click)="downloadGameSaves()">
-                        <ion-label>Baixar Jogos Salvos</ion-label> 
-                        <ion-icon slot="end" name="cloud-download-outline"></ion-icon>
-                      </ion-item>
-                      <ion-item button detail="false" (click)="downloadFullDiskChanges()">
-                        <ion-label>{{'Baixar Disco Virtual'}}</ion-label> 
-                        <ion-icon slot="end" name="code-download-outline"></ion-icon>
-                      </ion-item>
-                      <ion-item button detail="false" (click)="clearAllData()">
-                        <ion-label color="danger" >{{'Apagar todos os dados'}}</ion-label> 
-                        <ion-icon slot="end" name="trash-outline" color="danger" ></ion-icon>
-                      </ion-item>
-                    </ion-list>
-                  </ion-content>
-                </ng-template>
-              </ion-popover>
-              <ion-item button detail="false" (click)="toggleKeyboard()">
-                <ion-label>Teclado Virtual</ion-label> 
-                <ion-icon slot="end" src="../../assets/icon/keyboard.svg"></ion-icon>
-              </ion-item>
-              <ion-item button detail="false" href="../ativador" target="_blank">
-                <ion-label>Abrir Ativador</ion-label> 
-                <ion-icon slot="end" name="open-outline"></ion-icon>
-              </ion-item>
-              <ion-item button detail="false" (click)="showTutorial()">
-                <ion-label>Avisos e Informações</ion-label> 
-                <ion-icon slot="end" name="information-circle-outline"></ion-icon>
-              </ion-item>
-              <ion-item button detail="true" id="nested-patch-options"><ion-label>Opções de Patch</ion-label></ion-item>
-              <ion-popover trigger="nested-patch-options" [dismissOnSelect]="true" side="end">
-                <ng-template>
-                  <ion-content>
-                    <ion-list>
-                      <ion-item button detail="false" (click)="fileInput.click()">
-                        <ion-label>Carregar Patch</ion-label> 
-                        <ion-icon slot="end" name="cloud-upload-outline"></ion-icon>
-                      </ion-item>
-                      <ion-item button detail="false" (click)="promptClearCustomPatch()">
-                        <ion-label>Remover Patch</ion-label> 
-                        <ion-icon slot="end" name="cloud-offline-outline"></ion-icon>
-                      </ion-item>
-                    </ion-list>
-                  </ion-content>
-                </ng-template>
-              </ion-popover>
-              
-            </ion-list>
-          </ion-content>
-        </ng-template>
-      </ion-popover>
-      <input style="display:none;" type="file" accept=".zip" #fileInput (change)="onPatchFileSelected($event)" />
     </ion-buttons>
   </ion-toolbar>
 </ion-header>
 
 <ion-content [fullscreen]="true" class="not-selectable">
+  <ion-popover mode="md" #popover [isOpen]="isPopoverOpen" triggerAction="click">
+    <ng-template>
+      <ion-content>
+        <ion-list class="ion-no-padding">
+          <ion-list-header class="ion-no-padding ion-padding-start" color="light">
+            <ion-label>Opções</ion-label>
+          </ion-list-header>
+          <ion-item detail="false">
+            <ion-toggle [checked]="disableSmoothFilter" (ionChange)="toggleSmoothFilter($event)">Desativar Suavização</ion-toggle> 
+          </ion-item>
+          <ion-item detail="false">
+            <ion-toggle (ionChange)="toggleAutoSave($event)">Auto-Save (5 mins)</ion-toggle> 
+          </ion-item>
+          <ion-item button detail="true" id="nested-save-options"><ion-label>Salvar</ion-label></ion-item>
+          <ion-popover trigger="nested-save-options" [dismissOnSelect]="true" side="end">
+            <ng-template>
+              <ion-content>
+                <ion-list>
+                  <ion-item button detail="false" (click)="saveGame()">
+                    <ion-label>Salvar Progresso</ion-label> 
+                    <ion-icon slot="end" name="save-outline"></ion-icon>
+                  </ion-item>
+                  <ion-item button detail="false" (click)="downloadGameSaves()">
+                    <ion-label>Baixar Jogos Salvos</ion-label> 
+                    <ion-icon slot="end" name="cloud-download-outline"></ion-icon>
+                  </ion-item>
+                  <ion-item button detail="false" (click)="downloadFullDiskChanges()">
+                    <ion-label>Baixar Disco Virtual</ion-label> 
+                    <ion-icon slot="end" name="code-download-outline"></ion-icon>
+                  </ion-item>
+                  <ion-item button detail="false" (click)="clearAllData()">
+                    <ion-label color="danger">Apagar todos os dados</ion-label> 
+                    <ion-icon slot="end" name="trash-outline" color="danger" ></ion-icon>
+                  </ion-item>
+                </ion-list>
+              </ion-content>
+            </ng-template>
+          </ion-popover>
+          <ion-item button detail="false" (click)="toggleKeyboard()">
+            <ion-label>Teclado Virtual</ion-label> 
+            <ion-icon slot="end" src="../../assets/icon/keyboard.svg"></ion-icon>
+          </ion-item>
+          <ion-item button detail="false" href="../ativador" target="_blank">
+            <ion-label>Abrir Ativador</ion-label> 
+            <ion-icon slot="end" name="open-outline"></ion-icon>
+          </ion-item>
+          <ion-item button detail="false" (click)="showTutorial()">
+            <ion-label>Avisos e Informações</ion-label> 
+            <ion-icon slot="end" name="information-circle-outline"></ion-icon>
+          </ion-item>
+          <ion-item button detail="true" id="nested-patch-options"><ion-label>Opções de Patch</ion-label></ion-item>
+          <ion-popover trigger="nested-patch-options" [dismissOnSelect]="true" side="end">
+            <ng-template>
+              <ion-content>
+                <ion-list>
+                  <ion-item button detail="false" (click)="fileInput.click()">
+                    <ion-label>Carregar Patch</ion-label> 
+                    <ion-icon slot="end" name="cloud-upload-outline"></ion-icon>
+                  </ion-item>
+                  <ion-item button detail="false" (click)="promptClearCustomPatch()">
+                    <ion-label>Remover Patch</ion-label> 
+                    <ion-icon slot="end" name="cloud-offline-outline"></ion-icon>
+                  </ion-item>
+                </ion-list>
+              </ion-content>
+            </ng-template>
+          </ion-popover>
+          
+        </ion-list>
+      </ion-content>
+    </ng-template>
+  </ion-popover>
+  <input style="display:none;" type="file" accept=".zip" #fileInput (change)="onPatchFileSelected($event)" />
   <div [ngClass]="{ hidden: isHidden, full: !isHidden }" class="smooth-canvas not-selectable" id="game-container"></div> 
+  <ion-fab *ngIf="!(!isMobile || !isLandscape)" slot="fixed" vertical="top" horizontal="start" >
+    <ion-fab-button color="tertiary">
+      <ion-icon name="menu-outline"></ion-icon>
+    </ion-fab-button>
+    <ion-fab-list side="end">
+      <ion-fab-button color="tertiary" (click)="saveGame()">
+        <ion-icon name="save-outline"></ion-icon>
+      </ion-fab-button>
+      <ion-fab-button color="tertiary" (click)="showPopover($event)">
+        <ion-icon name="options-outline"></ion-icon>
+      </ion-fab-button>
+      <ion-fab-button color="tertiary" (click)="toggleKeyboard()">
+        <ion-icon src="../../assets/icon/keyboard.svg"></ion-icon>
+      </ion-fab-button>
+    </ion-fab-list>
+  </ion-fab>
+
+  <ion-fab #gameInputFab *ngIf="!isVirtalKeyboardShowing" slot="fixed" vertical="bottom" horizontal="start" >
+    <ion-fab-button color="tertiary">
+      <ion-icon name="game-controller-outline"></ion-icon>
+    </ion-fab-button>
+    <ion-fab-list class="labeled" [ngClass]="{ landscape: isLandscape, portrait: !isLandscape }" [side]="!isLandscape ? 'top' : 'end'">
+      <ng-container *ngFor="let input of gameInputs">
+        <ion-fab-button color="tertiary" (click)="sendKey(input.keyCode)">
+          {{ input.text }}
+          <ion-label>{{ input.label }}</ion-label>
+        </ion-fab-button>     
+      </ng-container>
+    </ion-fab-list>
+    <ion-fab-list class="labeled" [ngClass]="{ landscape: !isLandscape, portrait: isLandscape }" [side]="isLandscape ? 'top' : 'end'">
+      <ion-fab-button color="tertiary" (click)="sendKey(EmulatorKeyCode.KBD_a)">
+        A
+      </ion-fab-button>
+      <ion-fab-button color="tertiary" (click)="sendKey(EmulatorKeyCode.KBD_m)">
+        M
+      </ion-fab-button>
+      <ion-fab-button color="tertiary" (click)="sendKey(EmulatorKeyCode.KBD_c)">
+        C
+        <ion-label>Classificação</ion-label>
+      </ion-fab-button>
+    </ion-fab-list>
+  </ion-fab>
 </ion-content>
 <ion-footer *ngIf="!isMobile">
   <ion-toolbar color="tertiary">
