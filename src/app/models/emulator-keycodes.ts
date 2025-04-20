@@ -105,5 +105,5 @@ export enum EmulatorKeyCode {
     KBD_up = 265,
     KBD_down = 264,
     KBD_right = 262,
-    KBD_extra_lt_gt = 348, // ???
+    KBD_extra_lt_gt = 348, // legacy key on some ibm keyboards
 }
