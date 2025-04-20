@@ -42,8 +42,22 @@
     image-rendering: auto !important;
 }
 
-@media (max-width: 599px), (max-height: 700px) {
+@media screen and (max-width: 599px), screen and (max-height: 700px) {
     .hidden-mob {
       display: none;
+    }
+}
+
+// hidden-mob-portrait is used to hide elements on mobile devices in portrait mode
+@media screen and (max-width: 599px) and (orientation: portrait) {
+    .hidden-mob-portrait {
+        display: none;
+    }
+}
+
+// hidden-mob-landscape is used to hide elements on mobile devices in landscape mode
+@media screen and (max-height: 599px) and (orientation: landscape) {
+    .hidden-mob-landscape {
+        display: none;
     }
 }

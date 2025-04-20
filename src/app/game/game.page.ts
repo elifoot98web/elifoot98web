@@ -7,6 +7,12 @@ import * as JSZip from 'jszip';
 import { environment } from 'src/environments/environment';
 import { ToggleCheckEvent } from '../interfaces/toggle-event';
 
+const STORAGEKEY = {
+  DISABLE_SMOOTH_FILTER: 'disableSmoothFilter',
+  AUTO_SAVE: 'autoSave',
+  HIDE_TUTORIAL: 'hideTutorial'
+}
+
 @Component({
   selector: 'app-game',
   templateUrl: './game.page.html',
@@ -15,7 +21,7 @@ import { ToggleCheckEvent } from '../interfaces/toggle-event';
 export class GamePage implements OnInit {
   @ViewChild('popover') popover: any;
   
-  smoothFilterActive = false;
+  disableSmoothFilter = false;
   isPopoverOpen = false;
   isHidden = true;
   dosCI: any = null;
@@ -101,12 +107,10 @@ export class GamePage implements OnInit {
   }
 
   async loadConfig() {
-    const smoothFilter = await this.storageService.get<boolean>('smoothFilter')
-    const autoSave = await this.storageService.get<boolean>('autoSave')
+    const disableSmoothFilter = await this.storageService.get<boolean>(STORAGEKEY.DISABLE_SMOOTH_FILTER)
+    const autoSave = await this.storageService.get<boolean>(STORAGEKEY.AUTO_SAVE)
     
-    if (smoothFilter) {
-      this.toggleSmoothFilter({detail: {checked: smoothFilter}})
-    }
+    this.toggleSmoothFilter({detail: {checked: disableSmoothFilter}})
 
     if (autoSave) {
       this.toggleAutoSave({detail: {checked: autoSave}})
@@ -114,7 +118,7 @@ export class GamePage implements OnInit {
   }
 
   async handleShowTutorial() {
-    const hideTutorial = await this.storageService.get<boolean>('hideTutorial')
+    const hideTutorial = await this.storageService.get<boolean>(STORAGEKEY.HIDE_TUTORIAL)
 
     if (!hideTutorial) {
       await this.showTutorial()
@@ -143,7 +147,7 @@ export class GamePage implements OnInit {
           value: 'showTutorial',
           checked: false,
           handler: async (e) => {
-            await this.storageService.set('hideTutorial', e.checked)
+            await this.storageService.set(STORAGEKEY.HIDE_TUTORIAL, e.checked)
           }
         }]
       });
@@ -227,21 +231,21 @@ export class GamePage implements OnInit {
       }, 5*60*1000)
       await this.saveGameService.saveGame()
     }
-    await this.storageService.set('autoSave', e.detail.checked)
+    await this.storageService.set(STORAGEKEY.AUTO_SAVE, e.detail.checked)
   }
 
   async toggleSmoothFilter(e: any) {
-    const activateSmoothFilter = e.detail.checked
-    this.smoothFilterActive = activateSmoothFilter
-    console.log(`smooth filter: ${activateSmoothFilter ? 'on' : 'off'}`)
+    const disableSmoothFilter = e.detail.checked
+    this.disableSmoothFilter = disableSmoothFilter
+    console.log(`smooth filter: ${!disableSmoothFilter ? 'on' : 'off'}`)
 
     const canvas = document.getElementsByClassName('emulator-canvas')[0] as HTMLCanvasElement
-    if(activateSmoothFilter) {
-      canvas.classList.add('smooth-canvas')
-    } else {
+    if(disableSmoothFilter) {
       canvas.classList.remove('smooth-canvas')
+    } else {
+      canvas.classList.add('smooth-canvas')
     }
-    await this.storageService.set('smoothFilter', activateSmoothFilter)
+    await this.storageService.set(STORAGEKEY.DISABLE_SMOOTH_FILTER, disableSmoothFilter)
   }
 
   showPopover(e: Event) {
