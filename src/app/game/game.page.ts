@@ -62,7 +62,7 @@ export class GamePage implements OnInit {
 
   disableSmoothFilter = false;
   isPopoverOpen = false;
-  isVirtalKeyboardShowing = false;
+  isVirtualKeyboardShowing = false;
   isHidden = true;
   dosCI: any = null;
   autoSaveInterval: any = null;
@@ -275,7 +275,7 @@ export class GamePage implements OnInit {
   }
   
   toggleKeyboard() {
-    this.isVirtalKeyboardShowing = !this.isVirtalKeyboardShowing
+    this.isVirtualKeyboardShowing = !this.isVirtualKeyboardShowing
     toggleSoftKeyboard()
     this.hidePopover()
   }
