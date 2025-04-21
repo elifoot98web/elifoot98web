@@ -5,7 +5,7 @@
   "background_color": "#252329",
   "display": "standalone",
   "scope": "./",
-  "start_url": "./",
+  "start_url": "/#/game",
   "icons": [
     {
       "src": "assets/pwaicons/windows11/SmallTile.scale-100.png",
