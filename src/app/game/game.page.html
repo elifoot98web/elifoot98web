@@ -4,13 +4,16 @@
       <ion-button fill="solid" color="secondary" (click)="toggleKeyboard()">
         <ion-icon slot="icon-only" src="../../assets/icon/keyboard.svg"></ion-icon>
       </ion-button>
+      <ion-button fill="solid" color="secondary" (click)="promptInputText()">
+        <ion-icon slot="icon-only" name="terminal-outline"></ion-icon>
+      </ion-button>
     </ion-buttons>
     <ion-title class="ion-hide-md-down">Elifoot 98 Online</ion-title>
     
     <ion-buttons slot="end"> 
       <ion-button fill="solid" color="primary" (click)="saveGame()">
         <ion-icon slot="end" name="save-outline"></ion-icon>
-        Salvar Progresso
+        <ion-label>Salvar Progresso</ion-label>
       </ion-button>
       <ion-button (click)="showPopover($event)">
         <ion-icon slot="icon-only" name="ellipsis-vertical-outline"></ion-icon>
@@ -19,7 +22,7 @@
   </ion-toolbar>
 </ion-header>
 
-<ion-content [fullscreen]="true" class="not-selectable">
+<ion-content [fullscreen]="true" class="not-selectable" color="primary">
   <ion-popover #popover [isOpen]="isPopoverOpen" triggerAction="click">
     <ng-template>
       <ion-content>
@@ -65,10 +68,6 @@
           <ion-item button detail="false" (click)="toggleKeyboard()">
             <ion-label>Teclado Virtual</ion-label> 
             <ion-icon slot="end" src="../../assets/icon/keyboard.svg"></ion-icon>
-          </ion-item>
-          <ion-item button detail="false" href="#/ativador" target="_blank">
-            <ion-label>Abrir Ativador</ion-label> 
-            <ion-icon slot="end" name="open-outline"></ion-icon>
           </ion-item>
           <ion-item button detail="false" (click)="showTutorial()">
             <ion-label>Avisos e Informações</ion-label> 

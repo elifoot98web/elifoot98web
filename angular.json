@@ -35,11 +35,6 @@
             "styles": ["src/theme/variables.scss", "src/global.scss"],
             "scripts": [
               {
-                "input": "src/scripts/elikg.js",
-                "inject": false,
-                "bundleName": "elifootweb"
-              },
-              {
                 "input": "src/scripts/game.js",
                 "inject": false,
                 "bundleName": "elifootweb"

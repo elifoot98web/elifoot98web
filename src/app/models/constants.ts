@@ -3,7 +3,8 @@ import { EmulatorKeyCode } from "./emulator-keycodes";
 export const STORAGE_KEY = {
   DISABLE_SMOOTH_FILTER: 'disableSmoothFilter',
   AUTO_SAVE: 'autoSave',
-  HIDE_TUTORIAL: 'hideTutorial'
+  HIDE_TUTORIAL: 'hideTutorial',
+  PENDING_UPDATE: 'pendingUpdate',
 }
 
 export const GAME_INPUT_FN_BTNS = [

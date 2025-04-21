@@ -11,10 +11,6 @@ const routes: Routes = [
     loadChildren: () => import('./game/game.module').then( m => m.GamePageModule)
   },
   {
-    path: 'ativador',
-    loadChildren: () => import('./ativador/ativador.module').then( m => m.AtivadorPageModule)
-  },
-  {
     path: '',
     redirectTo: 'main',
     pathMatch: 'full'

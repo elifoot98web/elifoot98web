@@ -23,7 +23,6 @@ export class GamePage implements OnInit {
   onWindowResize() {
     this.isLandscape = window.innerWidth > window.innerHeight
     this.isMobile = this.isLandscape && window.innerHeight < 768 || window.innerWidth < 768 
-    console.log({isLandscape: this.isLandscape, isMobile: this.isMobile})
   }
 
   smoothFilterDisabled = false;
@@ -49,13 +48,20 @@ export class GamePage implements OnInit {
       backdropDismiss: false
     });
     await loading.present();
-    console.time("carregando game...")
-    await this.loadGame()
-    console.timeEnd("carregando game...")
-    await this.loadConfig()
-    this.isHidden = false
-    await loading.dismiss()
-    await this.handleShowTutorial()
+
+    try { 
+      console.time("carregando game...")
+      await this.loadGame()
+      console.timeEnd("carregando game...")
+      await this.loadConfig()
+      this.isHidden = false
+      await loading.dismiss()
+      await this.handleShowTutorial()
+    } catch (e: any) {
+      console.error(e)
+      await loading.dismiss()
+      await this.showErrorAlert(e)
+    }
   }
   
   async loadGame(): Promise<void> {
@@ -385,6 +391,25 @@ export class GamePage implements OnInit {
   }
 
   async promptInputText() {
+    const placeholders = [
+      'Tite\nFelipao\nParreira',
+      'Ronaldo',
+      'Hristo',
+      'Lukunku',
+      'Denilson',
+      'Taffarel',
+      'Peter Schemichel',
+      'Roberto Carlos',
+      'Bosco',
+      'Zinedine Zidane',
+      'Rui Costa',
+      'Mirandinha',
+      'Batistuta'
+    ]
+
+    const randomIndex = Math.floor(Math.random() * placeholders.length);
+    const randomPlaceholder = placeholders[randomIndex]
+
     const alert = await this.alertController.create({
       header: 'Input',
       message: 'Digite o texto que deseja enviar para o jogo',
@@ -393,7 +418,7 @@ export class GamePage implements OnInit {
       inputs: [{
         name: 'text',
         type: 'textarea',
-        placeholder: 'Texto'
+        placeholder: randomPlaceholder
       }],
       buttons: [{
         text: 'Cancelar',
