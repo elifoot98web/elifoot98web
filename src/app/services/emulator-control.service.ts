@@ -19,21 +19,12 @@ export class EmulatorControlService {
     if(!dosCI || !dosCI.simulateKeyPress || !str) {
       return;
     }
-
-    // support only IBM PC KEYBOARD LAYOUT
-    const supportedCharsRegex = /^[a-zA-Z0-9!@#$%^&*()_+{}|:"<>?`~\[\]\\;',./-=\n\r\s]+$/;
-
-    // replace unsupported characters with an empty space
-    const sanitizedStr = str.split('').map((char) => { 
-      if (supportedCharsRegex.test(char)) {
-        return char;
-      } else {
-        console.warn(`Unsupported character: ${char}`);
-        return ' '; // replace with a space or any other placeholder
-      }
-     }).join('');
     
-    const individualStrokes = sanitizedStr.split('').map((char) => {
+    const individualStrokes = str.split('').map((char) => {
+      const keyStroke = EmulatorKeyCodeHelper.getKeyStrokeForCharacter(char);
+      if (keyStroke.length === 0) {
+        return [EmulatorKeyCode.KBD_space]; // Default to space for unsupported characters
+      }
       return EmulatorKeyCodeHelper.getKeyStrokeForCharacter(char);
     })
 
@@ -41,7 +32,7 @@ export class EmulatorControlService {
     for (const keyStroke of individualStrokes) {
       this.sendKey(dosCI, ...keyStroke);
       // Add a small delay between key presses for the emulator to process them
-      await new Promise(resolve => setTimeout(resolve, 80)); 
+      await new Promise(resolve => setTimeout(resolve, 30)); 
     }
   }
 }

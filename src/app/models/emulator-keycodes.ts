@@ -110,13 +110,13 @@ export enum EmulatorKeyCode {
 
 export class EmulatorKeyCodeHelper {
     static getKeyStrokeForCharacter(char: string): EmulatorKeyCode[] {
-        const supportedCharsRegex = /^[a-zA-Z0-9!@#$%^&*()_+{}|:"<>?`~\[\]\\;',./-=\n\r\s]+$/;
+        const supportedCharsRegex = /^[a-zA-Z0-9!@#$%^&*()_+{}|:"<>?`~\[\]\\;',./\-=\n\r\s]+$/;
         // Check if the character is supported
         if (!supportedCharsRegex.test(char)) {
-            console.warn(`Unsupported character: ${char}`);
+            console.warn(`Unsupported character: ${char} (${char.charCodeAt(0)} | 0x${char.charCodeAt(0).toString(16)})`);
             return [];
         }
-        
+
         const keyStroke: EmulatorKeyCode[] = []
         if (char === ' ') {
             keyStroke.push(EmulatorKeyCode.KBD_space);
@@ -171,7 +171,7 @@ export class EmulatorKeyCodeHelper {
                     keyStroke.push(EmulatorKeyCode.KBD_slash);
                     break;
                 default:
-                    console.warn(`Unsupported character: ${char}`);
+                    console.warn(`Unsupported character: ${char} (${char.charCodeAt(0)})`);
                     return [];
             }
         } else if ('~_+{}|:"<>?'.includes(char)) { // Handle special characters with shift

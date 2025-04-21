@@ -392,7 +392,7 @@ export class GamePage implements OnInit {
       cssClass: 'alert-whitespace',
       inputs: [{
         name: 'text',
-        type: 'text',
+        type: 'textarea',
         placeholder: 'Texto'
       }],
       buttons: [{

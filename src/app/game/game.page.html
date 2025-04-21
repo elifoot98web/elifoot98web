@@ -58,6 +58,10 @@
               </ion-content>
             </ng-template>
           </ion-popover>
+          <ion-item button detail="false" (click)="promptInputText()">
+            <ion-label>Input de Texto</ion-label> 
+            <ion-icon slot="end" name="terminal-outline"></ion-icon>
+          </ion-item>
           <ion-item button detail="false" (click)="toggleKeyboard()">
             <ion-label>Teclado Virtual</ion-label> 
             <ion-icon slot="end" src="../../assets/icon/keyboard.svg"></ion-icon>
@@ -131,8 +135,8 @@
         M
       </ion-fab-button>
       <ion-fab-button color="tertiary" (click)="promptInputText()">
-        <ion-label>Enviar Texto</ion-label>
-        <ion-icon src="../../assets/icon/keyboard.svg"></ion-icon>
+        <ion-label>Input de Texto</ion-label>
+        <ion-icon name="terminal-outline"></ion-icon>
       </ion-fab-button>
       <ion-fab-button color="tertiary" (click)="sendKey(EmulatorKeyCode.KBD_kpmultiply)">
         *
