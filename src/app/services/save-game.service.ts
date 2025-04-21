@@ -12,6 +12,11 @@ export class SaveGameService {
   }
 
   async downloadGameSaves(dosCI: any): Promise<boolean> {
+    if(!dosCI) {
+      console.warn('dosCI is not defined');
+      return false
+    }
+    
     const rawChanges = await dosCI.persist()
     let zip = new JSZip()
     zip = await zip.loadAsync(rawChanges, { createFolders: true })
@@ -68,6 +73,11 @@ export class SaveGameService {
   }
 
   async downloadFullDiskChanges(dosCI: any): Promise<boolean> {
+    if(!dosCI) {
+      console.warn('dosCI is not defined');
+      return false
+    }
+
     const rawChanges = await dosCI.persist()
     let zip = new JSZip()
     zip = await zip.loadAsync(rawChanges, { createFolders: true })
@@ -88,6 +98,11 @@ export class SaveGameService {
 
   async clearAllData(dosCI: any): Promise<void> {
     // Clear all data from the game
+    if(!dosCI) {
+      console.warn('dosCI is not defined');
+      return
+    }
+
     dosCI.pause()
     await dosCI.exit()
 

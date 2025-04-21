@@ -5,6 +5,7 @@ export const STORAGE_KEY = {
   AUTO_SAVE: 'autoSave',
   HIDE_TUTORIAL: 'hideTutorial',
   PENDING_UPDATE: 'pendingUpdate',
+  FAIL_COUNT: 'failCount',
 }
 
 export const GAME_INPUT_FN_BTNS = [

@@ -57,10 +57,40 @@ export class GamePage implements OnInit {
       this.isHidden = false
       await loading.dismiss()
       await this.handleShowTutorial()
+      await this.storageService.set(STORAGE_KEY.FAIL_COUNT, 0)
     } catch (e: any) {
       console.error(e)
       await loading.dismiss()
-      await this.showErrorAlert(e)
+      
+      let failCount = await this.storageService.get<number>(STORAGE_KEY.FAIL_COUNT) || 0
+      failCount += 1
+      await this.storageService.set(STORAGE_KEY.FAIL_COUNT, failCount)
+
+      if (failCount < 3) {
+        window.location.reload()
+      } else {
+        const alert = await this.alertController.create({
+          header: `É ${failCount} papapá...`,
+          cssClass: 'alert-whitespace',
+          message: `Multiplas tentativas(${failCount}) de carregar o jogo falharam\n\nMotivo: (${e.message})`,
+          backdropDismiss: false,
+          buttons: [
+            {
+              text: 'Tentar novamente',
+              handler: () => {
+                window.location.reload()
+              }
+            }, {
+              text: 'Limpar todos os dados',
+              cssClass: 'alert-danger',
+              handler: async () => {
+                await this.clearAllData()
+              }
+            }
+          ],
+        });
+        await alert.present();
+      }
     }
   }
   
