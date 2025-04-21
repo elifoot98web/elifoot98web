@@ -49,13 +49,20 @@ export class GamePage implements OnInit {
       backdropDismiss: false
     });
     await loading.present();
-    console.time("carregando game...")
-    await this.loadGame()
-    console.timeEnd("carregando game...")
-    await this.loadConfig()
-    this.isHidden = false
-    await loading.dismiss()
-    await this.handleShowTutorial()
+
+    try { 
+      console.time("carregando game...")
+      await this.loadGame()
+      console.timeEnd("carregando game...")
+      await this.loadConfig()
+      this.isHidden = false
+      await loading.dismiss()
+      await this.handleShowTutorial()
+    } catch (e: any) {
+      console.error(e)
+      await loading.dismiss()
+      await this.showErrorAlert(e)
+    }
   }
   
   async loadGame(): Promise<void> {

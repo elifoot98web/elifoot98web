@@ -11,31 +11,15 @@
 <ion-content [fullscreen]="true" color="primary">
   <ion-grid fixed class="center-vertical">
     <ion-row>
-      <ion-col size="12" size-lg="5">
+      <ion-col size="12" class="ion-padding">
         <ion-card button [routerLink]="['/game']" color="secondary" class="center-vertical">
           <ion-img src="../../assets/gamescreen.png"></ion-img>
           <ion-card-header color="secondary">
             <ion-toolbar color="secondary">
-              <ion-card-title class="not-selectable">Jogar no navegador (BETA)</ion-card-title>
+              <ion-card-title class="not-selectable">Jogar Agora!</ion-card-title>
               <ion-buttons slot="end">
                 <ion-button fill="solid" color="secondary">
                   <ion-icon slot="icon-only" name="game-controller-outline"></ion-icon>
-                </ion-button>
-              </ion-buttons>
-            </ion-toolbar>
-          </ion-card-header>
-        </ion-card>
-      </ion-col>
-      <ion-col size-lg="2" class="ion-hide-lg-down"></ion-col>
-      <ion-col size="12" size-lg="5">
-        <ion-card button [routerLink]="['/ativador']" color="primary" class="center-vertical">
-          <ion-img src="../../assets/ativadorscreen.png"></ion-img>
-          <ion-card-header color="tertiary">
-            <ion-toolbar color="tertiary">
-              <ion-card-title class="not-selectable">Gerador de Contra-Senha (Ativador)</ion-card-title>
-              <ion-buttons slot="end">
-                <ion-button fill="solid" color="tertiary">
-                  <ion-icon slot="icon-only" name="key-outline"></ion-icon>
                 </ion-button>
               </ion-buttons>
             </ion-toolbar>
