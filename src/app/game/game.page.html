@@ -105,7 +105,7 @@
       <ion-fab-button color="tertiary" (click)="showPopover($event)">
         <ion-icon name="options-outline"></ion-icon>
       </ion-fab-button>
-      <ion-fab-button color="tertiary" (click)="toggleKeyboard()">
+      <ion-fab-button color="secondary" (click)="toggleKeyboard()">
         <ion-icon src="../../assets/icon/keyboard.svg"></ion-icon>
       </ion-fab-button>
     </ion-fab-list>
@@ -130,9 +130,9 @@
       <ion-fab-button color="tertiary" (click)="sendKey(EmulatorKeyCode.KBD_m)">
         M
       </ion-fab-button>
-      <ion-fab-button color="tertiary" (click)="sendKey(EmulatorKeyCode.KBD_c)">
-        C
-        <ion-label>Classificação</ion-label>
+      <ion-fab-button color="tertiary" (click)="promptInputText()">
+        <ion-label>Enviar Texto</ion-label>
+        <ion-icon src="../../assets/icon/keyboard.svg"></ion-icon>
       </ion-fab-button>
       <ion-fab-button color="tertiary" (click)="sendKey(EmulatorKeyCode.KBD_kpmultiply)">
         *

@@ -8,42 +8,8 @@ import { environment } from 'src/environments/environment';
 import { ToggleCheckEvent } from '../models/toggle-event';
 import { EmulatorKeyCode } from '../models/emulator-keycodes';
 import { EmulatorControlService } from '../services/emulator-control.service';
+import { GAME_INPUT_FN_BTNS, GAME_INPUT_FN_BTNS_REVERSED, STORAGE_KEY } from '../models/constants';
 
-const STORAGEKEY = {
-  DISABLE_SMOOTH_FILTER: 'disableSmoothFilter',
-  AUTO_SAVE: 'autoSave',
-  HIDE_TUTORIAL: 'hideTutorial'
-}
-
-const gameInputButtons = [
-  { keyCode: EmulatorKeyCode.KBD_f1, label: '3-3-4', text: 'F1' },
-  { keyCode: EmulatorKeyCode.KBD_f2, label: '3-4-3', text: 'F2' },
-  { keyCode: EmulatorKeyCode.KBD_f3, label: '4-2-4', text: 'F3' },
-  { keyCode: EmulatorKeyCode.KBD_f4, label: '4-3-3', text: 'F4' },
-  { keyCode: EmulatorKeyCode.KBD_f5, label: '4-4-2', text: 'F5' },
-  { keyCode: EmulatorKeyCode.KBD_f6, label: '4-5-1', text: 'F6' },
-  { keyCode: EmulatorKeyCode.KBD_f7, label: '5-2-3', text: 'F7' },
-  { keyCode: EmulatorKeyCode.KBD_f8, label: '5-3-2', text: 'F8' },
-  { keyCode: EmulatorKeyCode.KBD_f9, label: '5-4-1', text: 'F9' },
-  { keyCode: EmulatorKeyCode.KBD_f10, label: '5-5-0', text: 'F10' },
-  { keyCode: EmulatorKeyCode.KBD_f11, label: '6-3-1', text: 'F11' },
-  { keyCode: EmulatorKeyCode.KBD_f12, label: '6-4-0', text: 'F12' },
-];
-
-const gameInputButtonsReversed = [
-  { keyCode: EmulatorKeyCode.KBD_f12, label: '6-4-0', text: 'F12' },
-  { keyCode: EmulatorKeyCode.KBD_f11, label: '6-3-1', text: 'F11' },
-  { keyCode: EmulatorKeyCode.KBD_f10, label: '5-5-0', text: 'F10' },
-  { keyCode: EmulatorKeyCode.KBD_f9, label: '5-4-1', text: 'F9' },
-  { keyCode: EmulatorKeyCode.KBD_f8, label: '5-3-2', text: 'F8' },
-  { keyCode: EmulatorKeyCode.KBD_f7, label: '5-2-3', text: 'F7' },
-  { keyCode: EmulatorKeyCode.KBD_f6, label: '4-5-1', text: 'F6' },
-  { keyCode: EmulatorKeyCode.KBD_f5, label: '4-4-2', text: 'F5' },
-  { keyCode: EmulatorKeyCode.KBD_f4, label: '4-3-3', text: 'F4' },
-  { keyCode: EmulatorKeyCode.KBD_f3, label: '4-2-4', text: 'F3' },
-  { keyCode: EmulatorKeyCode.KBD_f2, label: '3-4-3', text: 'F2' },
-  { keyCode: EmulatorKeyCode.KBD_f1, label: '3-3-4', text: 'F1' },
-];
 
 @Component({
   selector: 'app-game',
@@ -161,8 +127,8 @@ export class GamePage implements OnInit {
   }
 
   async loadConfig() {
-    const disableSmoothFilter = await this.storageService.get<boolean>(STORAGEKEY.DISABLE_SMOOTH_FILTER)
-    const autoSave = await this.storageService.get<boolean>(STORAGEKEY.AUTO_SAVE)
+    const disableSmoothFilter = await this.storageService.get<boolean>(STORAGE_KEY.DISABLE_SMOOTH_FILTER)
+    const autoSave = await this.storageService.get<boolean>(STORAGE_KEY.AUTO_SAVE)
     
     this.toggleSmoothFilter({detail: {checked: disableSmoothFilter}})
 
@@ -172,7 +138,7 @@ export class GamePage implements OnInit {
   }
 
   async handleShowTutorial() {
-    const hideTutorial = await this.storageService.get<boolean>(STORAGEKEY.HIDE_TUTORIAL)
+    const hideTutorial = await this.storageService.get<boolean>(STORAGE_KEY.HIDE_TUTORIAL)
 
     if (!hideTutorial) {
       await this.showTutorial()
@@ -180,7 +146,7 @@ export class GamePage implements OnInit {
   }
 
   async showTutorial() {
-      const hideTutorial = await this.storageService.get<boolean>(STORAGEKEY.HIDE_TUTORIAL)
+      const hideTutorial = await this.storageService.get<boolean>(STORAGE_KEY.HIDE_TUTORIAL)
       const alert = await this.alertController.create({
         header: 'Informações',
         message: 'Salvando o progresso:\n' +
@@ -206,7 +172,7 @@ export class GamePage implements OnInit {
           value: 'showTutorial',
           checked: hideTutorial,
           handler: async (e) => {
-            await this.storageService.set(STORAGEKEY.HIDE_TUTORIAL, e.checked)
+            await this.storageService.set(STORAGE_KEY.HIDE_TUTORIAL, e.checked)
           }
         }]
       });
@@ -215,9 +181,9 @@ export class GamePage implements OnInit {
 
   get gameInputs() {
     if (!this.isLandscape) {
-      return gameInputButtonsReversed
+      return GAME_INPUT_FN_BTNS_REVERSED;
     } else {
-      return gameInputButtons;
+      return GAME_INPUT_FN_BTNS;
     }
   }
 
@@ -299,7 +265,7 @@ export class GamePage implements OnInit {
       }, 5*60*1000)
       await this.saveGameService.saveGame()
     }
-    await this.storageService.set(STORAGEKEY.AUTO_SAVE, e.detail.checked)
+    await this.storageService.set(STORAGE_KEY.AUTO_SAVE, e.detail.checked)
   }
 
   async toggleSmoothFilter(e: any) {
@@ -313,7 +279,7 @@ export class GamePage implements OnInit {
     } else {
       canvas.classList.add('smooth-canvas')
     }
-    await this.storageService.set(STORAGEKEY.DISABLE_SMOOTH_FILTER, disableSmoothFilter)
+    await this.storageService.set(STORAGE_KEY.DISABLE_SMOOTH_FILTER, disableSmoothFilter)
   }
 
   showPopover(e: Event) {
@@ -416,6 +382,33 @@ export class GamePage implements OnInit {
       await loading.dismiss()
       await this.showErrorAlert(e)
     }
+  }
+
+  async promptInputText() {
+    const alert = await this.alertController.create({
+      header: 'Input',
+      message: 'Digite o texto que deseja enviar para o jogo',
+      backdropDismiss: false,
+      cssClass: 'alert-whitespace',
+      inputs: [{
+        name: 'text',
+        type: 'text',
+        placeholder: 'Texto'
+      }],
+      buttons: [{
+        text: 'Cancelar',
+        role: 'cancel'
+      }, {
+        text: 'Enviar',
+        handler: async (data) => {
+          const text = data.text
+          if (text) {
+            this.emulatorControlService.sendString(this.dosCI, text)
+          }
+        }
+      }]
+    })
+    await alert.present()
   }
 
   private hidePopover() {
