@@ -389,7 +389,7 @@ export class GamePage implements OnInit {
       header: 'Input',
       message: 'Digite o texto que deseja enviar para o jogo',
       backdropDismiss: false,
-      cssClass: 'alert-whitespace',
+      cssClass: 'alert-whitespace wide-alert',
       inputs: [{
         name: 'text',
         type: 'textarea',
