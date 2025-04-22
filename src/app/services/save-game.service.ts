@@ -16,15 +16,16 @@ export class SaveGameService {
       console.warn('dosCI is not defined');
       return false
     }
-    
+
     const rawChanges = await dosCI.persist()
     let zip = new JSZip()
     zip = await zip.loadAsync(rawChanges, { createFolders: true })
     
     let hasSaves = false
     // remove non save game files
+    const keptDirectories = ['d/eli98/jogos/', 'd/eli98/', 'd/']
     let filesToRemove = zip.filter((_, file) => {
-      return !file.name.toLowerCase().includes('eli98/jogos/') && file.name.toLowerCase() !=('d/eli98/')
+      return !file.name.toLowerCase().includes('d/eli98/jogos/') && !keptDirectories.includes(file.name.toLowerCase())
     })
     filesToRemove.forEach(file => {
       zip.remove(file.name)
