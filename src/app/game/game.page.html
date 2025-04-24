@@ -114,38 +114,65 @@
     </ion-fab-list>
   </ion-fab>
 
-  <ion-fab #gameInputFab *ngIf="!isVirtualKeyboardShowing" slot="fixed" vertical="bottom" horizontal="start" >
-    <ion-fab-button color="tertiary">
-      <ion-icon name="game-controller-outline"></ion-icon>
-    </ion-fab-button>
-    <ion-fab-list class="labeled" [ngClass]="{ landscape: isLandscape, portrait: !isLandscape }" [side]="!isLandscape ? 'top' : 'end'">
-      <ng-container *ngFor="let input of gameInputs">
-        <ion-fab-button color="tertiary" (click)="sendKey(input.keyCode)">
-          {{ input.text }}
-          <ion-label>{{ input.label }}</ion-label>
-        </ion-fab-button>     
-      </ng-container>
-    </ion-fab-list>
-    <ion-fab-list class="labeled" [ngClass]="{ landscape: !isLandscape, portrait: isLandscape }" [side]="isLandscape ? 'top' : 'end'">
-      <ion-fab-button color="tertiary" (click)="sendKey(EmulatorKeyCode.KBD_a)">
-        A
+  <ng-container *ngIf="!isVirtualKeyboardShowing">
+    <ion-fab slot="fixed" vertical="bottom" horizontal="start" >
+      <ion-fab-button color="tertiary">
+        <ion-icon name="game-controller-outline"></ion-icon>
       </ion-fab-button>
-      <ion-fab-button color="tertiary" (click)="sendKey(EmulatorKeyCode.KBD_m)">
-        M
+      <ion-fab-list class="labeled" [ngClass]="{ landscape: isLandscape, portrait: !isLandscape }" [side]="isLandscape ? 'end' : 'top'">
+        <ng-container *ngFor="let input of gameInputs">
+          <ion-fab-button color="tertiary" (click)="sendKey(input.keyCode)">
+            {{ input.text }}
+            <ion-label>{{ input.label }}</ion-label>
+          </ion-fab-button>     
+        </ng-container>
+      </ion-fab-list>
+      <ion-fab-list class="labeled" [ngClass]="{ landscape: !isLandscape, portrait: isLandscape }" [side]="isLandscape ? 'top' : 'end'">
+        <ion-fab-button color="tertiary" (click)="sendKey(EmulatorKeyCode.KBD_a)">
+          A
+        </ion-fab-button>
+        <ion-fab-button color="tertiary" (click)="sendKey(EmulatorKeyCode.KBD_m)">
+          M
+        </ion-fab-button>
+        <ion-fab-button color="tertiary" (click)="promptInputText()">
+          <ion-label>Input de Texto</ion-label>
+          <ion-icon name="terminal-outline"></ion-icon>
+        </ion-fab-button>
+        <ion-fab-button color="tertiary" (click)="sendKey(EmulatorKeyCode.KBD_kpmultiply)">
+          *
+        </ion-fab-button>
+      </ion-fab-list>
+    </ion-fab>
+    
+    <ion-fab slot="fixed" vertical="bottom" [activated]="isMobile" horizontal="end" >
+      <ion-fab-button color="tertiary" closeIcon="game-controller-outline">
+        <ion-icon name="game-controller-outline"></ion-icon>
       </ion-fab-button>
-      <ion-fab-button color="tertiary" (click)="promptInputText()">
-        <ion-label>Input de Texto</ion-label>
-        <ion-icon name="terminal-outline"></ion-icon>
-      </ion-fab-button>
-      <ion-fab-button color="tertiary" (click)="sendKey(EmulatorKeyCode.KBD_kpmultiply)">
-        *
-      </ion-fab-button>
-    </ion-fab-list>
-  </ion-fab>
-</ion-content>
-<ion-footer *ngIf="!isMobile">
-  <ion-toolbar color="tertiary">
-    <ion-card-subtitle class="ion-padding-start ion-padding-top not-selectable">Feito nas pressas, na terra dos altos coqueiros.</ion-card-subtitle>
-    <ion-card-subtitle class="ion-padding-start ion-padding-bottom not-selectable">Este site NÃO coleta nenhuma informação, NÃO utiliza cookies ou qualquer outro mecanismo de rastreamento.</ion-card-subtitle>
-  </ion-toolbar>
+      <ion-fab-list class="labeled" [ngClass]="{ landscape: isLandscape, portrait: !isLandscape }" side="start">
+        <ion-fab-button color="tertiary" (click)="sendKeyWithoutClosingFab($event, EmulatorKeyCode.KBD_right)">
+          <ion-icon name="caret-forward-outline"></ion-icon>
+        </ion-fab-button>
+        <ion-fab-button color="tertiary" (click)="sendKeyWithoutClosingFab($event, EmulatorKeyCode.KBD_left)">
+          <ion-icon name="caret-back-outline"></ion-icon>
+        </ion-fab-button>
+      </ion-fab-list>
+      <ion-fab-list class="labeled" [ngClass]="{ landscape: !isLandscape, portrait: isLandscape }" side="top">
+        <ion-fab-button color="tertiary" (click)="sendKeyWithoutClosingFab($event, EmulatorKeyCode.KBD_enter)">
+          <ion-icon name="return-down-back-outline"></ion-icon>
+        </ion-fab-button>
+        <ion-fab-button color="tertiary" (click)="sendKeyWithoutClosingFab($event, EmulatorKeyCode.KBD_down)">
+          <ion-icon name="caret-down-outline"></ion-icon>
+        </ion-fab-button>
+        <ion-fab-button color="tertiary" (click)="sendKeyWithoutClosingFab($event, EmulatorKeyCode.KBD_up)">
+          <ion-icon name="caret-up-outline"></ion-icon>
+        </ion-fab-button>
+      </ion-fab-list>
+    </ion-fab>
+  </ng-container>
+  </ion-content>
+  <ion-footer *ngIf="!isMobile">
+    <ion-toolbar color="tertiary">
+      <ion-card-subtitle class="ion-padding-start ion-padding-top not-selectable">Feito nas pressas, na terra dos altos coqueiros.</ion-card-subtitle>
+      <ion-card-subtitle class="ion-padding-start ion-padding-bottom not-selectable">Este site NÃO coleta nenhuma informação, NÃO utiliza cookies ou qualquer outro mecanismo de rastreamento.</ion-card-subtitle>
+    </ion-toolbar>
 </ion-footer>
