@@ -117,7 +117,7 @@ export class GamePage implements OnInit {
 
     const checkGreenScreen = async () => {
       try {
-        const imageData = await this.dosCI.screenshot()
+        const imageData: ImageData = await this.dosCI.screenshot()
         const points = [
           { x: 0, y: 25 },
           { x: 200, y: 25 },
@@ -299,15 +299,39 @@ export class GamePage implements OnInit {
   }
 
   async toggleAutoSave(e: any & ToggleCheckEvent) {
-    console.log(`autosave: ${e.detail.checked ? 'on' : 'off'}`)
+    const checked = e.detail.checked
+    console.log(`autosave: ${checked ? 'on' : 'off'}`)
+    await this.storageService.set(STORAGE_KEY.AUTO_SAVE, checked)
+
+    const experimental = await this.storageService.get<boolean>(STORAGE_KEY.AUTO_SAVE_EXPERIMENTAL)
+    if(!experimental) {
+      await this.toggleAutoSaveClassic(checked)
+    } else {
+      await this.toggleAutoSaveExperimental(checked)
+    }
+  }
+
+  async toggleAutoSaveExperimental(checked: boolean) {  
+    // get a frame from canvas each second and check if the save bar is visible, 
+    // After detecting it, wait for it to disappear,
+    // then call this.saveGameService.saveGame() to persist the disk
+    
     clearInterval(this.autoSaveInterval)
-    if (e.detail.checked) {
+    if (checked) {
+      const canvas = document.getElementsByClassName('emulator-canvas')[0] as HTMLCanvasElement
+      
+      
+    }
+  }
+
+  async toggleAutoSaveClassic(checked: boolean) {
+    clearInterval(this.autoSaveInterval)
+    if (checked) {
       this.autoSaveInterval = setInterval(async () => {
         await this.saveGameService.saveGame()
       }, 5 * 60 * 1000)
       await this.saveGameService.saveGame()
     }
-    await this.storageService.set(STORAGE_KEY.AUTO_SAVE, e.detail.checked)
   }
 
   async toggleSmoothFilter(e: any) {
@@ -331,6 +355,11 @@ export class GamePage implements OnInit {
     setTimeout(() => {
       this.isPopoverOpen = true;
     }, 50);
+  }
+
+  async textRecon(e: Event) {
+    e.stopImmediatePropagation()
+    await this.emulatorControlService.findTextOnGameScreen(this.dosCI, "Contra-Senha")
   }
 
   sendKeyWithoutClosingFab(e: Event, key: EmulatorKeyCode) {

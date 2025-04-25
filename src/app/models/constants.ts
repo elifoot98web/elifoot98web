@@ -3,6 +3,7 @@ import { EmulatorKeyCode } from "./emulator-keycodes";
 export const STORAGE_KEY = {
   DISABLE_SMOOTH_FILTER: 'disableSmoothFilter',
   AUTO_SAVE: 'autoSave',
+  AUTO_SAVE_EXPERIMENTAL: 'autoSave_experimental',
   HIDE_TUTORIAL: 'hideTutorial',
   PENDING_UPDATE: 'pendingUpdate',
   FAIL_COUNT: 'failCount',
