@@ -36,6 +36,9 @@
           <ion-item detail="false">
             <ion-toggle (ionChange)="toggleAutoSave($event)">Auto-Save (5 mins)</ion-toggle> 
           </ion-item>
+          <ion-item detail="false">
+            <ion-toggle (ionChange)="toggleAutoSaveExperimental($event)">Sync Auto-Save</ion-toggle> 
+          </ion-item>
           <ion-item button detail="true" id="nested-save-options"><ion-label>Salvar</ion-label></ion-item>
           <ion-popover trigger="nested-save-options" [dismissOnSelect]="true" side="end">
             <ng-template>

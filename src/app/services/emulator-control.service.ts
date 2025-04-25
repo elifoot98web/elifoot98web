@@ -1,13 +1,20 @@
 import { Injectable } from '@angular/core';
 import { DosCI } from '../models/jsdos';
 import { EmulatorKeyCode, EmulatorKeyCodeHelper } from '../models/emulator-keycodes';
-import { createWorker, Worker } from 'tesseract.js';
+import { createWorker, Rectangle, Worker } from 'tesseract.js';
 
 @Injectable({
   providedIn: 'root'
 })
 export class EmulatorControlService {
   private _worker: Worker | null = null;
+  private areaOfInterest: Rectangle = {
+    top: 275,
+    left: 332,
+    width: 132,
+    height: 20
+  }
+
   constructor() {
     this.getWorker()
   }
@@ -39,44 +46,56 @@ export class EmulatorControlService {
     }
   }
 
-  public async findTextOnGameScreen(dosCI: DosCI, searchString: string): Promise<boolean> {
+  public async isGameSaving(dosCI: DosCI): Promise<boolean> {
+    return this.findTextOnGameScreen(dosCI, 'a gravar o jogo...', this.areaOfInterest, 4)
+  }
+
+  public async findTextOnGameScreen(dosCI: DosCI, searchString: string, areaOfInterest?: Rectangle, editDistanceTolerance: number = 0): Promise<boolean> {
     // use tesseract.js to detect text on the screen
     // and return the result if the text is found
-    console.time('findTextOnGameScreen');
+    let found = false;
     try {
       const imageData = await dosCI.screenshot()
       if (!imageData) {
-        console.error('No image data found');
+        console.warn('No image data found');
         return false;
       }
-      console.time('findTextOnGameScreen: getWorker');
       const worker = await this.getWorker();
-      console.timeEnd('findTextOnGameScreen: getWorker');
 
       // convert imagedata to base64
-      console.time('findTextOnGameScreen: imageDataToImage');
       const base64 = this.imageDataToImage(imageData);
       if (!base64) {
-        console.error('No base64 image data found');
+        console.warn('No base64 image data found');
         return false;
       }
-      console.timeEnd('findTextOnGameScreen: imageDataToImage');
+      const recognizeOptions: Partial<Tesseract.RecognizeOptions> = {}
 
-      console.time('findTextOnGameScreen: recognize');
-      const result = await worker.recognize(base64)
-      console.timeEnd('findTextOnGameScreen: recognize');
+      if (areaOfInterest) {
+        recognizeOptions.rectangle = areaOfInterest;
+      }
+
+      const result = await worker.recognize(base64, recognizeOptions)
+      const foundText = this.stringWithoutAccents(result.data.text.toLowerCase().trim())
+      const searchText = this.stringWithoutAccents(searchString.toLowerCase())
       
-      console.time('findTextOnGameScreen: includes');
-      const found = result.data.text.toLowerCase().includes(searchString.toLowerCase());
-      console.timeEnd('findTextOnGameScreen: includes');
-      console.timeEnd('findTextOnGameScreen');
-      console.log('findTextOnGameScreen: ', result);
+      // if text is too short, return false
+      if (foundText.length == 0 || foundText.length < searchText.length / 2) {
+        return false
+      }
+
+      const distance = this.minimunDistanceWithSlidingWindow(foundText, searchText)
+      const includes = foundText.includes(searchText)
+      // console.log('Recognizer:', {foundText, searchText, distance, includes})
       
-      return found
+
+      if (includes || distance <= editDistanceTolerance) {
+        console.log('Text found on game screen:', foundText, searchString)
+        found = true  
+      }
     } catch (error) {
-      console.error('Error finding text on game screen:', error);
-      return false;
+      console.error('Error finding text on game screen:', error)
     }
+    return found
   }
 
   private async getWorker(): Promise<Worker> {
@@ -88,14 +107,125 @@ export class EmulatorControlService {
 
   private imageDataToImage(imageData: ImageData): string {
     const canvas = document.createElement('canvas');
-    canvas.width = imageData.width;
-    canvas.height = imageData.height;
+
+    const scale = 1
+    
+    // use double the size of the image to improve recognition
+    canvas.width = imageData.width * scale;
+    canvas.height = imageData.height * scale;
     const ctx = canvas.getContext('2d');
     if (ctx) {
+      // draw the image on the full
       ctx.putImageData(imageData, 0, 0);
+      if(scale > 1) {
+        ctx.scale(scale, scale);
+        ctx.drawImage(canvas, 0, 0, imageData.width, imageData.height, 0, 0, imageData.width, imageData.height);
+      }
       return canvas.toDataURL('image/png');
     }
     return '';
   }
 
+  /**
+   * Calculate the Levenshtein distance between two strings.
+   * @param str1 The first string.
+   * @param str2 The second string.
+   * @returns The Levenshtein distance between the two strings.
+   */
+  private levenshteinDistance(str1: string, str2: string): number {
+    const matrix: number[][] = [];
+
+    for (let i = 0; i <= str1.length; i++) {
+      matrix[i] = [i];
+    }
+    for (let j = 0; j <= str2.length; j++) {
+      matrix[0][j] = j;
+    }
+
+    for (let i = 1; i <= str1.length; i++) {
+      for (let j = 1; j <= str2.length; j++) {
+        if (str1.charAt(i - 1) === str2.charAt(j - 1)) {
+          matrix[i][j] = matrix[i - 1][j - 1];
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1, // substitution
+            matrix[i][j - 1] + 1,     // insertion
+            matrix[i - 1][j] + 1      // deletion
+          );
+        }
+      }
+    }
+    return matrix[str1.length][str2.length];
+  }
+
+  private minimunDistanceWithSlidingWindow(str1: string, str2: string): number {
+    const len1 = str1.length;
+    const len2 = str2.length;
+    
+    const smallerStr = len1 < len2 ? str1 : str2;
+    const largerStr = len1 < len2 ? str2 : str1;
+    
+    let smallestDistance = largerStr.length + 1;
+
+    // sliding the smaller string over the larger string
+    for(let i = 0; i <= largerStr.length - smallerStr.length; i++) {
+      const subStr = largerStr.substring(i, i + smallerStr.length);
+      const distance = this.editDistDP(smallerStr, subStr);
+      if (distance < smallestDistance) {
+        smallestDistance = distance;
+      }
+    }
+
+    return smallestDistance;
+  }
+
+  /**
+   * Calculate the edit distance between two strings using dynamic programming.
+   * @param str1 The first string.
+   * @param str2 The second string.
+   * @returns The edit distance between the two strings.
+   */
+  private editDistDP(str1: string, str2: string): number {
+    const m = str1.length;
+    const n = str2.length;
+  
+    // Matrix to store intermediate values
+    const editDistance: number[][] = Array.from({ length: m + 1 }, () =>
+      Array(n + 1).fill(0)
+    );
+  
+    // Initialize first column
+    for (let i = 0; i <= m; i++) {
+      editDistance[i][0] = i;
+    }
+  
+    // Initialize first row
+    for (let j = 0; j <= n; j++) {
+      editDistance[0][j] = j;
+    }
+  
+    // Fill the matrix
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        if (str1[i - 1] === str2[j - 1]) {
+          // If characters match, no cost
+          editDistance[i][j] = editDistance[i - 1][j - 1];
+        } else {
+          // If characters are different, take min of insert, delete, replace
+          editDistance[i][j] = 1 + Math.min(
+            editDistance[i][j - 1],     // Insertion
+            editDistance[i - 1][j],     // Deletion
+            editDistance[i - 1][j - 1]  // Substitution
+          );
+        }
+      }
+    }
+  
+    return editDistance[m][n];
+  }
+
+  public stringWithoutAccents(str: string): string {
+    return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  }
+  
 }

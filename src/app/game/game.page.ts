@@ -9,6 +9,7 @@ import { ToggleCheckEvent } from '../models/toggle-event';
 import { EmulatorKeyCode } from '../models/emulator-keycodes';
 import { EmulatorControlService } from '../services/emulator-control.service';
 import { GAME_INPUT_FN_BTNS, GAME_INPUT_FN_BTNS_REVERSED, STORAGE_KEY } from '../models/constants';
+import { AutoSaverService } from '../services/auto-saver.service';
 
 
 @Component({
@@ -39,7 +40,8 @@ export class GamePage implements OnInit {
     private saveGameService: SaveGameService,
     private patchService: PatchService,
     private storageService: LocalStorageService,
-    private emulatorControlService: EmulatorControlService) { }
+    private emulatorControlService: EmulatorControlService,
+    private autoSaverService: AutoSaverService) { }
 
   async ngOnInit() {
     this.onWindowResize()
@@ -298,29 +300,47 @@ export class GamePage implements OnInit {
     this.hidePopover()
   }
 
+  async useExperimentalFeatures(e: ToggleCheckEvent | any) {
+    const checked = e.detail.checked
+    console.log(`experimental features: ${checked ? 'on' : 'off'}`)
+    await this.storageService.set(STORAGE_KEY.AUTO_SAVE_EXPERIMENTAL, checked)
+    
+    if (checked) {
+      const autoSave = await this.storageService.get<boolean>(STORAGE_KEY.AUTO_SAVE)
+      if (autoSave) {
+        await this.toggleAutoSave({ detail: { checked: autoSave } })
+      }
+    } else {
+      const autoSave = await this.storageService.get<boolean>(STORAGE_KEY.AUTO_SAVE)
+      if (autoSave) {
+        await this.toggleAutoSaveClassic(autoSave)
+      }
+    }
+  }
+
   async toggleAutoSave(e: any & ToggleCheckEvent) {
     const checked = e.detail.checked
     console.log(`autosave: ${checked ? 'on' : 'off'}`)
     await this.storageService.set(STORAGE_KEY.AUTO_SAVE, checked)
 
-    const experimental = await this.storageService.get<boolean>(STORAGE_KEY.AUTO_SAVE_EXPERIMENTAL)
-    if(!experimental) {
+    // const experimental = await this.storageService.get<boolean>(STORAGE_KEY.AUTO_SAVE_EXPERIMENTAL)
+    // if(!experimental) {
       await this.toggleAutoSaveClassic(checked)
-    } else {
-      await this.toggleAutoSaveExperimental(checked)
-    }
+    // } else {
+    //   await this.toggleAutoSaveExperimental(e)
+    // }
   }
 
-  async toggleAutoSaveExperimental(checked: boolean) {  
+  async toggleAutoSaveExperimental(e: any) {  
     // get a frame from canvas each second and check if the save bar is visible, 
     // After detecting it, wait for it to disappear,
     // then call this.saveGameService.saveGame() to persist the disk
+    const checked = e.detail.checked
     
-    clearInterval(this.autoSaveInterval)
     if (checked) {
-      const canvas = document.getElementsByClassName('emulator-canvas')[0] as HTMLCanvasElement
-      
-      
+      this.autoSaverService.start(this.dosCI, 1500)
+    } else {
+      this.autoSaverService.stop()
     }
   }
 
@@ -359,7 +379,13 @@ export class GamePage implements OnInit {
 
   async textRecon(e: Event) {
     e.stopImmediatePropagation()
-    await this.emulatorControlService.findTextOnGameScreen(this.dosCI, "Contra-Senha")
+    const rectangle = {
+      top: 275,
+      left: 332,
+      width: 132,
+      height: 20
+    }
+    await this.emulatorControlService.findTextOnGameScreen(this.dosCI, "a gravar o jogo...", rectangle, 5)
   }
 
   sendKeyWithoutClosingFab(e: Event, key: EmulatorKeyCode) {
