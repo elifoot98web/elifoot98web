@@ -33,7 +33,6 @@
           <ion-item detail="false">
             <ion-toggle [checked]="smoothFilterDisabled" (ionChange)="toggleSmoothFilter($event)">Desativar Suavização</ion-toggle> 
           </ion-item>
-
           <ion-item button detail="true" id="nested-autosave-options">
             <ion-label>Auto-Save</ion-label>
           </ion-item>
@@ -105,7 +104,10 @@
               </ion-content>
             </ng-template>
           </ion-popover>
-          
+          <ion-item button detail="false" (click)="confirmRefresh()">
+            <ion-label>Recarregar</ion-label> 
+            <ion-icon slot="end" name="refresh-outline"></ion-icon>
+          </ion-item>
         </ion-list>
       </ion-content>
     </ng-template>

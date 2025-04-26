@@ -462,6 +462,25 @@ export class GamePage implements OnInit {
     }
   }
 
+  async confirmRefresh() {
+    const alert = await this.alertController.create({
+      header: 'Aviso',
+      message: 'Tem certeza que deseja recarregar o jogo? \n\nO progresso que não foi salvo, será perdido.',
+      backdropDismiss: false,
+      cssClass: 'alert-whitespace',
+      buttons: [{
+        text: 'Cancelar',
+        role: 'cancel'
+      }, {
+        text: 'Recarregar',
+        handler: async () => {
+          window.location.reload()
+        }
+      }]
+    })
+    await alert.present()
+  }
+
   async promptInputText() {
     const placeholders = [
       'Tite\nFelipao\nParreira',
