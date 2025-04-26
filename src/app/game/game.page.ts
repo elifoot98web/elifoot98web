@@ -26,14 +26,17 @@ export class GamePage implements OnInit {
     this.isMobile = this.isLandscape && window.innerHeight < 768 || window.innerWidth < 768
   }
 
+  // UI state properties
   smoothFilterDisabled = false;
+  autoSaveDisabled = false;
+  periodicSave = false;
   isPopoverOpen = false;
   isVirtualKeyboardShowing = false;
   isHidden = true;
-  dosCI: any = null;
-  autoSaveInterval: any = null;
   isLandscape = false
   isMobile = false
+
+  dosCI: any = null;
 
   constructor(private loadingController: LoadingController,
     private alertController: AlertController,
@@ -171,14 +174,9 @@ export class GamePage implements OnInit {
   }
 
   async loadConfig() {
-    const disableSmoothFilter = await this.storageService.get<boolean>(STORAGE_KEY.DISABLE_SMOOTH_FILTER)
-    const autoSave = await this.storageService.get<boolean>(STORAGE_KEY.AUTO_SAVE)
-
-    this.toggleSmoothFilter({ detail: { checked: disableSmoothFilter } })
-
-    if (autoSave) {
-      this.toggleAutoSave({ detail: { checked: autoSave } })
-    }
+    this.setupSmoothFilter()
+    this.setupAutoSave()
+    this.setupPeriodicSave()
   }
 
   async handleShowTutorial() {
@@ -300,58 +298,45 @@ export class GamePage implements OnInit {
     this.hidePopover()
   }
 
-  async useExperimentalFeatures(e: ToggleCheckEvent | any) {
-    const checked = e.detail.checked
-    console.log(`experimental features: ${checked ? 'on' : 'off'}`)
-    await this.storageService.set(STORAGE_KEY.AUTO_SAVE_EXPERIMENTAL, checked)
-    
-    if (checked) {
-      const autoSave = await this.storageService.get<boolean>(STORAGE_KEY.AUTO_SAVE)
-      if (autoSave) {
-        await this.toggleAutoSave({ detail: { checked: autoSave } })
-      }
-    } else {
-      const autoSave = await this.storageService.get<boolean>(STORAGE_KEY.AUTO_SAVE)
-      if (autoSave) {
-        await this.toggleAutoSaveClassic(autoSave)
-      }
-    }
+  async setupAutoSave() {
+    const disableAutoSave = await this.storageService.get<boolean>(STORAGE_KEY.DISABLE_AUTO_SAVE)
+    this.toggleDisableAutoSave({ detail: { checked: disableAutoSave } })
   }
 
-  async toggleAutoSave(e: any & ToggleCheckEvent) {
-    const checked = e.detail.checked
-    console.log(`autosave: ${checked ? 'on' : 'off'}`)
-    await this.storageService.set(STORAGE_KEY.AUTO_SAVE, checked)
+  async toggleDisableAutoSave(e: any & ToggleCheckEvent) {
+    const autoSaveDisabled = e.detail.checked
+    this.autoSaveDisabled = autoSaveDisabled
+    console.log(`autosave: ${!autoSaveDisabled ? 'on' : 'off'}`)
+    await this.storageService.set<boolean>(STORAGE_KEY.DISABLE_AUTO_SAVE, autoSaveDisabled)
 
-    // const experimental = await this.storageService.get<boolean>(STORAGE_KEY.AUTO_SAVE_EXPERIMENTAL)
-    // if(!experimental) {
-      await this.toggleAutoSaveClassic(checked)
-    // } else {
-    //   await this.toggleAutoSaveExperimental(e)
-    // }
-  }
-
-  async toggleAutoSaveExperimental(e: any) {  
-    // get a frame from canvas each second and check if the save bar is visible, 
-    // After detecting it, wait for it to disappear,
-    // then call this.saveGameService.saveGame() to persist the disk
-    const checked = e.detail.checked
-    
-    if (checked) {
-      this.autoSaverService.start(this.dosCI, 1500)
-    } else {
+    if(autoSaveDisabled) {
       this.autoSaverService.stop()
+    } else {
+      this.autoSaverService.start(this.dosCI)
     }
   }
 
-  async toggleAutoSaveClassic(checked: boolean) {
-    clearInterval(this.autoSaveInterval)
-    if (checked) {
-      this.autoSaveInterval = setInterval(async () => {
-        await this.saveGameService.saveGame()
-      }, 5 * 60 * 1000)
-      await this.saveGameService.saveGame()
+  async setupPeriodicSave() {
+    const periodicSave = await this.storageService.get<boolean>(STORAGE_KEY.PERIODIC_SAVE)
+    if(periodicSave) {
+      this.togglePeriodicSave({ detail: { checked: periodicSave } })
     }
+  }
+
+  async togglePeriodicSave(e: any & ToggleCheckEvent) {
+    const checked = e.detail.checked
+    this.periodicSave = checked
+    await this.storageService.set<boolean>(STORAGE_KEY.PERIODIC_SAVE, this.periodicSave)
+    if(checked) {
+      this.autoSaverService.startPeriodicSave()
+    } else {
+      this.autoSaverService.stopPeriodicSave()
+    }
+  }
+
+  async setupSmoothFilter() {
+    const disableSmoothFilter = await this.storageService.get<boolean>(STORAGE_KEY.DISABLE_SMOOTH_FILTER)
+    this.toggleSmoothFilter({ detail: { checked: disableSmoothFilter } })
   }
 
   async toggleSmoothFilter(e: any) {
@@ -365,7 +350,7 @@ export class GamePage implements OnInit {
     } else {
       canvas.classList.add('smooth-canvas')
     }
-    await this.storageService.set(STORAGE_KEY.DISABLE_SMOOTH_FILTER, disableSmoothFilter)
+    await this.storageService.set<boolean>(STORAGE_KEY.DISABLE_SMOOTH_FILTER, disableSmoothFilter)
   }
 
   showPopover(e: Event) {
@@ -377,20 +362,8 @@ export class GamePage implements OnInit {
     }, 50);
   }
 
-  async textRecon(e: Event) {
-    e.stopImmediatePropagation()
-    const rectangle = {
-      top: 275,
-      left: 332,
-      width: 132,
-      height: 20
-    }
-    await this.emulatorControlService.findTextOnGameScreen(this.dosCI, "a gravar o jogo...", rectangle, 5)
-  }
-
   sendKeyWithoutClosingFab(e: Event, key: EmulatorKeyCode) {
     e.stopImmediatePropagation()
-
     this.sendKey(key)
   }
 
@@ -400,7 +373,9 @@ export class GamePage implements OnInit {
   }
 
   async applyPatch(patch: JSZip) {
-    clearInterval(this.autoSaveInterval)
+    this.autoSaverService.stop()
+    this.autoSaverService.stopPeriodicSave()
+
     const loading = await this.loadingController.create({
       message: 'Aplicando patch...',
       backdropDismiss: false

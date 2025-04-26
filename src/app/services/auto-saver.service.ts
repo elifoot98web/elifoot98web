@@ -3,17 +3,18 @@ import { SaveGameService } from './save-game.service';
 import { AutoSaverState } from '../models/auto-saver-state';
 import { DosCI } from '../models/jsdos';
 import { EmulatorControlService } from './emulator-control.service';
-import { Rectangle } from 'tesseract.js';
 import { LoadingController } from '@ionic/angular';
+import { AUTO_SAVER } from '../models/constants';
 
 @Injectable({
   providedIn: 'root'
 })
 export class AutoSaverService {
   private state: AutoSaverState = AutoSaverState.IDLE
-  private tickIntervalMs: number = 100
+  private tickIntervalMs: number = AUTO_SAVER.DEFAULT_TICK_INTERVAL_MS
   private dosCI!: DosCI
- 
+  private periodicSaveInterval: any = 0
+
   constructor(
     private saveGameService: SaveGameService, 
     private emulatorControlService: EmulatorControlService,
@@ -21,8 +22,14 @@ export class AutoSaverService {
     this.state = AutoSaverState.IDLE
   }
 
-  public start(dosCI: DosCI, tickIntervalMs: number = 100) {
-    console.log('AutoSaverService started')
+  
+  public start(dosCI: DosCI, tickIntervalMs: number = AUTO_SAVER.DEFAULT_TICK_INTERVAL_MS) {
+    if (this.state !== AutoSaverState.IDLE) {
+      console.warn('AutoSaverService is already running')
+      return
+    }
+
+    console.log('AutoSaverService started with tick interval:', tickIntervalMs)
     this.tickIntervalMs = tickIntervalMs
     this.dosCI = dosCI
     this.state = AutoSaverState.MONITORING
@@ -34,20 +41,32 @@ export class AutoSaverService {
     this.state = AutoSaverState.IDLE
   }
 
+  public startPeriodicSave(periodInMs: number = AUTO_SAVER.DEFAULT_PERIODIC_SAVE_INTERVAL_MS) {
+    console.log('Periodic save started with interval:', periodInMs)
+    clearInterval(this.periodicSaveInterval)
+    this.periodicSaveInterval = setInterval(() => {
+      console.log('Periodic save triggered')
+      this.saveGameService.saveGame()
+    }, periodInMs)
+  }
+
+  public stopPeriodicSave() {
+    console.log('Periodic save stopped')
+    clearInterval(this.periodicSaveInterval)
+  }
+
   private async tick() {
-    switch (this.state) {
-      case AutoSaverState.IDLE:
-      case AutoSaverState.ERROR:
-        return
-      case AutoSaverState.MONITORING:
-        // Check if the game is saving
-        await this.monitor()
-        break
-      case AutoSaverState.GAME_SAVING_DETECTED:
-        // Wait for the game to finish save
-        await this.checkGameSaveFinished()
-        break
+    if(this.state !== AutoSaverState.MONITORING) {
+      return
     }
+
+    try {
+      await this.monitor()
+    } catch (error) {
+      console.error('Error in AutoSaver monitor:', error)
+      this.state = AutoSaverState.ERROR
+    }
+      
     setTimeout(() => this.tick(), this.tickIntervalMs)
   }
 
@@ -59,40 +78,21 @@ export class AutoSaverService {
     if (isGameSaving) {
       console.log('Game is saving...')
       const loading = await this.loadingController.create({
-        message: 'Saving game...',
+        message: 'Salvando jogo...',
         backdropDismiss: false,
       })
       await loading.present()
 
       while(isGameSaving) {
         console.log('Game is still saving...')
-        await new Promise(resolve => setTimeout(resolve, 1000))
+        await new Promise(resolve => setTimeout(resolve, AUTO_SAVER.DEFAULT_GAME_SAVING_DETECTED_TIMEOUT_MS))
         isGameSaving = await this.emulatorControlService.isGameSaving(this.dosCI)
       }
+      loading.message = 'Salvando máquina virtual...'
       await this.saveGameService.saveGame()
       console.log('Emulator data saved')
       await loading.dismiss()
     }
     console.timeEnd('autosaver monitor')
-  }
-
-  private async checkGameSaveFinished() {
-    console.time('autosaver checkGameSaveFinished')
-    const isGameSaving = await this.emulatorControlService.isGameSaving(this.dosCI)
-    if (!isGameSaving) {
-      console.log('Game save finished')
-      await this.saveGameService.saveGame()
-      console.log('Emulator data saved')
-      
-      // go back to monitoring mode if the saver is not stopped
-      this.setStateProtected(AutoSaverState.MONITORING)
-    }
-    console.timeEnd('autosaver checkGameSaveFinished')
-  }
-
-  private setStateProtected(state: AutoSaverState) {
-    if(this.state !== AutoSaverState.IDLE) {
-      this.state = state
-    }
   }
 }

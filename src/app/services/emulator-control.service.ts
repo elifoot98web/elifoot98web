@@ -2,18 +2,14 @@ import { Injectable } from '@angular/core';
 import { DosCI } from '../models/jsdos';
 import { EmulatorKeyCode, EmulatorKeyCodeHelper } from '../models/emulator-keycodes';
 import { createWorker, Rectangle, Worker } from 'tesseract.js';
+import { EMULATOR_CONTROL_CONFIG } from '../models/constants';
 
 @Injectable({
   providedIn: 'root'
 })
 export class EmulatorControlService {
   private _worker: Worker | null = null;
-  private areaOfInterest: Rectangle = {
-    top: 275,
-    left: 332,
-    width: 132,
-    height: 20
-  }
+  private areaOfInterest: Rectangle = EMULATOR_CONTROL_CONFIG.DEFAULT_AREA_OF_INTEREST
 
   constructor() {
     this.getWorker()
@@ -42,12 +38,15 @@ export class EmulatorControlService {
     for (const keyStroke of individualStrokes) {
       this.sendKey(dosCI, ...keyStroke);
       // Add a small delay between key presses for the emulator to process them
-      await new Promise(resolve => setTimeout(resolve, 30)); 
+      await new Promise(resolve => setTimeout(resolve, EMULATOR_CONTROL_CONFIG.KEYSTROKE_DELAY)); 
     }
   }
 
   public async isGameSaving(dosCI: DosCI): Promise<boolean> {
-    return this.findTextOnGameScreen(dosCI, 'a gravar o jogo...', this.areaOfInterest, 4)
+    return this.findTextOnGameScreen(dosCI, 
+      'a gravar o jogo...', 
+      this.areaOfInterest, 
+      EMULATOR_CONTROL_CONFIG.DEFAULT_TOLERANCE_GAME_SAVING_DETECTION)
   }
 
   public async findTextOnGameScreen(dosCI: DosCI, searchString: string, areaOfInterest?: Rectangle, editDistanceTolerance: number = 0): Promise<boolean> {
@@ -124,38 +123,6 @@ export class EmulatorControlService {
       return canvas.toDataURL('image/png');
     }
     return '';
-  }
-
-  /**
-   * Calculate the Levenshtein distance between two strings.
-   * @param str1 The first string.
-   * @param str2 The second string.
-   * @returns The Levenshtein distance between the two strings.
-   */
-  private levenshteinDistance(str1: string, str2: string): number {
-    const matrix: number[][] = [];
-
-    for (let i = 0; i <= str1.length; i++) {
-      matrix[i] = [i];
-    }
-    for (let j = 0; j <= str2.length; j++) {
-      matrix[0][j] = j;
-    }
-
-    for (let i = 1; i <= str1.length; i++) {
-      for (let j = 1; j <= str2.length; j++) {
-        if (str1.charAt(i - 1) === str2.charAt(j - 1)) {
-          matrix[i][j] = matrix[i - 1][j - 1];
-        } else {
-          matrix[i][j] = Math.min(
-            matrix[i - 1][j - 1] + 1, // substitution
-            matrix[i][j - 1] + 1,     // insertion
-            matrix[i - 1][j] + 1      // deletion
-          );
-        }
-      }
-    }
-    return matrix[str1.length][str2.length];
   }
 
   private minimunDistanceWithSlidingWindow(str1: string, str2: string): number {
