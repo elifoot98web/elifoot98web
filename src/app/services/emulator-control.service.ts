@@ -82,7 +82,7 @@ export class EmulatorControlService {
         return false
       }
 
-      const distance = this.minimunDistanceWithSlidingWindow(foundText, searchText)
+      const distance = this.minimumDistanceWithSlidingWindow(foundText, searchText)
       const includes = foundText.includes(searchText)
       // console.log('Recognizer:', {foundText, searchText, distance, includes})
       
@@ -125,7 +125,7 @@ export class EmulatorControlService {
     return '';
   }
 
-  private minimunDistanceWithSlidingWindow(str1: string, str2: string): number {
+  private minimumDistanceWithSlidingWindow(str1: string, str2: string): number {
     const len1 = str1.length;
     const len2 = str2.length;
     
