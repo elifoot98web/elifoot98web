@@ -11,7 +11,9 @@
           "/index.html",
           "/manifest.webmanifest",
           "/*.css",
-          "/*.js"
+          "/*.js",
+          "/assets/elifoot/**",
+          "/assets/js-dos/**"
         ]
       }
     },
