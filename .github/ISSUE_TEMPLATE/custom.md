@@ -1,6 +1,6 @@
 ---
-name: Custom issue template
-about: generic issue template
+name: Issue Geral
+about: Template de Issue geral
 title: ''
 labels: Triage
 assignees: ''
