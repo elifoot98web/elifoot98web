@@ -35,7 +35,7 @@ export class GamePage implements OnInit {
   isHidden = true;
   isLandscape = false
   isMobile = false
-
+  debugMode = false
   dosCI: any = null;
 
   constructor(private loadingController: LoadingController,
@@ -248,6 +248,10 @@ export class GamePage implements OnInit {
     }
   }
 
+  async importGameSaves() {
+
+  }
+
   async downloadFullDiskChanges() {
     const hasSaved = await this.saveGameService.downloadFullDiskChanges(this.dosCI)
     this.hidePopover()
@@ -425,9 +429,47 @@ export class GamePage implements OnInit {
     await alert.present()
   }
 
+  async onSaveFileSelected(e: any) {
+    const file: File = e.target.files[0]
+    console.log("Save file selected", { file })
+    this.hidePopover()
+
+    const loading = await this.loadingController.create({
+      message: 'Validando arquivos...',
+      backdropDismiss: false
+    });
+    await loading.present();
+
+    try {
+      const patch = await this.patchService.prepareSaveFilePatch(file)
+      await loading.dismiss()
+      const alert = await this.alertController.create({
+        header: 'Aviso',
+        message: `Se já existir um arquivo com o mesmo nome do save, ele será substituído.\nDeseja continuar?`,
+        backdropDismiss: false,
+        cssClass: 'alert-whitespace',
+        buttons: [{
+          text: 'Não',
+          role: 'cancel'
+        }, {
+          text: 'Sim',
+          handler: async () => {
+            await this.applySaveGamePatch(patch)
+          }
+        }]
+      });
+      await alert.present();
+    } catch (e: any) {
+      console.error(e)
+      await loading.dismiss()
+      await this.showErrorAlert(e)
+    }
+    
+  }
+
   async onPatchFileSelected(e: any) {
     const file: File = e.target.files[0]
-    console.log("oopa", { file })
+    console.log("Patch File selected", { file })
     this.hidePopover()
     const loading = await this.loadingController.create({
       message: 'Validando patch...',
@@ -570,5 +612,37 @@ export class GamePage implements OnInit {
       await loading.dismiss()
       await this.showErrorAlert(e)
     }
+  }
+
+  private async applySaveGamePatch(patch: JSZip) {
+    const loading = await this.loadingController.create({
+      message: 'Aplicando jogo salvo...',
+      backdropDismiss: false
+    });
+    await loading.present();
+    
+    try {
+      await this.patchService.applySaveFilePatch(this.dosCI, patch)
+      await loading.dismiss()
+      const alert = await this.alertController.create({
+        header: 'Jogo salvo aplicado',
+        message: 'O jogo salvo foi aplicado com sucesso.\nO jogo será reiniciado.',
+        cssClass: 'alert-whitespace',
+        backdropDismiss: false,
+        buttons: [{
+          text: 'Recarregar',
+          handler: async () => {
+            window.location.reload()
+          }
+        }]
+      });
+      await alert.present();
+      await this.dosCI.exit()
+    } catch (e: any) {
+      console.error(e)
+      await loading.dismiss()
+      await this.showErrorAlert(e)
+    }
+    
   }
 }

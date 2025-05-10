@@ -77,20 +77,17 @@ export class AutoSaverService {
     let isGameSaving = await this.emulatorControlService.isGameSaving(this.dosCI)
     if (isGameSaving) {
       console.log('Game is saving...')
-      const loading = await this.loadingController.create({
-        message: 'Salvando jogo...',
-        backdropDismiss: false,
-      })
-      await loading.present()
-      
       const waitUntil = Date.now() + AUTO_SAVER.MAX_WAITING_TIME_FOR_GAME_SAVE_DETECTED
       while(isGameSaving && waitUntil > Date.now()) {
         console.log('Game is still saving...')
         await new Promise(resolve => setTimeout(resolve, AUTO_SAVER.DEFAULT_GAME_SAVING_DETECTED_TIMEOUT_MS))
         isGameSaving = await this.emulatorControlService.isGameSaving(this.dosCI)
       }
-      
-      loading.message = 'Salvando máquina virtual...'
+      const loading = await this.loadingController.create({
+        message: 'Salvando máquina virtual...',
+        backdropDismiss: false,
+      })
+      await loading.present()
       await this.saveGameService.saveGame()
       console.log('Emulator data saved')
       await loading.dismiss()

@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import * as JSZip from 'jszip';
+import { BASE_SAVEGAME_DIR } from '../models/constants';
 
 @Injectable({
   providedIn: 'root'
@@ -22,10 +23,16 @@ export class SaveGameService {
     zip = await zip.loadAsync(rawChanges, { createFolders: true })
     
     let hasSaves = false
+    let accumulatedPath = ''
+    
     // remove non save game files
-    const keptDirectories = ['d/eli98/jogos/', 'd/eli98/', 'd/']
+    const keptDirectories: string[] = BASE_SAVEGAME_DIR.split('/').filter(dir => !!dir).map((dir) => {
+      accumulatedPath += dir + '/'
+      return accumulatedPath
+    })
+
     let filesToRemove = zip.filter((_, file) => {
-      return !file.name.toLowerCase().includes('d/eli98/jogos/') && !keptDirectories.includes(file.name.toLowerCase())
+      return !file.name.toLowerCase().includes(BASE_SAVEGAME_DIR) && !keptDirectories.includes(file.name.toLowerCase())
     })
     filesToRemove.forEach(file => {
       zip.remove(file.name)
@@ -35,7 +42,7 @@ export class SaveGameService {
     zip.forEach((_, file) => {
       if (file.name.toLowerCase().includes('.e98')) {
         hasSaves = true
-        file.name = file.name.replace('d/eli98/jogos/', '')
+        file.name = file.name.replace(BASE_SAVEGAME_DIR, '')
       }
     })
 
