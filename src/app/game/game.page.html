@@ -63,7 +63,11 @@
                     <ion-label>Baixar Jogos Salvos</ion-label> 
                     <ion-icon slot="end" name="cloud-download-outline"></ion-icon>
                   </ion-item>
-                  <ion-item button detail="false" (click)="downloadFullDiskChanges()">
+                  <ion-item button detail="false" (click)="saveGameFileInput.click()">
+                    <ion-label>Carregar Jogo Salvo</ion-label> 
+                    <ion-icon slot="end" name="cloud-upload-outline"></ion-icon>
+                  </ion-item>
+                  <ion-item *ngIf="debugMode" button detail="false" (click)="downloadFullDiskChanges()">
                     <ion-label>Baixar Disco Virtual</ion-label> 
                     <ion-icon slot="end" name="code-download-outline"></ion-icon>
                   </ion-item>
@@ -92,7 +96,7 @@
             <ng-template>
               <ion-content>
                 <ion-list>
-                  <ion-item button detail="false" (click)="fileInput.click()">
+                  <ion-item button detail="false" (click)="patchFileInput.click()">
                     <ion-label>Carregar Patch</ion-label> 
                     <ion-icon slot="end" name="cloud-upload-outline"></ion-icon>
                   </ion-item>
@@ -112,7 +116,8 @@
       </ion-content>
     </ng-template>
   </ion-popover>
-  <input style="display:none;" type="file" accept=".zip" #fileInput (change)="onPatchFileSelected($event)" />
+  <input style="display:none;" type="file" accept=".zip" #patchFileInput (change)="onPatchFileSelected($event)" />
+  <input style="display:none;" type="file" accept=".e98" #saveGameFileInput (change)="onSaveFileSelected($event)" />
   <div [ngClass]="{ hidden: isHidden, full: !isHidden }" class="smooth-canvas not-selectable" id="game-container"></div> 
   <ion-fab *ngIf="!(!isMobile || !isLandscape)" slot="fixed" vertical="top" horizontal="start" >
     <ion-fab-button color="tertiary">

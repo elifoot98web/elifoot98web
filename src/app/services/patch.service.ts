@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import * as JSZip from 'jszip';
 import { DosCI } from '../models/jsdos';
 import { lastValueFrom } from 'rxjs';
+import { BASE_SAVEGAME_DIR } from '../models/constants';
 
 @Injectable({
   providedIn: 'root'
@@ -96,7 +97,7 @@ export class PatchService {
 
     // validate equipas dictionary, if filled has at least 34 .eft files
     if (Object.keys(equipasFiles).length > 0 && Object.keys(equipasFiles).length < 34) {
-      throw new Error('Não há equipes suficientes para jogar')
+      throw new Error('Não há equipes suficientes para jogar. O patch deve conter pelo menos 34 arquivos .EFT.')
     }
 
     // merge equipasFiles and support files to the patch object
@@ -104,6 +105,41 @@ export class PatchService {
     Object.assign(patch.files, supportFiles)
 
     return patch
+  }
+
+  /**
+   * 
+   * @param file - Save(s) to be validated
+   * @returns 
+   */
+  async prepareSaveFilePatch(file: File): Promise<JSZip> {
+    if (!file) {
+      throw new Error('No file provided')
+    }
+
+    // Check if the file is a .e98 file
+    if (!file.name.toLowerCase().endsWith('.e98')) {
+      throw new Error('Invalid file type. Only .e98 files are allowed')
+    }
+
+    const fileName = file.name.toUpperCase()
+    const zip = new JSZip()
+    // load .e98 file in the zip
+    await zip.file(BASE_SAVEGAME_DIR + fileName, file.arrayBuffer())
+
+    return zip
+  }
+
+  async applySaveFilePatch(dosCI: DosCI, patch: JSZip) {
+    // Get local changes
+    const localChanges = await this.getLocalChanges(dosCI)
+    if (!localChanges) {
+      throw new Error('Could not get local changes')
+    }
+    
+    Object.assign(localChanges.files, patch.files)
+    console.log("Patched zip", {localChanges})
+    await this.overwriteEmulatorsUICache(localChanges)
   }
 
   private async getAssetFile(assetFilePath: string): Promise<Blob> {
@@ -146,10 +182,8 @@ export class PatchService {
   }
 
   private async getClearLocalChanges(dosCI: DosCI): Promise<JSZip> {
-    await saveGameFileSystem()
-    const rawChanges = await dosCI.persist()
-    const localChanges = await JSZip.loadAsync(rawChanges)
-    
+    const localChanges = await this.getLocalChanges(dosCI)
+
     // clear existing patch files
     const filesToRemove = localChanges.filter((_, file) => {
       return file.name.toLowerCase().startsWith('d/eli98/patch') || 
@@ -166,6 +200,13 @@ export class PatchService {
       localChanges.remove(file.name)
     })
 
+    return localChanges
+  }
+
+  private async getLocalChanges(dosCI: DosCI): Promise<JSZip> {
+    await saveGameFileSystem()
+    const rawChanges = await dosCI.persist()
+    const localChanges = await JSZip.loadAsync(rawChanges)
     return localChanges
   }
 }
