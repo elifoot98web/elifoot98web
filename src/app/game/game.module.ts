@@ -10,6 +10,7 @@ import { GamePage } from './game.page';
 import { SaveGameService } from '../services/save-game.service';
 import { LocalStorageService } from '../services/local-storage.service';
 import { PatchService } from '../services/patch.service';
+import { UserGuideComponent } from './components/user-guide/user-guide.component';
 
 @NgModule({
   imports: [
@@ -18,7 +19,10 @@ import { PatchService } from '../services/patch.service';
     IonicModule,
     GamePageRoutingModule
   ],
-  declarations: [GamePage],
+  declarations: [
+    GamePage,
+    UserGuideComponent
+  ],
   providers: [SaveGameService, LocalStorageService, PatchService]
 })
 export class GamePageModule {}

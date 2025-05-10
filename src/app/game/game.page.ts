@@ -1,5 +1,5 @@
 import { Component, HostListener, OnInit, ViewChild } from '@angular/core';
-import { AlertController, LoadingController } from '@ionic/angular';
+import { AlertController, LoadingController, ModalController } from '@ionic/angular';
 import { SaveGameService } from '../services/save-game.service';
 import { LocalStorageService } from '../services/local-storage.service';
 import { PatchService } from '../services/patch.service';
@@ -10,6 +10,7 @@ import { EmulatorKeyCode } from '../models/emulator-keycodes';
 import { EmulatorControlService } from '../services/emulator-control.service';
 import { GAME_INPUT_FN_BTNS, GAME_INPUT_FN_BTNS_REVERSED, STORAGE_KEY } from '../models/constants';
 import { AutoSaverService } from '../services/auto-saver.service';
+import { UserGuideComponent } from './components/user-guide/user-guide.component';
 
 
 @Component({
@@ -41,6 +42,7 @@ export class GamePage implements OnInit {
 
   constructor(private loadingController: LoadingController,
     private alertController: AlertController,
+    private modalController: ModalController,
     private saveGameService: SaveGameService,
     private patchService: PatchService,
     private storageService: LocalStorageService,
@@ -220,6 +222,14 @@ export class GamePage implements OnInit {
       }]
     });
     await alert.present();
+  }
+
+  async showUserGuideModal() {
+    const modal = await this.modalController.create({
+      component: UserGuideComponent,
+      backdropDismiss: false
+    });
+    await modal.present();
   }
 
   get gameInputs() {
