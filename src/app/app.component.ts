@@ -5,9 +5,10 @@ import { LocalStorageService } from './services/local-storage.service';
 import { STORAGE_KEY } from './models/constants';
 
 @Component({
-  selector: 'app-root',
-  templateUrl: 'app.component.html',
-  styleUrls: ['app.component.scss'],
+    selector: 'app-root',
+    templateUrl: 'app.component.html',
+    styleUrls: ['app.component.scss'],
+    standalone: false
 })
 export class AppComponent {
   constructor(platform: Platform, private alertController: AlertController, private updates: SwUpdate, private localStorage: LocalStorageService) {

@@ -13,9 +13,10 @@ import { AutoSaverService } from '../services/auto-saver.service';
 
 
 @Component({
-  selector: 'app-game',
-  templateUrl: './game.page.html',
-  styleUrls: ['./game.page.scss'],
+    selector: 'app-game',
+    templateUrl: './game.page.html',
+    styleUrls: ['./game.page.scss'],
+    standalone: false
 })
 export class GamePage implements OnInit {
   EmulatorKeyCode = EmulatorKeyCode
