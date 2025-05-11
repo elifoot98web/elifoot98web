@@ -1,3 +1,27 @@
-<p>
-  user-guide works!
-</p>
+<ion-header>
+  <ion-toolbar color="primary">
+    <ion-title>FAQ e Tutorial</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="close()">
+        <ion-icon name="close"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+  <ion-toolbar>
+    <ion-segment value="all">
+      <ion-segment-button value="all">
+        <ion-label>FAQ</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="favorites">
+        <ion-label>Tutorial</ion-label>
+      </ion-segment-button>
+    </ion-segment>
+  </ion-toolbar>
+</ion-header>
+<ion-content>
+  <!-- <ion-segment-view>
+    <ion-segment-content id="first">First</ion-segment-content>
+    <ion-segment-content id="second">Second</ion-segment-content>
+    <ion-segment-content id="third">Third</ion-segment-content>
+  </ion-segment-view> -->
+</ion-content>

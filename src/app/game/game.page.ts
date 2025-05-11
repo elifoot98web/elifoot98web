@@ -191,37 +191,44 @@ export class GamePage implements OnInit {
   }
 
   async showTutorial() {
-    const hideTutorial = await this.storageService.get<boolean>(STORAGE_KEY.HIDE_TUTORIAL)
-    const alert = await this.alertController.create({
-      header: 'Informações',
-      message: 'Salvando o progresso:\n' +
-        '- Sempre que terminar de jogar, clique no botão "Salvar Progresso" no topo do site para persistir o jogo salvo neste navegador\n' +
-        '- O jogo salvo é persistido 100% no armazenamento do browser.\n' +
-        '- No menu de opções, é possível ativar a opção de auto-save a cada 5 minutos.\n' +
-        '- Se os dados do navegador forem apagados ao fim da sessão, ou se estiver rodando em uma janela anônima de navegação o jogo salvo será perdido entre sessões\n' +
-        '\n' +
-        'Input:\n' +
-        '- No computador, pressione ESC para livrar o mouse da janela do jogo.\n' +
-        '- No celular, o cursor pode ser movido com o dedo como se a tela toda fosse um grande touchpad de notebook.\n' +
-        '- O teclado virtual pode ser aberto e fechado clicando no botão de teclado aqui do lado.\n' +
-        '- Os navegadores no sistema Android sofrem um pouco mais com a performance.\n' +
-        '- Jogar no celular ainda não está 100% por conta da emulação do mouse e teclado, mas já estou pensando numa solução.\n',
-      backdropDismiss: false,
-      cssClass: 'alert-whitespace wide-alert',
-      buttons: [{
-        text: 'Entendi'
-      }],
-      inputs: [{
-        type: 'checkbox',
-        label: 'Não mostrar novamente',
-        value: 'showTutorial',
-        checked: hideTutorial,
-        handler: async (e) => {
-          await this.storageService.set(STORAGE_KEY.HIDE_TUTORIAL, e.checked)
-        }
-      }]
-    });
-    await alert.present();
+    this.hidePopover()
+    const modal = await this.modalController.create({
+      component: UserGuideComponent,
+      cssClass: 'user-guide-modal',
+      backdropDismiss: false
+    })
+    await modal.present()
+    // const hideTutorial = await this.storageService.get<boolean>(STORAGE_KEY.HIDE_TUTORIAL)
+    // const alert = await this.alertController.create({
+    //   header: 'Informações',
+    //   message: 'Salvando o progresso:\n' +
+    //     '- Sempre que terminar de jogar, clique no botão "Salvar Progresso" no topo do site para persistir o jogo salvo neste navegador\n' +
+    //     '- O jogo salvo é persistido 100% no armazenamento do browser.\n' +
+    //     '- No menu de opções, é possível ativar a opção de auto-save a cada 5 minutos.\n' +
+    //     '- Se os dados do navegador forem apagados ao fim da sessão, ou se estiver rodando em uma janela anônima de navegação o jogo salvo será perdido entre sessões\n' +
+    //     '\n' +
+    //     'Input:\n' +
+    //     '- No computador, pressione ESC para livrar o mouse da janela do jogo.\n' +
+    //     '- No celular, o cursor pode ser movido com o dedo como se a tela toda fosse um grande touchpad de notebook.\n' +
+    //     '- O teclado virtual pode ser aberto e fechado clicando no botão de teclado aqui do lado.\n' +
+    //     '- Os navegadores no sistema Android sofrem um pouco mais com a performance.\n' +
+    //     '- Jogar no celular ainda não está 100% por conta da emulação do mouse e teclado, mas já estou pensando numa solução.\n',
+    //   backdropDismiss: false,
+    //   cssClass: 'alert-whitespace wide-alert',
+    //   buttons: [{
+    //     text: 'Entendi'
+    //   }],
+    //   inputs: [{
+    //     type: 'checkbox',
+    //     label: 'Não mostrar novamente',
+    //     value: 'showTutorial',
+    //     checked: hideTutorial,
+    //     handler: async (e) => {
+    //       await this.storageService.set(STORAGE_KEY.HIDE_TUTORIAL, e.checked)
+    //     }
+    //   }]
+    // });
+    // await alert.present();
   }
 
   async showUserGuideModal() {
