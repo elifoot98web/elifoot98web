@@ -11,6 +11,8 @@ import { SaveGameService } from '../services/save-game.service';
 import { LocalStorageService } from '../services/local-storage.service';
 import { PatchService } from '../services/patch.service';
 import { UserGuideComponent } from './components/user-guide/user-guide.component';
+import { FaqComponent } from './components/faq/faq.component';
+import { TutorialComponent } from './components/tutorial/tutorial.component';
 
 @NgModule({
   imports: [
@@ -21,7 +23,9 @@ import { UserGuideComponent } from './components/user-guide/user-guide.component
   ],
   declarations: [
     GamePage,
-    UserGuideComponent
+    UserGuideComponent,
+    FaqComponent,
+    TutorialComponent
   ],
   providers: [SaveGameService, LocalStorageService, PatchService]
 })

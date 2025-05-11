@@ -1,27 +1,27 @@
 <ion-header>
-  <ion-toolbar color="primary">
-    <ion-title>FAQ e Tutorial</ion-title>
-    <ion-buttons slot="end">
+  <ion-toolbar [ngClass]="{'ion-text-center': isMobile}" color="tertiary">
+    <ion-buttons [slot]="isMobile ? 'start' : 'end'">
       <ion-button (click)="close()">
-        <ion-icon name="close"></ion-icon>
+        <ion-icon name="close" slot="icon-only"></ion-icon>
       </ion-button>
     </ion-buttons>
-  </ion-toolbar>
-  <ion-toolbar>
-    <ion-segment value="all">
-      <ion-segment-button value="all">
+    <ion-segment value="faq">
+      <ion-segment-button value="faq" content-id="faq-content">
         <ion-label>FAQ</ion-label>
       </ion-segment-button>
-      <ion-segment-button value="favorites">
+      <ion-segment-button value="tutorial" content-id="tutorial-content">
         <ion-label>Tutorial</ion-label>
       </ion-segment-button>
     </ion-segment>
   </ion-toolbar>
 </ion-header>
 <ion-content>
-  <!-- <ion-segment-view>
-    <ion-segment-content id="first">First</ion-segment-content>
-    <ion-segment-content id="second">Second</ion-segment-content>
-    <ion-segment-content id="third">Third</ion-segment-content>
-  </ion-segment-view> -->
+  <ion-segment-view>
+    <ion-segment-content id="faq-content">
+      <app-faq></app-faq>
+    </ion-segment-content>
+    <ion-segment-content id="tutorial-content">
+      
+    </ion-segment-content>
+  </ion-segment-view>
 </ion-content>

@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { ModalController } from '@ionic/angular';
+import { LayoutHelperService } from 'src/app/services/layout-helper.service';
 
 @Component({
   selector: 'app-user-guide',
@@ -9,7 +10,11 @@ import { ModalController } from '@ionic/angular';
 })
 export class UserGuideComponent  implements OnInit {
 
-  constructor(private modalController: ModalController) { }
+  constructor(private modalController: ModalController, private layoutHelpeService: LayoutHelperService) { }
+
+  get isMobile(): boolean {
+    return this.layoutHelpeService.isMobileMode
+  }
 
   ngOnInit() {}
 

@@ -1,0 +1,7 @@
+ion-segment-button::part(indicator-background) {
+    background: var(--ion-color-secondary);
+}
+
+ion-segment-button {
+    --indicator-height: 4px;
+}
