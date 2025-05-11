@@ -1,0 +1,90 @@
+<ion-content>
+  
+  <ion-accordion-group multiple="true">
+  <ion-accordion>
+    <ion-item slot="header" color="light">
+      <ion-label>Menu de Opções</ion-label>
+    </ion-item>
+    <div class="ion-padding" slot="content">
+      <p>
+        O menu de opções (<ion-icon name="menu-outline"></ion-icon>><ion-icon name="options-outline"></ion-icon> ou <ion-icon name="ellipsis-vertical-outline"></ion-icon>)
+        localizado no canto superior da tela. 
+      </p>
+      <ion-accordion-group expand="inset">
+        <ion-accordion>
+          <ion-item slot="header">
+            <ion-label>
+              <strong>Desativar Suavização</strong>
+            </ion-label>
+          </ion-item>
+          <div class="ion-padding" slot="content">
+            Desativa o filtro de suavização de imagem do emulador. Caso prefira os pixels quadrados, ative essa opção.
+            <p class="ion-padding-top">Essa opção pode ser útil para quem está jogando em telas de baixa resolução ou dispositivos mais antigos, onde a suavização pode deixar a imagem menos legível.</p> 
+          </div>
+        </ion-accordion>
+        <ion-accordion>
+          <ion-item slot="header">
+            <ion-label>
+              <strong>Auto-Save</strong>
+            </ion-label>
+          </ion-item>
+          <div class="ion-padding" slot="content">
+            <p>Submenu com opções de salvamento de dados da máquina virtual/emulador.</p>
+            
+            <h4>Salvar Máquina Virtual <ion-icon name="save-outline"></ion-icon></h4>
+            <p>
+              Salva o estado atual da máquina virtual, incluindo o sistema de arquivos do emulador em geral. 
+              Essa opção é útil caso você tenha feito alterações nos arquivos em geral, como a utilização do editor de equipes do Elifoot 98 ou mudanças nas configurações do windows 3.1 por exemplo.
+            </p>
+
+            <h4>Desativar Sync Save</h4>
+            <p>
+              Por padrão, os sistema detecta automaticamente quando o jogo é salvo e após o fim do salvamento, dispara o salvamentento automático da máquina virtual/emulador. 
+            </p>
+            <p>
+              Utilize essa opção para desativar o salvamento automático da máquina virtual/emulador.
+            </p>
+
+            <h4>Save Periódico (5min)</h4>
+            <p>
+              Utilize essa opção para ativar o salvamento automático da máquina virtual/emulador a cada 5 minutos. 
+            </p>
+            <p>
+              Note que essa opção é independente da de Sync Save, ou seja, é possível ativar as duas opções ao mesmo tempo.
+            </p>
+          </div>
+        </ion-accordion>
+        <ion-accordion>
+          <ion-item slot="header">
+            <ion-label>
+              <strong>Dados e Backups</strong>
+            </ion-label>
+          </ion-item>
+          <div class="ion-padding" slot="content">
+            <p>Submenu com opções para importação e exportação de dados de jogos além de opção para apagar e resetar a máquina.</p>
+            
+            <h4>Exportar Jogos Salvos <ion-icon name="share-outline"></ion-icon></h4>
+            <p>
+              Opção para fazer download dos jogos salvos (arquivos .e98) da máquina virtual para seu computador/celular.<br>
+              <strong>Importante:</strong> O download é feito em um arquivo compactado (.zip) que contém todos os jogos salvos.
+            </p>
+
+            <h4>Importar Jogos Salvos <ion-icon name="download-outline"></ion-icon></h4>
+            <p>
+              Opção para copiar um jogo salvo em outro local (arquivo .e98) para dentro da máquina virtual/emulador.<br>
+              <strong>Importante:</strong> Se já houver um arquivo com mesmo nome dentro da máquina virtual, o save selecionado para importação irá SUBSTITUIR o arquivo no destino.
+            </p>
+            <ion-text color="danger">
+              <h4 color="danger">Apagar todos os dados <ion-icon name="trash-outline"></ion-icon></h4>
+            </ion-text>
+            <p>
+              Opção para apagar todos os dados da máquina virtual/emulador, incluindo jogos salvos, arquivos de configuração e outros dados.<br>  
+              <strong>Importante:</strong> Essa opção não pode ser desfeita! Uma vez apagados os dados, não há como recuperá-los.
+            </p>
+          </div>
+        </ion-accordion>
+      </ion-accordion-group>
+      </div>
+    </ion-accordion>
+  </ion-accordion-group>
+</ion-content>

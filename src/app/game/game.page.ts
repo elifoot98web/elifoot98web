@@ -183,7 +183,7 @@ export class GamePage implements OnInit {
   }
 
   async handleShowTutorial() {
-    const hideTutorial = await this.storageService.get<boolean>(STORAGE_KEY.HIDE_TUTORIAL)
+    const hideTutorial = false //await this.storageService.get<boolean>(STORAGE_KEY.HIDE_TUTORIAL)
 
     if (!hideTutorial) {
       await this.showTutorial()

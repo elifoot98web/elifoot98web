@@ -12,7 +12,7 @@ import { LocalStorageService } from '../services/local-storage.service';
 import { PatchService } from '../services/patch.service';
 import { UserGuideComponent } from './components/user-guide/user-guide.component';
 import { FaqComponent } from './components/faq/faq.component';
-import { TutorialComponent } from './components/tutorial/tutorial.component';
+import { ManualComponent } from './components/manual/manual.component';
 
 @NgModule({
   imports: [
@@ -25,7 +25,7 @@ import { TutorialComponent } from './components/tutorial/tutorial.component';
     GamePage,
     UserGuideComponent,
     FaqComponent,
-    TutorialComponent
+    ManualComponent
   ],
   providers: [SaveGameService, LocalStorageService, PatchService]
 })
