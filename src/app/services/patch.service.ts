@@ -1,9 +1,9 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import * as JSZip from 'jszip';
 import { DosCI } from '../models/jsdos';
 import { lastValueFrom } from 'rxjs';
 import { BASE_SAVEGAME_DIR } from '../models/constants';
+import JSZip from 'jszip';
 
 @Injectable({
   providedIn: 'root'

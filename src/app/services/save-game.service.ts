@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
-import * as JSZip from 'jszip';
 import { BASE_SAVEGAME_DIR } from '../models/constants';
+import JSZip from 'jszip';
 
 @Injectable({
   providedIn: 'root'
