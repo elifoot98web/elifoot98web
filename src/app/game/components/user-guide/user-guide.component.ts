@@ -5,6 +5,7 @@ import { ModalController } from '@ionic/angular';
   selector: 'app-user-guide',
   templateUrl: './user-guide.component.html',
   styleUrls: ['./user-guide.component.scss'],
+  standalone: false
 })
 export class UserGuideComponent  implements OnInit {
 
