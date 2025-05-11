@@ -3,7 +3,7 @@ import { AlertController, LoadingController } from '@ionic/angular';
 import { SaveGameService } from '../services/save-game.service';
 import { LocalStorageService } from '../services/local-storage.service';
 import { PatchService } from '../services/patch.service';
-import * as JSZip from 'jszip';
+import JSZip from 'jszip';
 import { environment } from 'src/environments/environment';
 import { ToggleCheckEvent } from '../models/toggle-event';
 import { EmulatorKeyCode } from '../models/emulator-keycodes';
