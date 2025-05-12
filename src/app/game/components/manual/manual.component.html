@@ -7,9 +7,9 @@
       </ion-item>
       <div class="ion-padding" slot="content">
         <p>
-          O menu de opções (<ion-icon name="menu-outline"></ion-icon>><ion-icon name="options-outline"></ion-icon> ou
+          O menu de opções (<ion-icon name="menu-outline"></ion-icon> <ion-icon name="arrow-forward-outline"></ion-icon> <ion-icon name="options-outline"></ion-icon> ou
           <ion-icon name="ellipsis-vertical-outline"></ion-icon>)
-          localizado no canto superior da tela.
+          está localizado no canto superior da tela.
         </p>
         <ion-accordion-group expand="inset">
           <ion-accordion>
@@ -19,7 +19,7 @@
               </ion-label>
             </ion-item>
             <div class="ion-padding" slot="content">
-              Desativa o filtro de suavização de imagem do emulador. Caso prefira os pixels quadrados, ative essa opção.
+              Desativa o filtro de suavização de imagem do emulador. Caso prefira os pixels quadrados, ative esta opção.
               <p class="ion-padding-top">Essa opção pode ser útil para quem está jogando em telas de baixa resolução ou
                 dispositivos mais antigos, onde a suavização pode deixar a imagem menos legível.</p>
             </div>
@@ -37,24 +37,21 @@
               <p>
                 Salva o estado atual da máquina virtual, incluindo o sistema de arquivos do emulador em geral.
                 Essa opção é útil caso você tenha feito alterações nos arquivos em geral, como a utilização do editor de
-                equipes do Elifoot 98 ou mudanças nas configurações do windows 3.1 por exemplo.
+                equipes do Elifoot 98 ou mudanças nas configurações do Windows 3.1, por exemplo.
               </p>
 
               <h4>Desativar Sync Save</h4>
               <p>
-                Por padrão, os sistema detecta automaticamente quando o jogo é salvo e após o fim do salvamento, dispara
-                o salvamentento automático da máquina virtual/emulador.
-              </p>
-              <p>
-                Utilize essa opção para desativar o salvamento automático da máquina virtual/emulador.
+                Por padrão, o sistema detecta automaticamente quando o jogo é salvo e dispara
+                o salvamento da máquina virtual/emulador. Caso você deseje desativar essa funcionalidade, utilize esta opção.
               </p>
 
               <h4>Save Periódico (5min)</h4>
               <p>
-                Utilize essa opção para ativar o salvamento automático da máquina virtual/emulador a cada 5 minutos.
+                Utilize esta opção para ativar o salvamento automático da máquina virtual/emulador a cada 5 minutos.
               </p>
               <p>
-                Note que essa opção é independente da de Sync Save, ou seja, é possível ativar as duas opções ao mesmo
+                Note que esta opção é independente da de Sync Save, ou seja, é possível ativar as duas opções ao mesmo
                 tempo.
               </p>
             </div>
@@ -139,7 +136,7 @@
 
               <h4>Remover Patch <ion-icon name="cloud-offline-outline"></ion-icon></h4>
               <p>
-                Remove o patch atualmente aplicado na máquina virtual e restaura jogo original.<br>
+                Remove o patch atualmente aplicado na máquina virtual e restaura o jogo original.<br>
                 <strong>Atenção:</strong> Jogos salvos não serão apagados, mas podem ficar em estado corrompido até que
                 o patch seja reaplicado.
               </p>
@@ -162,15 +159,16 @@
     </ion-accordion>
     <ion-accordion value="aux-controls">
       <ion-item slot="header" color="light">
-        <ion-label>Controles Auxíliares</ion-label>
+        <ion-label>Controles Auxiliares</ion-label>
         <ion-icon slot="end" name="game-controller"></ion-icon>
       </ion-item>
       <div class="ion-padding" slot="content">
         <p>
           Os botões flutuantes de controles auxiliares são exibidos como ícones de joystick na parte inferior da tela.<br>
           Esses botões são úteis para acessar rapidamente atalhos e teclas do teclado com ações específicas para o jogo.<br>
-          Em um dos botões flutuantes você encontrará os botões <strong>F1 ao F12</strong>, <strong>A</strong> e <strong>M</strong>. Utilizado para escolher táticas para a partida.<br>
-          Enquanto no outro, há atalhos de teclas de navegação como as <strong>setas direcionais <ion-icon name="caret-back-outline"></ion-icon> <ion-icon name="caret-up-outline"></ion-icon> <ion-icon name="caret-forward-outline"></ion-icon> <ion-icon name="caret-down-outline"></ion-icon></strong> e <strong>Enter <ion-icon name="return-down-back-outline"></ion-icon></strong>
+          Em um dos botões flutuantes, você encontrará os botões <strong>F1 ao F12</strong>, <strong>A</strong> e <strong>M</strong>, utilizados para escolher táticas para a partida.<br>
+          Enquanto no outro, há atalhos de teclas de navegação, como as <strong>setas direcionais <ion-icon name="caret-back-outline"></ion-icon> <ion-icon name="caret-up-outline"></ion-icon> <ion-icon name="caret-forward-outline"></ion-icon> <ion-icon name="caret-down-outline"></ion-icon></strong> e <strong>Enter <ion-icon name="return-down-back-outline"></ion-icon></strong>.
+        </p>
       </div>
     </ion-accordion>
   </ion-accordion-group>
