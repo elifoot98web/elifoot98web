@@ -42,6 +42,11 @@
     max-width: 800px !important;
 }
 
+ion-popover.menu-popover {
+    --max-width: 90%;
+    --width: 280px;
+}
+
 .smooth-canvas {
     image-rendering: auto !important;
 }

@@ -1,5 +1,5 @@
 import { Component, HostListener, OnInit, ViewChild } from '@angular/core';
-import { AlertController, LoadingController } from '@ionic/angular';
+import { AlertController, LoadingController, ModalController } from '@ionic/angular';
 import { SaveGameService } from '../services/save-game.service';
 import { LocalStorageService } from '../services/local-storage.service';
 import { PatchService } from '../services/patch.service';
@@ -10,6 +10,8 @@ import { EmulatorKeyCode } from '../models/emulator-keycodes';
 import { EmulatorControlService } from '../services/emulator-control.service';
 import { GAME_INPUT_FN_BTNS, GAME_INPUT_FN_BTNS_REVERSED, STORAGE_KEY } from '../models/constants';
 import { AutoSaverService } from '../services/auto-saver.service';
+import { UserGuideComponent } from './components/user-guide/user-guide.component';
+import { LayoutHelperService } from '../services/layout-helper.service';
 
 
 @Component({
@@ -21,12 +23,6 @@ import { AutoSaverService } from '../services/auto-saver.service';
 export class GamePage implements OnInit {
   EmulatorKeyCode = EmulatorKeyCode
   @ViewChild('popover') popover: any;
-  @HostListener('window:resize', ['$event'])
-  onWindowResize() {
-    this.isLandscape = window.innerWidth > window.innerHeight
-    this.isMobile = this.isLandscape && window.innerHeight < 768 || window.innerWidth < 768
-  }
-
   // UI state properties
   smoothFilterDisabled = false;
   autoSaveDisabled = false;
@@ -34,21 +30,20 @@ export class GamePage implements OnInit {
   isPopoverOpen = false;
   isVirtualKeyboardShowing = false;
   isHidden = true;
-  isLandscape = false
-  isMobile = false
   debugMode = false
   dosCI: any = null;
 
   constructor(private loadingController: LoadingController,
     private alertController: AlertController,
+    private modalController: ModalController,
     private saveGameService: SaveGameService,
     private patchService: PatchService,
     private storageService: LocalStorageService,
     private emulatorControlService: EmulatorControlService,
-    private autoSaverService: AutoSaverService) { }
+    private autoSaverService: AutoSaverService,
+    private layoutHelperService: LayoutHelperService) { }
 
   async ngOnInit() {
-    this.onWindowResize()
     const loading = await this.loadingController.create({
       message: 'Carregando game...',
       backdropDismiss: false
@@ -191,35 +186,60 @@ export class GamePage implements OnInit {
   async showTutorial() {
     const hideTutorial = await this.storageService.get<boolean>(STORAGE_KEY.HIDE_TUTORIAL)
     const alert = await this.alertController.create({
-      header: 'Informações',
-      message: 'Salvando o progresso:\n' +
-        '- Sempre que terminar de jogar, clique no botão "Salvar Progresso" no topo do site para persistir o jogo salvo neste navegador\n' +
-        '- O jogo salvo é persistido 100% no armazenamento do browser.\n' +
-        '- No menu de opções, é possível ativar a opção de auto-save a cada 5 minutos.\n' +
-        '- Se os dados do navegador forem apagados ao fim da sessão, ou se estiver rodando em uma janela anônima de navegação o jogo salvo será perdido entre sessões\n' +
-        '\n' +
-        'Input:\n' +
-        '- No computador, pressione ESC para livrar o mouse da janela do jogo.\n' +
-        '- No celular, o cursor pode ser movido com o dedo como se a tela toda fosse um grande touchpad de notebook.\n' +
-        '- O teclado virtual pode ser aberto e fechado clicando no botão de teclado aqui do lado.\n' +
-        '- Os navegadores no sistema Android sofrem um pouco mais com a performance.\n' +
-        '- Jogar no celular ainda não está 100% por conta da emulação do mouse e teclado, mas já estou pensando numa solução.\n',
+      header: 'Informações Importantes',
+      message:
+      'Este é um projeto gratuito e de código aberto, sem cobranças ou coleta de dados dos usuários.\n' +
+      '\nPara aprender a jogar, consulte o FAQ e o Manual do Usuário disponíveis no menu de opções.\n' +
+      '\nSobre os jogos salvos:\n' +
+      '- Os dados são armazenados localmente no navegador. Se você estiver usando uma janela anônima ou se os dados de navegação forem apagados, os jogos salvos serão perdidos.\n' +
+      '\n' +
+      'Dicas de uso:\n' +
+      '- No computador, pressione ESC para liberar o mouse da janela do jogo.\n' +
+      '- No celular, mova o cursor deslizando o dedo na tela, como em um touchpad de notebook.\n' +
+      '\nAproveite para reviver a nostalgia do clássico Elifoot 98 diretamente no seu navegador!\n',
       backdropDismiss: false,
       cssClass: 'alert-whitespace wide-alert',
-      buttons: [{
-        text: 'Entendi'
-      }],
-      inputs: [{
-        type: 'checkbox',
-        label: 'Não mostrar novamente',
-        value: 'showTutorial',
-        checked: hideTutorial,
-        handler: async (e) => {
-          await this.storageService.set(STORAGE_KEY.HIDE_TUTORIAL, e.checked)
+      buttons: [
+        {
+          text: 'FAQ e Manual',
+          handler: async () => {
+            await alert.dismiss()
+            await this.showFAQAndManualModal()
+          }
+        },
+        {
+          text: 'Entendi'
         }
+      ],
+      inputs: [{
+      type: 'checkbox',
+      label: 'Não mostrar novamente',
+      value: 'showTutorial',
+      checked: hideTutorial,
+      handler: async (e) => {
+        await this.storageService.set(STORAGE_KEY.HIDE_TUTORIAL, e.checked)
+      }
       }]
     });
     await alert.present();
+  }
+
+  async showFAQAndManualModal() {
+    this.hidePopover()
+    const modal = await this.modalController.create({
+      component: UserGuideComponent,
+      cssClass: 'user-guide-modal',
+      backdropDismiss: false
+    })
+    await modal.present()
+  }
+
+  async showUserGuideModal() {
+    const modal = await this.modalController.create({
+      component: UserGuideComponent,
+      backdropDismiss: false
+    });
+    await modal.present();
   }
 
   get gameInputs() {
@@ -228,6 +248,14 @@ export class GamePage implements OnInit {
     } else {
       return GAME_INPUT_FN_BTNS;
     }
+  }
+
+  get isLandscape() {
+    return this.layoutHelperService.isLandscapeMode
+  }
+
+  get isMobile() {
+    return this.layoutHelperService.isMobileMode
   }
 
   async saveGame() {

@@ -1,0 +1,27 @@
+<ion-header>
+  <ion-toolbar [ngClass]="{'ion-text-center': isMobile}" color="tertiary">
+    <ion-buttons [slot]="isMobile ? 'start' : 'end'">
+      <ion-button (click)="close()">
+        <ion-icon name="close" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+    <ion-segment>
+      <ion-segment-button value="faq" content-id="faq-content">
+        <ion-label>FAQ</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="manual" content-id="manual-content">
+        <ion-label>Manual</ion-label>
+      </ion-segment-button>
+    </ion-segment>
+  </ion-toolbar>
+</ion-header>
+<ion-content>
+  <ion-segment-view>
+    <ion-segment-content id="faq-content">
+      <app-faq></app-faq>
+    </ion-segment-content>
+    <ion-segment-content id="manual-content">
+      <app-manual></app-manual>
+    </ion-segment-content>
+  </ion-segment-view>
+</ion-content>

@@ -1,8 +1,9 @@
-import { Component } from '@angular/core';
+import { Component, HostListener } from '@angular/core';
 import { SwUpdate } from '@angular/service-worker';
 import { AlertController, Platform } from '@ionic/angular';
 import { LocalStorageService } from './services/local-storage.service';
 import { STORAGE_KEY } from './models/constants';
+import { LayoutHelperService } from './services/layout-helper.service';
 
 @Component({
     selector: 'app-root',
@@ -11,8 +12,21 @@ import { STORAGE_KEY } from './models/constants';
     standalone: false
 })
 export class AppComponent {
-  constructor(platform: Platform, private alertController: AlertController, private updates: SwUpdate, private localStorage: LocalStorageService) {
+
+  @HostListener('window:resize', ['$event'])
+  onWindowResize() {
+    this.layoutHelperService.onWindowResize();
+  }
+
+  constructor(platform: Platform, 
+    private alertController: AlertController, 
+    private updates: SwUpdate, 
+    private localStorage: LocalStorageService, 
+    private layoutHelperService: LayoutHelperService) {
+
     platform.ready().then(async () => {
+      // Initialize the layout helper service
+      this.onWindowResize()
       // Check if a refresh is needed
       const pendingUpdate = await this.localStorage.get<boolean>(STORAGE_KEY.PENDING_UPDATE);
       if(pendingUpdate) {
