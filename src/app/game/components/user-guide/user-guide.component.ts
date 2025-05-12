@@ -10,10 +10,10 @@ import { LayoutHelperService } from 'src/app/services/layout-helper.service';
 })
 export class UserGuideComponent  implements OnInit {
 
-  constructor(private modalController: ModalController, private layoutHelpeService: LayoutHelperService) { }
+  constructor(private modalController: ModalController, private layoutHelperService: LayoutHelperService) { }
 
   get isMobile(): boolean {
-    return this.layoutHelpeService.isMobileMode
+    return this.layoutHelperService.isMobileMode
   }
 
   ngOnInit() {}

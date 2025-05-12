@@ -9,7 +9,7 @@ export class LayoutHelperService {
 
   onWindowResize() {
     this.isLandscape = window.innerWidth > window.innerHeight
-    this.isMobile = this.isLandscape && window.innerHeight < 768 || window.innerWidth < 768
+    this.isMobile = (this.isLandscape && window.innerHeight < 768) || window.innerWidth < 768
   }
 
   constructor() { }

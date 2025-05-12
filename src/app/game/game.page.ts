@@ -11,6 +11,7 @@ import { EmulatorControlService } from '../services/emulator-control.service';
 import { GAME_INPUT_FN_BTNS, GAME_INPUT_FN_BTNS_REVERSED, STORAGE_KEY } from '../models/constants';
 import { AutoSaverService } from '../services/auto-saver.service';
 import { UserGuideComponent } from './components/user-guide/user-guide.component';
+import { LayoutHelperService } from '../services/layout-helper.service';
 
 
 @Component({
@@ -22,12 +23,6 @@ import { UserGuideComponent } from './components/user-guide/user-guide.component
 export class GamePage implements OnInit {
   EmulatorKeyCode = EmulatorKeyCode
   @ViewChild('popover') popover: any;
-  @HostListener('window:resize', ['$event'])
-  onWindowResize() {
-    this.isLandscape = window.innerWidth > window.innerHeight
-    this.isMobile = this.isLandscape && window.innerHeight < 768 || window.innerWidth < 768
-  }
-
   // UI state properties
   smoothFilterDisabled = false;
   autoSaveDisabled = false;
@@ -35,8 +30,6 @@ export class GamePage implements OnInit {
   isPopoverOpen = false;
   isVirtualKeyboardShowing = false;
   isHidden = true;
-  isLandscape = false
-  isMobile = false
   debugMode = false
   dosCI: any = null;
 
@@ -47,10 +40,10 @@ export class GamePage implements OnInit {
     private patchService: PatchService,
     private storageService: LocalStorageService,
     private emulatorControlService: EmulatorControlService,
-    private autoSaverService: AutoSaverService) { }
+    private autoSaverService: AutoSaverService,
+    private layoutHelperService: LayoutHelperService) { }
 
   async ngOnInit() {
-    this.onWindowResize()
     const loading = await this.loadingController.create({
       message: 'Carregando game...',
       backdropDismiss: false
@@ -255,6 +248,14 @@ export class GamePage implements OnInit {
     } else {
       return GAME_INPUT_FN_BTNS;
     }
+  }
+
+  get isLandscape() {
+    return this.layoutHelperService.isLandscapeMode
+  }
+
+  get isMobile() {
+    return this.layoutHelperService.isMobileMode
   }
 
   async saveGame() {
