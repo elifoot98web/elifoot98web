@@ -141,7 +141,7 @@ export class SaveGameService {
   }
 
   private saveUint8ArrayAsFile(uint8Array: Uint8Array, fileName: string): void {
-    const blob = new Blob([uint8Array as unknown as BlobPart], { type: 'application/octet-stream' });
+    const blob = new Blob([uint8Array.buffer as ArrayBuffer], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
   
     const link = document.createElement('a');
