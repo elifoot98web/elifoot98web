@@ -61,25 +61,74 @@
             </ion-label>
           </ion-item>
           <div class="ion-padding" slot="content">
-            <p>Submenu com opções para importação e exportação de dados de jogos além de opção para apagar e resetar a máquina.</p>
+            <p>Este submenu oferece opções para gerenciar dados de jogos, incluindo exportação, importação e redefinição completa da máquina virtual.</p>
             
             <h4>Exportar Jogos Salvos <ion-icon name="share-outline"></ion-icon></h4>
             <p>
-              Opção para fazer download dos jogos salvos (arquivos .e98) da máquina virtual para seu computador/celular.<br>
-              <strong>Importante:</strong> O download é feito em um arquivo compactado (.zip) que contém todos os jogos salvos.
+              Permite baixar os jogos salvos (arquivos .e98) da máquina virtual para o seu dispositivo.<br>
+              <strong>Nota:</strong> O download será feito em um arquivo compactado (.zip) contendo todos os jogos salvos.
             </p>
 
             <h4>Importar Jogos Salvos <ion-icon name="download-outline"></ion-icon></h4>
             <p>
-              Opção para copiar um jogo salvo em outro local (arquivo .e98) para dentro da máquina virtual/emulador.<br>
-              <strong>Importante:</strong> Se já houver um arquivo com mesmo nome dentro da máquina virtual, o save selecionado para importação irá SUBSTITUIR o arquivo no destino.
+              Permite adicionar um jogo salvo de outro local (arquivo .e98) para dentro da máquina virtual.<br>
+              <strong>Atenção:</strong> Caso já exista um arquivo com o mesmo nome na máquina virtual, o arquivo importado irá SUBSTITUIR o existente.
             </p>
             <ion-text color="danger">
-              <h4 color="danger">Apagar todos os dados <ion-icon name="trash-outline"></ion-icon></h4>
+              <h4 color="danger">Apagar Todos os Dados <ion-icon name="trash-outline"></ion-icon></h4>
             </ion-text>
             <p>
-              Opção para apagar todos os dados da máquina virtual/emulador, incluindo jogos salvos, arquivos de configuração e outros dados.<br>  
-              <strong>Importante:</strong> Essa opção não pode ser desfeita! Uma vez apagados os dados, não há como recuperá-los.
+              Remove todos os dados da máquina virtual, incluindo jogos salvos, configurações e outros arquivos.<br>  
+              <strong>Aviso:</strong> Esta ação é irreversível. Após a exclusão, os dados não poderão ser recuperados.
+            </p>
+          </div>
+        </ion-accordion>
+        <ion-accordion>
+          <ion-item slot="header">
+            <ion-label>
+              <strong>Input de Texto</strong>
+            </ion-label>
+          </ion-item>
+          <div class="ion-padding" slot="content">
+            <p>
+              Permite abrir uma caixa de texto para enviar conteúdo diretamente para a máquina virtual.<br>
+              Essa funcionalidade é útil para colar textos do seu computador ou celular diretamente no emulador, ou para digitar caracteres que não estão disponíveis no teclado virtual.
+            </p>
+          </div>
+        </ion-accordion>
+        <ion-accordion>
+          <ion-item slot="header">
+            <ion-label>
+              <strong>Teclado Virtual</strong>
+            </ion-label>
+          </ion-item>
+          <div class="ion-padding" slot="content">
+            <p>
+              Ativa ou desativa o teclado virtual.<br>
+            </p>
+          </div>
+        </ion-accordion>
+        <ion-accordion>
+          <ion-item slot="header">
+            <ion-label>
+              <strong>Opções de Patch</strong>
+            </ion-label>
+          </ion-item>
+          <div class="ion-padding" slot="content">
+            <p>Este submenu oferece opções para aplicação de patches para alteração de times, bandeiras, países, árbitros e demais opções dentro do jogo.</p>
+            <p>
+              Esses patches podem ser encontrados em sites especializados, como os dos nossos amigos do <strong><a href="https://turboelifoot.com" target="_blank">Turbo Elifoot <ion-icon name="open-outline"></ion-icon></a></strong>.
+            </p>
+            <h4>Carregar Patch <ion-icon name="cloud-upload-outline"></ion-icon></h4>
+            <p>
+              Permite selecionar um arquivo de patch para aplicar na máquina virtual.<br>
+              <strong>Nota:</strong> Apenas arquivos ZIP com estrutura compatível com o Elifoot 98.
+            </p>
+
+            <h4>Remover Patch <ion-icon name="cloud-offline-outline"></ion-icon></h4>
+            <p>
+              Remove o patch atualmente aplicado na máquina virtual e restaura jogo original.<br>
+              <strong>Atenção:</strong> Jogos salvos não serão apagados, mas podem ficar em estado corrompido até que o patch seja reaplicado.
             </p>
           </div>
         </ion-accordion>
