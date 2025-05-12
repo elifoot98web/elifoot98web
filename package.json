@@ -3,6 +3,10 @@
   "version": "1.0",
   "author": "Leonardo Pereira <jlcvp>",
   "homepage": "https://www.elifoot98.com.br",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/elifoot98web/elifoot98web.git"
+  },
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
@@ -32,7 +36,6 @@
     "@capacitor/status-bar": "5.0.6",
     "@ionic/angular": "^8.5.7",
     "@ionic/storage-angular": "^4.0.0",
-    "file-saver": "^2.0.5",
     "ionicons": "^7.0.0",
     "jszip": "^3.10.1",
     "rxjs": "~7.8.0",
@@ -52,7 +55,6 @@
     "@angular/language-service": "^19.2.10",
     "@capacitor/cli": "5.2.2",
     "@ionic/angular-toolkit": "^9.0.0",
-    "@types/file-saver": "^2.0.5",
     "@types/jasmine": "~4.3.0",
     "@types/node": "^12.11.1",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
@@ -72,5 +74,5 @@
     "ts-node": "^8.3.0",
     "typescript": "^5.8.3"
   },
-  "description": "An Ionic project"
+  "description": "Aplicação que permite jogar Elifoot 98 diretamente no navegador! Reviva a nostalgia deste clássico jogo de gerenciamento de futebol. Compatível com dispositivos móveis e desktops."
 }

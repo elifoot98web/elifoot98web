@@ -1,0 +1,115 @@
+<ion-header>
+  <ion-toolbar [ngClass]="{'ion-text-center': isMobile}" color="tertiary">
+    <ion-buttons [slot]="isMobile ? 'start' : 'end'">
+      <ion-button (click)="close()">
+        <ion-icon name="close" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+    <ion-title>Sobre e Créditos</ion-title>
+  </ion-toolbar>
+</ion-header>
+<ion-content class="ion-padding">
+  <h2>Elifoot 98 Online</h2>
+  <p>
+    Copyright © 2023-2025 <a href="https://github.com/jlcvp" target="_blank">Leonardo "Leu" Pereira</a> <br>
+    Licenciado sob a <a href="https://opensource.org/licenses/MIT" target="_blank">Licença MIT</a>.<br>
+    <small>Veja o arquivo <a href="https://github.com/elifoot98web/elifoot98web/blob/main/LICENSE" target="_blank">LICENSE</a> para detalhes.</small>
+  </p>
+  <p>
+    O objetivo deste projeto é permitir que o Elifoot 98 seja jogado diretamente no navegador, em computadores e celulares, sem precisar de extensões do sistema ou emuladores.
+    Como bônus, esta versão permite jogar em modo janela, algo não disponível no original ou via OTVDM.<br>
+    Para mais detalhes sobre o projeto, consulte o nosso<br>
+    <strong><a href="https://github.com/elifoot98web/elifoot98web?#elifoot-98-online" target="_blank">repositório oficial no GitHub</a></strong>.
+  </p>
+
+  <h3>Sobre o Elifoot 98</h3>
+  <p>
+    Elifoot 98 é um jogo original de André Elias, distribuído como shareware.<br>
+    Este projeto é uma homenagem de fãs, sem fins lucrativos.<br>
+    <a href="https://web.archive.org/web/20010124090300/http://www.ip.pt/~ip213368/" target="_blank">Homepage original do Elifoot 98 (arquivo)</a>
+  </p>
+  <h3>Licenças</h3>
+  <ion-accordion-group color="light" expand="inset">
+    <ion-accordion value="elifoot98">
+      <ion-item color="light" slot="header"><b>Elifoot 98</b> <ion-note slot="end">Licença proprietária</ion-note></ion-item>
+      <div class="ion-padding" slot="content">
+        <pre style="white-space: pre-wrap; font-size: 0.9em;">
+Elifoot 98
+por André Elias e Ricardo Correia
+(c) 1998 Todos os direitos reservados
+Autorizada apenas a distribuição livre e gratuita. A comercialização ou distribuição comercial, sob qualquer forma, é proibida sem autorização escrita dos autores.
+        </pre>
+      </div>
+    </ion-accordion>
+    <ion-accordion value="angular">
+     <ion-item color="light" slot="header"><b>Angular</b> <ion-note slot="end">MIT</ion-note></ion-item>
+      <div class="ion-padding" slot="content">
+        <a href="https://github.com/angular/angular/blob/main/LICENSE" target="_blank">Ver licença MIT</a>
+      </div>
+    </ion-accordion>
+    <ion-accordion value="ionic">
+     <ion-item color="light" slot="header"><b>Ionic Framework</b> <ion-note slot="end">MIT</ion-note></ion-item>
+      <div class="ion-padding" slot="content">
+        <a href="https://github.com/ionic-team/ionic-framework/blob/main/LICENSE" target="_blank">Ver licença MIT</a>
+      </div>
+    </ion-accordion>
+    <ion-accordion value="capacitor">
+     <ion-item color="light" slot="header"><b>Capacitor</b> <ion-note slot="end">MIT</ion-note></ion-item>
+      <div class="ion-padding" slot="content">
+        <a href="https://github.com/ionic-team/capacitor/blob/main/LICENSE" target="_blank">Ver licença MIT</a>
+      </div>
+    </ion-accordion>
+    <ion-accordion value="jszip">
+     <ion-item color="light" slot="header"><b>JSZip</b> <ion-note slot="end">MIT</ion-note></ion-item>
+      <div class="ion-padding" slot="content">
+        <a href="https://github.com/Stuk/jszip/blob/main/LICENSE.markdown" target="_blank">Ver licença MIT</a>
+      </div>
+    </ion-accordion>
+    <ion-accordion value="tesseractjs">
+     <ion-item color="light" slot="header"><b>tesseract.js</b> <ion-note slot="end">Apache-2.0</ion-note></ion-item>
+      <div class="ion-padding" slot="content">
+        <pre style="white-space: pre-wrap; font-size: 0.9em;">
+Copyright 2015-present, The Tesseract.js Authors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+        </pre>
+      </div>
+    </ion-accordion>
+    <ion-accordion value="rxjs">
+     <ion-item color="light" slot="header"><b>rxjs</b> <ion-note slot="end">Apache-2.0</ion-note></ion-item>
+      <div class="ion-padding" slot="content">
+        <pre style="white-space: pre-wrap; font-size: 0.9em;">
+Copyright (c) 2015-2024 Google LLC, Netflix, Inc., Microsoft Corp. and contributors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+        </pre>
+      </div>
+    </ion-accordion>
+    <ion-accordion value="ionicons">
+     <ion-item color="light" slot="header"><b>ionicons</b> <ion-note slot="end">MIT</ion-note></ion-item>
+      <div class="ion-padding" slot="content">
+        <a href="https://github.com/ionic-team/ionicons/blob/main/LICENSE" target="_blank">Ver licença MIT</a>
+      </div>
+    </ion-accordion>
+  </ion-accordion-group>
+</ion-content>
