@@ -83,10 +83,6 @@
             <ion-label>Teclado Virtual</ion-label> 
             <ion-icon slot="end" src="../../assets/icon/keyboard.svg"></ion-icon>
           </ion-item>
-          <ion-item button detail="false" (click)="showTutorial()">
-            <ion-label>Avisos e Informações</ion-label> 
-            <ion-icon slot="end" name="information-circle-outline"></ion-icon>
-          </ion-item>
           <ion-item button detail="true" id="nested-patch-options"><ion-label>Opções de Patch</ion-label></ion-item>
           <ion-popover trigger="nested-patch-options" [dismissOnSelect]="true" side="end">
             <ng-template>
@@ -104,6 +100,10 @@
               </ion-content>
             </ng-template>
           </ion-popover>
+          <ion-item button detail="false" (click)="showTutorial()">
+            <ion-label>FAQ e Manual</ion-label> 
+            <ion-icon slot="end" name="information-circle-outline"></ion-icon>
+          </ion-item>
           <ion-item button detail="false" (click)="confirmRefresh()">
             <ion-label>Recarregar</ion-label> 
             <ion-icon slot="end" name="refresh-outline"></ion-icon>
