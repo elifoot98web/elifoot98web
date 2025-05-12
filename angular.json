@@ -41,6 +41,7 @@
               }
             ],
             "allowedCommonJsDependencies": [
+              "tesseract.js",
               "localforage",
               "jszip"
             ],

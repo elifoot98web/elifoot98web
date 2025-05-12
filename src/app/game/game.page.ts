@@ -12,6 +12,7 @@ import { GAME_INPUT_FN_BTNS, GAME_INPUT_FN_BTNS_REVERSED, STORAGE_KEY } from '..
 import { AutoSaverService } from '../services/auto-saver.service';
 import { UserGuideComponent } from './components/user-guide/user-guide.component';
 import { LayoutHelperService } from '../services/layout-helper.service';
+import { AboutComponent } from './components/about/about.component';
 
 
 @Component({
@@ -228,18 +229,18 @@ export class GamePage implements OnInit {
     this.hidePopover()
     const modal = await this.modalController.create({
       component: UserGuideComponent,
-      cssClass: 'user-guide-modal',
       backdropDismiss: false
     })
     await modal.present()
   }
 
-  async showUserGuideModal() {
+  async showAboutModal() {
+    this.hidePopover()
     const modal = await this.modalController.create({
-      component: UserGuideComponent,
+      component: AboutComponent,
       backdropDismiss: false
-    });
-    await modal.present();
+    })
+    await modal.present()
   }
 
   get gameInputs() {

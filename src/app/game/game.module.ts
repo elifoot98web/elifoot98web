@@ -13,6 +13,8 @@ import { PatchService } from '../services/patch.service';
 import { UserGuideComponent } from './components/user-guide/user-guide.component';
 import { FaqComponent } from './components/faq/faq.component';
 import { ManualComponent } from './components/manual/manual.component';
+import { AboutComponent } from './components/about/about.component';
+import { LayoutHelperService } from '../services/layout-helper.service';
 
 @NgModule({
   imports: [
@@ -25,8 +27,9 @@ import { ManualComponent } from './components/manual/manual.component';
     GamePage,
     UserGuideComponent,
     FaqComponent,
-    ManualComponent
+    ManualComponent,
+    AboutComponent
   ],
-  providers: [SaveGameService, LocalStorageService, PatchService]
+  providers: [SaveGameService, LocalStorageService, PatchService, LayoutHelperService]
 })
 export class GamePageModule {}
