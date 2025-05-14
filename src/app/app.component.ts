@@ -13,11 +13,6 @@ import { LayoutHelperService } from './services/layout-helper.service';
 })
 export class AppComponent {
 
-  @HostListener('window:resize', ['$event'])
-  onWindowResize() {
-    this.layoutHelperService.onWindowResize();
-  }
-
   constructor(platform: Platform, 
     private alertController: AlertController, 
     private updates: SwUpdate, 
@@ -25,8 +20,12 @@ export class AppComponent {
     private layoutHelperService: LayoutHelperService) {
 
     platform.ready().then(async () => {
-      // Initialize the layout helper service
-      this.onWindowResize()
+      console.log('Platform ready', { 
+        isMobile: this.layoutHelperService.isMobile, 
+        isDesktop: this.layoutHelperService.isDesktop, 
+        isLandscape: this.layoutHelperService.isLandscape, 
+        isPortrait: this.layoutHelperService.isPortrait
+      });
       // Check if a refresh is needed
       const pendingUpdate = await this.localStorage.get<boolean>(STORAGE_KEY.PENDING_UPDATE);
       if(pendingUpdate) {

@@ -17,7 +17,7 @@ export class AboutComponent  implements OnInit {
   ngOnInit() {}
 
   get isMobile() {
-    return this.layoutHelper.isMobileMode;
+    return this.layoutHelper.isMobile
   }
 
   close() {
