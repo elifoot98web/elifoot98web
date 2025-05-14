@@ -252,11 +252,11 @@ export class GamePage implements OnInit {
   }
 
   get isLandscape() {
-    return this.layoutHelperService.isLandscapeMode
+    return this.layoutHelperService.isLandscape
   }
 
   get isMobile() {
-    return this.layoutHelperService.isMobileMode
+    return this.layoutHelperService.isMobile
   }
 
   async saveGame() {

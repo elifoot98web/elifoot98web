@@ -13,7 +13,7 @@ export class UserGuideComponent  implements OnInit {
   constructor(private modalController: ModalController, private layoutHelperService: LayoutHelperService) { }
 
   get isMobile(): boolean {
-    return this.layoutHelperService.isMobileMode
+    return this.layoutHelperService.isMobile
   }
 
   ngOnInit() {}

@@ -4,29 +4,21 @@ import { Injectable } from '@angular/core';
   providedIn: 'root'
 })
 export class LayoutHelperService {
-  private isLandscape: boolean = false
-  private isMobile: boolean = false
+  constructor() {}
 
-  onWindowResize() {
-    this.isLandscape = window.innerWidth > window.innerHeight
-    this.isMobile = (this.isLandscape && window.innerHeight < 768) || window.innerWidth < 768
+  get isLandscape(): boolean {
+    return window.innerWidth > window.innerHeight
   }
 
-  constructor() { }
-
-  get isLandscapeMode(): boolean {
-    return this.isLandscape
-  }
-
-  get isPortraitMode(): boolean {
+  get isPortrait(): boolean {
     return !this.isLandscape
   }
 
-  get isMobileMode(): boolean {
-    return this.isMobile
+  get isMobile(): boolean {
+    return (this.isLandscape && window.innerHeight < 768) || window.innerWidth < 768
   }
 
-  get isDesktopMode(): boolean {
+  get isDesktop(): boolean {
     return !this.isMobile
   }
 }
