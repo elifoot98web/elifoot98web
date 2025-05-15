@@ -1,14 +1,22 @@
 var dosInstance
 var elifootMain = async (pathPrefix, gameBundleURL) => {
-    emulators.pathPrefix = pathPrefix
-    console.log("Carregando js-dos + elifoot")
+    // wait up to 15 seconds for the promise to resolve
+    return new Promise(async (resolve, reject) => {
+        emulators.pathPrefix = pathPrefix
+        console.log("Carregando js-dos + elifoot")
+        const timeout = setTimeout(() => {
+            reject(new Error("jsdos timed out after 15 seconds"));
+        }, 15000);
 
-    dosInstance = await Dos(document.getElementById("game-container"), {
-        style: "none"
-    })
-    const dosCI = await dosInstance.run(gameBundleURL);
-    
-    return dosCI
+        dosInstance = await Dos(document.getElementById("game-container"), {
+            style: "none"
+        })
+        console.log("DOS instance created...")
+        console.log("Loading game bundle...")
+        const dosCI = await dosInstance.run(gameBundleURL);
+        clearTimeout(timeout);
+        resolve(dosCI)
+    });
 }
 
 var saveGameFileSystem = async () => {
