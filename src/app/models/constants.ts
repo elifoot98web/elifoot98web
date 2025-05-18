@@ -58,3 +58,15 @@ export const EMULATOR_CONTROL_CONFIG = {
 }
 
 export const BASE_SAVEGAME_DIR = 'd/eli98/jogos/'
+
+export enum Endianess {
+  BIG_ENDIAN = 'big',
+  LITTLE_ENDIAN = 'little',
+}
+
+export const EMULATOR_RAM_SIZE = 0x800000; // 8MB
+
+export const MEMORY_SEARCH_PARAMS = {
+  CHUNK_SIZE: 0x100000, // 1MB
+  MAX_RESULTS: 10000,
+}

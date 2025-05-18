@@ -73,7 +73,6 @@ export class AutoSaverService {
   private async monitor() {
     // detect if game is saving in the emulator
     // if game is saving, set state to GAME_SAVING_DETECTED
-    console.time('autosaver monitor')
     let isGameSaving = await this.emulatorControlService.isGameSaving(this.dosCI)
     if (isGameSaving) {
       console.log('Game is saving...')
@@ -92,6 +91,5 @@ export class AutoSaverService {
       console.log('Emulator data saved')
       await loading.dismiss()
     }
-    console.timeEnd('autosaver monitor')
   }
 }
