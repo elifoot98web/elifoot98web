@@ -1,4 +1,4 @@
-import { Component, HostListener, OnInit, ViewChild } from '@angular/core';
+import { Component, OnInit, ViewChild } from '@angular/core';
 import { AlertController, LoadingController, ModalController } from '@ionic/angular';
 import { SaveGameService } from '../services/save-game.service';
 import { LocalStorageService } from '../services/local-storage.service';
@@ -13,6 +13,7 @@ import { AutoSaverService } from '../services/auto-saver.service';
 import { UserGuideComponent } from './components/user-guide/user-guide.component';
 import { LayoutHelperService } from '../services/layout-helper.service';
 import { AboutComponent } from './components/about/about.component';
+import { OmaticModalComponent } from './components/omatic-modal/omatic-modal.component';
 
 
 @Component({
@@ -238,6 +239,15 @@ export class GamePage implements OnInit {
     this.hidePopover()
     const modal = await this.modalController.create({
       component: AboutComponent,
+      backdropDismiss: false
+    })
+    await modal.present()
+  }
+
+  async showOmaticModal() {
+    this.hidePopover()
+    const modal = await this.modalController.create({
+      component: OmaticModalComponent,
       backdropDismiss: false
     })
     await modal.present()
