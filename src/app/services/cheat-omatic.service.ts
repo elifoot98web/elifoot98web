@@ -28,7 +28,7 @@ export class CheatOmaticService {
     this.dosCI = dosCI;
     this.currentResults = [];
     const term = this.searchValue
-    this.searchState = SearchState.SEARCH;
+    this.searchState = SearchState.ONGOING_SEARCH;
     if(!dosCI) {
       throw new Error('DosCI is not initialized');
     }
@@ -61,7 +61,7 @@ export class CheatOmaticService {
   }
 
   async continueSearch(): Promise<void> {
-    if (this.searchState !== SearchState.SEARCH) {
+    if (this.searchState !== SearchState.ONGOING_SEARCH) {
       throw new Error(`Cannot continue search. Current state: ${ this.searchState }`);
     }
 
@@ -89,9 +89,9 @@ export class CheatOmaticService {
       this.searchState = SearchState.ERROR;
       throw new Error(`Error during search for term: ${ term }`);
     }
-
+    const oldLength = this.currentResults.length;
     this.currentResults = this.currentResults.filter(result => results.includes(result));
-    
+    const newLength = this.currentResults.length;
     if (this.currentResults.length == 0) {
       this.searchState = SearchState.NO_MATCHES;
       console.log('No matches found for term:', term);
@@ -100,6 +100,8 @@ export class CheatOmaticService {
       this.searchState = SearchState.MATCHES_FOUND;
       console.log('Single match found for term:', term, 'at address:', this.currentResults[0]);
     }
+
+    console.log(`Search continued. Found ${this.currentResults.length} results. (from ${oldLength} to ${newLength})`);
   }
 
   async setValue(address: number, value: string): Promise<void> {
@@ -193,7 +195,7 @@ export enum SearchType {
 
 export enum SearchState {
   NEW,
-  SEARCH,
+  ONGOING_SEARCH,
   MATCHES_FOUND,
   NO_MATCHES,
   ERROR

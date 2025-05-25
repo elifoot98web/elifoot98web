@@ -41,11 +41,53 @@ export class OmaticModalComponent implements OnInit {
     this.cheatOmaticService.searchValue = value;
   }
 
+  /** UI elements getters */
+  get infoText(): string {
+    switch (this.searchState) {
+      case SearchState.NEW:
+        return 'Informe o valor atual que você quer alterar dentro do jogo e clique em "Buscar"';
+      case SearchState.ONGOING_SEARCH:
+        return 'Mude o valor dentro do jogo, atualize a caixinha de busca e clique em "Buscar" novamente\n'+
+        `Tentando filtrar de ${this.currentSearch.length} resultados`;      
+      case SearchState.MATCHES_FOUND:
+        return `Cha-ching! Funcionou. Insira o valor que você quer colocar e clique em "Alterar"`;
+      case SearchState.NO_MATCHES:
+        return 'No matches found';
+      case SearchState.ERROR:
+        return 'An error occurred during the search';
+      default:
+        return '';
+    }
+  }
+
+  get inputLabel(): string {
+    switch (this.searchState) {
+      case SearchState.NEW:
+        return 'Valor atual';
+      case SearchState.ONGOING_SEARCH:
+        return 'Valor atualizado';
+      case SearchState.MATCHES_FOUND:
+        return 'Novo valor';
+      default:
+        return '';
+    }
+  }
+
   close(){
     this.modalController.dismiss();
   }
 
-  async search() {
+  searchAction() {
+    switch (this.searchState) {
+      case SearchState.ONGOING_SEARCH:
+        this.searchNext();
+        break;
+      default:
+        this.newSearch()
+    }
+  }
+
+  async newSearch() {
     try {
       const dosCI: DosCI | undefined = await dosInstance.ciPromise;
       if (!dosCI) {
@@ -55,6 +97,10 @@ export class OmaticModalComponent implements OnInit {
     } catch (error) {
       console.error('Error during search:', error);
     }
+  }
+
+  async searchNext() {
+    await this.cheatOmaticService.continueSearch();
   }
 
   async setValue() {
