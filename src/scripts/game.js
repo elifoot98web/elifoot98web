@@ -6,9 +6,8 @@ var elifootMain = async (pathPrefix, gameBundleURL) => {
     dosInstance = await Dos(document.getElementById("game-container"), {
         style: "none"
     })
-    const dosCI = await dosInstance.run(gameBundleURL);
-    
-    return dosCI
+    const ciInstance = await dosInstance.run(gameBundleURL);
+    return ciInstance
 }
 
 var saveGameFileSystem = async () => {

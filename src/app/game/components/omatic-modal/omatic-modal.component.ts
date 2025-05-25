@@ -1,7 +1,8 @@
 import { Component, OnInit } from '@angular/core';
 import { ModalController } from '@ionic/angular';
 import { Endianess } from 'src/app/models/constants';
-import { CheatOmaticService } from 'src/app/services/cheat-omatic.service';
+import { DosCI } from 'src/app/models/jsdos';
+import { CheatOmaticService, SearchState } from 'src/app/services/cheat-omatic.service';
 import { LayoutHelperService } from 'src/app/services/layout-helper.service';
 
 @Component({
@@ -11,10 +12,9 @@ import { LayoutHelperService } from 'src/app/services/layout-helper.service';
   standalone: false,
 })
 export class OmaticModalComponent implements OnInit {
+  SearchState = SearchState;
 
-  searchValue: string = '';
   endianess: Endianess = Endianess.LITTLE_ENDIAN;
-  currentSearch: number[] = [];
   constructor(private modalController:ModalController, 
     private layoutHelperService: LayoutHelperService,
     private cheatOmaticService: CheatOmaticService) { }
@@ -25,46 +25,45 @@ export class OmaticModalComponent implements OnInit {
     return this.layoutHelperService.isMobile
   }
 
+  get currentSearch(): number[] {
+    return this.cheatOmaticService.currentResults;
+  }
+
+  get searchState(): SearchState {
+    return this.cheatOmaticService.searchState;
+  }
+
+  get searchValue(): string {
+    return this.cheatOmaticService.searchValue;
+  }
+
+  set searchValue(value: string) {
+    this.cheatOmaticService.searchValue = value;
+  }
+
   close(){
     this.modalController.dismiss();
   }
 
   async search() {
-    // convert the search value to a Uint8Array. If it's an integer or hex string, convert it to a byte array
-    let value: Uint8Array;
-    if (this.searchValue.startsWith('0x')) {
-      // Hexadecimal string
-      const hexString = this.searchValue.slice(2);
-      value = new Uint8Array(hexString.match(/.{1,2}/g)?.map(byte => parseInt(byte, 16)) || []);
-    } else if (!isNaN(Number(this.searchValue))) {
-      // Integer
-      const intValue = parseInt(this.searchValue);
-      // Determine the minimum number of bytes needed
-      const byteLength = Math.ceil(Math.log2(intValue + 1) / 8) || 1;
-      value = new Uint8Array(byteLength);
-      for (let i = 0; i < byteLength; i++) {
-        value[this.endianess === Endianess.LITTLE_ENDIAN ? i : byteLength - 1 - i] = (intValue >> (8 * i)) & 0xFF;
+    try {
+      const dosCI: DosCI | undefined = await dosInstance.ciPromise;
+      if (!dosCI) {
+        throw new Error('DosCI is not initialized');
       }
-    } else {
-      // String
-      value = new TextEncoder().encode(this.searchValue);
+      await this.cheatOmaticService.newSearch(dosCI);
+    } catch (error) {
+      console.error('Error during search:', error);
     }
-    console.log('Value to search:', value);
-    
-    if(this.currentSearch.length === 0) {
-      const ci = await dosInstance.ciPromise;
-      if (!ci) {
-        console.error('DosCI is not initialized.');
-        return;
-      }
-      const results = await this.cheatOmaticService.startSearch(ci, value)
-      this.currentSearch = results;
-      console.log('Search results:', results);
-    } else {
-      const results = await this.cheatOmaticService.nextSearch(value)
-      this.currentSearch = results;
-      console.log('Next search results:', results);
+  }
+
+  async setValue() {
+    try {
+      const value = this.searchValue;
+      const address = this.currentSearch[0];
+      this.cheatOmaticService.setValue(address, value);
+    } catch (error) {
+      console.error('Error during setValue:', error);
     }
-    
   }
 }
