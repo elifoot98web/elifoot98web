@@ -1,42 +1,58 @@
-.win9x-modal-inner {
+.win9x-modal-border {
+  border-bottom-color: #808080;
+  border-right-color: #808080;
+  border-top-color: #fff;
+  border-left-color: #fff;
+  padding: 0;
+  margin: 0;
+  border-width: 2px;
+  border-style: solid;
+  background: #c0c0c0;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.win9x-modal-container {
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 16px 0 0 0;
-}
-
-.win9x-row {
-  width: 100%;
-  display: flex;
   justify-content: center;
-  margin-bottom: 12px;
+  
+  padding: 2px;
+  box-sizing: border-box;
 }
 
-.win9x-select-row {
-  justify-content: flex-start;
-  margin-bottom: 18px;
+ion-toolbar.win9x-titlebar {
+  --background: linear-gradient(to right, #000080 50%, #3a6ea5 100%);
+  --color: #fff;
+  font-weight: bolder;
+  user-select: none;
 }
 
-.win9x-form-row {
-  flex-direction: row;
-  gap: 12px;
-  align-items: flex-end;
-  justify-content: center;
+.buttons-padding-end {
+  padding-right: 4px !important;
 }
 
-.win9x-input {
-  min-width: 120px;
-  max-width: 180px;
-  margin-right: 8px;
+ion-toolbar ion-button {
+  --background: #c0c0c0;
+  --border-width: 2px;
+  --border-style: outset;
+  --border-color: #fff;
+  --border-radius: 2px !important;
+  --padding-start: 4px !important;
+  --padding-end: 4px !important;
+  --padding-top: 4px !important;
+  --padding-bottom: 4px !important;
+  --color: #000;
+  cursor: pointer;
+  transition: background 0.1s;
 }
 
-.win9x-button {
-  min-width: 90px;
-  margin-left: 0;
-  margin-right: 0;
-}
-
-.win9x-info {
-  justify-content: flex-start;
-  margin-bottom: 18px;
+ion-content.win9x-modal-content {
+  padding: 0;
+  --background: #c0c0c0;
+  font-family: 'MS Sans Serif', Tahoma, Geneva, Verdana, sans-serif;
 }

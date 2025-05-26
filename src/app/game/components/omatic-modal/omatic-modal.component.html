@@ -1,33 +1,45 @@
-<ion-header class="win9x-modal">
-  <ion-toolbar [ngClass]="{'ion-text-center': isMobile, 'win9x-titlebar': true}" color="tertiary">
-    <ion-buttons [slot]="isMobile ? 'start' : 'end'">
-      <ion-button (click)="close()">
-        <ion-icon name="close" slot="icon-only"></ion-icon>
-      </ion-button>
-    </ion-buttons>
-    <ion-title class="ion-text-center">Leu's O'Matic Cheater</ion-title>
-  </ion-toolbar>
-</ion-header>
-<ion-content class="win9x-content">
-  <div class="win9x-modal-inner">
-    <div class="win9x-row win9x-select-row">
-      <ion-select class="win9x-select" [disabled]="true" interface="popover" value="elifoot" placeholder="ELIFOOT.EXE">
-        <ion-select-option value="elifoot">ELIFOOT.EXE</ion-select-option>
-      </ion-select>
-    </div>
-    <div class="win9x-row win9x-info">
-      <p>{{ infoText }}</p>
-    </div>
-    <div class="win9x-row win9x-form-row">
-      <ion-input class="win9x-input" [label]="inputLabel" labelPlacement="stacked" placeholder="123000" [(ngModel)]="searchValue"></ion-input>
-      <ion-button class="win9x-button" (click)="searchAction()" [disabled]="searchValue.length == 0">
-        <ion-icon name="search-outline"></ion-icon>
-        <ion-label>Search</ion-label>
-      </ion-button>
-      <ion-button class="win9x-button" (click)="setValue()" [disabled]="!searchValue || currentSearch.length != 1">
-        <ion-icon name="bug-outline"></ion-icon>
-        <ion-label>Set</ion-label>
-      </ion-button>
+  <div class="win9x-modal-border">
+    <div class="win9x-modal-container">
+      <ion-header class="ion-no-border">
+        <ion-toolbar class="win9x-titlebar ion-text-center">
+          <ion-title>Leu's O'Matic Cheater</ion-title>
+          <ion-buttons slot="end" class="buttons-padding-end">
+            <ion-button (click)="close()">
+              <ion-icon name="close"></ion-icon>
+            </ion-button>
+          </ion-buttons>
+        </ion-toolbar>
+      </ion-header>
+      <ion-content class="win9x-modal-content ion-padding">
+        <ion-list lines="none">
+          <ion-item class="win9x-select-row">
+            <ion-select class="win9x-input" interface="popover" disabled value="ELIFOOT.EXE">
+              <ion-select-option value="ELIFOOT.EXE">ELIFOOT.EXE</ion-select-option>
+            </ion-select>
+          </ion-item>
+          <ion-item class="win9x-info">
+            <ion-label>{{ infoText }}</ion-label>
+          </ion-item>
+          <ion-item class="win9x-form-row">
+            <ion-grid class="win9x-grid">
+              <ion-row class="ion-align-items-end ion-justify-content-center">
+                <ion-col size="12" size-md="5">
+                  <ion-input class="win9x-input" [placeholder]="inputLabel" [(ngModel)]="searchValue" type="text"></ion-input>
+                </ion-col>
+                <ion-col size="12" size-md="3">
+                  <ion-button class="win9x-button" (click)="searchAction()" [disabled]="!searchValue || searchValue.length == 0" fill="clear" color="dark" size="small">
+                    🔍 Search
+                  </ion-button>
+                </ion-col>
+                <ion-col size="12" size-md="4">
+                  <ion-button class="win9x-button" (click)="setValue()" [disabled]="!searchValue || currentSearch.length != 1" fill="clear" color="dark" size="small">
+                    🐞 Set
+                  </ion-button>
+                </ion-col>
+              </ion-row>
+            </ion-grid>
+          </ion-item>
+        </ion-list>
+      </ion-content>
     </div>
   </div>
-</ion-content>
