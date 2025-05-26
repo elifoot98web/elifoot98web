@@ -1,4 +1,4 @@
-  <div class="win9x-modal-border">
+  <div class="win9x-element-border win9x-outer-window">
     <div class="win9x-modal-container">
       <ion-header class="ion-no-border">
         <ion-toolbar class="win9x-titlebar ion-text-center">
@@ -11,35 +11,33 @@
         </ion-toolbar>
       </ion-header>
       <ion-content class="win9x-modal-content ion-padding">
-        <ion-list lines="none">
-          <ion-item class="win9x-select-row">
-            <ion-select class="win9x-input" interface="popover" disabled value="ELIFOOT.EXE">
-              <ion-select-option value="ELIFOOT.EXE">ELIFOOT.EXE</ion-select-option>
-            </ion-select>
+          <!-- Fake selector -->
+          <select class="win9x-select win9x-element-bevel ion-padding-start" disabled value="ELIFOOT.EXE">
+            <option value="ELIFOOT.EXE">ELIFOOT.EXE</option>
+          </select>
+          <ion-item lines="none" class="ion-margin-top win9x-element-bevel win9x-info">
+            <div class="win9x-info-text ion-text-center">
+              {{ infoText }}
+            </div>
           </ion-item>
-          <ion-item class="win9x-info">
-            <ion-label>{{ infoText }}</ion-label>
-          </ion-item>
-          <ion-item class="win9x-form-row">
-            <ion-grid class="win9x-grid">
-              <ion-row class="ion-align-items-end ion-justify-content-center">
-                <ion-col size="12" size-md="5">
-                  <ion-input class="win9x-input" [placeholder]="inputLabel" [(ngModel)]="searchValue" type="text"></ion-input>
-                </ion-col>
-                <ion-col size="12" size-md="3">
-                  <ion-button class="win9x-button" (click)="searchAction()" [disabled]="!searchValue || searchValue.length == 0" fill="clear" color="dark" size="small">
-                    🔍 Search
-                  </ion-button>
-                </ion-col>
-                <ion-col size="12" size-md="4">
-                  <ion-button class="win9x-button" (click)="setValue()" [disabled]="!searchValue || currentSearch.length != 1" fill="clear" color="dark" size="small">
-                    🐞 Set
-                  </ion-button>
-                </ion-col>
-              </ion-row>
-            </ion-grid>
-          </ion-item>
-        </ion-list>
+          
+          <ion-grid class="ion-no-padding ion-padding-top">
+            <ion-row class="ion-align-items-end ion-justify-content-center">
+              <ion-col size="12" size-md="5">
+                <input class="win9x-input win9x-element-bevel" [placeholder]="inputLabel" [(ngModel)]="searchValue" type="text">
+              </ion-col>
+              <ion-col size="12" size-md="3">
+                <ion-button class="win9x-button" (click)="searchAction()" [disabled]="!searchValue || searchValue.length == 0" fill="clear" color="dark" size="small">
+                  🔍 Buscar
+                </ion-button>
+              </ion-col>
+              <ion-col size="12" size-md="4">
+                <ion-button class="win9x-button" (click)="setValue()" [disabled]="!searchValue || currentSearch.length != 1" fill="clear" color="dark" size="small">
+                  🐞 Set
+                </ion-button>
+              </ion-col>
+            </ion-row>
+          </ion-grid>
       </ion-content>
     </div>
   </div>
