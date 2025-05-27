@@ -52,9 +52,9 @@ export class OmaticModalComponent implements OnInit {
       case SearchState.MATCHES_FOUND:
         return `Cha-ching! Funcionou. Insira o valor que você quer colocar e clique em "Alterar"`;
       case SearchState.NO_MATCHES:
-        return 'No matches found';
+        return 'Infelizmente não foi possível filtrar nenhum resultado para o valor informado';
       case SearchState.ERROR:
-        return 'An error occurred during the search';
+        return 'Ocorreu um erro durante a busca. Verifique o valor informado e tente novamente';
       default:
         return '';
     }
@@ -73,17 +73,51 @@ export class OmaticModalComponent implements OnInit {
     }
   }
 
+  get primaryButtonText(): string {
+    if(this.searchState == SearchState.MATCHES_FOUND) {
+      return 'Alterar';
+    } else {
+      return 'Buscar';
+    }
+  }
+
+  get secondaryButtonText(): string {
+    return "Nova Busca"
+  }
+
   close(){
     this.modalController.dismiss();
   }
 
-  searchAction() {
+  async primaryButtonAction() {
     switch (this.searchState) {
-      case SearchState.ONGOING_SEARCH:
-        this.searchNext();
+      case SearchState.MATCHES_FOUND:
+        await this.setValue();
         break;
       default:
-        this.newSearch()
+        await this.searchAction();
+    }
+  }
+
+  async secondaryButtonAction() {
+    try {
+      const dosCI: DosCI | undefined = await dosInstance.ciPromise;
+      if (!dosCI) {
+        throw new Error('DosCI is not initialized');
+      }
+      this.cheatOmaticService.resetSearch(dosCI);
+    } catch (error) {
+      console.error('Error during reset search:', error);
+    }
+  }
+
+  async searchAction() {
+    switch (this.searchState) {
+      case SearchState.ONGOING_SEARCH:
+        await this.searchNext();
+        break;
+      default:
+        await this.newSearch()
     }
   }
 
@@ -93,7 +127,8 @@ export class OmaticModalComponent implements OnInit {
       if (!dosCI) {
         throw new Error('DosCI is not initialized');
       }
-      await this.cheatOmaticService.newSearch(dosCI);
+      this.cheatOmaticService.resetSearch(dosCI);
+      this.cheatOmaticService.firstSearch();
     } catch (error) {
       console.error('Error during search:', error);
     }

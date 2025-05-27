@@ -27,13 +27,13 @@
                 <input class="win9x-input win9x-element-bevel" [placeholder]="inputLabel" [(ngModel)]="searchValue" type="text">
               </ion-col>
               <ion-col size="12" size-md="3" class="ion-padding-horizontal" [ngClass]="{'ion-padding-top': isMobile }">
-                <ion-button class="win9x-button" expand="block" fill="clear" (click)="searchAction()" [disabled]="!searchValue || searchValue.length == 0">
-                  Buscar
+                <ion-button class="win9x-button" expand="block" fill="clear" (click)="primaryButtonAction()" [disabled]="!searchValue || searchValue.length == 0">
+                  {{ primaryButtonText }}
                 </ion-button>
               </ion-col>
               <ion-col size="12" size-md="3" class="ion-padding-horizontal" [ngClass]="{'ion-padding-top': isMobile}">
-                <ion-button class="win9x-button" expand="block" fill="clear" (click)="setValue()" [disabled]="!searchValue || currentSearch.length != 1">
-                  Set
+                <ion-button class="win9x-button" expand="block" fill="clear" (click)="secondaryButtonAction()" [disabled]="searchState == SearchState.NEW">
+                  {{ secondaryButtonText }}
                 </ion-button>
               </ion-col>
             </ion-row>

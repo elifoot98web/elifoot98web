@@ -24,12 +24,16 @@ export class CheatOmaticService {
     this._searchState = value;
   }
 
-  async newSearch(dosCI: DosCI): Promise<void> {
+  resetSearch(dosCI: DosCI): void {
+    this.currentResults = []; 
+    this.searchState = SearchState.NEW;
     this.dosCI = dosCI;
-    this.currentResults = [];
+  }
+
+  async firstSearch(): Promise<void> {
     const term = this.searchValue
     this.searchState = SearchState.ONGOING_SEARCH;
-    if(!dosCI) {
+    if(!this.dosCI) {
       throw new Error('DosCI is not initialized');
     }
 
