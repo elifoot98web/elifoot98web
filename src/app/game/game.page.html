@@ -7,6 +7,9 @@
       <ion-button fill="solid" color="secondary" (click)="promptInputText()">
         <ion-icon slot="icon-only" name="terminal-outline"></ion-icon>
       </ion-button>
+      <ion-button fill="solid" color="medium" (click)="showOmaticModal()">
+        <ion-icon slot="icon-only" src="../../assets/icon/cheese.svg"></ion-icon>
+      </ion-button>
     </ion-buttons>
     <ion-title class="ion-hide-md-down">Elifoot 98 Online</ion-title>
     
@@ -136,6 +139,9 @@
       </ion-fab-button>
       <ion-fab-button color="secondary" (click)="toggleKeyboard()">
         <ion-icon src="../../assets/icon/keyboard.svg"></ion-icon>
+      </ion-fab-button>
+      <ion-fab-button color="light" (click)="showOmaticModal()">
+        <ion-icon src="../../assets/icon/cheese.svg"></ion-icon>
       </ion-fab-button>
     </ion-fab-list>
   </ion-fab>
