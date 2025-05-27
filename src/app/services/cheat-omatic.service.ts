@@ -61,13 +61,15 @@ export class CheatOmaticService {
       throw new Error(`Error during search for term: ${ term }`);
     }
 
+    this.currentResults = results;
     if(results.length == 1) {
       this.searchState = SearchState.MATCHES_FOUND;
       console.log('Single match found for term:', term, 'at address:', results[0]);
+      return;
+    } else {
+      this.searchState = SearchState.ONGOING_SEARCH;
     }
     console.log('Search completed. Found ' + results.length + ' results.');
-    this.currentResults = results;
-    this.searchState = SearchState.ONGOING_SEARCH;
   }
 
   async continueSearch(): Promise<void> {
