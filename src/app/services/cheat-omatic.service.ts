@@ -13,6 +13,7 @@ export class CheatOmaticService {
   private endianess: Endianess = Endianess.LITTLE_ENDIAN;
   private dosCI?: DosCI;
   private _searchState: SearchState = SearchState.NEW;
+  private inferredDataType: DataType = DataType.BYTE;
 
   constructor() { }
 
@@ -27,6 +28,7 @@ export class CheatOmaticService {
   resetSearch(dosCI: DosCI): void {
     this.currentResults = []; 
     this.searchState = SearchState.NEW;
+    this.inferredDataType = DataType.BYTE; // Reset inferred data type to smallest unit
     this.dosCI = dosCI;
   }
 
@@ -47,12 +49,10 @@ export class CheatOmaticService {
     }
 
     const searchBuffer = this.parseValueToByteArray(term)
-    console.log('New search:', { term, searchBuffer });
-
+    this.updateInferredDataType(searchBuffer);
     const results = await this.performSearch(searchBuffer);
     if(results.length == 0) {
       this.searchState = SearchState.NO_MATCHES;
-      console.log('No matches found for term:', term);
       return;
     }
 
@@ -64,12 +64,10 @@ export class CheatOmaticService {
     this.currentResults = results;
     if(results.length == 1) {
       this.searchState = SearchState.MATCHES_FOUND;
-      console.log('Single match found for term:', term, 'at address:', results[0]);
       return;
     } else {
       this.searchState = SearchState.ONGOING_SEARCH;
     }
-    console.log('Search completed. Found ' + results.length + ' results.');
   }
 
   async continueSearch(): Promise<void> {
@@ -88,12 +86,10 @@ export class CheatOmaticService {
     }
 
     const searchBuffer = this.parseValueToByteArray(term)
-    console.log('Continuing search:', {term, searchBuffer});
-
+    this.updateInferredDataType(searchBuffer);
     const results = await this.performSearch(searchBuffer);
     if (results.length == 0) {
       this.searchState = SearchState.NO_MATCHES;
-      console.log('No matches found for term:', term);
       return;
     }
 
@@ -106,14 +102,10 @@ export class CheatOmaticService {
     const newLength = this.currentResults.length;
     if (this.currentResults.length == 0) {
       this.searchState = SearchState.NO_MATCHES;
-      console.log('No matches found for term:', term);
       return;
     } else if (this.currentResults.length == 1) {
       this.searchState = SearchState.MATCHES_FOUND;
-      console.log('Single match found for term:', term, 'at address:', this.currentResults[0]);
     }
-
-    console.log(`Search continued. Found ${this.currentResults.length} results. (from ${oldLength} to ${newLength})`);
   }
 
   async setValue(address: number, value: string): Promise<void> {
@@ -121,12 +113,20 @@ export class CheatOmaticService {
       throw new Error('DosCI is not initialized.');
     }
 
-    const parsedValue = this.parseValueToByteArray(value);
-    console.log('Setting value at address:', address, 'to:', parsedValue);
-
+    let parsedValue = this.parseValueToByteArray(value);
+    this.updateInferredDataType(parsedValue);
+    if(this.inferredDataType < DataType.STRING && parsedValue.length < this.inferredDataType) {
+      // complete the buffer with zeros to match the inferred data type
+      const paddedValue = new Uint8Array(this.inferredDataType);
+      
+      paddedValue.set(parsedValue, 0);
+      if (this.endianess == Endianess.BIG_ENDIAN) {
+        paddedValue.set(parsedValue, this.inferredDataType - parsedValue.length);
+      }
+      parsedValue = paddedValue;
+    }
     try {
       await this.dosCI.writeMemory(address, parsedValue);
-      console.log('Value set successfully.');
     } catch (error) {
       console.error('Error setting value:', error);
       throw error;
@@ -143,7 +143,6 @@ export class CheatOmaticService {
     this.currentResults = [address];
     this.searchState = SearchState.MATCHES_FOUND;
     this.searchValue = '';
-    console.log('Directly set match to address:', address);
   }
 
   private async performSearch(value: Uint8Array): Promise<number[]> {
@@ -159,10 +158,7 @@ export class CheatOmaticService {
     }
 
     const currentResults = [];
-    console.log('#### Starting search for value:', value);
-    console.log('Memory size:', EMULATOR_RAM_SIZE);
-    console.log('Chunk size:', MEMORY_SEARCH_PARAMS.CHUNK_SIZE);
-    console.log('Value length:', value.length);
+    
     // Search for the value in the emulator's memory in chunks
     const chunkSize = MEMORY_SEARCH_PARAMS.CHUNK_SIZE
     const memorySize = EMULATOR_RAM_SIZE;
@@ -186,7 +182,6 @@ export class CheatOmaticService {
       }
     }
 
-    console.log('Search completed. Found ' + currentResults.length + ' results.');
     return currentResults;
   }
 
@@ -211,6 +206,23 @@ export class CheatOmaticService {
     }
     return value;
   }
+
+  private updateInferredDataType(value: Uint8Array): void {
+    let valueDataType: DataType = DataType.BYTE;
+    if (value.length === 1) {
+      valueDataType = DataType.BYTE;
+    } else if (value.length === 2) {
+      valueDataType = DataType.WORD;
+    } else if (value.length < 5) {
+      valueDataType = DataType.DWORD;
+    } else {
+      valueDataType = DataType.STRING; // Default to string for larger values
+    }
+
+    if(valueDataType > this.inferredDataType) { // Only update if the new type is larger
+      this.inferredDataType = valueDataType;
+    }
+  }
 }
 
 export enum SearchType {
@@ -224,4 +236,11 @@ export enum SearchState {
   MATCHES_FOUND,
   NO_MATCHES,
   ERROR
+}
+
+export enum DataType {
+  BYTE = 1,
+  WORD = 2,
+  DWORD = 4,
+  STRING = 5 // from 5 bytes and up
 }
