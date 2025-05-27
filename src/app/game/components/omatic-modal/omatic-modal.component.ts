@@ -47,7 +47,7 @@ export class OmaticModalComponent implements OnInit {
       case SearchState.NEW:
         return 'Informe o valor atual que você quer alterar dentro do jogo e clique em "Buscar"';
       case SearchState.ONGOING_SEARCH:
-        return 'Mude o valor dentro do jogo, atualize a caixinha de busca e clique em "Buscar" novamente\n'+
+        return 'Mude o valor dentro do jogo, atualize a caixinha de busca e clique em "Buscar" novamente\n\n'+
         `Tentando filtrar de ${this.currentSearch.length} resultados`;      
       case SearchState.MATCHES_FOUND:
         return `Cha-ching! Funcionou. Insira o valor que você quer colocar e clique em "Alterar\n\n(Código: 0x${this.currentSearch[0].toString(16).toUpperCase()})`;
@@ -83,6 +83,14 @@ export class OmaticModalComponent implements OnInit {
 
   get secondaryButtonText(): string {
     return "Nova Busca"
+  }
+
+  get primaryButtonDisabled(): boolean {
+    if(this.searchState == SearchState.MATCHES_FOUND) {
+      return this.searchValue.length === 0 || isNaN(Number(this.searchValue));
+    } else { 
+      return this.searchValue.length === 0 || this.searchState == SearchState.NO_MATCHES || this.searchState == SearchState.ERROR;
+    }
   }
 
   close(){

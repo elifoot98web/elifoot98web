@@ -135,6 +135,7 @@ export class CheatOmaticService {
     const address = parseInt(addressHex, 16);
     if (isNaN(address) || address < 0 || address >= EMULATOR_RAM_SIZE) {
       console.error('Invalid address:', addressHex);
+      this.searchState = SearchState.NO_MATCHES;
       return;
     }
     this.currentResults = [address];

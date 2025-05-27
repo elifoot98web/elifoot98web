@@ -2,7 +2,7 @@
     <div class="win9x-modal-container">
       <ion-header class="ion-no-border">
         <ion-toolbar class="win9x-titlebar ion-text-center">
-          <ion-title>Leu's O'Matic Cheater</ion-title>
+          <ion-title>Leu's Cheat 'O Matic</ion-title>
           <ion-buttons slot="end" class="buttons-padding-end">
             <ion-button (click)="close()">
               <ion-icon name="close"></ion-icon>
@@ -27,7 +27,7 @@
                 <input class="win9x-input win9x-element-bevel" [placeholder]="inputLabel" [(ngModel)]="searchValue" type="text">
               </ion-col>
               <ion-col size="12" size-md="3" class="ion-padding-horizontal" [ngClass]="{'ion-padding-top': isMobile }">
-                <ion-button class="win9x-button" expand="block" fill="clear" (click)="primaryButtonAction()" [disabled]="!searchValue || searchValue.length == 0">
+                <ion-button class="win9x-button" expand="block" fill="clear" (click)="primaryButtonAction()" [disabled]="primaryButtonDisabled">
                   {{ primaryButtonText }}
                 </ion-button>
               </ion-col>
