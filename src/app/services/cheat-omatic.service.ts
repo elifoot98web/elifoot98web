@@ -32,13 +32,18 @@ export class CheatOmaticService {
 
   async firstSearch(): Promise<void> {
     const term = this.searchValue
-    this.searchState = SearchState.ONGOING_SEARCH;
     if(!this.dosCI) {
       throw new Error('DosCI is not initialized');
     }
 
     if(term.length === 0) {
       throw new Error('Search term is empty.');
+    }
+
+    if(term.startsWith('0x')) {
+      // set matches directly to the address
+      this.setMatchesDirectly(term);
+      return
     }
 
     const searchBuffer = this.parseValueToByteArray(term)
@@ -62,6 +67,7 @@ export class CheatOmaticService {
     }
     console.log('Search completed. Found ' + results.length + ' results.');
     this.currentResults = results;
+    this.searchState = SearchState.ONGOING_SEARCH;
   }
 
   async continueSearch(): Promise<void> {
@@ -123,6 +129,18 @@ export class CheatOmaticService {
       console.error('Error setting value:', error);
       throw error;
     }
+  }
+
+  private setMatchesDirectly(addressHex: string) {
+    const address = parseInt(addressHex, 16);
+    if (isNaN(address) || address < 0 || address >= EMULATOR_RAM_SIZE) {
+      console.error('Invalid address:', addressHex);
+      return;
+    }
+    this.currentResults = [address];
+    this.searchState = SearchState.MATCHES_FOUND;
+    this.searchValue = '';
+    console.log('Directly set match to address:', address);
   }
 
   private async performSearch(value: Uint8Array): Promise<number[]> {

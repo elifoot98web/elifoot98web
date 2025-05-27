@@ -50,7 +50,7 @@ export class OmaticModalComponent implements OnInit {
         return 'Mude o valor dentro do jogo, atualize a caixinha de busca e clique em "Buscar" novamente\n'+
         `Tentando filtrar de ${this.currentSearch.length} resultados`;      
       case SearchState.MATCHES_FOUND:
-        return `Cha-ching! Funcionou. Insira o valor que você quer colocar e clique em "Alterar"`;
+        return `Cha-ching! Funcionou. Insira o valor que você quer colocar e clique em "Alterar\n\n(Código: 0x${this.currentSearch[0].toString(16).toUpperCase()})`;
       case SearchState.NO_MATCHES:
         return 'Infelizmente não foi possível filtrar nenhum resultado para o valor informado';
       case SearchState.ERROR:
