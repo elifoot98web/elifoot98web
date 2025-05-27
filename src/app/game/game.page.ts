@@ -248,6 +248,7 @@ export class GamePage implements OnInit {
     this.hidePopover()
     const modal = await this.modalController.create({
       component: OmaticModalComponent,
+      cssClass: 'omatic-modal',
       backdropDismiss: false
     })
     await modal.present()

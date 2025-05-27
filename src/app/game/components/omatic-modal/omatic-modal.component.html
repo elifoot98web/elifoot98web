@@ -21,19 +21,19 @@
             </div>
           </ion-item>
           
-          <ion-grid class="ion-no-padding ion-padding-top">
-            <ion-row class="ion-align-items-end ion-justify-content-center">
-              <ion-col size="12" size-md="5">
+          <ion-grid class="ion-padding-top" [ngClass]="{'ion-no-padding': !isMobile }">
+            <ion-row class="ion-align-items-center ion-justify-content-start">
+              <ion-col size="12" size-md="6" [ngClass]="{'ion-padding-end': !isMobile }">
                 <input class="win9x-input win9x-element-bevel" [placeholder]="inputLabel" [(ngModel)]="searchValue" type="text">
               </ion-col>
-              <ion-col size="12" size-md="3">
-                <ion-button class="win9x-button" (click)="searchAction()" [disabled]="!searchValue || searchValue.length == 0" fill="clear" color="dark" size="small">
-                  🔍 Buscar
+              <ion-col size="12" size-md="3" class="ion-padding-horizontal" [ngClass]="{'ion-padding-top': isMobile }">
+                <ion-button class="win9x-button" expand="block" fill="clear" (click)="searchAction()" [disabled]="!searchValue || searchValue.length == 0">
+                  Buscar
                 </ion-button>
               </ion-col>
-              <ion-col size="12" size-md="4">
-                <ion-button class="win9x-button" (click)="setValue()" [disabled]="!searchValue || currentSearch.length != 1" fill="clear" color="dark" size="small">
-                  🐞 Set
+              <ion-col size="12" size-md="3" class="ion-padding-horizontal" [ngClass]="{'ion-padding-top': isMobile}">
+                <ion-button class="win9x-button" expand="block" fill="clear" (click)="setValue()" [disabled]="!searchValue || currentSearch.length != 1">
+                  Set
                 </ion-button>
               </ion-col>
             </ion-row>

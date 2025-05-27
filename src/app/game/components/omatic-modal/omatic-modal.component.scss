@@ -100,8 +100,51 @@ ion-content.win9x-modal-content {
 }
 
 .win9x-input {
+  position: relative;
   background: #fff;
   font-family: 'MS Sans Serif', sans-serif;
   color: #000;
   padding-inline-start: 8px;
+  padding-inline-end: 8px;
+  width: 100%;
+}
+
+.win9x-button {
+  background: #c0c0c0;
+  border: none;
+  border-radius: 0;
+  box-shadow: inset -1px -1px #0a0a0a,inset 1px 1px #fff,inset -2px -2px grey,inset 2px 2px #dfdfdf;
+  box-sizing: border-box;
+  color: #000;
+  font-family: 'MS Sans Serif', sans-serif;
+  font-weight: bold;
+  min-height: 26px;
+  min-width: 75px;
+  padding: 0 12px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.win9x-button:active {
+  box-shadow: inset -1px -1px #ffffff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px #808080;
+}
+
+ion-button.win9x-button.button-disabled {
+  background: #c0c0c0;
+  color: #808080;
+}
+
+ion-button.win9x-button.button-disabled::part(native) {
+    text-shadow: 1px 1px 0 #fff; 
+}
+
+.win9x-button:focus {
+  outline: 1px dotted #000000;
+  outline-offset: -4px;
+}
+
+ion-button.win9x-button {
+  --ripple-color: transparent !important;
+  --background-hover: transparent !important;
+  --background-focused: transparent !important;
 }
