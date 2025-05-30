@@ -190,8 +190,11 @@ export class CheatOmaticService {
     let value: Uint8Array;
     if (term.startsWith('0x')) {
       // Hexadecimal string
-      const hexString = term.slice(2);
-      value = new Uint8Array(hexString.match(/.{1,2}/g)?.map(byte => parseInt(byte, 16)) || []);
+      let hexString = term.slice(2);  
+      if (hexString.length % 2 !== 0) {  
+        hexString = '0' + hexString; // Pad with leading zero if length is odd  
+      }  
+      value = new Uint8Array(hexString.match(/../g)?.map(byte => parseInt(byte, 16)) || []);
     } else if (!isNaN(Number(term))) {
       // Integer
       const intValue = parseInt(term);
