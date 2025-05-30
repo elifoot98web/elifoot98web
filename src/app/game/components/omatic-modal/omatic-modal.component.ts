@@ -80,7 +80,7 @@ export class OmaticModalComponent implements OnInit {
   }
 
   get secondaryButtonText(): string {
-    return "Nova Busca"
+    return 'Nova Busca'
   }
 
   get primaryButtonDisabled(): boolean {
@@ -89,6 +89,10 @@ export class OmaticModalComponent implements OnInit {
     } else { 
       return this.searchValue.length === 0 || this.searchState == SearchState.NO_MATCHES || this.searchState == SearchState.ERROR;
     }
+  }
+
+  get secondaryButtonDisabled(): boolean {
+    return this.searchState === SearchState.NEW
   }
 
   close(){
@@ -148,7 +152,7 @@ export class OmaticModalComponent implements OnInit {
     try {
       const value = this.searchValue;
       const address = this.currentSearch[0];
-      this.cheatOmaticService.setValue(address, value);
+      await this.cheatOmaticService.setValue(address, value);
     } catch (error) {
       console.error('Error during setValue:', error);
     }

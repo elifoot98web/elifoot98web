@@ -8,13 +8,11 @@ import { LayoutHelperService } from 'src/app/services/layout-helper.service';
   styleUrls: ['./about.component.scss'],
   standalone: false
 })
-export class AboutComponent  implements OnInit {
+export class AboutComponent {
 
   constructor(
     private modalController: ModalController, 
     private layoutHelper: LayoutHelperService) { }
-
-  ngOnInit() {}
 
   get isMobile() {
     return this.layoutHelper.isMobile

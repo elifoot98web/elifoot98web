@@ -47,7 +47,7 @@ export default defineConfig([globalIgnores(["projects/**/*"]), {
             style: "camelCase",
         }],
         
-        '@angular-eslint/prefer-standalone': 'none',
+        "@angular-eslint/prefer-standalone": "off",
     },
 }, {
     files: ["src/**/*.html"],

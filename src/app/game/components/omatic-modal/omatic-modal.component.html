@@ -31,7 +31,7 @@
                 </ion-button>
               </ion-col>
               <ion-col size="12" size-md="5" class="ion-padding-horizontal" [ngClass]="{'ion-padding-top': isMobile}">
-                <ion-button class="win9x-button" expand="block" fill="clear" (click)="secondaryButtonAction()" [disabled]="searchState == SearchState.NEW">
+                <ion-button class="win9x-button" expand="block" fill="clear" (click)="secondaryButtonAction()" [disabled]="secondaryButtonDisabled">
                   {{ secondaryButtonText }}
                 </ion-button>
               </ion-col>

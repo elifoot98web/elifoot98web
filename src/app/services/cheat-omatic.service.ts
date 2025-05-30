@@ -51,7 +51,7 @@ export class CheatOmaticService {
     const searchBuffer = this.parseValueToByteArray(term)
     this.updateInferredDataType(searchBuffer);
     const results = await this.performSearch(searchBuffer);
-    if(results.length == 0) {
+    if(results.length === 0) {
       this.searchState = SearchState.NO_MATCHES;
       return;
     }
