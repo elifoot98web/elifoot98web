@@ -45,16 +45,16 @@ export class OmaticModalComponent implements OnInit {
   get infoText(): string {
     switch (this.searchState) {
       case SearchState.NEW:
-        return 'Informe o valor atual que você quer alterar dentro do jogo e clique em "Buscar"';
+        return 'Digite o valor atual que deseja modificar no jogo e clique em "Buscar"';
       case SearchState.ONGOING_SEARCH:
-        return 'Mude o valor dentro do jogo, atualize a caixinha de busca e clique em "Buscar" novamente\n\n'+
-        `Tentando filtrar de ${this.currentSearch.length} resultados`;      
+        return 'Volte para o jogo e tente modificar o valor desejado. Depois, reabra esta janela, atualize o campo de busca e clique em "Buscar" novamente\n\n' +
+        `Filtrando ${this.currentSearch.length} resultados`;
       case SearchState.MATCHES_FOUND:
-        return `Cha-ching! Funcionou. Insira o valor que você quer colocar e clique em "Alterar\n\n(Código: 0x${this.currentSearch[0].toString(16).toUpperCase()})`;
+        return `Cha-ching! Agora é só inserir o novo valor desejado e clicar em "Alterar".\n\n(Código: 0x${this.currentSearch[0].toString(16).toUpperCase()})\nGuarde este código para facilitar futuras alterações sem precisar buscar novamente`;
       case SearchState.NO_MATCHES:
-        return 'Infelizmente não foi possível filtrar nenhum resultado para o valor informado';
+        return 'Nenhum resultado foi encontrado para o valor informado';
       case SearchState.ERROR:
-        return 'Ocorreu um erro durante a busca. Verifique o valor informado e tente novamente';
+        return 'Houve um erro na busca. Confira o valor informado e tente novamente';
       default:
         return '';
     }

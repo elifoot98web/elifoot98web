@@ -119,9 +119,10 @@ export class CheatOmaticService {
       // complete the buffer with zeros to match the inferred data type
       const paddedValue = new Uint8Array(this.inferredDataType);
       
-      paddedValue.set(parsedValue, 0);
       if (this.endianess == Endianess.BIG_ENDIAN) {
         paddedValue.set(parsedValue, this.inferredDataType - parsedValue.length);
+      } else {
+        paddedValue.set(parsedValue, 0);
       }
       parsedValue = paddedValue;
     }
