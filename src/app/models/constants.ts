@@ -59,7 +59,7 @@ export const EMULATOR_CONTROL_CONFIG = {
 
 export const BASE_SAVEGAME_DIR = 'd/eli98/jogos/'
 
-export enum Endianess {
+export enum Endianness {
   BIG_ENDIAN = 'big',
   LITTLE_ENDIAN = 'little',
 }

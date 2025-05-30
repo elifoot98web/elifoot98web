@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { ModalController } from '@ionic/angular';
-import { Endianess } from 'src/app/models/constants';
+import { Endianness } from 'src/app/models/constants';
 import { DosCI } from 'src/app/models/jsdos';
 import { CheatOmaticService, SearchState } from 'src/app/services/cheat-omatic.service';
 import { LayoutHelperService } from 'src/app/services/layout-helper.service';
@@ -14,7 +14,6 @@ import { LayoutHelperService } from 'src/app/services/layout-helper.service';
 export class OmaticModalComponent implements OnInit {
   SearchState = SearchState;
 
-  endianess: Endianess = Endianess.LITTLE_ENDIAN;
   constructor(private modalController:ModalController, 
     private layoutHelperService: LayoutHelperService,
     private cheatOmaticService: CheatOmaticService) { }
@@ -136,7 +135,7 @@ export class OmaticModalComponent implements OnInit {
         throw new Error('DosCI is not initialized');
       }
       this.cheatOmaticService.resetSearch(dosCI);
-      this.cheatOmaticService.firstSearch();
+      await this.cheatOmaticService.firstSearch();
     } catch (error) {
       console.error('Error during search:', error);
     }

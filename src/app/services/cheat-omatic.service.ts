@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { DosCI } from '../models/jsdos';
-import { EMULATOR_RAM_SIZE, Endianess, MEMORY_SEARCH_PARAMS } from '../models/constants';
+import { EMULATOR_RAM_SIZE, Endianness, MEMORY_SEARCH_PARAMS } from '../models/constants';
 
 @Injectable({
   providedIn: 'root'
@@ -10,7 +10,7 @@ export class CheatOmaticService {
   currentResults: number[] = [];
   searchValue: string = '';
   
-  private endianess: Endianess = Endianess.LITTLE_ENDIAN;
+  private endianness: Endianness = Endianness.LITTLE_ENDIAN;
   private dosCI?: DosCI;
   private _searchState: SearchState = SearchState.NEW;
   private inferredDataType: DataType = DataType.BYTE;
@@ -97,9 +97,9 @@ export class CheatOmaticService {
       this.searchState = SearchState.ERROR;
       throw new Error(`Error during search for term: ${ term }`);
     }
-    const oldLength = this.currentResults.length;
+    
+    // Filter current results to keep only those that match the new search results
     this.currentResults = this.currentResults.filter(result => results.includes(result));
-    const newLength = this.currentResults.length;
     if (this.currentResults.length == 0) {
       this.searchState = SearchState.NO_MATCHES;
       return;
@@ -119,7 +119,7 @@ export class CheatOmaticService {
       // complete the buffer with zeros to match the inferred data type
       const paddedValue = new Uint8Array(this.inferredDataType);
       
-      if (this.endianess == Endianess.BIG_ENDIAN) {
+      if (this.endianness == Endianness.BIG_ENDIAN) {
         paddedValue.set(parsedValue, this.inferredDataType - parsedValue.length);
       } else {
         paddedValue.set(parsedValue, 0);
@@ -158,13 +158,13 @@ export class CheatOmaticService {
       return [-1];
     }
 
-    const currentResults = [];
     
     // Search for the value in the emulator's memory in chunks
     const chunkSize = MEMORY_SEARCH_PARAMS.CHUNK_SIZE
     const memorySize = EMULATOR_RAM_SIZE;
     const valueLength = value.length;
-
+    
+    const foundResults = [];
     for (let address = 0; address <= memorySize - valueLength; address += chunkSize) {
       const readSize = Math.min(chunkSize + valueLength - 1, memorySize - address);
       const chunk = await dosCI.readMemory(address, readSize);
@@ -178,12 +178,12 @@ export class CheatOmaticService {
           }
         }
         if (match) {
-          currentResults.push(address + offset);
+          foundResults.push(address + offset);
         }
       }
     }
 
-    return currentResults;
+    return foundResults;
   }
 
   private parseValueToByteArray(term: string): Uint8Array {
@@ -202,7 +202,7 @@ export class CheatOmaticService {
       const byteLength = Math.ceil(Math.log2(intValue + 1) / 8) || 1;
       value = new Uint8Array(byteLength);
       for (let i = 0; i < byteLength; i++) {
-        value[this.endianess === Endianess.LITTLE_ENDIAN ? i : byteLength - 1 - i] = (intValue >> (8 * i)) & 0xFF;
+        value[this.endianness === Endianness.LITTLE_ENDIAN ? i : byteLength - 1 - i] = (intValue >> (8 * i)) & 0xFF;
       }
     } else {
       // String
