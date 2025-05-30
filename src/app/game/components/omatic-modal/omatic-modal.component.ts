@@ -1,6 +1,5 @@
 import { Component, OnInit } from '@angular/core';
 import { ModalController } from '@ionic/angular';
-import { Endianness } from 'src/app/models/constants';
 import { DosCI } from 'src/app/models/jsdos';
 import { CheatOmaticService, SearchState } from 'src/app/services/cheat-omatic.service';
 import { LayoutHelperService } from 'src/app/services/layout-helper.service';
