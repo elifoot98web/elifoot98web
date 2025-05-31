@@ -6,10 +6,8 @@ import { Component, OnInit } from '@angular/core';
   styleUrls: ['./faq.component.scss'],
   standalone: false
 })
-export class FaqComponent  implements OnInit {
+export class FaqComponent {
 
   constructor() { }
-
-  ngOnInit() {}
 
 }

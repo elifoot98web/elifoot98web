@@ -1,0 +1,150 @@
+.win9x-element-border {
+  border-bottom-color: #808080;
+  border-right-color: #808080;
+  border-top-color: #fff;
+  border-left-color: #fff;
+  border-width: 2px;
+  border-style: solid;
+  box-sizing: border-box;
+}
+
+.win9x-element-bevel {
+  border-bottom-color: #fff;
+  border-right-color: #fff;
+  border-top-color: #808080;
+  border-left-color: #808080;
+  border-width: 2px;
+  border-style: solid;
+  box-sizing: border-box;
+}
+
+.win9x-outer-window {
+  background: #c0c0c0;
+  width: 100%;
+  height: 100%;
+}
+
+.win9x-modal-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  box-sizing: border-box;
+}
+
+ion-toolbar.win9x-titlebar {
+  --background: linear-gradient(to right, #000080 50%, #3a6ea5 100%);
+  --color: #fff;
+  font-weight: bolder;
+  font-family: 'MS Sans Serif', sans-serif;
+  user-select: none;
+}
+
+.buttons-padding-end {
+  padding-right: 4px !important;
+}
+
+ion-toolbar ion-button {
+  --background: #c0c0c0;
+  --border-width: 2px;
+  --border-style: outset;
+  --border-color: #fff;
+  --border-radius: 2px !important;
+  --padding-start: 4px !important;
+  --padding-end: 4px !important;
+  --padding-top: 4px !important;
+  --padding-bottom: 4px !important;
+  --color: #000;
+  cursor: pointer;
+}
+
+ion-content.win9x-modal-content {
+  padding: 0;
+  --background: #c0c0c0;
+  font-family: 'MS Sans Serif', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.win9x-select {
+  width: 100%; 
+  background: #c0c0c0;
+  color: #808080;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='16' height='17' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M15 0H0v16h1V1h14V0z' fill='%23DFDFDF'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M2 1H1v14h1V2h12V1H2z' fill='%23fff'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M16 17H0v-1h15V0h1v17z' fill='%23000'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M15 1h-1v14H1v1h14V1z' fill='gray'/%3E%3Cpath fill='silver' d='M2 2h12v13H2z'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M11 6H4v1h1v1h1v1h1v1h1V9h1V8h1V7h1V6z' fill='%23808080'/%3E%3C/svg%3E");
+  background-position: top 4px right 4px;
+  background-repeat: no-repeat;
+  border-radius: 0;
+  padding-right: 16px;
+  position: relative;  
+}
+
+.win9x-info {
+  min-height: 160px;
+}
+
+.win9x-info-text {
+  font-weight: bold;
+  font-family: 'MS Sans Serif', sans-serif;
+  padding-top: 8px;
+  white-space: pre-wrap;
+}
+
+.win9x-modal-content ion-item {
+  --background: #c0c0c0;
+  --color: #000;
+  --border-radius: 0;
+}
+
+.win9x-input {
+  position: relative;
+  background: #fff;
+  font-family: 'MS Sans Serif', sans-serif;
+  color: #000;
+  padding-inline-start: 8px;
+  padding-inline-end: 8px;
+  width: 100%;
+}
+
+.win9x-button {
+  background: #c0c0c0;
+  border: none;
+  border-radius: 0;
+  box-shadow: inset -1px -1px #0a0a0a,inset 1px 1px #fff,inset -2px -2px grey,inset 2px 2px #dfdfdf;
+  box-sizing: border-box;
+  color: #000;
+  font-family: 'MS Sans Serif', sans-serif;
+  font-weight: bold;
+  min-height: 26px;
+  min-width: 75px;
+  padding: 0 12px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.win9x-button:active {
+  box-shadow: inset -1px -1px #ffffff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px #808080;
+}
+
+ion-button.win9x-button.button-disabled {
+  background: #c0c0c0;
+  color: #808080;
+}
+
+ion-button.win9x-button.button-disabled::part(native) {
+    text-shadow: 1px 1px 0 #fff; 
+}
+
+.win9x-button:focus {
+  outline: 1px dotted #000000;
+  outline-offset: -4px;
+}
+
+ion-button.win9x-button {
+  --ripple-color: transparent !important;
+  --background-hover: transparent !important;
+  --background-focused: transparent !important;
+}

@@ -53,6 +53,22 @@ export interface DosCI {
 
     // events
     events(): CommandInterfaceEvents;
+
+    /**
+     * Reads data from emulator memory
+     * @param address address in emulator memory
+     * @param size amount of data to read
+     * @returns data read from emulator memory
+     */
+    readMemory(address: number, size: number): Promise<Uint8Array>
+
+    /**
+     * Writes data to emulator memory
+     * @param address address in emulator memory
+     * @param data data to write
+     * @returns number of bytes written
+     */
+    writeMemory(address: number, data: Uint8Array): Promise<number>
 }
 
 export type MessageType = "log" | "warn" | "error" | string;

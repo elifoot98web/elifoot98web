@@ -84,3 +84,10 @@ canvas {
         display: none;
     }
 }
+
+// this height value is only used on modal presentation mode (desktop (min-width: 768px))
+@media screen and (min-width: 768px) {
+    .omatic-modal {
+        --height: 400px;
+    }
+}

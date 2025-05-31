@@ -1,0 +1,42 @@
+  <div class="win9x-element-border win9x-outer-window">
+    <div class="win9x-modal-container">
+      <ion-header class="ion-no-border">
+        <ion-toolbar class="win9x-titlebar ion-text-center">
+          <ion-title> <ion-icon src="../../assets/icon/cheese.svg"></ion-icon> Leu's Cheat 'O Matic</ion-title>
+          <ion-buttons slot="end" class="buttons-padding-end">
+            <ion-button (click)="close()">
+              <ion-icon name="close"></ion-icon>
+            </ion-button>
+          </ion-buttons>
+        </ion-toolbar>
+      </ion-header>
+      <ion-content class="win9x-modal-content ion-padding">
+          <!-- Fake selector -->
+          <select class="win9x-select win9x-element-bevel ion-padding-start" disabled value="ELIFOOT.EXE">
+            <option value="ELIFOOT.EXE">ELIFOOT.EXE</option>
+          </select>
+          <ion-item lines="none" class="ion-margin-top win9x-element-bevel win9x-info">
+            <div class="win9x-info-text ion-text-center">
+              {{ infoText }}
+            </div>
+          </ion-item>
+          <ion-grid class="ion-padding-top" [ngClass]="{'ion-no-padding': !isMobile }">
+            <ion-row class="ion-align-items-center ion-justify-content-start">
+              <ion-col size="12" size-md="4" [ngClass]="{'ion-padding-end': !isMobile }">
+                <input class="win9x-input win9x-element-bevel" [placeholder]="inputLabel" [(ngModel)]="searchValue" type="text">
+              </ion-col>
+              <ion-col size="12" size-md="3" class="ion-padding-horizontal" [ngClass]="{'ion-padding-top': isMobile }">
+                <ion-button class="win9x-button" expand="block" fill="clear" (click)="primaryButtonAction()" [disabled]="primaryButtonDisabled">
+                  {{ primaryButtonText }}
+                </ion-button>
+              </ion-col>
+              <ion-col size="12" size-md="5" class="ion-padding-horizontal" [ngClass]="{'ion-padding-top': isMobile}">
+                <ion-button class="win9x-button" expand="block" fill="clear" (click)="secondaryButtonAction()" [disabled]="secondaryButtonDisabled">
+                  {{ secondaryButtonText }}
+                </ion-button>
+              </ion-col>
+            </ion-row>
+          </ion-grid>
+      </ion-content>
+    </div>
+  </div>

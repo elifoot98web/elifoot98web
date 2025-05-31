@@ -6,10 +6,8 @@ import { Component, OnInit } from '@angular/core';
   styleUrls: ['./manual.component.scss'],
   standalone: false
 })
-export class ManualComponent  implements OnInit {
+export class ManualComponent {
 
   constructor() { }
-
-  ngOnInit() {}
 
 }

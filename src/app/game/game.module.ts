@@ -15,6 +15,7 @@ import { FaqComponent } from './components/faq/faq.component';
 import { ManualComponent } from './components/manual/manual.component';
 import { AboutComponent } from './components/about/about.component';
 import { LayoutHelperService } from '../services/layout-helper.service';
+import { OmaticModalComponent } from './components/omatic-modal/omatic-modal.component';
 
 @NgModule({
   imports: [
@@ -28,7 +29,8 @@ import { LayoutHelperService } from '../services/layout-helper.service';
     UserGuideComponent,
     FaqComponent,
     ManualComponent,
-    AboutComponent
+    AboutComponent,
+    OmaticModalComponent
   ],
   providers: [SaveGameService, LocalStorageService, PatchService, LayoutHelperService]
 })

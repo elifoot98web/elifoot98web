@@ -8,15 +8,13 @@ import { LayoutHelperService } from 'src/app/services/layout-helper.service';
   styleUrls: ['./user-guide.component.scss'],
   standalone: false
 })
-export class UserGuideComponent  implements OnInit {
+export class UserGuideComponent {
 
   constructor(private modalController: ModalController, private layoutHelperService: LayoutHelperService) { }
 
   get isMobile(): boolean {
     return this.layoutHelperService.isMobile
   }
-
-  ngOnInit() {}
 
   close() {
     this.modalController.dismiss();
