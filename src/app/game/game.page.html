@@ -12,8 +12,8 @@
       </ion-button>
     </ion-buttons>
     <ion-title class="ion-hide-md-down">Elifoot 98 Online</ion-title>
-    
-    <ion-buttons slot="end"> 
+
+    <ion-buttons slot="end">
       <ion-button (click)="showPopover($event)">
         <ion-icon slot="icon-only" name="ellipsis-vertical-outline"></ion-icon>
       </ion-button>
@@ -30,11 +30,12 @@
             <ion-label>Opções</ion-label>
           </ion-list-header>
           <ion-item button detail="false" (click)="showOmaticModal()">
-            <ion-label>Abrir 'O Matic</ion-label> 
+            <ion-label>Abrir 'O Matic</ion-label>
             <ion-icon slot="end" color="warning" src="../../assets/icon/cheese.svg"></ion-icon>
           </ion-item>
           <ion-item detail="false">
-            <ion-toggle [checked]="smoothFilterDisabled" (ionChange)="toggleSmoothFilter($event)">Desativar Suavização</ion-toggle> 
+            <ion-toggle [checked]="smoothFilterDisabled" (ionChange)="toggleSmoothFilter($event)">Desativar
+              Suavização</ion-toggle>
           </ion-item>
           <ion-item button detail="true" id="nested-autosave-options">
             <ion-label>Auto-Save</ion-label>
@@ -44,14 +45,16 @@
               <ion-content>
                 <ion-list>
                   <ion-item button detail="false" (click)="saveGame()">
-                    <ion-label>Salvar Máquina Virtual</ion-label> 
+                    <ion-label>Salvar Máquina Virtual</ion-label>
                     <ion-icon slot="end" name="save-outline"></ion-icon>
                   </ion-item>
                   <ion-item detail="false">
-                    <ion-toggle [checked]="autoSaveDisabled" (ionChange)="toggleDisableAutoSave($event)">Desativar Sync Save</ion-toggle> 
+                    <ion-toggle [checked]="autoSaveDisabled" (ionChange)="toggleDisableAutoSave($event)">Desativar Sync
+                      Save</ion-toggle>
                   </ion-item>
                   <ion-item detail="false">
-                    <ion-toggle [checked]="periodicSave" (ionChange)="togglePeriodicSave($event)">Save Periódico (5min)</ion-toggle> 
+                    <ion-toggle [checked]="periodicSave" (ionChange)="togglePeriodicSave($event)">Save Periódico
+                      (5min)</ion-toggle>
                   </ion-item>
                 </ion-list>
               </ion-content>
@@ -63,31 +66,31 @@
               <ion-content>
                 <ion-list>
                   <ion-item button detail="false" (click)="downloadGameSaves()">
-                    <ion-label>Exportar jogos salvos</ion-label> 
+                    <ion-label>Exportar jogos salvos</ion-label>
                     <ion-icon slot="end" name="share-outline"></ion-icon>
                   </ion-item>
                   <ion-item button detail="false" (click)="saveGameFileInput.click()">
-                    <ion-label>Importar jogo salvo</ion-label> 
+                    <ion-label>Importar jogo salvo</ion-label>
                     <ion-icon slot="end" name="download-outline"></ion-icon>
                   </ion-item>
                   <ion-item *ngIf="debugMode" button detail="false" (click)="downloadFullDiskChanges()">
-                    <ion-label>Baixar Disco Virtual</ion-label> 
+                    <ion-label>Baixar Disco Virtual</ion-label>
                     <ion-icon slot="end" name="code-download-outline"></ion-icon>
                   </ion-item>
                   <ion-item button detail="false" (click)="clearAllData()">
-                    <ion-label color="danger">Apagar todos os dados</ion-label> 
-                    <ion-icon slot="end" name="trash-outline" color="danger" ></ion-icon>
+                    <ion-label color="danger">Apagar todos os dados</ion-label>
+                    <ion-icon slot="end" name="trash-outline" color="danger"></ion-icon>
                   </ion-item>
                 </ion-list>
               </ion-content>
             </ng-template>
           </ion-popover>
           <ion-item button detail="false" (click)="promptInputText()">
-            <ion-label>Input de Texto</ion-label> 
+            <ion-label>Input de Texto</ion-label>
             <ion-icon slot="end" name="terminal-outline"></ion-icon>
           </ion-item>
           <ion-item button detail="false" (click)="toggleKeyboard()">
-            <ion-label>Teclado Virtual</ion-label> 
+            <ion-label>Teclado Virtual</ion-label>
             <ion-icon slot="end" src="../../assets/icon/keyboard.svg"></ion-icon>
           </ion-item>
           <ion-item button detail="true" id="nested-patch-options"><ion-label>Opções de Patch</ion-label></ion-item>
@@ -96,11 +99,11 @@
               <ion-content>
                 <ion-list>
                   <ion-item button detail="false" (click)="patchFileInput.click()">
-                    <ion-label>Carregar Patch</ion-label> 
+                    <ion-label>Carregar Patch</ion-label>
                     <ion-icon slot="end" name="cloud-upload-outline"></ion-icon>
                   </ion-item>
                   <ion-item button detail="false" (click)="promptClearCustomPatch()">
-                    <ion-label>Remover Patch</ion-label> 
+                    <ion-label>Remover Patch</ion-label>
                     <ion-icon slot="end" name="cloud-offline-outline"></ion-icon>
                   </ion-item>
                 </ion-list>
@@ -108,15 +111,15 @@
             </ng-template>
           </ion-popover>
           <ion-item button detail="false" (click)="showFAQAndManualModal()">
-            <ion-label>FAQ e Manual</ion-label> 
+            <ion-label>FAQ e Manual</ion-label>
             <ion-icon slot="end" name="help-circle-outline"></ion-icon>
           </ion-item>
           <ion-item button detail="false" (click)="showAboutModal()">
-            <ion-label>Sobre e Créditos</ion-label> 
+            <ion-label>Sobre e Créditos</ion-label>
             <ion-icon slot="end" name="information-circle-outline"></ion-icon>
           </ion-item>
           <ion-item button detail="false" (click)="confirmRefresh()">
-            <ion-label>Recarregar</ion-label> 
+            <ion-label>Recarregar</ion-label>
             <ion-icon slot="end" name="refresh-outline"></ion-icon>
           </ion-item>
         </ion-list>
@@ -125,8 +128,8 @@
   </ion-popover>
   <input style="display:none;" type="file" accept=".zip" #patchFileInput (change)="onPatchFileSelected($event)" />
   <input style="display:none;" type="file" accept=".e98" #saveGameFileInput (change)="onSaveFileSelected($event)" />
-  <div [ngClass]="{ hidden: isHidden, full: !isHidden }" class="smooth-canvas not-selectable" id="game-container"></div> 
-  <ion-fab *ngIf="!(!isMobile || !isLandscape)" slot="fixed" vertical="top" horizontal="start" >
+  <div [ngClass]="{ hidden: isHidden, full: !isHidden }" class="smooth-canvas not-selectable" id="game-container"></div>
+  <ion-fab *ngIf="!(!isMobile || !isLandscape)" slot="fixed" vertical="top" horizontal="start">
     <ion-fab-button color="tertiary">
       <ion-icon name="menu-outline"></ion-icon>
     </ion-fab-button>
@@ -147,19 +150,21 @@
   </ion-fab>
 
   <ng-container *ngIf="!isVirtualKeyboardShowing">
-    <ion-fab slot="fixed" vertical="bottom" horizontal="start" >
+    <ion-fab slot="fixed" vertical="bottom" horizontal="start">
       <ion-fab-button color="tertiary">
         <ion-icon name="game-controller-outline"></ion-icon>
       </ion-fab-button>
-      <ion-fab-list class="labeled" [ngClass]="{ landscape: isLandscape, portrait: !isLandscape }" [side]="isLandscape ? 'end' : 'top'">
+      <ion-fab-list class="labeled" [ngClass]="{ landscape: isLandscape, portrait: !isLandscape }"
+        [side]="isLandscape ? 'end' : 'top'">
         <ng-container *ngFor="let input of gameInputs">
           <ion-fab-button color="tertiary" (click)="sendKey(input.keyCode)">
             {{ input.text }}
             <ion-label>{{ input.label }}</ion-label>
-          </ion-fab-button>     
+          </ion-fab-button>
         </ng-container>
       </ion-fab-list>
-      <ion-fab-list class="labeled" [ngClass]="{ landscape: !isLandscape, portrait: isLandscape }" [side]="isLandscape ? 'top' : 'end'">
+      <ion-fab-list class="labeled" [ngClass]="{ landscape: !isLandscape, portrait: isLandscape }"
+        [side]="isLandscape ? 'top' : 'end'">
         <ion-fab-button color="tertiary" (click)="sendKey(EmulatorKeyCode.KBD_a)">
           A
         </ion-fab-button>
@@ -178,8 +183,8 @@
         </ion-fab-button>
       </ion-fab-list>
     </ion-fab>
-    
-    <ion-fab slot="fixed" vertical="bottom" [activated]="isMobile" horizontal="end" >
+
+    <ion-fab slot="fixed" vertical="bottom" [activated]="isMobile" horizontal="end">
       <ion-fab-button color="tertiary" closeIcon="game-controller-outline">
         <ion-icon name="game-controller-outline"></ion-icon>
       </ion-fab-button>
@@ -204,10 +209,4 @@
       </ion-fab-list>
     </ion-fab>
   </ng-container>
-  </ion-content>
-  <ion-footer *ngIf="!isMobile">
-    <ion-toolbar color="tertiary">
-      <ion-card-subtitle class="ion-padding-start ion-padding-top not-selectable">Feito nas pressas, na terra dos altos coqueiros.</ion-card-subtitle>
-      <ion-card-subtitle class="ion-padding-start ion-padding-bottom not-selectable">Este site NÃO coleta nenhuma informação, NÃO utiliza cookies ou qualquer outro mecanismo de rastreamento.</ion-card-subtitle>
-    </ion-toolbar>
-</ion-footer>
+</ion-content>
