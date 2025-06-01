@@ -1,6 +1,6 @@
 {
   "name": "elifoot98_web",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "author": "Leonardo Pereira <jlcvp>",
   "homepage": "https://www.elifoot98.com.br",
   "repository": {
@@ -11,6 +11,8 @@
     "ng": "ng",
     "start": "ng serve",
     "prebuild": "npm run version:config",
+    "prebuild:githubpages": "npm run version:config",
+    "prebuild:prod": "npm run version:config",
     "build": "ng build",
     "build:prod": "ng build --configuration production",
     "build:githubpages": "ng build --configuration githubpages",
