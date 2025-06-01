@@ -124,6 +124,9 @@
           </ion-item>
         </ion-list>
       </ion-content>
+      <ion-footer class="ion-no-padding ion-no-margin ion-text-center">
+            <ion-note class="ion-no-padding ion-no-margin not-selectable">v{{ versionConfig.versionName }}</ion-note>
+      </ion-footer>
     </ng-template>
   </ion-popover>
   <input style="display:none;" type="file" accept=".zip" #patchFileInput (change)="onPatchFileSelected($event)" />

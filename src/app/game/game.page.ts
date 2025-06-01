@@ -34,6 +34,7 @@ export class GamePage implements OnInit {
   isHidden = true;
   debugMode = false
   dosCI: any = null;
+  versionConfig = environment.versionConfig;
 
   constructor(private loadingController: LoadingController,
     private alertController: AlertController,

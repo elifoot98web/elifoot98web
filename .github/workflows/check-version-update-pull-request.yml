@@ -1,0 +1,17 @@
+name: Check Version Update on Pull Request
+on:
+  pull_request:
+    branches:
+      - main
+jobs:
+  check-version-update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Version Check
+        id: version-check
+        uses: EndBug/version-check@v2.1.5
+      - name: Fail when unchanged
+        if: steps.version-check.outputs.changed == 'false'
+        run: 'echo "No version change detected. Please update the version in package.json." && exit 1'
+  
