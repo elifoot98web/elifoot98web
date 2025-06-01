@@ -1,6 +1,6 @@
 {
   "name": "elifoot98_web",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "author": "Leonardo Pereira <jlcvp>",
   "homepage": "https://www.elifoot98.com.br",
   "repository": {
@@ -10,13 +10,15 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
+    "prebuild": "npm run version:config",
     "build": "ng build",
     "build:prod": "ng build --configuration production",
     "build:githubpages": "ng build --configuration githubpages",
     "watch": "ng build --watch --configuration development",
     "watch:prod": "ng build --watch --configuration production",
     "test": "ng test",
-    "lint": "ng lint"
+    "lint": "ng lint",
+    "version:config": "node ./scripts/version-config.js"
   },
   "private": true,
   "dependencies": {
@@ -71,6 +73,7 @@
     "karma-coverage-istanbul-reporter": "~3.0.2",
     "karma-jasmine": "~5.1.0",
     "karma-jasmine-html-reporter": "~2.0.0",
+    "replace-in-file": "^8.3.0",
     "ts-node": "^8.3.0",
     "typescript": "^5.8.3"
   },
