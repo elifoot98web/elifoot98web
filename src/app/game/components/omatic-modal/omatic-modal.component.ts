@@ -164,7 +164,6 @@ export class OmaticModalComponent {
   async showSavedCheats() {
     const alert = await this.alertController.create({
       header: 'Cheats Salvos',
-      message: 'Selecione uma trapaça salva para aplicar',
       buttons: [
         {
           text: 'Excluir',
