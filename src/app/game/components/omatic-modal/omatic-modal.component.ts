@@ -1,6 +1,5 @@
 import { Component } from '@angular/core';
 import { AlertController, ModalController } from '@ionic/angular';
-import { min } from 'rxjs';
 import { DosCI } from 'src/app/models/jsdos';
 import { SavedCheat, SearchState } from 'src/app/models/omatic-models';
 import { CheatOmaticService } from 'src/app/services/cheat-omatic.service';
@@ -42,6 +41,10 @@ export class OmaticModalComponent {
 
   get savedCheats(): SavedCheat[] {
     return this.cheatOmaticService.savedCheats;
+  }
+
+  get foundMatchHex(): string {
+    return `0x${this.currentSearch[0].toString(16).toUpperCase()}`
   }
 
   /** UI elements getters */
@@ -168,9 +171,11 @@ export class OmaticModalComponent {
         {
           text: 'Excluir',
           role: 'destructive',
-          cssClass: 'alert-danger',
-          handler: (cheat: SavedCheat) => {
-            this.deleteCheat(cheat);
+          cssClass: 'alert-danger',          
+          handler: async (cheat: SavedCheat) => {
+            if(cheat) {
+              await this.deleteCheat(cheat);
+            }
           }
         },
         {
@@ -179,19 +184,20 @@ export class OmaticModalComponent {
         },
         {
           text: 'Carregar Cheat',
-          handler: (cheat: SavedCheat) => {
-            this.selectSavedCheat(cheat);
+          handler: async (cheat: SavedCheat) => {
+            await this.selectSavedCheat(cheat);
           }
         }
       ],
-      inputs: this.cheatOmaticService.savedCheats.map(cheat => {
+      inputs: this.cheatOmaticService.savedCheats.map((cheat, index) => {
         return {
           type: 'radio',
-          label: `${cheat.name} (${cheat.hexAddress.toUpperCase()})`,
+          label: `${cheat.name} (${cheat.hexAddress})`,
           value: cheat,
-          checked: false
+          checked: index === 0, // Select the first cheat by default
         }
       })
+      
     })
 
     await alert.present();
@@ -199,38 +205,40 @@ export class OmaticModalComponent {
 
   async saveCheatDialog() {
     const alert = await this.alertController.create({
-      header: 'Salvar Cheat',
-      message: 'Digite um nome para o cheat',
+      header: `Salvar Cheat (${this.foundMatchHex})`,
+      message: 'Dê um nome para este cheat.\n\nObservação: O cheat não é salvo permanentemente entre sessões, pois o endereço de memória muda a cada vez que o jogo é iniciado.',
+      cssClass: 'alert-whitespace',
       inputs: [
-        {
-          name: 'cheatName',
-          type: 'text',
-          placeholder: 'Nome da Trapaça',
-          attributes: {
-            maxlength: 15,
-            minlength: 1,
-          }
+      {
+        name: 'cheatName',
+        type: 'text',
+        placeholder: 'Nome do Cheat',
+        attributes: {
+        maxlength: 25,
+        minlength: 1,
         }
+      }
       ],
       buttons: [
-        {
-          text: 'Cancelar',
-          role: 'cancel',
-        },
-        {
-          text: 'Salvar',
-          handler: async (data) => {
-            if (data.cheatName && data.cheatName.trim().length > 0) {
-              try {
-                await this.cheatOmaticService.saveCheat(data.cheatName);
-              } catch (error) {
-                console.error('Error saving cheat:', error);
-              }
-            } else {
-              console.warn('Cheat name cannot be empty');
-            }
-          }
+      {
+        text: 'Cancelar',
+        role: 'cancel',
+      },
+      {
+        text: 'Salvar',
+        handler: async (data) => {
+        if (data?.cheatName?.trim().length > 0) {
+          await this.cheatOmaticService.saveCheat(data.cheatName);
+        } else {
+          const alert = await this.alertController.create({
+          header: 'Erro',
+          message: 'O nome do cheat não pode estar vazio.',
+          buttons: ['OK']
+          });
+          await alert.present();
         }
+        }
+      }
       ]
     });
     await alert.present();
@@ -256,7 +264,7 @@ export class OmaticModalComponent {
       console.error('Error deleting saved cheat:', error);
     }
     const alert = await this.alertController.create({
-      message: `Cheat "${cheat.name}" excluído com sucesso.`,
+      message: `Cheat "${cheat.name}" excluído`,
       buttons: ['OK']
     });
     await alert.present();

@@ -17,9 +17,7 @@ export class CheatOmaticService {
   private _searchState: SearchState = SearchState.NEW;
   private inferredDataType: DataType = DataType.BYTE;
 
-  constructor(private storageService: LocalStorageService) {
-    this.loadSavedCheats();
-  }
+  constructor() { }
 
   get searchState(): SearchState {
     return this._searchState;
@@ -197,25 +195,11 @@ export class CheatOmaticService {
     return foundResults;
   }
 
-  async loadSavedCheats(): Promise<void> {
-    try {
-      const savedCheats = await this.storageService.get<SavedCheat[]>(STORAGE_KEY.SAVED_CHEATS)
-      if (savedCheats) {
-        this.savedCheats = savedCheats;
-      } else {
-        this.savedCheats = [];
-      }
-    }
-    catch (error) {
-      console.error('Error loading saved cheats:', error);
-    }
-  }
-
-  async saveCheat(name: string): Promise<void> {
+  saveCheat(name: string): void {
     const address = this.currentResults[0];
     const dataType = this.inferredDataType;
 
-    let hexAddress = address.toString(16);
+    let hexAddress = address.toString(16).toUpperCase();
     if(hexAddress.length % 2 !== 0) {
       hexAddress = '0' + hexAddress; // Pad with leading zero if length is odd
     }
@@ -237,13 +221,6 @@ export class CheatOmaticService {
       console.log(`Saving new cheat: ${savedCheat.name}`);
       this.savedCheats.push(savedCheat);
     }
-    
-    try {
-      await this.storageService.set<SavedCheat[]>(STORAGE_KEY.SAVED_CHEATS, this.savedCheats);
-    }
-    catch (error) {
-      console.error('Error saving cheat:', error);
-    }
   }
 
   selectSavedCheat(savedCheat: SavedCheat): void {
@@ -251,21 +228,15 @@ export class CheatOmaticService {
       throw new Error('DosCI is not initialized.');
     }
 
-    this.resetSearch(this.dosCI);
     this.inferredDataType = savedCheat.dataType;
     this.setMatchDirectly(savedCheat.hexAddress);
   }
 
-  async deleteSavedChear(savedCheat: SavedCheat): Promise<void> {
+  deleteSavedChear(savedCheat: SavedCheat): void {
     const index = this.savedCheats.findIndex(cheat => cheat.hexAddress === savedCheat.hexAddress && cheat.name === savedCheat.name && cheat.dataType === savedCheat.dataType);
     
     if (index !== -1) {
       this.savedCheats.splice(index, 1);
-      try {
-        await this.storageService.set<SavedCheat[]>(STORAGE_KEY.SAVED_CHEATS, this.savedCheats);
-      } catch (error) {
-        console.error('Error deleting saved cheat:', error);
-      }
     } else {
       console.warn('Saved cheat not found:', savedCheat);
     }
