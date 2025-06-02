@@ -36,6 +36,20 @@
                 </ion-button>
               </ion-col>
             </ion-row>
+            <ion-row class="ion-padding-top ion-justify-content-center">
+              <ion-col size="12">
+                <ion-button class="win9x-button" expand="block" fill="clear" (click)="saveCheatDialog()" [disabled]="searchState !== SearchState.MATCHES_FOUND">
+                    Salvar Código de Cheat
+                </ion-button>
+              </ion-col>
+            </ion-row>
+            <ion-row class="ion-padding-top ion-justify-content-center">
+              <ion-col size="12">
+                <ion-button class="win9x-button" expand="block" fill="clear" (click)="showSavedCheats()" [disabled]="savedCheats.length === 0">
+                    Cheats Salvos
+                </ion-button>
+              </ion-col>
+            </ion-row>
           </ion-grid>
       </ion-content>
     </div>
