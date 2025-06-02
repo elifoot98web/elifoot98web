@@ -259,7 +259,7 @@ export class OmaticModalComponent {
 
   async deleteCheat(cheat: SavedCheat) {
     try {
-      await this.cheatOmaticService.deleteSavedChear(cheat);
+      await this.cheatOmaticService.deleteSavedCheat(cheat);
     } catch (error) {
       console.error('Error deleting saved cheat:', error);
     }

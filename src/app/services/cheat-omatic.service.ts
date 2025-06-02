@@ -1,7 +1,6 @@
 import { Injectable } from '@angular/core';
 import { DosCI } from '../models/jsdos';
-import { EMULATOR_RAM_SIZE, Endianness, MEMORY_SEARCH_PARAMS, STORAGE_KEY } from '../models/constants';
-import { LocalStorageService } from './local-storage.service';
+import { EMULATOR_RAM_SIZE, Endianness, MEMORY_SEARCH_PARAMS } from '../models/constants';
 import { DataType, SavedCheat, SearchState } from '../models/omatic-models';
 
 @Injectable({
@@ -232,7 +231,7 @@ export class CheatOmaticService {
     this.setMatchDirectly(savedCheat.hexAddress);
   }
 
-  deleteSavedChear(savedCheat: SavedCheat): void {
+  deleteSavedCheat(savedCheat: SavedCheat): void {
     const index = this.savedCheats.findIndex(cheat => cheat.hexAddress === savedCheat.hexAddress && cheat.name === savedCheat.name && cheat.dataType === savedCheat.dataType);
     
     if (index !== -1) {
