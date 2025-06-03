@@ -31,11 +31,11 @@ export class OmaticModalComponent {
     return this.cheatOmaticService.searchState;
   }
 
-  get searchValue(): string {
+  get inputValue(): string {
     return this.cheatOmaticService.inputValue;
   }
 
-  set searchValue(value: string) {
+  set inputValue(value: string) {
     this.cheatOmaticService.inputValue = value;
   }
 
@@ -93,9 +93,9 @@ export class OmaticModalComponent {
 
   get primaryButtonDisabled(): boolean {
     if(this.searchState == SearchState.MATCHES_FOUND) {
-      return this.searchValue.length === 0 || isNaN(Number(this.searchValue));
+      return this.inputValue.length === 0 || isNaN(Number(this.inputValue));
     } else { 
-      return this.searchValue.length === 0 || this.searchState == SearchState.NO_MATCHES || this.searchState == SearchState.ERROR;
+      return this.inputValue.length === 0 || this.searchState == SearchState.NO_MATCHES || this.searchState == SearchState.ERROR;
     }
   }
 

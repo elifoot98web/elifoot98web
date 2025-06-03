@@ -23,7 +23,7 @@
           <ion-grid class="ion-padding-top" [ngClass]="{'ion-no-padding': !isMobile }">
             <ion-row class="ion-align-items-center ion-justify-content-start">
               <ion-col size="12" size-md="4" [ngClass]="{'ion-padding-end': !isMobile }">
-                <input class="win9x-input win9x-element-bevel" [placeholder]="inputLabel" [(ngModel)]="searchValue" type="text">
+                <input class="win9x-input win9x-element-bevel" [placeholder]="inputLabel" [(ngModel)]="inputValue" type="text">
               </ion-col>
               <ion-col size="12" size-md="3" class="ion-padding-horizontal" [ngClass]="{'ion-padding-top': isMobile }">
                 <ion-button class="win9x-button" expand="block" fill="clear" (click)="primaryButtonAction()" [disabled]="primaryButtonDisabled">
