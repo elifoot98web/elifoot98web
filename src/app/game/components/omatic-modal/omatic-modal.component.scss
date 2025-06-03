@@ -48,17 +48,11 @@ ion-toolbar.win9x-titlebar {
 }
 
 ion-toolbar ion-button {
-  --background: #c0c0c0;
-  --border-width: 2px;
-  --border-style: outset;
-  --border-color: #fff;
-  --border-radius: 2px !important;
-  --padding-start: 4px !important;
-  --padding-end: 4px !important;
+  --padding-start: 0px !important;
+  --padding-end: 0px !important;
   --padding-top: 4px !important;
   --padding-bottom: 4px !important;
-  --color: #000;
-  cursor: pointer;
+  padding: 0 8px !important;
 }
 
 ion-content.win9x-modal-content {
@@ -118,8 +112,6 @@ ion-content.win9x-modal-content {
   color: #000;
   font-family: 'MS Sans Serif', sans-serif;
   font-weight: bold;
-  min-height: 26px;
-  min-width: 75px;
   padding: 0 12px;
   font-size: 14px;
   cursor: pointer;
