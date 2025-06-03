@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { DosCI } from '../models/jsdos';
 import { EMULATOR_RAM_SIZE, Endianness, MEMORY_SEARCH_PARAMS } from '../models/constants';
+import { DataType, SavedCheat, SearchState } from '../models/omatic-models';
 
 @Injectable({
   providedIn: 'root'
@@ -8,8 +9,8 @@ import { EMULATOR_RAM_SIZE, Endianness, MEMORY_SEARCH_PARAMS } from '../models/c
 export class CheatOmaticService {
   
   currentResults: number[] = [];
-  searchValue: string = '';
-  
+  inputValue: string = '';
+  savedCheats: SavedCheat[] = [];
   private endianness: Endianness = Endianness.LITTLE_ENDIAN;
   private dosCI?: DosCI;
   private _searchState: SearchState = SearchState.NEW;
@@ -33,7 +34,7 @@ export class CheatOmaticService {
   }
 
   async firstSearch(): Promise<void> {
-    const term = this.searchValue
+    const term = this.inputValue
     if(!this.dosCI) {
       throw new Error('DosCI is not initialized');
     }
@@ -44,7 +45,7 @@ export class CheatOmaticService {
 
     if(term.startsWith('0x')) {
       // set matches directly to the address
-      this.setMatchesDirectly(term);
+      this.setMatchDirectly(term);
       return
     }
 
@@ -79,7 +80,7 @@ export class CheatOmaticService {
       throw new Error('DosCI is not initialized.');
     }
 
-    const term = this.searchValue
+    const term = this.inputValue
 
     if (term.length === 0) {
       throw new Error('Search term is empty.');
@@ -108,10 +109,17 @@ export class CheatOmaticService {
     }
   }
 
-  async setValue(address: number, value: string): Promise<void> {
+  async setValue(): Promise<void> {
     if (!this.dosCI) {
       throw new Error('DosCI is not initialized.');
     }
+
+    if (this.searchState !== SearchState.MATCHES_FOUND || this.inputValue.length === 0 || this.currentResults.length !== 1) {
+      throw new Error(`Cannot set value. Inconsistent state ${ this.searchState }, searchValue: ${ this.inputValue }, currentResults length: ${ this.currentResults.length }`);
+    }
+
+    const value = this.inputValue;
+    const address = this.currentResults[0];
 
     let parsedValue = this.parseValueToByteArray(value);
     this.updateInferredDataType(parsedValue);
@@ -134,7 +142,7 @@ export class CheatOmaticService {
     }
   }
 
-  private setMatchesDirectly(addressHex: string) {
+  setMatchDirectly(addressHex: string) {
     const address = parseInt(addressHex, 16);
     if (isNaN(address) || address < 0 || address >= EMULATOR_RAM_SIZE) {
       console.error('Invalid address:', addressHex);
@@ -143,7 +151,7 @@ export class CheatOmaticService {
     }
     this.currentResults = [address];
     this.searchState = SearchState.MATCHES_FOUND;
-    this.searchValue = '';
+    this.inputValue = '';
   }
 
   private async performSearch(value: Uint8Array): Promise<number[]> {
@@ -184,6 +192,53 @@ export class CheatOmaticService {
     }
 
     return foundResults;
+  }
+
+  saveCheat(name: string): void {
+    const address = this.currentResults[0];
+    const dataType = this.inferredDataType;
+
+    let hexAddress = address.toString(16).toUpperCase();
+    if(hexAddress.length % 2 !== 0) {
+      hexAddress = '0' + hexAddress; // Pad with leading zero if length is odd
+    }
+    
+    const savedCheat: SavedCheat = {
+      name: name,
+      hexAddress: `0x${hexAddress}`,
+      dataType: dataType
+    }
+
+    // Check if a cheat with the same address already exists
+    const existingCheatIndex = this.savedCheats.findIndex(cheat => cheat.hexAddress === savedCheat.hexAddress && cheat.dataType === savedCheat.dataType);
+    if (existingCheatIndex !== -1) {
+      // Update existing cheat
+      this.savedCheats[existingCheatIndex] = savedCheat;
+      console.log(`Updated existing cheat: ${savedCheat.name}`);
+    } else {
+      // Add new cheat
+      console.log(`Saving new cheat: ${savedCheat.name}`);
+      this.savedCheats.push(savedCheat);
+    }
+  }
+
+  selectSavedCheat(savedCheat: SavedCheat): void {
+    if (!this.dosCI) {
+      throw new Error('DosCI is not initialized.');
+    }
+
+    this.inferredDataType = savedCheat.dataType;
+    this.setMatchDirectly(savedCheat.hexAddress);
+  }
+
+  deleteSavedCheat(savedCheat: SavedCheat): void {
+    const index = this.savedCheats.findIndex(cheat => cheat.hexAddress === savedCheat.hexAddress && cheat.name === savedCheat.name && cheat.dataType === savedCheat.dataType);
+    
+    if (index !== -1) {
+      this.savedCheats.splice(index, 1);
+    } else {
+      console.warn('Saved cheat not found:', savedCheat);
+    }
   }
 
   private parseValueToByteArray(term: string): Uint8Array {
@@ -227,24 +282,4 @@ export class CheatOmaticService {
       this.inferredDataType = valueDataType;
     }
   }
-}
-
-export enum SearchType {
-  STRING,
-  INTEGER
-}
-
-export enum SearchState {
-  NEW,
-  ONGOING_SEARCH,
-  MATCHES_FOUND,
-  NO_MATCHES,
-  ERROR
-}
-
-export enum DataType {
-  BYTE = 1,
-  WORD = 2,
-  DWORD = 4,
-  STRING = 5 // from 5 bytes and up
 }
