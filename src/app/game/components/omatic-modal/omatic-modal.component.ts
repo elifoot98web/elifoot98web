@@ -32,11 +32,11 @@ export class OmaticModalComponent {
   }
 
   get searchValue(): string {
-    return this.cheatOmaticService.searchValue;
+    return this.cheatOmaticService.inputValue;
   }
 
   set searchValue(value: string) {
-    this.cheatOmaticService.searchValue = value;
+    this.cheatOmaticService.inputValue = value;
   }
 
   get savedCheats(): SavedCheat[] {

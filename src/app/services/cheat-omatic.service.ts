@@ -9,7 +9,7 @@ import { DataType, SavedCheat, SearchState } from '../models/omatic-models';
 export class CheatOmaticService {
   
   currentResults: number[] = [];
-  searchValue: string = '';
+  inputValue: string = '';
   savedCheats: SavedCheat[] = [];
   private endianness: Endianness = Endianness.LITTLE_ENDIAN;
   private dosCI?: DosCI;
@@ -34,7 +34,7 @@ export class CheatOmaticService {
   }
 
   async firstSearch(): Promise<void> {
-    const term = this.searchValue
+    const term = this.inputValue
     if(!this.dosCI) {
       throw new Error('DosCI is not initialized');
     }
@@ -80,7 +80,7 @@ export class CheatOmaticService {
       throw new Error('DosCI is not initialized.');
     }
 
-    const term = this.searchValue
+    const term = this.inputValue
 
     if (term.length === 0) {
       throw new Error('Search term is empty.');
@@ -114,11 +114,11 @@ export class CheatOmaticService {
       throw new Error('DosCI is not initialized.');
     }
 
-    if (this.searchState !== SearchState.MATCHES_FOUND || this.searchValue.length === 0 || this.currentResults.length !== 1) {
-      throw new Error(`Cannot set value. Inconsistent state ${ this.searchState }, searchValue: ${ this.searchValue }, currentResults length: ${ this.currentResults.length }`);
+    if (this.searchState !== SearchState.MATCHES_FOUND || this.inputValue.length === 0 || this.currentResults.length !== 1) {
+      throw new Error(`Cannot set value. Inconsistent state ${ this.searchState }, searchValue: ${ this.inputValue }, currentResults length: ${ this.currentResults.length }`);
     }
 
-    const value = this.searchValue;
+    const value = this.inputValue;
     const address = this.currentResults[0];
 
     let parsedValue = this.parseValueToByteArray(value);
@@ -151,7 +151,7 @@ export class CheatOmaticService {
     }
     this.currentResults = [address];
     this.searchState = SearchState.MATCHES_FOUND;
-    this.searchValue = '';
+    this.inputValue = '';
   }
 
   private async performSearch(value: Uint8Array): Promise<number[]> {
