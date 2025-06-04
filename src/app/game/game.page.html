@@ -33,6 +33,10 @@
             <ion-label>Abrir 'O Matic</ion-label>
             <ion-icon slot="end" color="warning" src="../../assets/icon/cheese.svg"></ion-icon>
           </ion-item>
+          <ion-item button detail="false" (click)="promptHostRoom()">
+            <ion-label>Hospedar Jogo Multiplayer</ion-label>
+            <ion-icon slot="end" name="people-outline"></ion-icon>
+          </ion-item>
           <ion-item detail="false">
             <ion-toggle [checked]="smoothFilterDisabled" (ionChange)="toggleSmoothFilter($event)">Desativar
               Suavização</ion-toggle>

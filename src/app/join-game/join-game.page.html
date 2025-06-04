@@ -20,8 +20,8 @@
   </ion-card>
 
   <!-- Show host's stream if available -->
-  <div *ngIf="hostStream" style="position:relative; width:100%; max-width:600px; margin:2em auto;">
-    <video #hostVideo autoplay playsinline controls="false" style="width:100%; border-radius:8px; background:#222;"
+  <div [ngClass]="{'ion-hide': !hostStream}" style="position:relative; width:100%; max-width:600px; margin:2em auto;">
+    <video id="stream-container" autoplay playsinline controls="false" style="width:100%; border-radius:8px; background:#222;"
       (mousemove)="onPointerMove($event)" (touchmove)="onPointerMove($event)"></video>
     <!-- You can add a canvas or overlay here for remote cursors -->
   </div>

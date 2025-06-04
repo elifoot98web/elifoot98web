@@ -66,7 +66,12 @@ export class JoinGamePage implements OnInit {
     await loading.present();
     try {
       await this.multiplayerGuestService.joinGameRoom(this.playerName, this.roomId, this.password);
-      this.hostStream = this.multiplayerGuestService.getHostStream();
+      this.multiplayerGuestService.onHostStream((stream) => {
+        this.hostStream = stream;
+        const video = document.querySelector('#stream-container') as HTMLVideoElement
+        if(!video) throw new Error('Video element not found')
+        video.srcObject = stream;
+      })
       // Optionally, subscribe to player list or other events here
     } catch (err: any) {
       this.joinError = err.message || 'Erro ao entrar na sala.';
@@ -99,6 +104,8 @@ export class JoinGamePage implements OnInit {
       x = event.offsetX;
       y = event.offsetY;
     } else if (event instanceof TouchEvent && event.touches.length > 0) {
+      // TODO: validate if coordinates match the same values of event.offsetX/Y
+      // when using touch events, we need to calculate the position relative to the target element
       const rect = (event.target as HTMLElement).getBoundingClientRect();
       x = event.touches[0].clientX - rect.left;
       y = event.touches[0].clientY - rect.top;

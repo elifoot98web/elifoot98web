@@ -74,9 +74,9 @@ export const MEMORY_SEARCH_PARAMS = {
 export const MULTIPLAYER = {
   APP_ID: 'br.com.elifoot98.multiplayer',
   EVENTS: {
-    PLAYER_IDENT: 'playerIdent',
-    PLAYER_POINTER: 'playerPointer',
-    PLAYER_LIST: 'playerList',
+    PLAYER_IDENT: 'Ident',
+    PLAYER_POINTER: 'Pointer',
+    PLAYER_LIST: 'pList',
     HOST_CLAIM: 'hostClaim',
   },
   HOST_CLAIM_TIMEOUT: 5000, // 5 seconds

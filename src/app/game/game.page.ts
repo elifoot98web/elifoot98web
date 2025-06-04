@@ -14,6 +14,7 @@ import { UserGuideComponent } from './components/user-guide/user-guide.component
 import { LayoutHelperService } from '../services/layout-helper.service';
 import { AboutComponent } from './components/about/about.component';
 import { OmaticModalComponent } from './components/omatic-modal/omatic-modal.component';
+import { MultiplayerHostService } from '../services/multiplayer-host.service';
 
 
 @Component({
@@ -36,7 +37,15 @@ export class GamePage implements OnInit {
   dosCI: any = null;
   versionConfig = environment.versionConfig;
 
-  constructor(private loadingController: LoadingController,
+  public isHosting = false;
+  public hostingError = '';
+  public hostRoomId = '';
+  public hostPassword = '';
+  public hostName = '';
+  public isStreaming = false;
+
+  constructor(
+    private loadingController: LoadingController,
     private alertController: AlertController,
     private modalController: ModalController,
     private saveGameService: SaveGameService,
@@ -44,7 +53,9 @@ export class GamePage implements OnInit {
     private storageService: LocalStorageService,
     private emulatorControlService: EmulatorControlService,
     private autoSaverService: AutoSaverService,
-    private layoutHelperService: LayoutHelperService) { }
+    private layoutHelperService: LayoutHelperService,
+    private multiplayerHostService: MultiplayerHostService
+  ) { }
 
   async ngOnInit() {
     const loading = await this.loadingController.create({
@@ -609,6 +620,76 @@ export class GamePage implements OnInit {
       }]
     })
     await alert.present()
+  }
+
+  async promptHostRoom() {
+    const alert = await this.alertController.create({
+      header: 'Criar Sala Multiplayer',
+      inputs: [
+        { name: 'hostName', type: 'text', placeholder: 'Seu nome', value: this.hostName },
+        { name: 'roomId', type: 'text', placeholder: 'ID da sala', value: this.hostRoomId },
+        { name: 'password', type: 'password', placeholder: 'Senha da Sala', value: this.hostPassword },
+      ],
+      buttons: [
+        { text: 'Cancelar', role: 'cancel' },
+        {
+          text: 'Criar',
+          handler: async (data) => {
+            this.hostName = data.hostName;
+            this.hostRoomId = data.roomId;
+            this.hostPassword = data.password;
+            await this.startHosting();
+          }
+        }
+      ]
+    });
+    await alert.present();
+  }
+
+  async startHosting() {
+    this.isHosting = true;
+    this.hostingError = '';
+    const loading = await this.loadingController.create({ message: 'Criando sala e iniciando streaming...' });
+    await loading.present();
+    try {
+      const stream = await this.captureGameCanvasStream();
+      await this.multiplayerHostService.createGameRoom(
+        this.hostName,
+        this.hostRoomId,
+        this.hostPassword,
+        stream
+      );
+      this.isStreaming = true;
+    } catch (err: any) {
+      this.hostingError = err.message || 'Erro ao criar sala.';
+      await this.showErrorAlert(new Error(this.hostingError));
+    } finally {
+      this.isHosting = false;
+      await loading.dismiss();
+    }
+  }
+
+  async stopHosting() {
+    this.multiplayerHostService.closeGameRoom();
+    this.isStreaming = false;
+    this.hostRoomId = '';
+    this.hostPassword = '';
+    this.hostName = '';
+  }
+
+  async captureGameCanvasStream(): Promise<MediaStream> {
+    // Wait for the canvas to be present in the DOM
+    let canvas: HTMLCanvasElement | null = null;
+    for (let i = 0; i < 20; i++) {
+      canvas = document.getElementsByClassName('emulator-canvas')[0] as HTMLCanvasElement
+      if (canvas) break;
+      await new Promise(res => setTimeout(res, 250));
+    }
+    if (!canvas) throw new Error('Canvas do jogo não encontrada!');
+
+    const canvasStream = (canvas as HTMLCanvasElement).captureStream(30)
+    // Prefer 30fps, fallback to default
+    return canvasStream
   }
 
   private hidePopover() {
