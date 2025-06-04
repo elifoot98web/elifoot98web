@@ -11,6 +11,10 @@ const routes: Routes = [
     loadChildren: () => import('./game/game.module').then( m => m.GamePageModule)
   },
   {
+    path: 'join-game',
+    loadChildren: () => import('./join-game/join-game.module').then( m => m.JoinGamePageModule)
+  },
+  {
     path: '',
     redirectTo: 'main',
     pathMatch: 'full'

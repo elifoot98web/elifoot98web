@@ -1,0 +1,37 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-title>Entrar na Sala</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  <ion-header collapse="condense">
+    <ion-toolbar>
+      <ion-title size="large">Entrar na Sala</ion-title>
+    </ion-toolbar>
+  </ion-header>
+
+  <!-- Show loading spinner while joining -->
+  <ion-spinner *ngIf="joining" name="crescent" style="display:block;margin:2em auto;"></ion-spinner>
+
+  <!-- Show error if joining failed -->
+  <ion-card *ngIf="joinError">
+    <ion-card-content color="danger">{{ joinError }}</ion-card-content>
+  </ion-card>
+
+  <!-- Show host's stream if available -->
+  <div *ngIf="hostStream" style="position:relative; width:100%; max-width:600px; margin:2em auto;">
+    <video #hostVideo autoplay playsinline controls="false" style="width:100%; border-radius:8px; background:#222;"
+      (mousemove)="onPointerMove($event)" (touchmove)="onPointerMove($event)"></video>
+    <!-- You can add a canvas or overlay here for remote cursors -->
+  </div>
+
+  <ion-text color="medium" *ngIf="!hostStream && !joining">
+    Aguarde o vídeo do host aparecer após entrar na sala.
+  </ion-text>
+</ion-content>
+
+<!-- Video stream binding logic -->
+<script>
+  // This script block is for illustration. In Angular, use ngAfterViewInit in the TS file to bind hostStream to the video element.
+</script>

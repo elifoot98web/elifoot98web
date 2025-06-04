@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { DosCI } from '../models/jsdos';
 import { EMULATOR_RAM_SIZE, Endianness, MEMORY_SEARCH_PARAMS } from '../models/constants';
-import { DataType, SavedCheat, SearchState } from '../models/omatic-models';
+import { DataType, SavedCheat, SearchState } from '../models/omatic.models';
 
 @Injectable({
   providedIn: 'root'

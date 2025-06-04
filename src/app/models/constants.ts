@@ -70,3 +70,14 @@ export const MEMORY_SEARCH_PARAMS = {
   CHUNK_SIZE: 0x100000, // 1MB
   MAX_RESULTS: 10000,
 }
+
+export const MULTIPLAYER = {
+  APP_ID: 'br.com.elifoot98.multiplayer',
+  EVENTS: {
+    PLAYER_IDENT: 'playerIdent',
+    PLAYER_POINTER: 'playerPointer',
+    PLAYER_LIST: 'playerList',
+    HOST_CLAIM: 'hostClaim',
+  },
+  HOST_CLAIM_TIMEOUT: 5000, // 5 seconds
+}

@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { AlertController, ModalController } from '@ionic/angular';
 import { DosCI } from 'src/app/models/jsdos';
-import { SavedCheat, SearchState } from 'src/app/models/omatic-models';
+import { SavedCheat, SearchState } from 'src/app/models/omatic.models';
 import { CheatOmaticService } from 'src/app/services/cheat-omatic.service';
 import { LayoutHelperService } from 'src/app/services/layout-helper.service';
 
