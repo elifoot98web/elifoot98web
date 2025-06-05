@@ -17,6 +17,18 @@ export interface PlayerCursorMessage {
     name: string;
 }
 
+export interface MultiplayerChatMessage {
+    [key: string]: string | number;
+    id: string; // unique id for message
+    senderId: string;
+    senderName: string;
+    text: string;
+}
+
+export interface MultiplayerChatMessageWithTimestamp extends MultiplayerChatMessage {
+    timestamp: number; // timestamp of the received message
+}
+
 export enum GuestGameState {
     NOT_IN_ROOM,
     JOINING_ROOM,

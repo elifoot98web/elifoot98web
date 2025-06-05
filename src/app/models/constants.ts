@@ -78,6 +78,7 @@ export const MULTIPLAYER = {
     PLAYER_POINTER: 'Pointer',
     PLAYER_LIST: 'pList',
     HOST_CLAIM: 'hostClaim',
+    CHAT_MESSAGE: 'chatMessage',
   },
   HOST_CLAIM_TIMEOUT: 5000, // 5 seconds
 }
