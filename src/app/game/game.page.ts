@@ -803,6 +803,7 @@ export class GamePage implements OnInit, OnDestroy {
   }
 
   private renderCursors(cursors: { [peerId: string]: PlayerCursorMessage }) {
+      // TODO: centralize this logic in a service and use it in both host and guest pages
       const canvas = document.querySelector('#cursors-overlay') as HTMLElement;
       if (!canvas) return;
       this.syncOverlayWithGameCanvas();

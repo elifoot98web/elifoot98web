@@ -137,6 +137,7 @@ export class JoinGamePage implements AfterViewInit, OnDestroy {
 
   // Render cursors based on the current state
   private renderCursors(cursors: { [peerId: string]: PlayerCursorMessage }) {
+    // TODO: centralize this logic in a service and use it in both host and guest pages
     const canvas = document.querySelector('#cursors-overlay') as HTMLElement;
     if (!canvas) return;
     this.syncOverlayWithVideo();
