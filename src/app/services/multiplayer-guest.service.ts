@@ -1,7 +1,8 @@
 import { Injectable } from '@angular/core';
-import { BaseRoomConfig, joinRoom, Room } from 'trystero';
+import { BaseRoomConfig, joinRoom, Room, selfId } from 'trystero';
 import { MULTIPLAYER } from '../models/constants';
 import { PlayerCursorMessage, PlayerListMessage } from '../models/multiplayer.models';
+import { MultiplayerCursorService } from './multiplayer-cursor.service';
 
 /**
  * MultiplayerGuestService manages the logic for joining a multiplayer game as a guest.
@@ -23,7 +24,7 @@ export class MultiplayerGuestService {
   /** Listener for host stream updates */
   private hostStreamListener: ((stream: MediaStream) => void) = () => {};
 
-  constructor() { }
+  constructor(private multiplayerCursorService: MultiplayerCursorService) { }
 
   /**
    * Returns the current list of players as an array of objects with peerId and playerName.
@@ -33,13 +34,6 @@ export class MultiplayerGuestService {
       peerId,
       playerName
     }));
-  }
-
-  /**
-   * Returns the host's stream, if available.
-   */
-  getHostStream(): MediaStream | undefined {
-    return this.hostStream;
   }
 
   /**
@@ -84,7 +78,17 @@ export class MultiplayerGuestService {
     this.players = {};
     this.hostStream = undefined;
     this.playerName = 'Jogador';
+    this.multiplayerCursorService.clear();
     console.log('Left game room and cleaned up resources.');
+  }
+
+  /**
+   * Sends a player pointer (cursor) message to other peers.
+   * @param cursor The cursor message to send
+   */
+  sendPlayerPointer(cursor: PlayerCursorMessage) {
+    if (!this.room) return;
+    this.multiplayerCursorService.sendLocalCursor(cursor, this.room);
   }
 
   /**
@@ -111,8 +115,7 @@ export class MultiplayerGuestService {
     // Listen for player pointer (cursor) messages from other players
     const [_sendPlayerPointer, receivePlayerPointer] = this.room.makeAction<PlayerCursorMessage>(MULTIPLAYER.EVENTS.PLAYER_POINTER);
     receivePlayerPointer((data, peerId) => {
-      // TODO: Handle displaying the cursor for peerId at (data.x, data.y) with data.color
-      console.log(`Player ${peerId} cursor at (${data.x}, ${data.y}) with color ${data.color}`);
+      this.multiplayerCursorService.updateCursor(peerId, data);
     });
   }
 
@@ -123,15 +126,5 @@ export class MultiplayerGuestService {
     if (!this.room) throw new Error('Room is not initialized');
     const [sendPlayerIdent] = this.room.makeAction<string>(MULTIPLAYER.EVENTS.PLAYER_IDENT);
     sendPlayerIdent(this.playerName);
-  }
-
-  /**
-   * Sends a player pointer (cursor) message to other peers.
-   * @param cursor The cursor message to send
-   */
-  sendPlayerPointer(cursor: PlayerCursorMessage) {
-    if (!this.room) return;
-    const [sendPlayerPointer] = this.room.makeAction<PlayerCursorMessage>(MULTIPLAYER.EVENTS.PLAYER_POINTER);
-    sendPlayerPointer(cursor);
   }
 }

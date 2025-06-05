@@ -1,0 +1,43 @@
+.page-background {
+    background-color: var(--ion-color-primary, #008000);
+}
+
+.full {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.join-game-card {
+    width: 40%;
+    min-width: 200px;
+    max-width: 500px;
+    height: 30%;
+    min-height: 180px;
+    max-height: 200px;
+}
+
+.card-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+}
+
+.mouse-overlay {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    pointer-events: none;
+    z-index: 2;
+    user-select: none;
+}
+
+#stream-target {
+    cursor: none;
+    width: 100%;
+    border-radius: 8px;
+    background: #224422
+}

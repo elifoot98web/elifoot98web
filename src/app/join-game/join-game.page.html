@@ -1,34 +1,41 @@
 <ion-header [translucent]="true">
-  <ion-toolbar>
-    <ion-title>Entrar na Sala</ion-title>
+  <ion-toolbar color="tertiary">
+    <ion-title>Multiplayer</ion-title>
+    <ion-buttons slot="end">
+      <ion-button  (click)="showParticipants()">
+        <ion-icon name="people-outline"></ion-icon>
+      </ion-button>
+    </ion-buttons>
   </ion-toolbar>
 </ion-header>
 
-<ion-content [fullscreen]="true">
-  <ion-header collapse="condense">
-    <ion-toolbar>
-      <ion-title size="large">Entrar na Sala</ion-title>
-    </ion-toolbar>
-  </ion-header>
+<ion-content [fullscreen]="true" color="primary" class="page-background ion-align-items-center ion-justify-content-center">
 
-  <!-- Show loading spinner while joining -->
-  <ion-spinner *ngIf="joining" name="crescent" style="display:block;margin:2em auto;"></ion-spinner>
+  <!-- Join button -->
+  <div *ngIf="gameState === GuestGameState.NOT_IN_ROOM" class="card-container ion-padding ion-text-center">
+    <ion-card class="join-game-card">
+      <ion-card-content class="ion-text-center">
+        <ion-button (click)="promptJoinInfo()">
+          Entrar em um jogo Multiplayer
+        </ion-button>
+      </ion-card-content>
+    </ion-card>
+  </div>
 
-  <!-- Show error if joining failed -->
+  <!-- Error Container -->
   <ion-card *ngIf="joinError">
     <ion-card-content color="danger">{{ joinError }}</ion-card-content>
   </ion-card>
-
-  <!-- Show host's stream if available -->
-  <div [ngClass]="{'ion-hide': !hostStream}" style="position:relative; width:100%; max-width:600px; margin:2em auto;">
-    <video id="stream-container" autoplay playsinline controls="false" style="width:100%; border-radius:8px; background:#222;"
+  
+  <!-- Game stream -->
+  <div [ngClass]="{'ion-hide': gameState !== GuestGameState.IN_ROOM }" class="ion-padding full">
+    <div id="cursors-overlay" class="mouse-overlay"></div>
+    <video id="stream-target" autoplay playsinline style="width:100%; border-radius:8px; background:#222;"
       (mousemove)="onPointerMove($event)" (touchmove)="onPointerMove($event)"></video>
     <!-- You can add a canvas or overlay here for remote cursors -->
   </div>
 
-  <ion-text color="medium" *ngIf="!hostStream && !joining">
-    Aguarde o vídeo do host aparecer após entrar na sala.
-  </ion-text>
+
 </ion-content>
 
 <!-- Video stream binding logic -->

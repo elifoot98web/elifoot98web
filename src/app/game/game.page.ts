@@ -628,7 +628,7 @@ export class GamePage implements OnInit {
       inputs: [
         { name: 'hostName', type: 'text', placeholder: 'Seu nome', value: this.hostName },
         { name: 'roomId', type: 'text', placeholder: 'ID da sala', value: this.hostRoomId },
-        { name: 'password', type: 'password', placeholder: 'Senha da Sala', value: this.hostPassword },
+        { name: 'password', type: 'text', placeholder: 'Senha da Sala', value: this.hostPassword },
       ],
       buttons: [
         { text: 'Cancelar', role: 'cancel' },
