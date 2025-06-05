@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild } from '@angular/core';
+import { Component, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { AlertController, LoadingController, ModalController } from '@ionic/angular';
 import { SaveGameService } from '../services/save-game.service';
 import { LocalStorageService } from '../services/local-storage.service';
@@ -15,6 +15,9 @@ import { LayoutHelperService } from '../services/layout-helper.service';
 import { AboutComponent } from './components/about/about.component';
 import { OmaticModalComponent } from './components/omatic-modal/omatic-modal.component';
 import { MultiplayerHostService } from '../services/multiplayer-host.service';
+import { Subscription } from 'rxjs';
+import { PlayerCursorMessage } from '../models/multiplayer.models';
+import { MultiplayerCursorService } from '../services/multiplayer-cursor.service';
 
 
 @Component({
@@ -23,7 +26,7 @@ import { MultiplayerHostService } from '../services/multiplayer-host.service';
     styleUrls: ['./game.page.scss'],
     standalone: false
 })
-export class GamePage implements OnInit {
+export class GamePage implements OnInit, OnDestroy {
   EmulatorKeyCode = EmulatorKeyCode
   @ViewChild('popover') popover: any;
   // UI state properties
@@ -36,13 +39,16 @@ export class GamePage implements OnInit {
   debugMode = false
   dosCI: any = null;
   versionConfig = environment.versionConfig;
-
-  public isHosting = false;
-  public hostingError = '';
-  public hostRoomId = '';
-  public hostPassword = '';
-  public hostName = '';
-  public isStreaming = false;
+  
+  
+  // multiplayer properties
+  isHosting = false;
+  hostRoomId = '';
+  hostPassword = '';
+  hostName = '';
+  private cursorSubscription?: Subscription;
+  private hostingError = '';
+  private isStreaming = false;
 
   constructor(
     private loadingController: LoadingController,
@@ -54,7 +60,8 @@ export class GamePage implements OnInit {
     private emulatorControlService: EmulatorControlService,
     private autoSaverService: AutoSaverService,
     private layoutHelperService: LayoutHelperService,
-    private multiplayerHostService: MultiplayerHostService
+    private multiplayerHostService: MultiplayerHostService,
+    private multiplayerCursorService: MultiplayerCursorService
   ) { }
 
   async ngOnInit() {
@@ -107,6 +114,10 @@ export class GamePage implements OnInit {
         await alert.present();
       }
     }
+  }
+
+  ngOnDestroy(): void {
+    this.cursorSubscription?.unsubscribe();
   }
 
   async loadGame(): Promise<void> {
@@ -660,6 +671,11 @@ export class GamePage implements OnInit {
         stream
       );
       this.isStreaming = true;
+      // Subscribe to cursor updates
+      this.prepareRemoteCursorContainer();
+      this.cursorSubscription = this.multiplayerCursorService.getCursorsObservable().subscribe(cursors => {
+        this.renderCursors(cursors);
+      });
     } catch (err: any) {
       this.hostingError = err.message || 'Erro ao criar sala.';
       await this.showErrorAlert(new Error(this.hostingError));
@@ -768,4 +784,75 @@ export class GamePage implements OnInit {
     }
     
   }
+
+  private prepareRemoteCursorContainer() {
+    const gameContainer = document.querySelector('#game-container') as HTMLElement;
+    if (!gameContainer) {
+      console.warn('Game container not found for cursor overlay');
+      return;
+    }
+
+    // Create the cursor overlay if it doesn't exist
+    let cursorOverlay = document.querySelector('#cursors-overlay') as HTMLElement;
+    if (!cursorOverlay) {
+      cursorOverlay = document.createElement('div');
+      cursorOverlay.id = 'cursors-overlay';
+      cursorOverlay.className = 'pointer-overlay';
+      gameContainer.appendChild(cursorOverlay);
+    }
+  }
+
+  private renderCursors(cursors: { [peerId: string]: PlayerCursorMessage }) {
+      const canvas = document.querySelector('#cursors-overlay') as HTMLElement;
+      if (!canvas) return;
+      this.syncOverlayWithGameCanvas();
+  
+      // Keep a map of cursor elements by peerId
+      if (!(canvas as any)._cursorElements) {
+        (canvas as any)._cursorElements = {};
+      }
+      const cursorElements: { [peerId: string]: HTMLElement } = (canvas as any)._cursorElements;
+  
+      // Remove elements for peers that no longer exist
+      Object.keys(cursorElements).forEach(peerId => {
+        if (!(peerId in cursors)) {
+          canvas.removeChild(cursorElements[peerId]);
+          delete cursorElements[peerId];
+        }
+      });
+  
+      Object.entries(cursors).forEach(([peerId, cursor]) => {
+        let el = cursorElements[peerId];
+        if (!el) {
+          el = document.createElement('div');
+          const img = document.createElement('img');
+          const txt = document.createElement('p');
+          el.style.position = 'absolute';
+          img.src = 'assets/cursor2.png';
+          txt.innerText = peerId.slice(0, 4);
+          el.appendChild(img);
+          el.appendChild(txt);
+          canvas.appendChild(el);
+          cursorElements[peerId] = el;
+        }
+        // Position
+        const canvasWidth = canvas.offsetWidth;
+        const canvasHeight = canvas.offsetHeight;
+        el.style.left = (cursor.x * canvasWidth) + 'px';
+        el.style.top = (cursor.y * canvasHeight) + 'px';
+      });
+    }
+  
+    private syncOverlayWithGameCanvas() {
+      const gameCanvas = document.querySelector('.emulator-canvas') as HTMLElement;
+      const overlay = document.querySelector('#cursors-overlay') as HTMLElement;
+      if (gameCanvas && overlay) {
+        overlay.style.position = 'absolute';
+        overlay.style.pointerEvents = 'none';
+        overlay.style.left = gameCanvas.offsetLeft + 'px';
+        overlay.style.top = gameCanvas.offsetTop + 'px';
+        overlay.style.width = gameCanvas.offsetWidth + 'px';
+        overlay.style.height = gameCanvas.offsetHeight + 'px';
+      }
+    }
 }

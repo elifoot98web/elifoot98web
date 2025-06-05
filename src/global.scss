@@ -65,6 +65,20 @@ canvas {
     user-select: none;
 }
 
+.pointer-overlay {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    pointer-events: none;
+    z-index: 2;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
 @media screen and (max-width: 599px), screen and (max-height: 700px) {
     .hidden-mob {
       display: none;

@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { BaseRoomConfig, joinRoom, Room, selfId } from 'trystero';
 import { MULTIPLAYER } from '../models/constants';
 import { HostClaimMessage, PlayerCursorMessage, PlayerListMessage } from '../models/multiplayer.models';
+import { MultiplayerCursorService } from './multiplayer-cursor.service';
 
 /**
  * MultiplayerHostService manages the lifecycle and logic for hosting a multiplayer game room.
@@ -18,7 +19,7 @@ export class MultiplayerHostService {
   /** Map of peerId to player name for all connected players (excluding host) */
   private players: { [peerId: string]: string } = {};
 
-  constructor() { }
+  constructor(private multiplayerCursorService: MultiplayerCursorService) { }
 
   /**
    * Returns the current list of players as an array of objects with peerId and playerName.
@@ -65,6 +66,7 @@ export class MultiplayerHostService {
     this.room = undefined;
     this.hostName = 'Game Host';
     this.players = {};
+    this.multiplayerCursorService.clear(); // Clear any cursor data
     console.log('Game room closed and resources cleaned up.');
   }
 
@@ -112,10 +114,7 @@ export class MultiplayerHostService {
 
     const [_sendPlayerPointer, receivePlayerPointer]  = this.room.makeAction<PlayerCursorMessage>(MULTIPLAYER.EVENTS.PLAYER_POINTER);
     receivePlayerPointer((data, peerId) => {
-      console.log(`Player pointer received from ${peerId}:`, data);
-      // TODO: Here we'll handle player cursor updates, e.g., updating a UI element
-      // For now, we just log it
-      console.log(`Player ${peerId} cursor at (${data.x}, ${data.y}) with color ${data.color}`);
+      this.multiplayerCursorService.updateCursor(peerId, data);
     });
   }
 

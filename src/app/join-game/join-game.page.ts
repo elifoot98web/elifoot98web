@@ -3,7 +3,6 @@ import { AlertController, LoadingController } from '@ionic/angular';
 import { MultiplayerGuestService } from '../services/multiplayer-guest.service';
 import { MultiplayerCursorService } from '../services/multiplayer-cursor.service';
 import { GuestGameState, PlayerCursorMessage } from '../models/multiplayer.models';
-import { selfId } from 'trystero';
 import { Subscription } from 'rxjs';
 
 @Component({
@@ -126,7 +125,6 @@ export class JoinGamePage implements AfterViewInit, OnDestroy {
     } else if (event instanceof TouchEvent && event.touches.length > 0) {
       // TODO: validate if coordinates match the same values of event.offsetX/Y
       // when using touch events, we need to calculate the position relative to the target element
-      console.log('Touch event detected', {event});
       const rect = (event.target as HTMLElement).getBoundingClientRect();
       x = (event.touches[0].clientX - rect.left) / rect.width;
       y = (event.touches[0].clientY - rect.top) / rect.height;
