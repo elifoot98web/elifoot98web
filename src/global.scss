@@ -79,6 +79,16 @@ canvas {
     -ms-user-select: none;
 }
 
+.pointer-overlay-cursor-label {
+    background: #fffa;
+    padding: 4px;
+    border-radius: 8px;
+    margin: 4px 2px;
+    color: black;
+    font-weight: bold;
+    font-family: monospace;
+}
+
 @media screen and (max-width: 599px), screen and (max-height: 700px) {
     .hidden-mob {
       display: none;

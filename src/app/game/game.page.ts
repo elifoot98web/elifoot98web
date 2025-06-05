@@ -16,7 +16,7 @@ import { AboutComponent } from './components/about/about.component';
 import { OmaticModalComponent } from './components/omatic-modal/omatic-modal.component';
 import { MultiplayerHostService } from '../services/multiplayer-host.service';
 import { Subscription } from 'rxjs';
-import { PlayerCursorMessage } from '../models/multiplayer.models';
+import { Color, PlayerCursorMessage, Solver } from '../models/multiplayer.models';
 import { MultiplayerCursorService } from '../services/multiplayer-cursor.service';
 
 
@@ -829,7 +829,13 @@ export class GamePage implements OnInit, OnDestroy {
           const txt = document.createElement('p');
           el.style.position = 'absolute';
           img.src = 'assets/cursor2.png';
+          const color = new Color(cursor.color);
+          const solver = new Solver(color);
+          const result = solver.solve();
+          img.style = result.filter;
+          console.log(`Cursor color: ${cursor.color}, Filter: ${result.filter}`);
           txt.innerText = cursor.name || peerId.slice(0, 6);
+          txt.className = 'pointer-overlay-cursor-label'
           el.appendChild(img);
           el.appendChild(txt);
           canvas.appendChild(el);

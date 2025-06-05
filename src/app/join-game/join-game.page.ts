@@ -2,7 +2,7 @@ import { Component, AfterViewInit, OnDestroy } from '@angular/core';
 import { AlertController, LoadingController } from '@ionic/angular';
 import { MultiplayerGuestService } from '../services/multiplayer-guest.service';
 import { MultiplayerCursorService } from '../services/multiplayer-cursor.service';
-import { GuestGameState, PlayerCursorMessage } from '../models/multiplayer.models';
+import { Color, GuestGameState, PlayerCursorMessage, Solver } from '../models/multiplayer.models';
 import { Subscription } from 'rxjs';
 import { selfId } from 'trystero';
 
@@ -164,7 +164,12 @@ export class JoinGamePage implements AfterViewInit, OnDestroy {
         el.className = `cursor${peerId === 'self' ? ' self' : ''}`;
         el.style.position = 'absolute';
         img.src = 'assets/cursor2.png';
+        const color = new Color(cursor.color);
+        const solver = new Solver(color);
+        const result = solver.solve();
+        img.style = result.filter;
         txt.innerText = peerId === selfId ? 'Você' : cursor.name || peerId.slice(0, 6);
+        txt.className = 'pointer-overlay-cursor-label'
         el.appendChild(img);
         el.appendChild(txt);
         canvas.appendChild(el);

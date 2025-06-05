@@ -29,7 +29,23 @@ export class Color {
     g: number;
     b: number;
 
-    constructor(r: number, g: number, b: number) {
+    constructor(hexString: string) {
+        if (hexString.startsWith('#')) {
+            hexString = hexString.slice(1);
+        }
+        if (hexString.length === 3) {
+            hexString = hexString.split('').map(c => c + c).join('');
+        } else if (hexString.length !== 6) {
+            throw new Error('Invalid hex color string');
+        }
+        
+        const r = parseInt(hexString.slice(0, 2), 16);
+        const g = parseInt(hexString.slice(2, 4), 16);
+        const b = parseInt(hexString.slice(4, 6), 16);
+        if (isNaN(r) || isNaN(g) || isNaN(b)) {
+            throw new Error('Invalid hex color string');
+        }
+
         this.r = this.clamp(r);
         this.g = this.clamp(g);
         this.b = this.clamp(b);
@@ -166,7 +182,7 @@ export class Solver {
     constructor(target: Color) {
         this.target = target;
         this.targetHSL = target.hsl();
-        this.reusedColor = new Color(0, 0, 0); // Object pool
+        this.reusedColor = new Color("#000"); // Object pool
     }
 
     solve(): { values: number[]; loss: number; filter: string } {
