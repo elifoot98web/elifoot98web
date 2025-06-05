@@ -4,6 +4,7 @@ import { MultiplayerGuestService } from '../services/multiplayer-guest.service';
 import { MultiplayerCursorService } from '../services/multiplayer-cursor.service';
 import { GuestGameState, PlayerCursorMessage } from '../models/multiplayer.models';
 import { Subscription } from 'rxjs';
+import { selfId } from 'trystero';
 
 @Component({
   selector: 'app-join-game',
@@ -15,6 +16,8 @@ export class JoinGamePage implements AfterViewInit, OnDestroy {
   private playerName = '';
   private roomId = '';
   private password = '';
+  private cursorColor = '#aa00aa'; // Default cursor color
+
   GuestGameState = GuestGameState;
   joinError = '';
 
@@ -129,7 +132,7 @@ export class JoinGamePage implements AfterViewInit, OnDestroy {
       x = (event.touches[0].clientX - rect.left) / rect.width;
       y = (event.touches[0].clientY - rect.top) / rect.height;
     }
-    this.multiplayerGuestService.sendPlayerPointer({ x, y, color: '#00f' });
+    this.multiplayerGuestService.sendPlayerPointer({ x, y, color: this.cursorColor, name: this.playerName });
   }
 
   // Render cursors based on the current state
@@ -161,7 +164,7 @@ export class JoinGamePage implements AfterViewInit, OnDestroy {
         el.className = `cursor${peerId === 'self' ? ' self' : ''}`;
         el.style.position = 'absolute';
         img.src = 'assets/cursor2.png';
-        txt.innerText = peerId === 'self' ? 'Você' : peerId.slice(0, 4);
+        txt.innerText = peerId === selfId ? 'Você' : cursor.name || peerId.slice(0, 6);
         el.appendChild(img);
         el.appendChild(txt);
         canvas.appendChild(el);

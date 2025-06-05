@@ -829,7 +829,7 @@ export class GamePage implements OnInit, OnDestroy {
           const txt = document.createElement('p');
           el.style.position = 'absolute';
           img.src = 'assets/cursor2.png';
-          txt.innerText = peerId.slice(0, 4);
+          txt.innerText = cursor.name || peerId.slice(0, 6);
           el.appendChild(img);
           el.appendChild(txt);
           canvas.appendChild(el);

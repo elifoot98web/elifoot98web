@@ -14,6 +14,7 @@ export interface PlayerCursorMessage {
     x: number;
     y: number;
     color: string;
+    name: string;
 }
 
 export enum GuestGameState {
