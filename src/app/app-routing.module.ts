@@ -4,15 +4,15 @@ import { PreloadAllModules, RouterModule, Routes } from '@angular/router';
 const routes: Routes = [
   {
     path: 'main',
-    loadChildren: () => import('./main/main.module').then( m => m.MainPageModule)
+    loadChildren: () => import('./pages/main/main.module').then( m => m.MainPageModule)
   },
   {
     path: 'game',
-    loadChildren: () => import('./game/game.module').then( m => m.GamePageModule)
+    loadChildren: () => import('./pages/game/game.module').then( m => m.GamePageModule)
   },
   {
     path: 'join-game',
-    loadChildren: () => import('./join-game/join-game.module').then( m => m.JoinGamePageModule)
+    loadChildren: () => import('./pages/join-game/join-game.module').then( m => m.JoinGamePageModule)
   },
   {
     path: '',

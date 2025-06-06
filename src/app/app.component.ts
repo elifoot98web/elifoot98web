@@ -1,9 +1,8 @@
-import { Component, HostListener } from '@angular/core';
+import { Component } from '@angular/core';
 import { SwUpdate } from '@angular/service-worker';
 import { AlertController, Platform } from '@ionic/angular';
-import { LocalStorageService } from './services/local-storage.service';
-import { STORAGE_KEY } from './models/constants';
-import { LayoutHelperService } from './services/layout-helper.service';
+import { STORAGE_KEY } from './core/models/constants';
+import { LayoutHelperService, LocalStorageService } from './core/services/shared';
 
 @Component({
     selector: 'app-root',
