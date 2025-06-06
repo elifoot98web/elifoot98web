@@ -1,13 +1,9 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-
 import { IonicModule } from '@ionic/angular';
-
 import { JoinGamePageRoutingModule } from './join-game-routing.module';
-
 import { JoinGamePage } from './join-game.page';
-import { MultiplayerGuestService } from '../../core/services/multiplayer/multiplayer-guest.service';
 
 @NgModule({
   imports: [
@@ -16,7 +12,6 @@ import { MultiplayerGuestService } from '../../core/services/multiplayer/multipl
     IonicModule,
     JoinGamePageRoutingModule
   ],
-  declarations: [JoinGamePage],
-  providers: [MultiplayerGuestService]
+  declarations: [JoinGamePage]
 })
 export class JoinGamePageModule {}
