@@ -2,9 +2,8 @@ import { Component, AfterViewInit, OnDestroy } from '@angular/core';
 import { AlertController, LoadingController } from '@ionic/angular';
 import { GuestGameState, PlayerCursorMessage } from '../../core/models/multiplayer';
 import { Subscription } from 'rxjs';
-import { selfId } from 'trystero';
 import { MultiplayerCursorService, MultiplayerGuestService } from '../../core/services/multiplayer';
-import { ColorHelper } from '../../core/helpers/color.helper';
+import { CursorRendererHelper } from 'src/app/core/helpers/cursor-renderer.helper';
 
 @Component({
   selector: 'app-join-game',
@@ -135,51 +134,12 @@ export class JoinGamePage implements AfterViewInit, OnDestroy {
     this.multiplayerGuestService.sendPlayerPointer({ x, y, color: this.cursorColor, name: this.playerName });
   }
 
-  // Render cursors based on the current state
   private renderCursors(cursors: { [peerId: string]: PlayerCursorMessage }) {
-    // TODO: centralize this logic in a service and use it in both host and guest pages
     const canvas = document.querySelector('#cursors-overlay') as HTMLElement;
     if (!canvas) return;
     this.syncOverlayWithVideo();
 
-    // Keep a map of cursor elements by peerId
-    if (!(canvas as any)._cursorElements) {
-      (canvas as any)._cursorElements = {};
-    }
-    const cursorElements: { [peerId: string]: HTMLElement } = (canvas as any)._cursorElements;
-
-    // Remove elements for peers that no longer exist
-    Object.keys(cursorElements).forEach(peerId => {
-      if (!(peerId in cursors)) {
-        canvas.removeChild(cursorElements[peerId]);
-        delete cursorElements[peerId];
-      }
-    });
-
-    Object.entries(cursors).forEach(([peerId, cursor]) => {
-      let el = cursorElements[peerId];
-      if (!el) {
-        el = document.createElement('div');
-        const img = document.createElement('img');
-        const txt = document.createElement('p');
-        el.className = `cursor${peerId === 'self' ? ' self' : ''}`;
-        el.style.position = 'absolute';
-        img.src = 'assets/cursor2.png';
-        const filter = ColorHelper.getCSSFilterFromColor(cursor.color)
-        img.style = filter;
-        txt.innerText = peerId === selfId ? 'Você' : cursor.name || peerId.slice(0, 6);
-        txt.className = 'pointer-overlay-cursor-label'
-        el.appendChild(img);
-        el.appendChild(txt);
-        canvas.appendChild(el);
-        cursorElements[peerId] = el;
-      }
-      // Position
-      const canvasWidth = canvas.offsetWidth;
-      const canvasHeight = canvas.offsetHeight;
-      el.style.left = (cursor.x * canvasWidth) + 'px';
-      el.style.top = (cursor.y * canvasHeight) + 'px';
-    });
+    CursorRendererHelper.renderCursors(canvas, cursors);
   }
 
   private syncOverlayWithVideo() {

@@ -9,10 +9,10 @@ import { OmaticModalComponent } from './components/omatic-modal/omatic-modal.com
 import { Subscription } from 'rxjs';
 import { EmulatorKeyCode } from '../../core/models/game';
 import { PlayerCursorMessage } from '../../core/models/multiplayer';
-import { ColorHelper } from '../../core/helpers/color.helper';
 import { AutoSaverService, EmulatorControlService, PatchService, SaveGameService } from '../../core/services/game';
 import { LayoutHelperService, LocalStorageService } from '../../core/services/shared';
 import { MultiplayerCursorService, MultiplayerHostService } from '../../core/services/multiplayer';
+import { CursorRendererHelper } from 'src/app/core/helpers/cursor-renderer.helper';
 
 
 @Component({
@@ -34,7 +34,7 @@ export class GamePage implements OnInit, OnDestroy {
   debugMode = false
   dosCI: any = null;
   versionConfig = environment.versionConfig;
-  
+
   // multiplayer properties
   isHosting = false;
   hostRoomId = '';
@@ -207,15 +207,15 @@ export class GamePage implements OnInit, OnDestroy {
     const alert = await this.alertController.create({
       header: 'Informações Importantes',
       message:
-      'Este é um projeto gratuito e de código aberto, sem cobranças ou coleta de dados dos usuários.\n' +
-      '\nPara aprender a jogar, consulte o FAQ e o Manual do Usuário disponíveis no menu de opções.\n' +
-      '\nSobre os jogos salvos:\n' +
-      '- Os dados são armazenados localmente no navegador. Se você estiver usando uma janela anônima ou se os dados de navegação forem apagados, os jogos salvos serão perdidos.\n' +
-      '\n' +
-      'Dicas de uso:\n' +
-      '- No computador, pressione ESC para liberar o mouse da janela do jogo.\n' +
-      '- No celular, mova o cursor deslizando o dedo na tela, como em um touchpad de notebook.\n' +
-      '\nAproveite para reviver a nostalgia do clássico Elifoot 98 diretamente no seu navegador!\n',
+        'Este é um projeto gratuito e de código aberto, sem cobranças ou coleta de dados dos usuários.\n' +
+        '\nPara aprender a jogar, consulte o FAQ e o Manual do Usuário disponíveis no menu de opções.\n' +
+        '\nSobre os jogos salvos:\n' +
+        '- Os dados são armazenados localmente no navegador. Se você estiver usando uma janela anônima ou se os dados de navegação forem apagados, os jogos salvos serão perdidos.\n' +
+        '\n' +
+        'Dicas de uso:\n' +
+        '- No computador, pressione ESC para liberar o mouse da janela do jogo.\n' +
+        '- No celular, mova o cursor deslizando o dedo na tela, como em um touchpad de notebook.\n' +
+        '\nAproveite para reviver a nostalgia do clássico Elifoot 98 diretamente no seu navegador!\n',
       backdropDismiss: false,
       cssClass: 'alert-whitespace wide-alert',
       buttons: [
@@ -231,13 +231,13 @@ export class GamePage implements OnInit, OnDestroy {
         }
       ],
       inputs: [{
-      type: 'checkbox',
-      label: 'Não mostrar novamente',
-      value: 'showTutorial',
-      checked: hideTutorial,
-      handler: async (e) => {
-        await this.storageService.set(STORAGE_KEY.HIDE_TUTORIAL, e.checked)
-      }
+        type: 'checkbox',
+        label: 'Não mostrar novamente',
+        value: 'showTutorial',
+        checked: hideTutorial,
+        handler: async (e) => {
+          await this.storageService.set(STORAGE_KEY.HIDE_TUTORIAL, e.checked)
+        }
       }]
     });
     await alert.present();
@@ -371,7 +371,7 @@ export class GamePage implements OnInit, OnDestroy {
     console.log(`autosave: ${!autoSaveDisabled ? 'on' : 'off'}`)
     await this.storageService.set<boolean>(STORAGE_KEY.DISABLE_AUTO_SAVE, autoSaveDisabled)
 
-    if(autoSaveDisabled) {
+    if (autoSaveDisabled) {
       this.autoSaverService.stop()
     } else {
       this.autoSaverService.start(this.dosCI)
@@ -380,7 +380,7 @@ export class GamePage implements OnInit, OnDestroy {
 
   async setupPeriodicSave() {
     const periodicSave = await this.storageService.get<boolean>(STORAGE_KEY.PERIODIC_SAVE)
-    if(periodicSave) {
+    if (periodicSave) {
       this.togglePeriodicSave({ detail: { checked: periodicSave } })
     }
   }
@@ -389,7 +389,7 @@ export class GamePage implements OnInit, OnDestroy {
     const checked = e.detail.checked
     this.periodicSave = checked
     await this.storageService.set<boolean>(STORAGE_KEY.PERIODIC_SAVE, this.periodicSave)
-    if(checked) {
+    if (checked) {
       this.autoSaverService.startPeriodicSave()
     } else {
       this.autoSaverService.stopPeriodicSave()
@@ -522,7 +522,6 @@ export class GamePage implements OnInit, OnDestroy {
       await loading.dismiss()
       await this.showErrorAlert(e)
     }
-    
   }
 
   async onPatchFileSelected(e: any) {
@@ -753,7 +752,7 @@ export class GamePage implements OnInit, OnDestroy {
       backdropDismiss: false
     });
     await loading.present();
-    
+
     try {
       await this.patchService.applySaveFilePatch(this.dosCI, patch)
       await loading.dismiss()
@@ -776,7 +775,6 @@ export class GamePage implements OnInit, OnDestroy {
       await loading.dismiss()
       await this.showErrorAlert(e)
     }
-    
   }
 
   private prepareRemoteCursorContainer() {
@@ -797,61 +795,24 @@ export class GamePage implements OnInit, OnDestroy {
   }
 
   private renderCursors(cursors: { [peerId: string]: PlayerCursorMessage }) {
-      // TODO: centralize this logic in a service and use it in both host and guest pages
-      const canvas = document.querySelector('#cursors-overlay') as HTMLElement;
-      if (!canvas) return;
-      this.syncOverlayWithGameCanvas();
-  
-      // Keep a map of cursor elements by peerId
-      if (!(canvas as any)._cursorElements) {
-        (canvas as any)._cursorElements = {};
-      }
-      const cursorElements: { [peerId: string]: HTMLElement } = (canvas as any)._cursorElements;
-  
-      // Remove elements for peers that no longer exist
-      Object.keys(cursorElements).forEach(peerId => {
-        if (!(peerId in cursors)) {
-          canvas.removeChild(cursorElements[peerId]);
-          delete cursorElements[peerId];
-        }
-      });
-  
-      Object.entries(cursors).forEach(([peerId, cursor]) => {
-        let el = cursorElements[peerId];
-        if (!el) {
-          el = document.createElement('div');
-          const img = document.createElement('img');
-          const txt = document.createElement('p');
-          el.style.position = 'absolute';
-          img.src = 'assets/cursor2.png';
-          const cssFilterString = ColorHelper.getCSSFilterFromColor(cursor.color);
-          img.style = cssFilterString;
-          console.log(`Cursor color: ${cursor.color}, Filter: ${cssFilterString}`);
-          txt.innerText = cursor.name || peerId.slice(0, 6);
-          txt.className = 'pointer-overlay-cursor-label'
-          el.appendChild(img);
-          el.appendChild(txt);
-          canvas.appendChild(el);
-          cursorElements[peerId] = el;
-        }
-        // Position
-        const canvasWidth = canvas.offsetWidth;
-        const canvasHeight = canvas.offsetHeight;
-        el.style.left = (cursor.x * canvasWidth) + 'px';
-        el.style.top = (cursor.y * canvasHeight) + 'px';
-      });
+    // TODO: centralize this logic in a service and use it in both host and guest pages
+    const canvas = document.querySelector('#cursors-overlay') as HTMLElement;
+    if (!canvas) return;
+    this.syncOverlayWithGameCanvas();
+
+    CursorRendererHelper.renderCursors(canvas, cursors);
+  }
+
+  private syncOverlayWithGameCanvas() {
+    const gameCanvas = document.querySelector('.emulator-canvas') as HTMLElement;
+    const overlay = document.querySelector('#cursors-overlay') as HTMLElement;
+    if (gameCanvas && overlay) {
+      overlay.style.position = 'absolute';
+      overlay.style.pointerEvents = 'none';
+      overlay.style.left = gameCanvas.offsetLeft + 'px';
+      overlay.style.top = gameCanvas.offsetTop + 'px';
+      overlay.style.width = gameCanvas.offsetWidth + 'px';
+      overlay.style.height = gameCanvas.offsetHeight + 'px';
     }
-  
-    private syncOverlayWithGameCanvas() {
-      const gameCanvas = document.querySelector('.emulator-canvas') as HTMLElement;
-      const overlay = document.querySelector('#cursors-overlay') as HTMLElement;
-      if (gameCanvas && overlay) {
-        overlay.style.position = 'absolute';
-        overlay.style.pointerEvents = 'none';
-        overlay.style.left = gameCanvas.offsetLeft + 'px';
-        overlay.style.top = gameCanvas.offsetTop + 'px';
-        overlay.style.width = gameCanvas.offsetWidth + 'px';
-        overlay.style.height = gameCanvas.offsetHeight + 'px';
-      }
-    }
+  }
 }
