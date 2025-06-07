@@ -11,7 +11,7 @@ import { EmulatorKeyCode } from '../../core/models/game';
 import { PlayerCursorMessage } from '../../core/models/multiplayer';
 import { AutoSaverService, EmulatorControlService, PatchService, SaveGameService } from '../../core/services/game';
 import { LayoutHelperService, LocalStorageService } from '../../core/services/shared';
-import { MultiplayerCursorService, MultiplayerHostService } from '../../core/services/multiplayer';
+import { MultiplayerCursorService, MultiplayerService } from '../../core/services/multiplayer';
 import { CursorRendererHelper } from 'src/app/core/helpers/cursor-renderer.helper';
 
 
@@ -41,7 +41,6 @@ export class GamePage implements OnInit, OnDestroy {
   hostPassword = '';
   hostName = '';
   private cursorSubscription?: Subscription;
-  private hostingError = '';
   private isStreaming = false;
 
   constructor(
@@ -54,7 +53,7 @@ export class GamePage implements OnInit, OnDestroy {
     private emulatorControlService: EmulatorControlService,
     private autoSaverService: AutoSaverService,
     private layoutHelperService: LayoutHelperService,
-    private multiplayerHostService: MultiplayerHostService,
+    private multiplayerService: MultiplayerService,
     private multiplayerCursorService: MultiplayerCursorService
   ) { }
 
@@ -652,26 +651,27 @@ export class GamePage implements OnInit, OnDestroy {
 
   async startHosting() {
     this.isHosting = true;
-    this.hostingError = '';
     const loading = await this.loadingController.create({ message: 'Criando sala e iniciando streaming...' });
     await loading.present();
     try {
       const stream = await this.captureGameCanvasStream();
-      await this.multiplayerHostService.createGameRoom(
+      await this.multiplayerService.hostGameRoom(
         this.hostName,
         this.hostRoomId,
         this.hostPassword,
         stream
       );
+
       this.isStreaming = true;
+
       // Subscribe to cursor updates
       this.prepareRemoteCursorContainer();
       this.cursorSubscription = this.multiplayerCursorService.getCursorsObservable().subscribe(cursors => {
         this.renderCursors(cursors);
       });
     } catch (err: any) {
-      this.hostingError = err.message || 'Erro ao criar sala.';
-      await this.showErrorAlert(new Error(this.hostingError));
+      const errorMsg = err.message || 'Erro ao criar sala.';
+      await this.showErrorAlert(new Error(errorMsg));
     } finally {
       this.isHosting = false;
       await loading.dismiss();
@@ -679,7 +679,8 @@ export class GamePage implements OnInit, OnDestroy {
   }
 
   async stopHosting() {
-    this.multiplayerHostService.closeGameRoom();
+    this.cursorSubscription?.unsubscribe();
+    this.multiplayerService.leaveRoom();
     this.isStreaming = false;
     this.hostRoomId = '';
     this.hostPassword = '';

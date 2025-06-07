@@ -2,7 +2,7 @@
   <ion-toolbar color="tertiary">
     <ion-title>Multiplayer</ion-title>
     <ion-buttons slot="end">
-      <ion-button  (click)="showParticipants()">
+      <ion-button (click)="showParticipants()">
         <ion-icon name="people-outline"></ion-icon>
       </ion-button>
     </ion-buttons>
@@ -12,7 +12,7 @@
 <ion-content [fullscreen]="true" color="primary" class="page-background ion-align-items-center ion-justify-content-center">
 
   <!-- Join button -->
-  <div *ngIf="gameState === GuestGameState.NOT_IN_ROOM" class="card-container ion-padding ion-text-center">
+  <div *ngIf="gameState === GameState.NOT_IN_ROOM" class="card-container ion-padding ion-text-center">
     <ion-card class="join-game-card">
       <ion-card-content class="ion-text-center">
         <ion-button (click)="promptJoinInfo()">
@@ -28,7 +28,7 @@
   </ion-card>
   
   <!-- Game stream -->
-  <div [ngClass]="{'ion-hide': gameState !== GuestGameState.IN_ROOM }" class="ion-padding full">
+  <div [ngClass]="{'ion-hide': gameState !== GameState.IN_ROOM }" class="ion-padding full">
     <div id="cursors-overlay" class="pointer-overlay"></div>
     <video id="stream-target" autoplay playsinline style="width:100%; border-radius:8px; background:#222;"
       (mousemove)="onPointerMove($event)" (touchmove)="onPointerMove($event)"></video>

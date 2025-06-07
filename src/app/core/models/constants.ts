@@ -73,12 +73,15 @@ export const MEMORY_SEARCH_PARAMS = {
 
 export const MULTIPLAYER = {
   APP_ID: 'br.com.elifoot98.multiplayer',
-  EVENTS: {
+  DEFAULT_CURSOR_COLOR: '#aa00aa',
+  EVENTS: { // WARNING: event names must be unique and have AT MOST 12 characters
     PLAYER_IDENT: 'Ident',
     PLAYER_POINTER: 'Pointer',
-    PLAYER_LIST: 'pList',
     HOST_CLAIM: 'hostClaim',
     CHAT_MESSAGE: 'chatMessage',
   },
-  HOST_CLAIM_TIMEOUT: 5000, // 5 seconds
+  HOST_CLAIM_TIMEOUT: 3000, // 3 seconds
+  HOST_CLAIM_INTERVAL: 500, // 500ms
+  PING_TIMEOUT: 5000, // 5 seconds
+  PING_REFRESH_INTERVAL: 10000, // 10 seconds
 }

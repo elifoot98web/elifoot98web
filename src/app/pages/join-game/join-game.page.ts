@@ -1,9 +1,10 @@
 import { Component, AfterViewInit, OnDestroy } from '@angular/core';
 import { AlertController, LoadingController } from '@ionic/angular';
-import { GuestGameState, PlayerCursorMessage } from '../../core/models/multiplayer';
+import { GameState, PlayerCursorMessage } from '../../core/models/multiplayer';
 import { Subscription } from 'rxjs';
-import { MultiplayerCursorService, MultiplayerGuestService } from '../../core/services/multiplayer';
+import { MultiplayerCursorService, MultiplayerService, MultiplayerStreamService } from '../../core/services/multiplayer';
 import { CursorRendererHelper } from 'src/app/core/helpers/cursor-renderer.helper';
+import { MULTIPLAYER } from 'src/app/core/models/constants';
 
 @Component({
   selector: 'app-join-game',
@@ -15,31 +16,26 @@ export class JoinGamePage implements AfterViewInit, OnDestroy {
   private playerName = '';
   private roomId = '';
   private password = '';
-  private cursorColor = '#aa00aa'; // Default cursor color
+  private cursorColor = MULTIPLAYER.DEFAULT_CURSOR_COLOR; // Default cursor color
 
-  GuestGameState = GuestGameState;
+  GameState = GameState;
   joinError = '';
 
-  gameState: GuestGameState = GuestGameState.NOT_IN_ROOM;
-
-  hostStream?: MediaStream;
+  gameState: GameState = GameState.NOT_IN_ROOM;
 
   private cursorSubscription?: Subscription;
 
   constructor(
     private loadingController: LoadingController,
     private alertController: AlertController,
-    private multiplayerGuestService: MultiplayerGuestService,
-    private multiplayerCursorService: MultiplayerCursorService
+    private multiplayerService: MultiplayerService,
+    private multiplayerCursorService: MultiplayerCursorService,
+    private multiplayerStreamService: MultiplayerStreamService
   ) { }
 
   ngAfterViewInit() {
     this.syncOverlayWithVideo();
     window.addEventListener('resize', () => this.syncOverlayWithVideo());
-    // Subscribe to cursor updates
-    this.cursorSubscription = this.multiplayerCursorService.getCursorsObservable().subscribe(cursors => {
-      this.renderCursors(cursors);
-    });
   }
 
   ngOnDestroy() {
@@ -77,53 +73,48 @@ export class JoinGamePage implements AfterViewInit, OnDestroy {
   }
 
   async joinRoom() {
-    this.gameState = GuestGameState.JOINING_ROOM;
+    this.gameState = GameState.JOINING_ROOM;
     this.joinError = '';
     const loading = await this.loadingController.create({ message: 'Entrando na sala...' });
     await loading.present();
     try {
-      await this.multiplayerGuestService.joinGameRoom(this.playerName, this.roomId, this.password);
-      this.multiplayerGuestService.onHostStream((stream) => {
-        this.hostStream = stream;
+      await this.multiplayerService.joinGameRoom(this.playerName, this.roomId, this.password);      
+      // handler stream 
+      const stream$ = this.multiplayerStreamService.getStreamObservable().subscribe((stream) => {
+        this.gameState = GameState.IN_ROOM;
         const video = document.querySelector('#stream-target') as HTMLVideoElement
-        if (!video) throw new Error('Video element not found')
+        if (!video) { 
+          stream$.unsubscribe();
+          throw new Error('Video element not found') 
+        }
         video.srcObject = stream;
-        this.gameState = GuestGameState.IN_ROOM;
-        // Optionally, subscribe to player list or other events here
       })
+
+      // handle cursors
+      // Subscribe to cursor updates
+      this.cursorSubscription = this.multiplayerCursorService.getCursorsObservable().subscribe(cursors => {
+        this.renderCursors(cursors);
+      });
     } catch (err: any) {
       this.joinError = err.message || 'Erro ao entrar na sala.';
-      this.gameState = GuestGameState.ERROR;
+      this.gameState = GameState.ERROR;
       await this.showError(this.joinError);
       await this.promptJoinInfo();
     } finally {
       await loading.dismiss();
     }
   }
-
-  showParticipants() {
-    const participants = this.multiplayerGuestService.playerList;
-  }
-
-  async showError(message: string) {
-    const alert = await this.alertController.create({
-      header: 'Erro',
-      message,
-      buttons: ['OK']
-    });
-    await alert.present();
-  }
-
+  
   /**
    * Handle pointer (mouse/touch) move and send to cursorService.
-   */
-  onPointerMove(event: MouseEvent | TouchEvent) {
-    let x = 0, y = 0;
-    if (event instanceof MouseEvent) {
-      // we need to transform the mouse coordinates to the target element where 0,0 is the top left and 1,1 is the bottom right
-      x = event.offsetX / (event.target as HTMLElement).clientWidth;
-      y = event.offsetY / (event.target as HTMLElement).clientHeight;
-
+  */
+ onPointerMove(event: MouseEvent | TouchEvent) {
+   let x = 0, y = 0;
+   if (event instanceof MouseEvent) {
+     // we need to transform the mouse coordinates to the target element where 0,0 is the top left and 1,1 is the bottom right
+     x = event.offsetX / (event.target as HTMLElement).clientWidth;
+     y = event.offsetY / (event.target as HTMLElement).clientHeight;
+     
     } else if (event instanceof TouchEvent && event.touches.length > 0) {
       // TODO: validate if coordinates match the same values of event.offsetX/Y
       // when using touch events, we need to calculate the position relative to the target element
@@ -131,7 +122,27 @@ export class JoinGamePage implements AfterViewInit, OnDestroy {
       x = (event.touches[0].clientX - rect.left) / rect.width;
       y = (event.touches[0].clientY - rect.top) / rect.height;
     }
-    this.multiplayerGuestService.sendPlayerPointer({ x, y, color: this.cursorColor, name: this.playerName });
+    
+    const cursorMessage: PlayerCursorMessage = {
+      x: x,
+      y: y,
+      color: this.cursorColor,
+      name: this.playerName
+    };
+    this.multiplayerCursorService.sendLocalCursor(cursorMessage)
+  }
+
+  showParticipants() {
+    throw new Error('Not implemented yet');
+  }
+  
+  private async showError(message: string) {
+    const alert = await this.alertController.create({
+      header: 'Erro',
+      message,
+      buttons: ['OK']
+    });
+    await alert.present();
   }
 
   private renderCursors(cursors: { [peerId: string]: PlayerCursorMessage }) {

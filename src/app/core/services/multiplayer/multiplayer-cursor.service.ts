@@ -8,7 +8,7 @@ import { MULTIPLAYER } from '../../models/constants';
   providedIn: 'root'
 })
 export class MultiplayerCursorService {
-  room: Room | undefined;
+  private room?: Room;
 
   private cursors: { [peerId: string]: PlayerCursorMessage } = {};
   private cursorsSubject = new BehaviorSubject<{ [peerId: string]: PlayerCursorMessage }>({});
@@ -16,16 +16,21 @@ export class MultiplayerCursorService {
   constructor() { }
 
   /**
-   * Update or add a cursor for a peer
+   * Initialize the cursor service with the current room.
+   * This should be called after joining a room.
    */
-  updateCursor(peerId: string, cursor: PlayerCursorMessage) {
-    this.cursors[peerId] = cursor;
-    this.cursorsSubject.next({ ...this.cursors });
+  setup(room: Room) {
+    this.room = room;
+    // Listen for player pointer (cursor) messages
+    const [_, receivePlayerPointer] = this.room.makeAction<PlayerCursorMessage>(MULTIPLAYER.EVENTS.PLAYER_POINTER);
+    receivePlayerPointer((data, peerId) => {
+      this.updateCursor(peerId, data);
+    });
   }
 
   /**
    * Remove a cursor for a peer
-   */
+  */
   removeCursor(peerId: string) {
     delete this.cursors[peerId];
     this.cursorsSubject.next({ ...this.cursors });
@@ -33,14 +38,14 @@ export class MultiplayerCursorService {
 
   /**
    * Get observable for all cursors
-   */
+  */
   getCursorsObservable(): Observable<{ [peerId: string]: PlayerCursorMessage }> {
     return this.cursorsSubject.asObservable();
   }
 
   /**
    * Clear all cursors (e.g., on room leave)
-   */
+  */
   clear() {
     this.cursors = {};
     this.cursorsSubject.next({});
@@ -48,10 +53,16 @@ export class MultiplayerCursorService {
 
   /**
    * Send local cursor update: update local state and send to peers
-   */
-  sendLocalCursor(cursor: PlayerCursorMessage, room: Room) {
+  */
+  sendLocalCursor(cursor: PlayerCursorMessage) {
+    if (!this.room) return;
     this.updateCursor(selfId, cursor);
-    const [sendPlayerPointer] = room.makeAction<PlayerCursorMessage>(MULTIPLAYER.EVENTS.PLAYER_POINTER);
+    const [sendPlayerPointer] = this.room.makeAction<PlayerCursorMessage>(MULTIPLAYER.EVENTS.PLAYER_POINTER);
     sendPlayerPointer(cursor);
+  }
+
+  private updateCursor(peerId: string, cursor: PlayerCursorMessage) {
+    this.cursors[peerId] = cursor;
+    this.cursorsSubject.next({ ...this.cursors });
   }
 }

@@ -10,13 +10,14 @@ import { MULTIPLAYER } from '../../models/constants';
 export class MultiplayerChatService {
   private messages: MultiplayerChatMessageWithTimestamp[] = [];
   private messagesSubject = new BehaviorSubject<MultiplayerChatMessageWithTimestamp[]>([]);
+  private room?: Room;
 
   constructor() {}
 
   /**
    * Call this to setup chat listeners for a room
    */
-  bindRoom(room: Room) {
+  setup(room: Room) {
     const [_, onChatMessage] = room.makeAction<MultiplayerChatMessage>(MULTIPLAYER.EVENTS.CHAT_MESSAGE);
     onChatMessage((msg) => {
       this.addMessage(msg);
@@ -26,16 +27,25 @@ export class MultiplayerChatService {
   /**
    * Send a chat message to peers
    */
-  sendMessage(room: Room, text: string, senderName?: string) {
-    const msg: MultiplayerChatMessageWithTimestamp = {
+  sendMessage(text: string) {
+    if (!this.room) {
+      console.warn('Chat room not set up. Call setup(room) first.');
+      return;
+    }
+
+    if (!text || text.trim() === '') {
+      console.warn('Cannot send empty message');
+      return;
+    }
+
+    const msg: MultiplayerChatMessage = {
       id: this.generateId(),
       senderId: selfId,
-      senderName: senderName || selfId.slice(0, 6), // Default name if not provided
-      text,
-      timestamp: Date.now(),
+      text: text.trim(),
     };
     this.addMessage(msg); // add locally
-    const [sendChatMessage] = room.makeAction<MultiplayerChatMessage>(MULTIPLAYER.EVENTS.CHAT_MESSAGE);
+    
+    const [sendChatMessage] = this.room.makeAction<MultiplayerChatMessage>(MULTIPLAYER.EVENTS.CHAT_MESSAGE);
     sendChatMessage(msg);
   }
 
@@ -68,6 +78,6 @@ export class MultiplayerChatService {
   }
 
   private generateId(): string {
-    return Math.random().toString(36).slice(2) + Date.now().toString(36);
+    return selfId.slice(0, 8) + Math.random().toString(36).slice(2);
   }
 }
