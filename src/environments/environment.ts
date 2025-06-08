@@ -15,22 +15,22 @@ export const environment = {
   multiplayerConfig: {
     turnConfig: [
       {
-        urls: "turn:a.relay.metered.ca:80",
+        urls: "turn:standard.relay.metered.ca:80",
         username: "631c75ecc434a6d0a9c26c92",
         credential: "8hamzirIerfjeAXw",
       },
       {
-        urls: "turn:a.relay.metered.ca:80?transport=tcp",
+        urls: "turn:standard.relay.metered.ca:80?transport=tcp",
         username: "631c75ecc434a6d0a9c26c92",
         credential: "8hamzirIerfjeAXw",
       },
       {
-        urls: "turn:a.relay.metered.ca:443",
+        urls: "turn:standard.relay.metered.ca:443",
         username: "631c75ecc434a6d0a9c26c92",
         credential: "8hamzirIerfjeAXw",
       },
       {
-        urls: "turn:a.relay.metered.ca:443?transport=tcp",
+        urls: "turns:standard.relay.metered.ca:443?transport=tcp",
         username: "631c75ecc434a6d0a9c26c92",
         credential: "8hamzirIerfjeAXw",
       },
