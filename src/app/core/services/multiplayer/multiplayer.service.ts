@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { BaseRoomConfig, joinRoom, Room } from 'trystero';
+import { joinRoom, Room } from 'trystero';
 import { GameState, HostClaimMessage, MultiplayerUserRole, PlayerIdentMessage } from '../../models/multiplayer';
 import { MULTIPLAYER } from '../../models/constants';
 import { MultiplayerChatService } from './multiplayer-chat.service';
@@ -7,6 +7,7 @@ import { MultiplayerCursorService } from './multiplayer-cursor.service';
 import { MultiplayerPlayerInfoService } from './multiplayer-player-info.service';
 import { BehaviorSubject } from 'rxjs';
 import { MultiplayerStreamService } from './multiplayer-stream.service';
+import { environment } from 'src/environments/environment';
 
 @Injectable({
   providedIn: 'root'
@@ -84,9 +85,10 @@ export class MultiplayerService {
     this.password = password;
     this.playerColor = color || '#000000'; // Default to black if no color provided
 
-    const config: BaseRoomConfig = {
+    const config: any = { // use any to allow turnConfig key
       appId: MULTIPLAYER.APP_ID,
-      password: this.password
+      password: this.password,
+      turnConfig: environment.multiplayerConfig.turnConfig
     }
     this.room = joinRoom(config, this.roomName);
 

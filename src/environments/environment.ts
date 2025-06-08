@@ -11,6 +11,30 @@ export const environment = {
     buildDate: "%BUILD_DATE%",
     commitHash: "%COMMIT_HASH%",
     versionName: "%VERSION%-DEV" 
+  },
+  multiplayerConfig: {
+    turnConfig: [
+      {
+        urls: "turn:a.relay.metered.ca:80",
+        username: "631c75ecc434a6d0a9c26c92",
+        credential: "8hamzirIerfjeAXw",
+      },
+      {
+        urls: "turn:a.relay.metered.ca:80?transport=tcp",
+        username: "631c75ecc434a6d0a9c26c92",
+        credential: "8hamzirIerfjeAXw",
+      },
+      {
+        urls: "turn:a.relay.metered.ca:443",
+        username: "631c75ecc434a6d0a9c26c92",
+        credential: "8hamzirIerfjeAXw",
+      },
+      {
+        urls: "turn:a.relay.metered.ca:443?transport=tcp",
+        username: "631c75ecc434a6d0a9c26c92",
+        credential: "8hamzirIerfjeAXw",
+      },
+    ],
   }
 };
 
