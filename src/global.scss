@@ -115,3 +115,11 @@ canvas {
         --height: 480px;
     }
 }
+
+@keyframes ping {
+  75%,
+  100% {
+    transform: scale(8);
+    opacity: 0;
+  }
+}

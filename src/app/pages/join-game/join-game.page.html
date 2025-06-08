@@ -31,7 +31,7 @@
   <div [ngClass]="{'ion-hide': gameState !== GameState.IN_ROOM }" class="ion-padding full">
     <div id="cursors-overlay" class="pointer-overlay"></div>
     <video id="stream-target" autoplay playsinline style="width:100%; border-radius:8px; background:#222;"
-      (mousemove)="onPointerMove($event)" (touchmove)="onPointerMove($event)"></video>
+      (mousemove)="onPointerMove($event)" (touchmove)="onPointerMove($event)" (click)="onClick($event)"></video>
     <!-- You can add a canvas or overlay here for remote cursors -->
   </div>
 

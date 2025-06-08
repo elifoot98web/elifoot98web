@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { Room, selfId } from 'trystero';
-import { PlayerCursorMessage } from '../../models/multiplayer';
+import { CursorClickMessage, CursorPositionMessage } from '../../models/multiplayer';
 import { MULTIPLAYER } from '../../models/constants';
 
 @Injectable({
@@ -10,8 +10,10 @@ import { MULTIPLAYER } from '../../models/constants';
 export class MultiplayerCursorService {
   private room?: Room;
 
-  private cursors: { [peerId: string]: PlayerCursorMessage } = {};
-  private cursorsSubject = new BehaviorSubject<{ [peerId: string]: PlayerCursorMessage }>({});
+  private cursors: { [peerId: string]: CursorPositionMessage } = {};
+  private cursorsSubject = new BehaviorSubject<{ [peerId: string]: CursorPositionMessage }>({});
+
+  private clickSubject = new BehaviorSubject<CursorClickMessage | null>(null);
 
   constructor() { }
 
@@ -22,10 +24,17 @@ export class MultiplayerCursorService {
   setup(room: Room) {
     this.room = room;
     // Listen for player pointer (cursor) messages
-    const [_, receivePlayerPointer] = this.room.makeAction<PlayerCursorMessage>(MULTIPLAYER.EVENTS.PLAYER_POINTER);
+    const [_, receivePlayerPointer] = this.room.makeAction<CursorPositionMessage>(MULTIPLAYER.EVENTS.PLAYER_CURSOR_POS);
     receivePlayerPointer((data, peerId) => {
       this.updateCursor(peerId, data);
     });
+
+    const [__, receivePlayerClick] = this.room.makeAction<CursorClickMessage>(MULTIPLAYER.EVENTS.PLAYER_CLICK);
+    receivePlayerClick((data) => {
+      if (data) {
+        this.clickSubject.next(data);
+      }
+    })
   }
 
   /**
@@ -39,8 +48,15 @@ export class MultiplayerCursorService {
   /**
    * Get observable for all cursors
   */
-  getCursorsObservable(): Observable<{ [peerId: string]: PlayerCursorMessage }> {
+  getCursorsObservable(): Observable<{ [peerId: string]: CursorPositionMessage }> {
     return this.cursorsSubject.asObservable();
+  }
+
+  /**
+   * Get observable for cursor click events.
+   */
+  getClickObservable(): Observable<CursorClickMessage | null> {
+    return this.clickSubject.asObservable();
   }
 
   /**
@@ -54,15 +70,23 @@ export class MultiplayerCursorService {
   /**
    * Send local cursor update: update local state and send to peers
   */
-  sendLocalCursor(cursor: PlayerCursorMessage) {
+  sendLocalCursor(cursor: CursorPositionMessage) {
     if (!this.room) return;
     this.updateCursor(selfId, cursor);
-    const [sendPlayerPointer] = this.room.makeAction<PlayerCursorMessage>(MULTIPLAYER.EVENTS.PLAYER_POINTER);
-    sendPlayerPointer(cursor);
+    const [sendCursorPosition] = this.room.makeAction<CursorPositionMessage>(MULTIPLAYER.EVENTS.PLAYER_CURSOR_POS);
+    sendCursorPosition(cursor);
   }
 
-  private updateCursor(peerId: string, cursor: PlayerCursorMessage) {
+  sendLocalClick(click: CursorClickMessage) {
+    if (!this.room) return;
+    this.clickSubject.next(click)
+    const [sendPlayerClick] = this.room.makeAction<CursorClickMessage>(MULTIPLAYER.EVENTS.PLAYER_CLICK);
+    sendPlayerClick(click);
+  }
+
+  private updateCursor(peerId: string, cursor: CursorPositionMessage) {
     this.cursors[peerId] = cursor;
     this.cursorsSubject.next({ ...this.cursors });
   }
+
 }

@@ -76,12 +76,15 @@ export const MULTIPLAYER = {
   DEFAULT_CURSOR_COLOR: '#aa00aa',
   EVENTS: { // WARNING: event names must be unique and have AT MOST 12 characters
     PLAYER_IDENT: 'Ident',
-    PLAYER_POINTER: 'Pointer',
+    PLAYER_CURSOR_POS: 'pPosition',
+    PLAYER_CLICK: 'pClick',
     HOST_CLAIM: 'hostClaim',
-    CHAT_MESSAGE: 'chatMessage',
+    CHAT_MESSAGE: 'chatMsg',
   },
   HOST_CLAIM_TIMEOUT: 3000, // 3 seconds
   HOST_CLAIM_INTERVAL: 500, // 500ms
   PING_TIMEOUT: 5000, // 5 seconds
   PING_REFRESH_INTERVAL: 10000, // 10 seconds
+  CURSOR_Z_INDEX: 10, // Cursors should be above the game elements
+  CURSOR_CLICK_Z_INDEX: 9, // Click pings should be below the cursors
 }

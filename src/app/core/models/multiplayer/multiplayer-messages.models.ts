@@ -1,5 +1,4 @@
 // copied from JsonValue in trysteros because it is not exported
-
 type SendableValue = null
     | string
     | number
@@ -15,11 +14,17 @@ export interface HostClaimMessage extends BaseMessage {
     hostName: string;
 }
 
-export interface PlayerCursorMessage extends BaseMessage {
+export interface CursorPositionMessage extends BaseMessage {
     x: number;
     y: number;
     color: string;
     name: string;
+}
+
+export interface CursorClickMessage extends BaseMessage {
+    x: number;
+    y: number;
+    color: string;
 }
 
 export interface PlayerIdentMessage extends BaseMessage {

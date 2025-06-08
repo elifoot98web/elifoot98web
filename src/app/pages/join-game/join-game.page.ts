@@ -1,6 +1,6 @@
 import { Component, AfterViewInit, OnDestroy } from '@angular/core';
 import { AlertController, LoadingController } from '@ionic/angular';
-import { GameState, PlayerCursorMessage } from '../../core/models/multiplayer';
+import { GameState, CursorPositionMessage, CursorClickMessage } from '../../core/models/multiplayer';
 import { Subscription } from 'rxjs';
 import { MultiplayerCursorService, MultiplayerService, MultiplayerStreamService } from '../../core/services/multiplayer';
 import { CursorRendererHelper } from 'src/app/core/helpers/cursor-renderer.helper';
@@ -91,10 +91,18 @@ export class JoinGamePage implements AfterViewInit, OnDestroy {
       })
 
       // handle cursors
-      // Subscribe to cursor updates
+      // Subscribe to cursor position updates
       this.cursorSubscription = this.multiplayerCursorService.getCursorsObservable().subscribe(cursors => {
         this.renderCursors(cursors);
       });
+
+      // Subscribe to cursor click events
+      this.multiplayerCursorService.getClickObservable().subscribe(click => {
+        if (click) {
+          this.renderClick(click);
+        }
+      });
+      
     } catch (err: any) {
       this.joinError = err.message || 'Erro ao entrar na sala.';
       this.gameState = GameState.ERROR;
@@ -109,27 +117,24 @@ export class JoinGamePage implements AfterViewInit, OnDestroy {
    * Handle pointer (mouse/touch) move and send to cursorService.
   */
  onPointerMove(event: MouseEvent | TouchEvent) {
-   let x = 0, y = 0;
-   if (event instanceof MouseEvent) {
-     // we need to transform the mouse coordinates to the target element where 0,0 is the top left and 1,1 is the bottom right
-     x = event.offsetX / (event.target as HTMLElement).clientWidth;
-     y = event.offsetY / (event.target as HTMLElement).clientHeight;
-     
-    } else if (event instanceof TouchEvent && event.touches.length > 0) {
-      // TODO: validate if coordinates match the same values of event.offsetX/Y
-      // when using touch events, we need to calculate the position relative to the target element
-      const rect = (event.target as HTMLElement).getBoundingClientRect();
-      x = (event.touches[0].clientX - rect.left) / rect.width;
-      y = (event.touches[0].clientY - rect.top) / rect.height;
-    }
-    
-    const cursorMessage: PlayerCursorMessage = {
+    const { x, y } = this.processCursorEvent(event);
+    const cursorMessage: CursorPositionMessage = {
       x: x,
       y: y,
       color: this.cursorColor,
       name: this.playerName
     };
     this.multiplayerCursorService.sendLocalCursor(cursorMessage)
+  }
+
+  onClick(event: MouseEvent | TouchEvent) {
+    const { x, y } = this.processCursorEvent(event);
+    const clickMessage: CursorClickMessage = {
+      x: x,
+      y: y,
+      color: this.cursorColor
+    }
+    this.multiplayerCursorService.sendLocalClick(clickMessage);
   }
 
   showParticipants() {
@@ -145,12 +150,37 @@ export class JoinGamePage implements AfterViewInit, OnDestroy {
     await alert.present();
   }
 
-  private renderCursors(cursors: { [peerId: string]: PlayerCursorMessage }) {
+  private processCursorEvent(event: MouseEvent | TouchEvent): { x: number, y: number } {
+    let x = 0, y = 0;
+    if (event instanceof MouseEvent) {
+     // we need to transform the mouse coordinates to the target element where 0,0 is the top left and 1,1 is the bottom right
+     x = event.offsetX / (event.target as HTMLElement).clientWidth;
+     y = event.offsetY / (event.target as HTMLElement).clientHeight;
+     
+    } else if (event instanceof TouchEvent && event.touches.length > 0) {
+      // TODO: validate if coordinates match the same values of event.offsetX/Y
+      // when using touch events, we need to calculate the position relative to the target element
+      const rect = (event.target as HTMLElement).getBoundingClientRect();
+      x = (event.touches[0].clientX - rect.left) / rect.width;
+      y = (event.touches[0].clientY - rect.top) / rect.height;
+    }
+    return { x, y };
+  }
+
+  private renderCursors(cursors: { [peerId: string]: CursorPositionMessage }) {
     const canvas = document.querySelector('#cursors-overlay') as HTMLElement;
     if (!canvas) return;
     this.syncOverlayWithVideo();
 
     CursorRendererHelper.renderCursors(canvas, cursors);
+  }
+
+  private renderClick(click: CursorClickMessage) {
+    const canvas = document.querySelector('#cursors-overlay') as HTMLElement;
+    if (!canvas) return;
+    this.syncOverlayWithVideo();
+
+    CursorRendererHelper.renderClick(canvas, click);
   }
 
   private syncOverlayWithVideo() {

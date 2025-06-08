@@ -8,7 +8,7 @@ import { AboutComponent } from './components/about/about.component';
 import { OmaticModalComponent } from './components/omatic-modal/omatic-modal.component';
 import { Subscription } from 'rxjs';
 import { EmulatorKeyCode } from '../../core/models/game';
-import { PlayerCursorMessage } from '../../core/models/multiplayer';
+import { CursorClickMessage, CursorPositionMessage } from '../../core/models/multiplayer';
 import { AutoSaverService, EmulatorControlService, PatchService, SaveGameService } from '../../core/services/game';
 import { LayoutHelperService, LocalStorageService } from '../../core/services/shared';
 import { MultiplayerCursorService, MultiplayerService } from '../../core/services/multiplayer';
@@ -41,6 +41,7 @@ export class GamePage implements OnInit, OnDestroy {
   hostPassword = '';
   hostName = '';
   private cursorSubscription?: Subscription;
+  private cursorClickSubscription?: Subscription;
   private isStreaming = false;
 
   constructor(
@@ -669,6 +670,13 @@ export class GamePage implements OnInit, OnDestroy {
       this.cursorSubscription = this.multiplayerCursorService.getCursorsObservable().subscribe(cursors => {
         this.renderCursors(cursors);
       });
+
+      this.cursorClickSubscription = this.multiplayerCursorService.getClickObservable().subscribe(click => {
+        if (click) {
+          this.renderClick(click);
+        }
+      })
+
     } catch (err: any) {
       const errorMsg = err.message || 'Erro ao criar sala.';
       await this.showErrorAlert(new Error(errorMsg));
@@ -680,6 +688,7 @@ export class GamePage implements OnInit, OnDestroy {
 
   async stopHosting() {
     this.cursorSubscription?.unsubscribe();
+    this.cursorClickSubscription?.unsubscribe();
     this.multiplayerService.leaveRoom();
     this.isStreaming = false;
     this.hostRoomId = '';
@@ -795,13 +804,20 @@ export class GamePage implements OnInit, OnDestroy {
     }
   }
 
-  private renderCursors(cursors: { [peerId: string]: PlayerCursorMessage }) {
-    // TODO: centralize this logic in a service and use it in both host and guest pages
+  private renderCursors(cursors: { [peerId: string]: CursorPositionMessage }) {
+    const canvas = document.querySelector('#cursors-overlay') as HTMLElement;
+    if (!canvas) return;
+    this.syncOverlayWithGameCanvas();
+    
+    CursorRendererHelper.renderCursors(canvas, cursors);
+  }
+  
+  private renderClick(click: CursorClickMessage) {
     const canvas = document.querySelector('#cursors-overlay') as HTMLElement;
     if (!canvas) return;
     this.syncOverlayWithGameCanvas();
 
-    CursorRendererHelper.renderCursors(canvas, cursors);
+    CursorRendererHelper.renderClick(canvas, click);
   }
 
   private syncOverlayWithGameCanvas() {
