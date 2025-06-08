@@ -176,6 +176,7 @@ export class MultiplayerService {
   private setupChatService() {
     if (!this.room) return;
 
+    console.log('Setting up chat service for room:', this.roomName);
     this.chatService.setup(this.room); // Setup chat service with the room
   }
 

@@ -1,0 +1,24 @@
+<ion-list class="chat-list">
+  <ng-container *ngIf="messages$ | async as messages">
+    <ion-item *ngFor="let msg of messages" [ngClass]="{'my-message': msg.senderId === selfId, 'remote-message': msg.senderId !== selfId}">
+      <div class="chat-bubble">
+        <div class="chat-meta">
+          <span class="chat-sender">{{ msg.senderId !== selfId ? players[msg.senderId]?.playerName || msg.senderId.slice(0,6) : ''}}</span>
+          <span class="chat-time">{{ msg.timestamp | date:'shortTime' }}</span>
+        </div>
+        <div class="chat-text">{{ msg.text }}</div>
+      </div>
+    </ion-item>
+  </ng-container>
+</ion-list>
+
+<ion-footer class="chat-footer">
+  <form (ngSubmit)="sendMessage(`${input.value}`); input.value='';" autocomplete="off">
+    <ion-item lines="none">
+      <ion-input #input required type="text" placeholder="Digite uma mensagem..." maxlength="200"></ion-input>
+      <ion-button type="submit" fill="solid" color="primary" [disabled]="!input.value || !`${input.value}`.trim()">
+        <ion-icon name="send"></ion-icon>
+      </ion-button>
+    </ion-item>
+  </form>
+</ion-footer>

@@ -25,6 +25,9 @@ export class JoinGamePage implements AfterViewInit, OnDestroy {
 
   private cursorSubscription?: Subscription;
 
+  isChatOpen = false;
+  isPortraitMobile = false;
+
   constructor(
     private loadingController: LoadingController,
     private alertController: AlertController,
@@ -36,10 +39,13 @@ export class JoinGamePage implements AfterViewInit, OnDestroy {
   ngAfterViewInit() {
     this.syncOverlayWithVideo();
     window.addEventListener('resize', () => this.syncOverlayWithVideo());
+    this.updateChatLayout();
+    window.addEventListener('resize', this.updateChatLayout.bind(this));
   }
 
   ngOnDestroy() {
     this.cursorSubscription?.unsubscribe();
+    window.removeEventListener('resize', this.updateChatLayout.bind(this));
   }
 
   /**
@@ -194,5 +200,18 @@ export class JoinGamePage implements AfterViewInit, OnDestroy {
       overlay.style.width = video.offsetWidth + 'px';
       overlay.style.height = video.offsetHeight + 'px';
     }
+  }
+
+  toggleChat(force?: boolean) {
+    if (typeof force === 'boolean') {
+      this.isChatOpen = force;
+    } else {
+      this.isChatOpen = !this.isChatOpen;
+    }
+  }
+
+  private updateChatLayout() {
+    // Portrait mobile: width < 768px and height > width
+    this.isPortraitMobile = window.innerWidth < 768 && window.innerHeight > window.innerWidth;
   }
 }

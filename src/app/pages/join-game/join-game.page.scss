@@ -30,3 +30,51 @@
     border-radius: 8px;
     background: #224422
 }
+
+.chat-sidebar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 340px;
+  max-width: 90vw;
+  height: 100%;
+  background: #fff;
+  box-shadow: -2px 0 12px rgba(0,0,0,0.08);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  border-top-left-radius: 12px;
+  border-bottom-left-radius: 12px;
+}
+
+.chat-fab {
+  z-index: 110;
+}
+
+@media (max-width: 1024px) {
+  .chat-sidebar {
+    width: 80vw;
+    min-width: 220px;
+  }
+}
+
+/* Bottom sheet modal for portrait mobile */
+:host ::ng-deep .chat-bottom-sheet .modal-wrapper {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  max-width: 100vw;
+  height: 60vh;
+  min-height: 240px;
+  border-top-left-radius: 18px;
+  border-top-right-radius: 18px;
+  background: #fff;
+  box-shadow: 0 -2px 12px rgba(0,0,0,0.12);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+:host ::ng-deep .chat-bottom-sheet .ion-page {
+  background: transparent;
+}

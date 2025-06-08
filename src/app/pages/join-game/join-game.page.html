@@ -33,12 +33,21 @@
     <video id="stream-target" autoplay playsinline style="width:100%; border-radius:8px; background:#222;"
       (mousemove)="onPointerMove($event)" (touchmove)="onPointerMove($event)" (click)="onClick($event)"></video>
     <!-- You can add a canvas or overlay here for remote cursors -->
+    <!-- Chat Toggle Button -->
+    <ion-fab vertical="top" horizontal="end" slot="fixed" class="chat-fab">
+      <ion-fab-button color="secondary" (click)="toggleChat()">
+        <ion-icon name="chatbubble-ellipses-outline"></ion-icon>
+      </ion-fab-button>
+    </ion-fab>
+    <!-- Chat Sidebar (desktop & landscape) -->
+    <div class="chat-sidebar" *ngIf="isChatOpen && !isPortraitMobile">
+      <app-chat></app-chat>
+    </div>
+    <!-- Chat Bottom Sheet (portrait mobile) -->
+    <ion-modal [isOpen]="isChatOpen && isPortraitMobile" class="chat-bottom-sheet" (ionModalDidDismiss)="toggleChat(false)">
+      <app-chat></app-chat>
+    </ion-modal>
   </div>
 
 
 </ion-content>
-
-<!-- Video stream binding logic -->
-<script>
-  // This script block is for illustration. In Angular, use ngAfterViewInit in the TS file to bind hostStream to the video element.
-</script>

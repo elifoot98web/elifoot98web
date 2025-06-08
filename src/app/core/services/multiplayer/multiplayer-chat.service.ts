@@ -18,6 +18,7 @@ export class MultiplayerChatService {
    * Call this to setup chat listeners for a room
    */
   setup(room: Room) {
+    this.room = room;
     const [_, onChatMessage] = room.makeAction<MultiplayerChatMessage>(MULTIPLAYER.EVENTS.CHAT_MESSAGE);
     onChatMessage((msg) => {
       this.addMessage(msg);
@@ -44,7 +45,7 @@ export class MultiplayerChatService {
       text: text.trim(),
     };
     this.addMessage(msg); // add locally
-    
+
     const [sendChatMessage] = this.room.makeAction<MultiplayerChatMessage>(MULTIPLAYER.EVENTS.CHAT_MESSAGE);
     sendChatMessage(msg);
   }
@@ -52,7 +53,7 @@ export class MultiplayerChatService {
   /**
    * Get observable for chat messages
    */
-  getMessagesObservable(): Observable<MultiplayerChatMessage[]> {
+  getMessagesObservable(): Observable<MultiplayerChatMessageWithTimestamp[]> {
     return this.messagesSubject.asObservable();
   }
 
