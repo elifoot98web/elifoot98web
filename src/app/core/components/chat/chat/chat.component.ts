@@ -32,6 +32,10 @@ export class ChatComponent implements OnDestroy {
     this.playersSubscription?.unsubscribe();
   }
 
+  trackBy(_: number, message: MultiplayerChatMessageWithTimestamp) {
+    return message.id;
+  }
+
   /**
    * Send a chat message
    */

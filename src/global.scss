@@ -80,14 +80,25 @@ canvas {
 }
 
 .pointer-overlay-cursor-label {
-    background: #fffa;
-    padding: 4px;
+    background: #fff;
+    padding: 2px;
     border-radius: 8px;
     margin: 4px 2px;
     color: black;
     font-weight: bold;
     font-family: monospace;
+    opacity: 0.35;
 }
+
+.cursor-click-ping {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    mix-blend-mode: screen;
+    pointer-events: none;
+    animation: ping 1s cubic-bezier(0, 0, 0.2, 1);
+} 
 
 @media screen and (max-width: 599px), screen and (max-height: 700px) {
     .hidden-mob {

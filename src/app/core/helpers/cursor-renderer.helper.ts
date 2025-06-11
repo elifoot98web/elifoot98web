@@ -50,21 +50,14 @@ export class CursorRendererHelper {
   static renderClick(targetContainer: HTMLElement, click: CursorClickMessage): void {
     // Create mouse ping element
     const pingElement = document.createElement('div');
-    pingElement.className = 'cursor-click';
-    pingElement.style.position = 'absolute';
+    pingElement.className = 'cursor-click-ping';
     pingElement.style.left = (click.x * targetContainer.offsetWidth) + 'px';
     pingElement.style.top = (click.y * targetContainer.offsetHeight) + 'px';
     pingElement.style.backgroundColor = click.color;
-    pingElement.style.width = '4px';
-    pingElement.style.height = '4px';
-    pingElement.style.borderRadius = '50%';
-    pingElement.style.pointerEvents = 'none'; // Prevent interaction with the ping
     pingElement.style.zIndex = `${MULTIPLAYER.CURSOR_CLICK_Z_INDEX}`; // Ensure it appears below cursors
     targetContainer.appendChild(pingElement);
     pingElement.addEventListener('animationend', () => {
       pingElement.remove();
-    })
-    pingElement.style.animation = 'ping 1s cubic-bezier(0, 0, 0.2, 1)';
-    
+    });    
   }
 }
