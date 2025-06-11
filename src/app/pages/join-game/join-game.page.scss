@@ -1,34 +1,51 @@
 .page-background {
-    background-color: var(--ion-color-primary, #008000);
+  background-color: var(--ion-color-primary, #008000);
 }
 
 .full {
-    position: relative;
-    width: 100%;
-    height: 100%;
+  position: relative;
+  width: 100%;
+  height: 100%;
 }
 
 .join-game-card {
-    width: 40%;
-    min-width: 200px;
-    max-width: 500px;
-    height: 30%;
-    min-height: 180px;
-    max-height: 200px;
+  width: 40%;
+  min-width: 200px;
+  max-width: 500px;
+  height: 30%;
+  min-height: 180px;
+  max-height: 200px;
 }
 
 .card-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center; 
+  height: 100%;
+}
+
+.game-stream-container {
+  /* Ensure container is relative and hides overflow */
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 #stream-target {
-    cursor: none;
-    width: 100%;
-    border-radius: 8px;
-    background: #224422
+  /* Remove object-fit for dynamic sizing via TS */
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  display: block;
+  margin: auto;
+  background: #224422;
+  border-radius: 8px;
+    cursor:none;
 }
 
 .chat-sidebar {
@@ -39,7 +56,7 @@
   max-width: 90vw;
   height: 100%;
   background: #fff;
-  box-shadow: -2px 0 12px rgba(0,0,0,0.08);
+  box-shadow: -2px 0 12px rgba(0, 0, 0, 0.08);
   z-index: 100;
   display: flex;
   flex-direction: column;
@@ -71,7 +88,7 @@
   border-top-left-radius: 18px;
   border-top-right-radius: 18px;
   background: #fff;
-  box-shadow: 0 -2px 12px rgba(0,0,0,0.12);
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.12);
   padding-bottom: env(safe-area-inset-bottom);
 }
 

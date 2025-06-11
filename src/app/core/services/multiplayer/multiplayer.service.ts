@@ -77,7 +77,7 @@ export class MultiplayerService {
 
   private joinRoom(playerName: string, roomName: string, password: string, color?: string): void {
     if (this.room) throw new Error('Already in a room. Please leave the current room before joining a new one.');
-
+    
     this.state = GameState.JOINING_ROOM;
 
     this.playerName = playerName;
@@ -90,7 +90,7 @@ export class MultiplayerService {
       password: this.password,
       turnConfig: environment.multiplayerConfig.turnConfig
     }
-    this.room = joinRoom(config, this.roomName);
+    this.room = joinRoom(config, this.roomName.toLocaleUpperCase()); // Use uppercase room name for consistency
 
     this.state = GameState.IN_ROOM;
     this.initPeerListeners(); // Initialize peer listeners for join/leave events

@@ -37,10 +37,20 @@ export class JoinGamePage implements AfterViewInit, OnDestroy {
   ) { }
 
   ngAfterViewInit() {
-    this.syncOverlayWithVideo();
-    window.addEventListener('resize', () => this.syncOverlayWithVideo());
+    window.addEventListener('resize', () => {
+      this.syncStreamContainer();
+      this.updateChatLayout();
+    });
     this.updateChatLayout();
-    window.addEventListener('resize', this.updateChatLayout.bind(this));
+   
+    const video = document.querySelector('#stream-target') as HTMLVideoElement;
+    if (video) {
+      video.addEventListener('loadedmetadata', () => {
+        console.log('Video metadata loaded, syncing stream container');
+        this.syncStreamContainer()
+      });
+    }
+    this.syncStreamContainer();
   }
 
   ngOnDestroy() {
@@ -176,7 +186,7 @@ export class JoinGamePage implements AfterViewInit, OnDestroy {
   private renderCursors(cursors: { [peerId: string]: CursorPositionMessage }) {
     const canvas = document.querySelector('#cursors-overlay') as HTMLElement;
     if (!canvas) return;
-    this.syncOverlayWithVideo();
+    this.syncStreamContainer();
 
     CursorRendererHelper.renderCursors(canvas, cursors);
   }
@@ -184,12 +194,17 @@ export class JoinGamePage implements AfterViewInit, OnDestroy {
   private renderClick(click: CursorClickMessage) {
     const canvas = document.querySelector('#cursors-overlay') as HTMLElement;
     if (!canvas) return;
-    this.syncOverlayWithVideo();
+    this.syncStreamContainer();
 
     CursorRendererHelper.renderClick(canvas, click);
   }
 
-  private syncOverlayWithVideo() {
+  private syncStreamContainer() {
+    this.scaleVideoToContainer();
+    this.resizeOverlayToMatchVideo();
+  }
+
+  private resizeOverlayToMatchVideo() {
     const video = document.querySelector('#stream-target') as HTMLVideoElement;
     const overlay = document.querySelector('#cursors-overlay') as HTMLElement;
     if (video && overlay) {
@@ -200,6 +215,29 @@ export class JoinGamePage implements AfterViewInit, OnDestroy {
       overlay.style.width = video.offsetWidth + 'px';
       overlay.style.height = video.offsetHeight + 'px';
     }
+  }
+
+  private scaleVideoToContainer() {
+    const video = document.querySelector('#stream-target') as HTMLVideoElement;
+    const container = video?.parentElement as HTMLElement;
+    if (!video || !container || !video.videoWidth || !video.videoHeight) return;
+    const containerW = container.clientWidth;
+    const containerH = container.clientHeight;
+    const videoAR = video.videoWidth / video.videoHeight;
+    const containerAR = containerW / containerH;
+    let width, height;
+    if (containerAR > videoAR) {
+      // Container is wider than video: fit by height
+      height = containerH;
+      width = height * videoAR;
+    } else {
+      // Container is taller than video: fit by width
+      width = containerW;
+      height = width / videoAR;
+    }
+    video.style.width = width + 'px';
+    video.style.height = height + 'px';
+    video.style.objectFit = 'unset'; // Remove object-fit so our sizing works
   }
 
   toggleChat(force?: boolean) {

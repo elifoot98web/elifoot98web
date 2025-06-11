@@ -9,7 +9,7 @@
   </ion-toolbar>
 </ion-header>
 
-<ion-content [fullscreen]="true" color="primary" class="page-background ion-align-items-center ion-justify-content-center">
+<ion-content [scrollX]="false" [scrollY]="false" [fullscreen]="true" color="primary" class="page-background ion-align-items-center ion-justify-content-center">
 
   <!-- Join button -->
   <div *ngIf="gameState === GameState.NOT_IN_ROOM" class="card-container ion-padding ion-text-center">
@@ -29,16 +29,18 @@
   
   <!-- Game stream -->
   <div [ngClass]="{'ion-hide': gameState !== GameState.IN_ROOM }" class="ion-padding full">
-    <div id="cursors-overlay" class="pointer-overlay"></div>
-    <video id="stream-target" autoplay playsinline style="width:100%; border-radius:8px; background:#222;"
+    <div class="game-stream-container full">
+      <div id="cursors-overlay" class="pointer-overlay"></div>
+      <video id="stream-target" autoplay playsinline 
       (mousemove)="onPointerMove($event)" (touchmove)="onPointerMove($event)" (click)="onClick($event)"></video>
-    <!-- You can add a canvas or overlay here for remote cursors -->
-    <!-- Chat Toggle Button -->
-    <ion-fab vertical="top" horizontal="end" slot="fixed" class="chat-fab">
-      <ion-fab-button color="secondary" (click)="toggleChat()">
-        <ion-icon name="chatbubble-ellipses-outline"></ion-icon>
-      </ion-fab-button>
-    </ion-fab>
+      <!-- You can add a canvas or overlay here for remote cursors -->
+      <!-- Chat Toggle Button -->
+      <ion-fab vertical="top" horizontal="end" slot="fixed" class="chat-fab">
+        <ion-fab-button color="secondary" (click)="toggleChat()">
+          <ion-icon name="chatbubble-ellipses-outline"></ion-icon>
+        </ion-fab-button>
+      </ion-fab>
+    </div>
     <!-- Chat Sidebar (desktop & landscape) -->
     <div class="chat-sidebar" *ngIf="isChatOpen && !isPortraitMobile">
       <app-chat></app-chat>
