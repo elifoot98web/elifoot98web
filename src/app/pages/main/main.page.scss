@@ -1,0 +1,35 @@
+.center-vertical {
+    position: relative;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.home-options-row {
+  align-items: center;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.home-option-col {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.home-main-card {
+  min-width: 260px;
+  max-width: 420px;
+  width: 100%;
+  border: 2px solid var(--ion-color-secondary);
+}
+
+.home-join-card {
+  min-width: 200px;
+  max-width: 340px;
+  width: 100%;
+  border: 2px solid var(--ion-color-primary);
+}
+
+.big-icon {
+    font-size: 72px;
+}
