@@ -28,6 +28,9 @@ export class JoinGamePage implements AfterViewInit, OnDestroy {
   isChatOpen = false;
   isPortraitMobile = false;
 
+  private chatSidebarTransitioning = false;
+  private chatSidebarRafId?: number;
+
   constructor(
     private loadingController: LoadingController,
     private alertController: AlertController,
@@ -42,13 +45,25 @@ export class JoinGamePage implements AfterViewInit, OnDestroy {
       this.updateChatLayout();
     });
     this.updateChatLayout();
-   
+
+    // Listen for chat sidebar transition events for smooth resizing
+    const sidebar = document.querySelector('.chat-sidebar-flex') as HTMLElement;
+    if (sidebar) {
+      sidebar.addEventListener('transitionrun', this.onSidebarTransitionRun);
+      sidebar.addEventListener('transitionend', this.onSidebarTransitionEndOrCancel);
+      sidebar.addEventListener('transitioncancel', this.onSidebarTransitionEndOrCancel);
+    }
+
     const video = document.querySelector('#stream-target') as HTMLVideoElement;
     if (video) {
       video.addEventListener('loadedmetadata', () => {
         console.log('Video metadata loaded, syncing stream container');
-        this.syncStreamContainer()
+        this.syncStreamContainer();
       });
+      video.addEventListener('play', () => {
+        console.log('Video started playing, syncing stream container');
+        this.syncStreamContainer();
+      })
     }
     this.syncStreamContainer();
   }
@@ -56,6 +71,17 @@ export class JoinGamePage implements AfterViewInit, OnDestroy {
   ngOnDestroy() {
     this.cursorSubscription?.unsubscribe();
     window.removeEventListener('resize', this.updateChatLayout.bind(this));
+    // Remove sidebar transition listeners
+    const sidebar = document.querySelector('.chat-sidebar-flex') as HTMLElement;
+    if (sidebar) {
+      sidebar.removeEventListener('transitionrun', this.onSidebarTransitionRun);
+      sidebar.removeEventListener('transitionend', this.onSidebarTransitionEndOrCancel);
+      sidebar.removeEventListener('transitioncancel', this.onSidebarTransitionEndOrCancel);
+    }
+    if (this.chatSidebarRafId) {
+      cancelAnimationFrame(this.chatSidebarRafId);
+      this.chatSidebarRafId = undefined;
+    }
   }
 
   /**
@@ -97,6 +123,9 @@ export class JoinGamePage implements AfterViewInit, OnDestroy {
       await this.multiplayerService.joinGameRoom(this.playerName, this.roomId, this.password);      
       // handler stream 
       const stream$ = this.multiplayerStreamService.getStreamObservable().subscribe((stream) => {
+        if(stream.getVideoTracks().length === 0) {
+          return; // No video track available, nothing to display
+        }
         this.gameState = GameState.IN_ROOM;
         const video = document.querySelector('#stream-target') as HTMLVideoElement
         if (!video) { 
@@ -104,6 +133,7 @@ export class JoinGamePage implements AfterViewInit, OnDestroy {
           throw new Error('Video element not found') 
         }
         video.srcObject = stream;
+        this.syncStreamContainer();
       })
 
       // handle cursors
@@ -252,4 +282,26 @@ export class JoinGamePage implements AfterViewInit, OnDestroy {
     // Portrait mobile: width < 768px and height > width
     this.isPortraitMobile = window.innerWidth < 768 && window.innerHeight > window.innerWidth;
   }
+
+  private onSidebarTransitionRun = () => {
+    if (!this.chatSidebarTransitioning) {
+      this.chatSidebarTransitioning = true;
+      this.runSidebarSyncLoop();
+    }
+  };
+
+  private onSidebarTransitionEndOrCancel = () => {
+    this.chatSidebarTransitioning = false;
+    if (this.chatSidebarRafId) {
+      cancelAnimationFrame(this.chatSidebarRafId);
+      this.chatSidebarRafId = undefined;
+    }
+    this.syncStreamContainer(); // Final sync
+  };
+
+  private runSidebarSyncLoop = () => {
+    if (!this.chatSidebarTransitioning) return;
+    this.syncStreamContainer();
+    this.chatSidebarRafId = requestAnimationFrame(this.runSidebarSyncLoop);
+  };
 }

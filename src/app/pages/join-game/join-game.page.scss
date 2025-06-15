@@ -8,6 +8,12 @@
   height: 100%;
 }
 
+.centered {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .join-game-card {
   width: 40%;
   min-width: 200px;
@@ -17,11 +23,20 @@
   max-height: 200px;
 }
 
-.card-container {
+.info-card-container {
   display: flex;
   align-items: center;
   justify-content: center; 
   height: 100%;
+}
+
+.game-stream-flex-container {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
 }
 
 .game-stream-container {
@@ -33,6 +48,9 @@
   display: flex;
   justify-content: center;
   align-items: center;
+  transition: width 0.3s cubic-bezier(0.4,0,0.2,1);
+  min-width: 0;
+  min-height: 0;
 }
 
 #stream-target {
@@ -48,50 +66,68 @@
     cursor:none;
 }
 
-.chat-sidebar {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 340px;
-  max-width: 90vw;
-  height: 100%;
-  background: #fff;
-  box-shadow: -2px 0 12px rgba(0, 0, 0, 0.08);
-  z-index: 100;
+.game-stream-container.with-chat {
+  width: calc(100% - 320px); // Shrink when chat is open
+}
+
+.chat-sidebar-flex {
+  transition: width 0.3s cubic-bezier(0.4,0,0.2,1), min-width 0.3s cubic-bezier(0.4,0,0.2,1);
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--ion-color-primary-shade, #005500);
   display: flex;
   flex-direction: column;
-  border-top-left-radius: 12px;
-  border-bottom-left-radius: 12px;
+  align-items: stretch;
+  height: 100%;
+  box-shadow: -2px 0 8px rgba(0,0,0,0.08);
 }
 
-.chat-fab {
-  z-index: 110;
+.chat-sidebar-flex.chat-open {
+  width: 320px;
+  min-width: 240px;
+  max-width: 100vw;
 }
 
-@media (max-width: 1024px) {
-  .chat-sidebar {
-    width: 80vw;
-    min-width: 220px;
+.chat-toggle-btn {
+  position: absolute;
+  top: 8px;
+  right: 4px;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+
+@media (max-width: 900px) {
+  .game-stream-container.with-chat {
+    width: calc(100% - 70vw);
+  }
+  .chat-sidebar-flex.chat-open {
+    width: 70vw;
+    min-width: 120px;
+  }
+  .chat-toggle-btn {
+    left: -36px;
   }
 }
 
-/* Bottom sheet modal for portrait mobile */
-:host ::ng-deep .chat-bottom-sheet .modal-wrapper {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  width: 100vw;
-  max-width: 100vw;
-  height: 60vh;
-  min-height: 240px;
-  border-top-left-radius: 18px;
-  border-top-right-radius: 18px;
-  background: #fff;
-  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.12);
-  padding-bottom: env(safe-area-inset-bottom);
-}
-
-:host ::ng-deep .chat-bottom-sheet .ion-page {
-  background: transparent;
+@media (max-width: 600px) {
+  .game-stream-flex-container {
+    flex-direction: column;
+  }
+  .game-stream-container.with-chat {
+    width: 100%;
+    height: calc(100% - 220px);
+  }
+  .chat-sidebar-flex.chat-open {
+    width: 100%;
+    min-width: 0;
+    height: 220px;
+    max-height: 60vh;
+    position: relative;
+  }
+  .chat-toggle-btn {
+    left: auto;
+    right: 8px;
+    top: -36px;
+  }
 }

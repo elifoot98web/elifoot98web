@@ -10,17 +10,30 @@
 </ion-header>
 
 <ion-content [scrollX]="false" [scrollY]="false" [fullscreen]="true" color="primary" class="page-background ion-align-items-center ion-justify-content-center">
-
-  <!-- Join button -->
-  <div *ngIf="gameState === GameState.NOT_IN_ROOM" class="card-container ion-padding ion-text-center">
-    <ion-card class="join-game-card">
-      <ion-card-content class="ion-text-center">
-        <ion-button (click)="promptJoinInfo()">
-          Entrar em um jogo Multiplayer
-        </ion-button>
-      </ion-card-content>
-    </ion-card>
-  </div>
+  @switch (gameState) {
+    @case (GameState.NOT_IN_ROOM) {
+      <div class="info-card-container ion-padding ion-text-center">
+        <ion-card class="join-game-card">
+          <ion-card-content class="ion-text-center full centered">
+            <ion-button (click)="promptJoinInfo()">
+              Entrar em um jogo Multiplayer
+            </ion-button>
+          </ion-card-content>
+        </ion-card>
+      </div>
+    }
+    @case (GameState.JOINING_ROOM) {
+      <div class="info-card-container ion-padding ion-text-center">
+        <ion-card class="join-game-card">
+          <ion-card-content class="ion-text-center full centered">
+            <ion-spinner name="crescent"></ion-spinner>
+            <p>Aguardando stream...</p>
+          </ion-card-content>
+        </ion-card>
+      </div>
+    }
+  }
+   
 
   <!-- Error Container -->
   <ion-card *ngIf="joinError">
@@ -28,27 +41,19 @@
   </ion-card>
   
   <!-- Game stream -->
-  <div [ngClass]="{'ion-hide': gameState !== GameState.IN_ROOM }" class="ion-padding full">
-    <div class="game-stream-container full">
+  <div [ngClass]="{'ion-hide': gameState === GameState.NOT_IN_ROOM }" class="ion-padding full game-stream-flex-container">
+    <div id="game-stream-container" class="game-stream-container full" [ngClass]="{'with-chat': isChatOpen}">
       <div id="cursors-overlay" class="pointer-overlay"></div>
       <video id="stream-target" autoplay playsinline 
       (mousemove)="onPointerMove($event)" (touchmove)="onPointerMove($event)" (click)="onClick($event)"></video>
-      <!-- You can add a canvas or overlay here for remote cursors -->
-      <!-- Chat Toggle Button -->
-      <ion-fab vertical="top" horizontal="end" slot="fixed" class="chat-fab">
-        <ion-fab-button color="secondary" (click)="toggleChat()">
-          <ion-icon name="chatbubble-ellipses-outline"></ion-icon>
-        </ion-fab-button>
-      </ion-fab>
     </div>
-    <!-- Chat Sidebar (desktop & landscape) -->
-    <div class="chat-sidebar" *ngIf="isChatOpen && !isPortraitMobile">
-      <app-chat></app-chat>
+    <!-- Chat Sidebar as a flex child -->
+    <div class="chat-sidebar-flex" [ngClass]="{ 'chat-open': isChatOpen, 'chat-collapsed': !isChatOpen }">
+      <app-chat class="full"></app-chat>
+      <ion-button color="secondary" class="chat-toggle-btn" (click)="toggleChat()">
+        <ion-icon [name]="isChatOpen ? 'close-outline' : 'chatbubble-ellipses-outline'"></ion-icon>
+      </ion-button>
     </div>
-    <!-- Chat Bottom Sheet (portrait mobile) -->
-    <ion-modal [isOpen]="isChatOpen && isPortraitMobile" class="chat-bottom-sheet" (ionModalDidDismiss)="toggleChat(false)">
-      <app-chat></app-chat>
-    </ion-modal>
   </div>
 
 
