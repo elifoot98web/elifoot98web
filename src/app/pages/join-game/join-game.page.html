@@ -1,0 +1,60 @@
+<ion-header [translucent]="true">
+  <ion-toolbar color="tertiary">
+    <ion-title>Multiplayer</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="showParticipants()">
+        <ion-icon name="people-outline"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [scrollX]="false" [scrollY]="false" [fullscreen]="true" color="primary" class="page-background ion-align-items-center ion-justify-content-center">
+  @switch (gameState) {
+    @case (GameState.NOT_IN_ROOM) {
+      <div class="info-card-container ion-padding ion-text-center">
+        <ion-card class="join-game-card">
+          <ion-card-content class="ion-text-center full centered">
+            <ion-button (click)="promptJoinInfo()">
+              Entrar em um jogo Multiplayer
+            </ion-button>
+          </ion-card-content>
+        </ion-card>
+      </div>
+    }
+    @case (GameState.JOINING_ROOM) {
+      <div class="info-card-container ion-padding ion-text-center">
+        <ion-card class="join-game-card">
+          <ion-card-content class="ion-text-center full centered">
+            <ion-spinner name="crescent"></ion-spinner>
+            <p>Aguardando stream...</p>
+          </ion-card-content>
+        </ion-card>
+      </div>
+    }
+  }
+   
+
+  <!-- Error Container -->
+  <ion-card *ngIf="joinError">
+    <ion-card-content color="danger">{{ joinError }}</ion-card-content>
+  </ion-card>
+  
+  <!-- Game stream -->
+  <div [ngClass]="{'ion-hide': gameState === GameState.NOT_IN_ROOM }" class="ion-padding full game-stream-flex-container">
+    <div id="game-stream-container" class="game-stream-container full" [ngClass]="{'with-chat': isChatOpen}">
+      <div id="cursors-overlay" class="pointer-overlay"></div>
+      <video id="stream-target" autoplay playsinline 
+      (mousemove)="onPointerMove($event)" (touchmove)="onPointerMove($event)" (click)="onClick($event)"></video>
+    </div>
+    <!-- Chat Sidebar as a flex child -->
+    <div class="chat-sidebar-flex" [ngClass]="{ 'chat-open': isChatOpen, 'chat-collapsed': !isChatOpen }">
+      <app-chat class="full"></app-chat>
+      <ion-button color="secondary" class="chat-toggle-btn" (click)="toggleChat()">
+        <ion-icon [name]="isChatOpen ? 'close-outline' : 'chatbubble-ellipses-outline'"></ion-icon>
+      </ion-button>
+    </div>
+  </div>
+
+
+</ion-content>

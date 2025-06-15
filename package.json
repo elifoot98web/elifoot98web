@@ -1,6 +1,6 @@
 {
   "name": "elifoot98_web",
-  "version": "2.1.1",
+  "version": "3.0.0",
   "author": "Leonardo Pereira <jlcvp>",
   "homepage": "https://www.elifoot98.com.br",
   "repository": {
@@ -44,6 +44,7 @@
     "jszip": "^3.10.1",
     "rxjs": "~7.8.0",
     "tesseract.js": "^6.0.1",
+    "trystero": "^0.21.6",
     "tslib": "^2.3.0",
     "zone.js": "~0.15.0"
   },
