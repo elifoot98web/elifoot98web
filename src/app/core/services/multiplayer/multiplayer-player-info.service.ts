@@ -18,9 +18,9 @@ export class MultiplayerPlayerInfoService {
   playerList$ = this.playerListSubject.asObservable();
   
   setup(room: Room) {
-    // Listen for player ident messages    
-    const [_sendPlayerIdent, receivePlayerIdent] = room.makeAction<PlayerIdentMessage>(MULTIPLAYER.EVENTS.PLAYER_IDENT);
-    receivePlayerIdent((ident, peerId) => {
+    // Listen for player ident messages
+    const playerIdent = room.makeAction<PlayerIdentMessage>(MULTIPLAYER.EVENTS.PLAYER_IDENT);
+    playerIdent.onMessage = (ident, { peerId }) => {
       console.log(`Received ident message from ${peerId}`, { ident });
       const playerInfo: PlayerInfo = {
         peerId,
@@ -30,7 +30,7 @@ export class MultiplayerPlayerInfoService {
         latency: -1 // Initial latency, will be updated later
       }
       this.updatePlayer(playerInfo);
-    });
+    };
 
     this.pingInterval = setInterval(() => {
       const peerIds = Object.keys(this.remotePlayers); 

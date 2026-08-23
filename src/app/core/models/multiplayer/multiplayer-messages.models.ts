@@ -1,13 +1,7 @@
-// copied from JsonValue in trysteros because it is not exported
-type SendableValue = null
-    | string
-    | number
-    | boolean
-    | SendableValue[]
-    | {[key: string]: SendableValue}
+import { JsonValue } from 'trystero';
 
 interface BaseMessage {
-    [key: string]: SendableValue
+    [key: string]: JsonValue
 }
 
 export interface HostClaimMessage extends BaseMessage {

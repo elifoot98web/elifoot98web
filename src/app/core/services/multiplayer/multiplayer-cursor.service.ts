@@ -24,17 +24,17 @@ export class MultiplayerCursorService {
   setup(room: Room) {
     this.room = room;
     // Listen for player pointer (cursor) messages
-    const [_, receivePlayerPointer] = this.room.makeAction<CursorPositionMessage>(MULTIPLAYER.EVENTS.PLAYER_CURSOR_POS);
-    receivePlayerPointer((data, peerId) => {
+    const cursorPosition = this.room.makeAction<CursorPositionMessage>(MULTIPLAYER.EVENTS.PLAYER_CURSOR_POS);
+    cursorPosition.onMessage = (data, { peerId }) => {
       this.updateCursor(peerId, data);
-    });
+    };
 
-    const [__, receivePlayerClick] = this.room.makeAction<CursorClickMessage>(MULTIPLAYER.EVENTS.PLAYER_CLICK);
-    receivePlayerClick((data) => {
+    const playerClick = this.room.makeAction<CursorClickMessage>(MULTIPLAYER.EVENTS.PLAYER_CLICK);
+    playerClick.onMessage = (data) => {
       if (data) {
         this.clickSubject.next(data);
       }
-    })
+    }
   }
 
   /**
@@ -73,15 +73,13 @@ export class MultiplayerCursorService {
   sendLocalCursor(cursor: CursorPositionMessage) {
     if (!this.room) return;
     this.updateCursor(selfId, cursor);
-    const [sendCursorPosition] = this.room.makeAction<CursorPositionMessage>(MULTIPLAYER.EVENTS.PLAYER_CURSOR_POS);
-    sendCursorPosition(cursor);
+    this.room.makeAction<CursorPositionMessage>(MULTIPLAYER.EVENTS.PLAYER_CURSOR_POS).send(cursor);
   }
 
   sendLocalClick(click: CursorClickMessage) {
     if (!this.room) return;
     this.clickSubject.next(click)
-    const [sendPlayerClick] = this.room.makeAction<CursorClickMessage>(MULTIPLAYER.EVENTS.PLAYER_CLICK);
-    sendPlayerClick(click);
+    this.room.makeAction<CursorClickMessage>(MULTIPLAYER.EVENTS.PLAYER_CLICK).send(click);
   }
 
   private updateCursor(peerId: string, cursor: CursorPositionMessage) {

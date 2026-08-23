@@ -19,10 +19,10 @@ export class MultiplayerChatService {
    */
   setup(room: Room) {
     this.room = room;
-    const [_, onChatMessage] = room.makeAction<MultiplayerChatMessage>(MULTIPLAYER.EVENTS.CHAT_MESSAGE);
-    onChatMessage((msg) => {
+    const chatMessage = room.makeAction<MultiplayerChatMessage>(MULTIPLAYER.EVENTS.CHAT_MESSAGE);
+    chatMessage.onMessage = (msg) => {
       this.addMessage(msg);
-    });
+    };
   }
 
   /**
@@ -46,8 +46,7 @@ export class MultiplayerChatService {
     };
     this.addMessage(msg); // add locally
 
-    const [sendChatMessage] = this.room.makeAction<MultiplayerChatMessage>(MULTIPLAYER.EVENTS.CHAT_MESSAGE);
-    sendChatMessage(msg);
+    this.room.makeAction<MultiplayerChatMessage>(MULTIPLAYER.EVENTS.CHAT_MESSAGE).send(msg);
   }
 
   /**

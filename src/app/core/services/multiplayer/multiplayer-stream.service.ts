@@ -29,7 +29,7 @@ export class MultiplayerStreamService {
       this.updateStream(stream);
     } else {
       console.log('Setting up stream for GUEST role');
-      this.room.onPeerStream((peerStream, peerId) => {
+      this.room.onPeerStream = (peerStream, peerId) => {
         if (this.role === MultiplayerUserRole.GUEST) {
           console.log(`[STREAM] Received stream from peer: ${peerId}`, { role: this.role, room: this.room, peerStream });
           // For GUEST, just update the local stream reference
@@ -38,7 +38,7 @@ export class MultiplayerStreamService {
         } else {
           console.warn('Received stream as HOST, but should not handle streams from peers.');
         }
-      })
+      }
     }
   }
 
@@ -49,7 +49,7 @@ export class MultiplayerStreamService {
   handlePeerJoin(peerId: string) {
     console.log(`[STREAM] Peer joined: ${peerId}`, { role: this.role, room: this.room, stream: this.stream });
     if (this.role === MultiplayerUserRole.HOST && this.room && this.stream) {
-      this.room.addStream(this.stream, peerId);
+      this.room.addStream(this.stream, { target: peerId });
     }
   }
 
@@ -59,7 +59,7 @@ export class MultiplayerStreamService {
    */
   handlePeerLeave(peerId: string) {
     if (this.role === MultiplayerUserRole.HOST && this.room && this.stream) {
-      this.room.removeStream(this.stream, peerId);
+      this.room.removeStream(this.stream, { target: peerId });
     }
   }
 

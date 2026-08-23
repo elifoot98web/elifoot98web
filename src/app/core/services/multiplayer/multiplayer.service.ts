@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { BaseRoomConfig, joinRoom, Room, TurnConfig } from 'trystero';
+import { joinRoom, JoinRoomConfig, Room } from 'trystero';
 import { GameState, HostClaimMessage, MultiplayerUserRole, PlayerIdentMessage } from '../../models/multiplayer';
 import { MULTIPLAYER } from '../../models/constants';
 import { MultiplayerChatService } from './multiplayer-chat.service';
@@ -85,7 +85,7 @@ export class MultiplayerService {
     this.password = password;
     this.playerColor = color || '#000000'; // Default to black if no color provided
 
-    const config: BaseRoomConfig & TurnConfig = { // use any to allow turnConfig key
+    const config: JoinRoomConfig = {
       appId: MULTIPLAYER.APP_ID,
       password: this.password,
       turnConfig: environment.multiplayerConfig.turnConfig
@@ -104,27 +104,27 @@ export class MultiplayerService {
   private async initPeerListeners() {
     if (!this.room) throw new Error('Room is not initialized');
 
-    this.room.onPeerJoin((peerId) => {
+    this.room.onPeerJoin = (peerId) => {
       this.onPeerJoin(peerId);
-    })
+    }
 
-    this.room.onPeerLeave((peerId) => {
+    this.room.onPeerLeave = (peerId) => {
       this.onPeerLeave(peerId);
-    })
+    }
   }
 
   private async claimHost(): Promise<boolean> {
     if (!this.room) throw new Error('Room is not initialized');
 
-    const [sendHostClaim, receiveHostClaim] = this.room.makeAction<HostClaimMessage>(MULTIPLAYER.EVENTS.HOST_CLAIM);
+    const hostClaim = this.room.makeAction<HostClaimMessage>(MULTIPLAYER.EVENTS.HOST_CLAIM);
 
     let reclaimed = false;
 
     // Listen for host claims from other peers during the initial timeout
-    receiveHostClaim((data, peerId) => {
+    hostClaim.onMessage = (data, { peerId }) => {
       reclaimed = true;
       console.warn(`Host claim received from ${peerId}:`, data);
-    });
+    };
 
     // Broadcast our host claim continuously until timeout
     const hostClaimInterval = setInterval(() => {
@@ -132,7 +132,7 @@ export class MultiplayerService {
         clearInterval(hostClaimInterval); // Stop sending if we detected a reclaim
         return;
       }
-      sendHostClaim({ hostName: this.playerName });
+      hostClaim.send({ hostName: this.playerName });
     }, MULTIPLAYER.HOST_CLAIM_INTERVAL);
 
     // Wait for a period to detect any host reclaim conflicts
@@ -164,13 +164,13 @@ export class MultiplayerService {
     this.playerRole = MultiplayerUserRole.HOST;
 
     // Setup host claim listener
-    const [sendHostClaim, receiveHostClaim] = this.room.makeAction<HostClaimMessage>(MULTIPLAYER.EVENTS.HOST_CLAIM);
-    receiveHostClaim((data, peerId) => {
+    const hostClaim = this.room.makeAction<HostClaimMessage>(MULTIPLAYER.EVENTS.HOST_CLAIM);
+    hostClaim.onMessage = (data, { peerId }) => {
       console.warn(`Host claim attempt received from ${peerId}:`, data);
-      // If we receive a claim after our own, we resend our claim to let 
+      // If we receive a claim after our own, we resend our claim to let
       // the other host candidate know we are still active
-      sendHostClaim({ hostName: this.playerName || 'Host' })
-    })
+      hostClaim.send({ hostName: this.playerName || 'Host' })
+    }
     
     this.setupStreamService(stream);
   }
@@ -201,15 +201,15 @@ export class MultiplayerService {
       this.playerInfoService.removePlayer(peerId); // Remove player info for this peer
     });
 
-    const [sendPlayerIdent] = room.makeAction<PlayerIdentMessage>(MULTIPLAYER.EVENTS.PLAYER_IDENT);
+    const playerIdent = room.makeAction<PlayerIdentMessage>(MULTIPLAYER.EVENTS.PLAYER_IDENT);
     this.addOnPeerJoinHandler((peerId: string) => {
       // When a new peer joins, send them the current player ident
-      const playerIdent: PlayerIdentMessage = {
+      const ident: PlayerIdentMessage = {
         name: this.playerName,
         color: this.playerColor,
         host: (this.playerRole === MultiplayerUserRole.HOST)
       };
-      sendPlayerIdent(playerIdent, peerId);
+      playerIdent.send(ident, { target: peerId });
     });
   }
 
