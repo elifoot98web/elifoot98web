@@ -1,0 +1,30 @@
+<ion-header>
+  <ion-toolbar color="tertiary">
+    <ion-title>Participantes</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="close()">
+        <ion-icon slot="icon-only" name="close-outline"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <ion-list lines="full">
+    <ion-item *ngFor="let player of players$ | async; trackBy: trackByPeerId">
+      <div slot="start" class="player-color" [style.background-color]="player.playerColor"></div>
+      <ion-label>
+        <h2>
+          {{ player.playerName || player.peerId.slice(0, 6) }}
+          <ion-badge *ngIf="player.role === MultiplayerUserRole.HOST" color="warning">anfitrião</ion-badge>
+        </h2>
+        <p>{{ player.peerId === selfId ? 'Este dispositivo' : player.peerId.slice(0, 8) }}</p>
+      </ion-label>
+      <ion-note slot="end" [color]="latencyColor(player)">{{ latencyLabel(player) }}</ion-note>
+    </ion-item>
+  </ion-list>
+
+  <ion-note *ngIf="(players$ | async)?.length === 0" class="ion-padding empty-note">
+    Ninguém na sala ainda.
+  </ion-note>
+</ion-content>

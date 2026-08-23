@@ -9,12 +9,14 @@ import { FaqComponent } from './components/faq/faq.component';
 import { ManualComponent } from './components/manual/manual.component';
 import { AboutComponent } from './components/about/about.component';
 import { OmaticModalComponent } from './components/omatic-modal/omatic-modal.component';
+import { CoreComponentsModule } from 'src/app/core/components/core-components.module';
 
 @NgModule({
   imports: [
     CommonModule,
     FormsModule,
     IonicModule,
+    CoreComponentsModule,
     GamePageRoutingModule
   ],
   declarations: [

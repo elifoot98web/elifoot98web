@@ -20,19 +20,27 @@ export class CursorRendererHelper {
     });
 
     Object.entries(cursors).forEach(([peerId, cursor]) => {
+      const isSelf = peerId === selfId;
       let el = cursorElements[peerId];
       if (!el) {
         el = document.createElement('div');
         const img = document.createElement('img');
         const txt = document.createElement('p');
-        el.className = `cursor${peerId === 'self' ? ' self' : ''}`;
+        el.className = `cursor${isSelf ? ' self' : ''}`;
         el.style.position = 'absolute';
         el.style.zIndex = `${MULTIPLAYER.CURSOR_Z_INDEX}`;
         el.style.pointerEvents = 'none'; // Prevent interaction with the native element
+        // Remote positions arrive throttled, so interpolate between them to avoid
+        // teleporting. The local cursor is deliberately left un-interpolated: it updates
+        // on every pointer event, so a transition would restart before it ever finished
+        // and the cursor would visibly trail the real pointer.
+        if (!isSelf) {
+          el.style.transition = `left ${MULTIPLAYER.CURSOR_SEND_THROTTLE_MS}ms linear, top ${MULTIPLAYER.CURSOR_SEND_THROTTLE_MS}ms linear`;
+        }
         img.src = 'assets/cursor2.png';
         const filter = ColorHelper.getCSSFilterFromColor(cursor.color)
         img.style = filter;
-        txt.innerText = peerId === selfId ? 'Você' : cursor.name || peerId.slice(0, 6);
+        txt.innerText = isSelf ? 'Você' : cursor.name || peerId.slice(0, 6);
         txt.className = 'pointer-overlay-cursor-label';
         el.appendChild(img);
         el.appendChild(txt);

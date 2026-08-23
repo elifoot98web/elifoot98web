@@ -8,6 +8,13 @@
     background-color: #008000;
 }
 
+// The cursor overlay is an absolutely-positioned child of #game-container, and it is
+// aligned using the canvas's offsetLeft/offsetTop. Making the container the positioned
+// ancestor means both resolve against the same box.
+#game-container {
+    position: relative;
+}
+
 ion-fab-list.labeled ion-fab-button {
     overflow: visible;
     position: relative;

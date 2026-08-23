@@ -15,6 +15,10 @@ export class MultiplayerCursorService {
 
   private clickSubject = new BehaviorSubject<CursorClickMessage | null>(null);
 
+  // Outgoing cursor throttling
+  private pendingCursor?: CursorPositionMessage;
+  private cursorFlushTimer?: ReturnType<typeof setTimeout>;
+
   constructor() { }
 
   /**
@@ -63,23 +67,48 @@ export class MultiplayerCursorService {
    * Clear all cursors (e.g., on room leave)
   */
   clear() {
+    clearTimeout(this.cursorFlushTimer);
+    this.cursorFlushTimer = undefined;
+    this.pendingCursor = undefined;
+    this.room = undefined;
     this.cursors = {};
     this.cursorsSubject.next({});
+    this.clickSubject.next(null);
   }
 
   /**
-   * Send local cursor update: update local state and send to peers
+   * Send local cursor update: update local state and send to peers.
+   *
+   * Pointer events fire far faster than anyone can perceive, and every send competes with
+   * the video stream for bandwidth, so outgoing positions are coalesced: the latest
+   * position wins and is flushed at most once per throttle window.
   */
   sendLocalCursor(cursor: CursorPositionMessage) {
     if (!this.room) return;
     this.updateCursor(selfId, cursor);
-    this.room.makeAction<CursorPositionMessage>(MULTIPLAYER.EVENTS.PLAYER_CURSOR_POS).send(cursor);
+
+    this.pendingCursor = cursor;
+    if (this.cursorFlushTimer !== undefined) return;
+
+    this.flushCursor();
+    this.cursorFlushTimer = setTimeout(() => {
+      this.cursorFlushTimer = undefined;
+      // Flush whatever arrived while we were throttling, so the cursor never
+      // comes to rest on a stale position.
+      if (this.pendingCursor) this.flushCursor();
+    }, MULTIPLAYER.CURSOR_SEND_THROTTLE_MS);
   }
 
   sendLocalClick(click: CursorClickMessage) {
     if (!this.room) return;
     this.clickSubject.next(click)
     this.room.makeAction<CursorClickMessage>(MULTIPLAYER.EVENTS.PLAYER_CLICK).send(click);
+  }
+
+  private flushCursor() {
+    if (!this.room || !this.pendingCursor) return;
+    this.room.makeAction<CursorPositionMessage>(MULTIPLAYER.EVENTS.PLAYER_CURSOR_POS).send(this.pendingCursor);
+    this.pendingCursor = undefined;
   }
 
   private updateCursor(peerId: string, cursor: CursorPositionMessage) {

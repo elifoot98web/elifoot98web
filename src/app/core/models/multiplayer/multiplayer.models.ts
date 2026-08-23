@@ -1,7 +1,9 @@
 export enum GameState {
     NOT_IN_ROOM,
     JOINING_ROOM,
+    WAITING_STREAM,
     IN_ROOM,
+    HOST_LEFT,
     ERROR
 }
 

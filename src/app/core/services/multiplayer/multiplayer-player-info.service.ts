@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
 import { MultiplayerUserRole, PlayerIdentMessage, PlayerInfo } from '../../models/multiplayer';
-import { Room } from 'trystero';
+import { Room, selfId } from 'trystero';
 import { MULTIPLAYER } from '../../models/constants';
 
 @Injectable({
@@ -10,14 +10,17 @@ import { MULTIPLAYER } from '../../models/constants';
 export class MultiplayerPlayerInfoService {
 
   private remotePlayers: { [peerId: string]: PlayerInfo } = {}; // Maps peerId to player name
-  private playerListSubject = new BehaviorSubject<PlayerInfo[]>([]);  
-  private pingInterval: any; // For latency updates
+  private playerListSubject = new BehaviorSubject<PlayerInfo[]>([]);
+  private pingInterval?: ReturnType<typeof setInterval>; // For latency updates
 
   constructor() { }
-  
+
   playerList$ = this.playerListSubject.asObservable();
-  
+
   setup(room: Room) {
+    // Guard against a second setup silently orphaning the previous interval
+    this.clear();
+
     // Listen for player ident messages
     const playerIdent = room.makeAction<PlayerIdentMessage>(MULTIPLAYER.EVENTS.PLAYER_IDENT);
     playerIdent.onMessage = (ident, { peerId }) => {
@@ -33,33 +36,42 @@ export class MultiplayerPlayerInfoService {
     };
 
     this.pingInterval = setInterval(() => {
-      const peerIds = Object.keys(this.remotePlayers); 
+      const peerIds = Object.keys(this.remotePlayers).filter(peerId => peerId !== selfId);
       peerIds.forEach(peerId => {
         let timedOut = false;
-        
+
         const timeOutHandler = setTimeout(() => {
           timedOut = true; // Mark as timed out
         }, MULTIPLAYER.PING_TIMEOUT)
 
         room.ping(peerId).then(latency => {
           if(timedOut) return; // Ignore if already timed out
-          
+
           clearTimeout(timeOutHandler); // Clear timeout if we got a response
-          
+
           const playerInfo = this.getPlayer(peerId);
           if (!playerInfo) return;
-            
+
           playerInfo.latency = latency;
           this.updatePlayer(playerInfo); // Update player with new latency
         })
       })
     }, MULTIPLAYER.PING_REFRESH_INTERVAL);
   }
-  
+
   clear() {
     clearInterval(this.pingInterval); // Stop ping updates
+    this.pingInterval = undefined;
     this.remotePlayers = {};
     this.playerListSubject.next([]);
+  }
+
+  /**
+   * Register the local player so the roster can list everyone in the room, not just peers.
+   * Latency is meaningless for ourselves, so it stays at 0.
+   */
+  setLocalPlayer(playerName: string, playerColor: string, role: MultiplayerUserRole) {
+    this.updatePlayer({ peerId: selfId, playerName, playerColor, role, latency: 0 });
   }
 
   updatePlayer(playerInfo: PlayerInfo) {

@@ -27,16 +27,9 @@ export interface PlayerIdentMessage extends BaseMessage {
     host: boolean; // true if this is the host player
 }
 
-export interface PlayerListMessage extends BaseMessage {
-    players: { [peerId: string]: string };
-}
-
 export interface MultiplayerChatMessage extends BaseMessage {
     id: string; // unique id for message
     senderId: string;
     text: string;
-}
-
-export interface MultiplayerChatMessageWithTimestamp extends MultiplayerChatMessage {
-    timestamp: number; // timestamp of the received message
+    timestamp: number; // set by the sender, so all peers order messages identically
 }

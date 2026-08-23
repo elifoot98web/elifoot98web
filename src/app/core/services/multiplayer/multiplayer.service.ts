@@ -16,11 +16,10 @@ export class MultiplayerService {
   // This service centralizes the core multiplayer logic, rooms, users which can be used by both host and guest.
 
   // Game state management
-  private state: GameState = GameState.NOT_IN_ROOM;
   private playerName: string = '';
   private roomName: string = '';
   private password: string = '';
-  private playerColor: string = '#000000'; // Default color for the player
+  private playerColor: string = MULTIPLAYER.DEFAULT_CURSOR_COLOR;
 
   private playerRole: MultiplayerUserRole = MultiplayerUserRole.GUEST; // Default role is GUEST
 
@@ -30,7 +29,7 @@ export class MultiplayerService {
   private onPeerLeaveHandlers: ((peerId: string) => void)[] = [];
 
   // Subjects
-  gameStateSubject = new BehaviorSubject<GameState>(this.state);
+  gameStateSubject = new BehaviorSubject<GameState>(GameState.NOT_IN_ROOM);
 
   constructor(
     private multiplayerCursorService: MultiplayerCursorService,
@@ -39,51 +38,75 @@ export class MultiplayerService {
     private streamService: MultiplayerStreamService
   ) { }
 
-  async hostGameRoom(hostName: string, roomName: string, password: string, stream: MediaStream) {
-    this.joinRoom(hostName, roomName, password);
+  get isInRoom(): boolean {
+    return this.room !== undefined;
+  }
+
+  async hostGameRoom(hostName: string, roomName: string, password: string, stream: MediaStream, color?: string) {
+    this.joinRoom(hostName, roomName, password, MultiplayerUserRole.HOST, color);
     const claimedHost = await this.claimHost();
     if (!claimedHost) {
-      this.leaveRoom();
-      this.state = GameState.ERROR;
-      throw new Error('Host claim failed, another host is already active. Disconnecting from room.');
+      this.leaveRoom(GameState.ERROR);
+      throw new Error('Já existe outro anfitrião nesta sala. Escolha outro código de sala.');
     }
     this.setupHost(stream);
   }
 
-  async joinGameRoom(playerName: string, roomName: string, password: string): Promise<void> {
-    this.joinRoom(playerName, roomName, password);
+  async joinGameRoom(playerName: string, roomName: string, password: string, color?: string): Promise<void> {
+    this.joinRoom(playerName, roomName, password, MultiplayerUserRole.GUEST, color);
     this.setupGuest()
   }
 
-  leaveRoom() {
-    if (this.room) {
-      this.room.leave();
-      this.room = undefined;
-      this.state = GameState.NOT_IN_ROOM;
-      this.playerRole = MultiplayerUserRole.GUEST; // Reset role
-      this.playerName = '';
+  /**
+   * Tear down the room and reset all multiplayer state.
+   *
+   * @param nextState the state to settle on. Callers that are leaving *because* of a
+   *   condition worth reporting (the host vanished, say) pass that state so it is not
+   *   overwritten by the default idle state.
+   */
+  leaveRoom(nextState: GameState = GameState.NOT_IN_ROOM) {
+    this.room?.leave();
+    this.room = undefined;
 
-      this.onPeerJoinHandlers = []; // Clear join handlers
-      this.onPeerLeaveHandlers = []; // Clear leave handlers
+    this.playerRole = MultiplayerUserRole.GUEST; // Reset role
+    this.playerName = '';
+    this.roomName = '';
+    this.password = '';
+    this.playerColor = MULTIPLAYER.DEFAULT_CURSOR_COLOR;
 
-      // Clear services
-      this.playerInfoService.clear();
-      this.multiplayerCursorService.clear();
-      this.chatService.clear();
-      this.streamService.clear(); // Clear stream service state
-      console.log('Left the multiplayer room and reset service state.');
+    this.onPeerJoinHandlers = []; // Clear join handlers
+    this.onPeerLeaveHandlers = []; // Clear leave handlers
+
+    // Clear services
+    this.playerInfoService.clear();
+    this.multiplayerCursorService.clear();
+    this.chatService.clear();
+    this.streamService.clear(); // Clear stream service state
+
+    this.setState(nextState);
+    console.log('Left the multiplayer room and reset service state.');
+  }
+
+  /**
+   * Publish a new game state to subscribers. All state transitions go through here so
+   * that the subject and the current state can never drift apart.
+   */
+  setState(state: GameState) {
+    if (this.gameStateSubject.value !== state) {
+      this.gameStateSubject.next(state);
     }
   }
 
-  private joinRoom(playerName: string, roomName: string, password: string, color?: string): void {
+  private joinRoom(playerName: string, roomName: string, password: string, role: MultiplayerUserRole, color?: string): void {
     if (this.room) throw new Error('Already in a room. Please leave the current room before joining a new one.');
-    
-    this.state = GameState.JOINING_ROOM;
+
+    this.setState(GameState.JOINING_ROOM);
 
     this.playerName = playerName;
     this.roomName = roomName;
     this.password = password;
-    this.playerColor = color || '#000000'; // Default to black if no color provided
+    this.playerRole = role;
+    this.playerColor = color || MULTIPLAYER.DEFAULT_CURSOR_COLOR;
 
     const config: JoinRoomConfig = {
       appId: MULTIPLAYER.APP_ID,
@@ -92,8 +115,18 @@ export class MultiplayerService {
     }
     this.room = joinRoom(config, this.roomName.toLocaleUpperCase()); // Use uppercase room name for consistency
 
-    this.state = GameState.IN_ROOM;
     this.initPeerListeners(); // Initialize peer listeners for join/leave events
+
+    // Registered before the player info service, whose own leave handler deletes the
+    // PlayerInfo this check reads. Handlers run in registration order.
+    if (role === MultiplayerUserRole.GUEST) {
+      this.addOnPeerLeaveHandler((peerId: string) => {
+        if (this.playerInfoService.getPlayer(peerId)?.role === MultiplayerUserRole.HOST) {
+          console.warn(`Host ${peerId} left the room.`);
+          this.setState(GameState.HOST_LEFT);
+        }
+      });
+    }
 
     // Setup shared services
     this.setupCursorService();
@@ -101,7 +134,7 @@ export class MultiplayerService {
     this.setupChatService();
   }
 
-  private async initPeerListeners() {
+  private initPeerListeners() {
     if (!this.room) throw new Error('Room is not initialized');
 
     this.room.onPeerJoin = (peerId) => {
@@ -153,15 +186,13 @@ export class MultiplayerService {
 
   private setupGuest() {
     if (!this.room) return;
-    
-    this.playerRole = MultiplayerUserRole.GUEST;
+
+    this.setState(GameState.WAITING_STREAM);
     this.setupStreamService();
   }
 
   private setupHost(stream: MediaStream) {
     if (!this.room) return;
-    
-    this.playerRole = MultiplayerUserRole.HOST;
 
     // Setup host claim listener
     const hostClaim = this.room.makeAction<HostClaimMessage>(MULTIPLAYER.EVENTS.HOST_CLAIM);
@@ -171,8 +202,9 @@ export class MultiplayerService {
       // the other host candidate know we are still active
       hostClaim.send({ hostName: this.playerName || 'Host' })
     }
-    
+
     this.setupStreamService(stream);
+    this.setState(GameState.IN_ROOM);
   }
 
   private setupChatService() {
@@ -196,6 +228,7 @@ export class MultiplayerService {
     const room = this.room; // Capture the room instance in this closure for use in handlers
 
     this.playerInfoService.setup(room); // Setup player info service
+    this.playerInfoService.setLocalPlayer(this.playerName, this.playerColor, this.playerRole);
 
     this.addOnPeerLeaveHandler((peerId: string) => {
       this.playerInfoService.removePlayer(peerId); // Remove player info for this peer
@@ -215,9 +248,9 @@ export class MultiplayerService {
 
   private setupStreamService(stream?: MediaStream) {
     if (!this.room) return;
-    
+
     this.streamService.setup(this.room, this.playerRole, stream);
-    
+
     // Only the host bothers with peer join/leave events
     if(this.playerRole === MultiplayerUserRole.HOST && stream) {
       console.log(`Setting up peer join/leave handlers for HOST role`);

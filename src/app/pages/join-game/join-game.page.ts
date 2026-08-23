@@ -1,9 +1,17 @@
-import { Component, AfterViewInit, OnDestroy } from '@angular/core';
-import { AlertController, LoadingController } from '@ionic/angular';
+import { Component, OnDestroy, OnInit } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
+import { LoadingController } from '@ionic/angular';
 import { GameState, CursorPositionMessage, CursorClickMessage } from '../../core/models/multiplayer';
-import { Subscription } from 'rxjs';
-import { MultiplayerCursorService, MultiplayerService, MultiplayerStreamService } from '../../core/services/multiplayer';
+import { Observable, Subscription } from 'rxjs';
+import {
+  MultiplayerChatService,
+  MultiplayerCursorService,
+  MultiplayerService,
+  MultiplayerStreamService,
+  MultiplayerUiService
+} from '../../core/services/multiplayer';
 import { CursorRendererHelper } from 'src/app/core/helpers/cursor-renderer.helper';
+import { OverlaySyncHelper } from 'src/app/core/helpers/overlay-sync.helper';
 import { MULTIPLAYER } from 'src/app/core/models/constants';
 
 @Component({
@@ -12,157 +20,119 @@ import { MULTIPLAYER } from 'src/app/core/models/constants';
   styleUrls: ['./join-game.page.scss'],
   standalone: false,
 })
-export class JoinGamePage implements AfterViewInit, OnDestroy {
+export class JoinGamePage implements OnInit, OnDestroy {
   private playerName = '';
   private roomId = '';
   private password = '';
-  private cursorColor = MULTIPLAYER.DEFAULT_CURSOR_COLOR; // Default cursor color
+  private cursorColor = MULTIPLAYER.DEFAULT_CURSOR_COLOR;
 
   GameState = GameState;
   joinError = '';
 
   gameState: GameState = GameState.NOT_IN_ROOM;
 
-  private cursorSubscription?: Subscription;
-
   isChatOpen = false;
-  isPortraitMobile = false;
 
-  private chatSidebarTransitioning = false;
-  private chatSidebarRafId?: number;
+  /** Drives the badge on the chat toggle, which sits outside the chat component. */
+  unreadCount$: Observable<number>;
+
+  /** Lives as long as the page. */
+  private pageSubscriptions = new Subscription();
+  /** Recreated per room, so a rejoin does not stack duplicate cursor subscriptions. */
+  private roomSubscriptions = new Subscription();
+  private stopObservingOverlay?: () => void;
 
   constructor(
     private loadingController: LoadingController,
-    private alertController: AlertController,
+    private route: ActivatedRoute,
     private multiplayerService: MultiplayerService,
     private multiplayerCursorService: MultiplayerCursorService,
-    private multiplayerStreamService: MultiplayerStreamService
-  ) { }
+    private multiplayerStreamService: MultiplayerStreamService,
+    private multiplayerUiService: MultiplayerUiService,
+    chatService: MultiplayerChatService
+  ) {
+    this.unreadCount$ = chatService.unreadCount$;
+  }
 
-  ngAfterViewInit() {
-    window.addEventListener('resize', () => {
-      this.syncStreamContainer();
-      this.updateChatLayout();
-    });
-    this.updateChatLayout();
+  ngOnInit() {
+    this.pageSubscriptions.add(
+      this.multiplayerService.gameStateSubject.subscribe(state => this.onGameStateChange(state))
+    );
 
-    // Listen for chat sidebar transition events for smooth resizing
-    const sidebar = document.querySelector('.chat-sidebar-flex') as HTMLElement;
-    if (sidebar) {
-      sidebar.addEventListener('transitionrun', this.onSidebarTransitionRun);
-      sidebar.addEventListener('transitionend', this.onSidebarTransitionEndOrCancel);
-      sidebar.addEventListener('transitioncancel', this.onSidebarTransitionEndOrCancel);
+    // Arriving via a share link should feel like following a link, so open the join
+    // form straight away with the code already filled in.
+    if (this.route.snapshot.queryParamMap.get('room')) {
+      this.promptJoinInfo();
     }
-
-    const video = document.querySelector('#stream-target') as HTMLVideoElement;
-    if (video) {
-      video.addEventListener('loadedmetadata', () => {
-        console.log('Video metadata loaded, syncing stream container');
-        this.syncStreamContainer();
-      });
-      video.addEventListener('play', () => {
-        console.log('Video started playing, syncing stream container');
-        this.syncStreamContainer();
-      })
-    }
-    this.syncStreamContainer();
   }
 
   ngOnDestroy() {
-    this.cursorSubscription?.unsubscribe();
-    window.removeEventListener('resize', this.updateChatLayout.bind(this));
-    // Remove sidebar transition listeners
-    const sidebar = document.querySelector('.chat-sidebar-flex') as HTMLElement;
-    if (sidebar) {
-      sidebar.removeEventListener('transitionrun', this.onSidebarTransitionRun);
-      sidebar.removeEventListener('transitionend', this.onSidebarTransitionEndOrCancel);
-      sidebar.removeEventListener('transitioncancel', this.onSidebarTransitionEndOrCancel);
-    }
-    if (this.chatSidebarRafId) {
-      cancelAnimationFrame(this.chatSidebarRafId);
-      this.chatSidebarRafId = undefined;
-    }
+    this.detachStream();
+    this.roomSubscriptions.unsubscribe();
+    this.pageSubscriptions.unsubscribe();
+    // Leaving here matters: without it the peer connection, ping interval and
+    // received stream all survive navigation back to the landing page.
+    this.multiplayerService.leaveRoom();
   }
 
   /**
-   * Prompt user for name, room id, and password, then join the game room.
+   * Collect name, room code and colour, then join. A room code from a share link is
+   * prefilled so the guest only needs to fill in who they are.
    */
   async promptJoinInfo() {
-    const alert = await this.alertController.create({
-      header: 'Entrar em sala multiplayer',
-      inputs: [
-        { name: 'playerName', type: 'text', placeholder: 'Seu nome', value: this.playerName },
-        { name: 'roomId', type: 'text', placeholder: 'ID da sala', value: this.roomId },
-        { name: 'password', type: 'text', placeholder: 'Senha da Sala (opcional)', value: this.password },
-      ],
-      buttons: [
-        {
-          text: 'Cancelar',
-          role: 'cancel',
-        },
-        {
-          text: 'Entrar',
-          handler: async (data) => {
-            this.playerName = data.playerName;
-            this.roomId = data.roomId;
-            this.password = data.password;
-            await this.joinRoom();
-          }
-        }
-      ]
-    });
-    await alert.present();
+    // Once the guest has typed a code of their own it wins over the one in the URL,
+    // otherwise retrying with a different room would be impossible.
+    const presetRoomCode = this.roomId || (this.route.snapshot.queryParamMap.get('room') ?? '');
+    const setup = await this.multiplayerUiService.promptRoomSetup('guest', presetRoomCode);
+    if (!setup) return;
+
+    this.playerName = setup.playerName;
+    this.roomId = setup.roomCode;
+    this.password = setup.password;
+    this.cursorColor = setup.playerColor;
+
+    await this.joinRoom();
   }
 
   async joinRoom() {
-    this.gameState = GameState.JOINING_ROOM;
+    // A previous attempt, or a host that walked out, can leave us still in a room.
+    if (this.multiplayerService.isInRoom) {
+      this.resetRoomState();
+    }
+
     this.joinError = '';
     const loading = await this.loadingController.create({ message: 'Entrando na sala...' });
     await loading.present();
+
     try {
-      await this.multiplayerService.joinGameRoom(this.playerName, this.roomId, this.password);      
-      // handler stream 
-      const stream$ = this.multiplayerStreamService.getStreamObservable().subscribe((stream) => {
-        if(stream.getVideoTracks().length === 0) {
-          return; // No video track available, nothing to display
-        }
-        this.gameState = GameState.IN_ROOM;
-        const video = document.querySelector('#stream-target') as HTMLVideoElement
-        if (!video) { 
-          stream$.unsubscribe();
-          throw new Error('Video element not found') 
-        }
-        video.srcObject = stream;
-        this.syncStreamContainer();
-      })
+      await this.multiplayerService.joinGameRoom(this.playerName, this.roomId, this.password, this.cursorColor);
 
-      // handle cursors
-      // Subscribe to cursor position updates
-      this.cursorSubscription = this.multiplayerCursorService.getCursorsObservable().subscribe(cursors => {
-        this.renderCursors(cursors);
-      });
-
-      // Subscribe to cursor click events
-      this.multiplayerCursorService.getClickObservable().subscribe(click => {
-        if (click) {
-          this.renderClick(click);
-        }
-      });
-      
+      // Trystero connects to a room name, not to a host: a wrong code or password looks
+      // identical to an empty room, so the only failure signal is the stream never arriving.
+      const stream = await this.multiplayerStreamService.waitForVideoStream();
+      this.attachStream(stream);
+      this.subscribeToCursors();
     } catch (err: any) {
-      this.joinError = err.message || 'Erro ao entrar na sala.';
-      this.gameState = GameState.ERROR;
-      await this.showError(this.joinError);
-      await this.promptJoinInfo();
+      await this.handleJoinFailure(err);
     } finally {
       await loading.dismiss();
     }
   }
-  
+
+  async leaveRoom() {
+    const confirmed = await this.multiplayerUiService.confirmLeave('Você vai parar de assistir a esta partida.');
+    if (!confirmed) return;
+    this.resetRoomState();
+  }
+
+  async showParticipants() {
+    await this.multiplayerUiService.showParticipants();
+  }
+
   /**
    * Handle pointer (mouse/touch) move and send to cursorService.
   */
- onPointerMove(event: MouseEvent | TouchEvent) {
+  onPointerMove(event: MouseEvent | TouchEvent) {
     const { x, y } = this.processCursorEvent(event);
     const cursorMessage: CursorPositionMessage = {
       x: x,
@@ -183,17 +153,88 @@ export class JoinGamePage implements AfterViewInit, OnDestroy {
     this.multiplayerCursorService.sendLocalClick(clickMessage);
   }
 
-  showParticipants() {
-    throw new Error('Not implemented yet');
+  toggleChat(force?: boolean) {
+    this.isChatOpen = typeof force === 'boolean' ? force : !this.isChatOpen;
   }
-  
-  private async showError(message: string) {
-    const alert = await this.alertController.create({
-      header: 'Erro',
-      message,
-      buttons: ['OK']
-    });
-    await alert.present();
+
+  private onGameStateChange(state: GameState) {
+    this.gameState = state;
+    if (state === GameState.HOST_LEFT) {
+      this.joinError = 'O anfitrião saiu da sala. A transmissão foi encerrada.';
+      // Nothing left to spectate, so drop the room — but keep HOST_LEFT on screen
+      // rather than falling back to the idle card.
+      this.detachStream();
+      this.roomSubscriptions.unsubscribe();
+      this.roomSubscriptions = new Subscription();
+      this.multiplayerService.leaveRoom(GameState.HOST_LEFT);
+    }
+  }
+
+  private async handleJoinFailure(err: any) {
+    // rxjs `timeout` throws a TimeoutError; anything else is a genuine connection fault.
+    const isTimeout = err?.name === 'TimeoutError';
+    this.joinError = isTimeout
+      ? 'Não recebemos a transmissão. Verifique o código da sala e a senha, e confirme que o anfitrião já começou a hospedar.'
+      : err?.message || 'Erro ao entrar na sala.';
+
+    // Settle on ERROR so the page offers a retry instead of silently resetting.
+    this.resetRoomState(GameState.ERROR);
+    await this.multiplayerUiService.showError(this.joinError);
+  }
+
+  private resetRoomState(nextState: GameState = GameState.NOT_IN_ROOM) {
+    this.detachStream();
+    this.roomSubscriptions.unsubscribe();
+    this.roomSubscriptions = new Subscription();
+    this.isChatOpen = false;
+    this.multiplayerService.leaveRoom(nextState);
+  }
+
+  /**
+   * Tear down everything attached to the current video element, so a later rejoin does
+   * not stack duplicate listeners or observers on it.
+   */
+  private detachStream() {
+    this.stopObservingOverlay?.();
+    this.stopObservingOverlay = undefined;
+
+    const video = this.getVideoElement();
+    if (!video) return;
+    video.removeEventListener('loadedmetadata', this.syncStreamContainer);
+    video.removeEventListener('resize', this.syncStreamContainer);
+    video.srcObject = null;
+  }
+
+  private attachStream(stream: MediaStream) {
+    const video = this.getVideoElement();
+    if (!video) throw new Error('Video element not found');
+
+    video.srcObject = stream;
+    this.multiplayerService.setState(GameState.IN_ROOM);
+
+    // The host re-scales its canvas whenever its own chat sidebar is toggled, which
+    // changes this track's resolution mid-call.
+    video.addEventListener('loadedmetadata', this.syncStreamContainer);
+    video.addEventListener('resize', this.syncStreamContainer);
+
+    // Observing the container, not the video: syncStreamContainer sets the video's own
+    // dimensions, so observing it would re-trigger on its own output.
+    this.stopObservingOverlay = OverlaySyncHelper.observe([video.parentElement], this.syncStreamContainer);
+    this.syncStreamContainer();
+  }
+
+  private subscribeToCursors() {
+    this.roomSubscriptions.add(
+      this.multiplayerCursorService.getCursorsObservable().subscribe(cursors => {
+        this.renderCursors(cursors);
+      })
+    );
+
+    this.roomSubscriptions.add(
+      this.multiplayerCursorService.getClickObservable().subscribe(click => {
+        if (click) this.renderClick(click);
+      })
+    );
   }
 
   private processCursorEvent(event: MouseEvent | TouchEvent): { x: number, y: number } {
@@ -202,10 +243,10 @@ export class JoinGamePage implements AfterViewInit, OnDestroy {
      // we need to transform the mouse coordinates to the target element where 0,0 is the top left and 1,1 is the bottom right
      x = event.offsetX / (event.target as HTMLElement).clientWidth;
      y = event.offsetY / (event.target as HTMLElement).clientHeight;
-     
+
     } else if (event instanceof TouchEvent && event.touches.length > 0) {
-      // TODO: validate if coordinates match the same values of event.offsetX/Y
-      // when using touch events, we need to calculate the position relative to the target element
+      // Touch events carry no offsetX/Y, so derive the same normalized coordinates
+      // from the touch point relative to the target's bounding box.
       const rect = (event.target as HTMLElement).getBoundingClientRect();
       x = (event.touches[0].clientX - rect.left) / rect.width;
       y = (event.touches[0].clientY - rect.top) / rect.height;
@@ -214,41 +255,37 @@ export class JoinGamePage implements AfterViewInit, OnDestroy {
   }
 
   private renderCursors(cursors: { [peerId: string]: CursorPositionMessage }) {
-    const canvas = document.querySelector('#cursors-overlay') as HTMLElement;
-    if (!canvas) return;
-    this.syncStreamContainer();
-
-    CursorRendererHelper.renderCursors(canvas, cursors);
+    const overlay = this.getOverlayElement();
+    if (!overlay) return;
+    CursorRendererHelper.renderCursors(overlay, cursors);
   }
 
   private renderClick(click: CursorClickMessage) {
-    const canvas = document.querySelector('#cursors-overlay') as HTMLElement;
-    if (!canvas) return;
-    this.syncStreamContainer();
-
-    CursorRendererHelper.renderClick(canvas, click);
+    const overlay = this.getOverlayElement();
+    if (!overlay) return;
+    CursorRendererHelper.renderClick(overlay, click);
   }
 
-  private syncStreamContainer() {
+  private getVideoElement(): HTMLVideoElement | null {
+    return document.querySelector('#stream-target');
+  }
+
+  private getOverlayElement(): HTMLElement | null {
+    return document.querySelector('#cursors-overlay');
+  }
+
+  private syncStreamContainer = () => {
     this.scaleVideoToContainer();
-    this.resizeOverlayToMatchVideo();
-  }
 
-  private resizeOverlayToMatchVideo() {
-    const video = document.querySelector('#stream-target') as HTMLVideoElement;
-    const overlay = document.querySelector('#cursors-overlay') as HTMLElement;
+    const video = this.getVideoElement();
+    const overlay = this.getOverlayElement();
     if (video && overlay) {
-      overlay.style.position = 'absolute';
-      overlay.style.pointerEvents = 'none';
-      overlay.style.left = video.offsetLeft + 'px';
-      overlay.style.top = video.offsetTop + 'px';
-      overlay.style.width = video.offsetWidth + 'px';
-      overlay.style.height = video.offsetHeight + 'px';
+      OverlaySyncHelper.align(overlay, video);
     }
-  }
+  };
 
   private scaleVideoToContainer() {
-    const video = document.querySelector('#stream-target') as HTMLVideoElement;
+    const video = this.getVideoElement();
     const container = video?.parentElement as HTMLElement;
     if (!video || !container || !video.videoWidth || !video.videoHeight) return;
     const containerW = container.clientWidth;
@@ -269,39 +306,4 @@ export class JoinGamePage implements AfterViewInit, OnDestroy {
     video.style.height = height + 'px';
     video.style.objectFit = 'unset'; // Remove object-fit so our sizing works
   }
-
-  toggleChat(force?: boolean) {
-    if (typeof force === 'boolean') {
-      this.isChatOpen = force;
-    } else {
-      this.isChatOpen = !this.isChatOpen;
-    }
-  }
-
-  private updateChatLayout() {
-    // Portrait mobile: width < 768px and height > width
-    this.isPortraitMobile = window.innerWidth < 768 && window.innerHeight > window.innerWidth;
-  }
-
-  private onSidebarTransitionRun = () => {
-    if (!this.chatSidebarTransitioning) {
-      this.chatSidebarTransitioning = true;
-      this.runSidebarSyncLoop();
-    }
-  };
-
-  private onSidebarTransitionEndOrCancel = () => {
-    this.chatSidebarTransitioning = false;
-    if (this.chatSidebarRafId) {
-      cancelAnimationFrame(this.chatSidebarRafId);
-      this.chatSidebarRafId = undefined;
-    }
-    this.syncStreamContainer(); // Final sync
-  };
-
-  private runSidebarSyncLoop = () => {
-    if (!this.chatSidebarTransitioning) return;
-    this.syncStreamContainer();
-    this.chatSidebarRafId = requestAnimationFrame(this.runSidebarSyncLoop);
-  };
 }

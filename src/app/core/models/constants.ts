@@ -7,6 +7,8 @@ export const STORAGE_KEY = {
   HIDE_TUTORIAL: 'hideTutorial',
   PENDING_UPDATE: 'pendingUpdate',
   FAIL_COUNT: 'failCount',
+  PLAYER_NAME: 'playerName',
+  PLAYER_COLOR: 'playerColor',
 }
 
 export const GAME_INPUT_FN_BTNS = [
@@ -87,4 +89,19 @@ export const MULTIPLAYER = {
   PING_REFRESH_INTERVAL: 10000, // 10 seconds
   CURSOR_Z_INDEX: 10, // Cursors should be above the game elements
   CURSOR_CLICK_Z_INDEX: 9, // Click pings should be below the cursors
+  // How long a guest waits for the host's video stream before giving up.
+  // Trystero has no notion of "room not found", so a wrong room code or password
+  // is indistinguishable from an empty room: both simply never deliver a stream.
+  STREAM_WAIT_TIMEOUT: 20000, // 20 seconds
+  // Minimum interval between outgoing cursor position broadcasts (~20/s).
+  CURSOR_SEND_THROTTLE_MS: 50,
+  // Room codes use an alphabet without easily confused characters (no O/0, I/1).
+  ROOM_CODE_ALPHABET: 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789',
+  ROOM_CODE_PREFIX: 'ELI-',
+  ROOM_CODE_LENGTH: 4,
+  // Palette offered in the join/host dialogs for the player's cursor colour.
+  PLAYER_COLORS: [
+    '#aa00aa', '#e6194b', '#f58231', '#ffe119',
+    '#3cb44b', '#42d4f4', '#4363d8', '#911eb4',
+  ],
 }

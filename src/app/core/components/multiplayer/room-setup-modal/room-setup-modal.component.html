@@ -1,0 +1,79 @@
+<ion-header>
+  <ion-toolbar color="tertiary">
+    <ion-title>{{ title }}</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="cancel()">
+        <ion-icon slot="icon-only" name="close-outline"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  <form (ngSubmit)="confirm()">
+    <ion-list lines="full" class="ion-no-padding">
+      <ion-item>
+        <ion-input
+          label="Seu nome"
+          labelPlacement="stacked"
+          [(ngModel)]="playerName"
+          name="playerName"
+          maxlength="20"
+          required
+          autocomplete="off"
+          placeholder="Como os outros vão te ver"></ion-input>
+      </ion-item>
+
+      <ion-item>
+        <ion-input
+          label="Código da sala"
+          labelPlacement="stacked"
+          [(ngModel)]="roomCode"
+          name="roomCode"
+          maxlength="24"
+          required
+          autocapitalize="characters"
+          autocomplete="off"
+          placeholder="ELI-XXXX"></ion-input>
+        <ion-button *ngIf="isHost" slot="end" fill="clear" type="button" (click)="regenerateCode()"
+          aria-label="Gerar outro código">
+          <ion-icon slot="icon-only" name="refresh-outline"></ion-icon>
+        </ion-button>
+      </ion-item>
+
+      <ion-item>
+        <ion-input
+          label="Senha da sala (opcional)"
+          labelPlacement="stacked"
+          [(ngModel)]="password"
+          name="password"
+          type="password"
+          autocomplete="off"
+          placeholder="Deixe vazio para sala aberta"></ion-input>
+      </ion-item>
+    </ion-list>
+
+    <ion-list-header class="ion-no-padding ion-padding-top">
+      <ion-label>Cor do seu cursor</ion-label>
+    </ion-list-header>
+    <div class="color-swatches">
+      <button
+        *ngFor="let color of colors"
+        type="button"
+        class="color-swatch"
+        [class.selected]="color === playerColor"
+        [style.background-color]="color"
+        [attr.aria-label]="'Escolher cor ' + color"
+        [attr.aria-pressed]="color === playerColor"
+        (click)="selectColor(color)"></button>
+    </div>
+
+    <ion-note *ngIf="isHost" class="ion-padding-top hint">
+      Compartilhe este código com quem for assistir. A senha deve ser combinada por fora.
+    </ion-note>
+
+    <ion-button expand="block" type="submit" class="ion-margin-top" [disabled]="!isValid">
+      {{ isHost ? 'Criar sala' : 'Entrar' }}
+    </ion-button>
+  </form>
+</ion-content>

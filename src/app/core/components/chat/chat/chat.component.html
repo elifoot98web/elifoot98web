@@ -1,25 +1,27 @@
-<ion-content>
-  <ion-list class="chat-list">
+<div class="chat-panel">
+  <div class="chat-messages" #messageList>
     <ng-container *ngIf="messages$ | async as messages">
-      <ion-item *ngFor="let msg of messages; trackBy:trackBy" [ngClass]="{'my-message': msg.senderId === selfId, 'remote-message': msg.senderId !== selfId}">
+      <div *ngFor="let msg of messages; trackBy:trackBy" class="chat-row"
+        [ngClass]="{'my-message': msg.senderId === selfId, 'remote-message': msg.senderId !== selfId}">
         <div class="chat-bubble">
           <div class="chat-meta">
-            <span class="chat-sender">{{ msg.senderId !== selfId ? players[msg.senderId]?.playerName || msg.senderId.slice(0,6) : ''}}</span>
+            <span class="chat-sender" [style.color]="msg.senderId !== selfId ? players[msg.senderId]?.playerColor : null">{{ msg.senderId !== selfId ? players[msg.senderId]?.playerName || msg.senderId.slice(0,6) : ''}}</span>
             <span class="chat-time">{{ msg.timestamp | date:'shortTime' }}</span>
           </div>
           <div class="chat-text">{{ msg.text }}</div>
         </div>
-      </ion-item>
+      </div>
+      <p *ngIf="messages.length === 0" class="chat-empty">
+        Nenhuma mensagem ainda. Diga oi!
+      </p>
     </ng-container>
-  </ion-list>
-</ion-content>
-<ion-footer class="chat-footer">
-  <form (ngSubmit)="sendMessage(`${input.value}`); input.value='';" autocomplete="off">
-    <ion-item lines="none">
-      <ion-input #input required type="text" placeholder="Digite uma mensagem..." maxlength="200"></ion-input>
-      <ion-button type="submit" fill="solid" color="primary" [disabled]="!input.value || !`${input.value}`.trim()">
-        <ion-icon name="send"></ion-icon>
-      </ion-button>
-    </ion-item>
+  </div>
+
+  <form class="chat-input-row" (ngSubmit)="sendMessage(`${input.value}`); input.value='';" autocomplete="off">
+    <input #input class="chat-input" type="text" placeholder="Digite uma mensagem..." maxlength="200" />
+    <ion-button type="submit" fill="solid" color="primary" size="small"
+      [disabled]="!input.value || !`${input.value}`.trim()" aria-label="Enviar mensagem">
+      <ion-icon slot="icon-only" name="send"></ion-icon>
+    </ion-button>
   </form>
-</ion-footer>
+</div>

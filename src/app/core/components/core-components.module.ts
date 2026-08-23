@@ -3,6 +3,8 @@ import { CommonModule } from '@angular/common';
 import { IonicModule } from '@ionic/angular';
 import { ChatComponent } from './chat/chat/chat.component';
 import { FormsModule } from '@angular/forms';
+import { ParticipantsModalComponent } from './multiplayer/participants-modal/participants-modal.component';
+import { RoomSetupModalComponent } from './multiplayer/room-setup-modal/room-setup-modal.component';
 
 @NgModule({
   imports: [
@@ -11,10 +13,14 @@ import { FormsModule } from '@angular/forms';
     IonicModule
   ],
   declarations: [
-    ChatComponent
+    ChatComponent,
+    ParticipantsModalComponent,
+    RoomSetupModalComponent
   ],
   exports: [
-    ChatComponent
+    ChatComponent,
+    ParticipantsModalComponent,
+    RoomSetupModalComponent
   ],
 })
 export class CoreComponentsModule { }

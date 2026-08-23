@@ -2,17 +2,18 @@ import { Component, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { AlertController, LoadingController, ModalController } from '@ionic/angular';
 import JSZip from 'jszip';
 import { environment } from 'src/environments/environment';
-import { GAME_INPUT_FN_BTNS, GAME_INPUT_FN_BTNS_REVERSED, STORAGE_KEY } from '../../core/models/constants';
+import { GAME_INPUT_FN_BTNS, GAME_INPUT_FN_BTNS_REVERSED, MULTIPLAYER, STORAGE_KEY } from '../../core/models/constants';
 import { UserGuideComponent } from './components/user-guide/user-guide.component';
 import { AboutComponent } from './components/about/about.component';
 import { OmaticModalComponent } from './components/omatic-modal/omatic-modal.component';
-import { Subscription } from 'rxjs';
+import { Observable, Subscription } from 'rxjs';
 import { EmulatorKeyCode } from '../../core/models/game';
 import { CursorClickMessage, CursorPositionMessage } from '../../core/models/multiplayer';
 import { AutoSaverService, EmulatorControlService, PatchService, SaveGameService } from '../../core/services/game';
 import { LayoutHelperService, LocalStorageService } from '../../core/services/shared';
-import { MultiplayerCursorService, MultiplayerService } from '../../core/services/multiplayer';
+import { MultiplayerChatService, MultiplayerCursorService, MultiplayerService, MultiplayerUiService } from '../../core/services/multiplayer';
 import { CursorRendererHelper } from 'src/app/core/helpers/cursor-renderer.helper';
+import { OverlaySyncHelper } from 'src/app/core/helpers/overlay-sync.helper';
 
 
 @Component({
@@ -37,12 +38,18 @@ export class GamePage implements OnInit, OnDestroy {
 
   // multiplayer properties
   isHosting = false;
+  isStreaming = false;
+  isChatOpen = false;
   hostRoomId = '';
   hostPassword = '';
   hostName = '';
-  private cursorSubscription?: Subscription;
-  private cursorClickSubscription?: Subscription;
-  private isStreaming = false;
+  hostColor = MULTIPLAYER.DEFAULT_CURSOR_COLOR;
+
+  /** Drives the badge on the chat toggle, which sits outside the chat component. */
+  unreadCount$: Observable<number>;
+
+  private multiplayerSubscriptions = new Subscription();
+  private stopObservingOverlay?: () => void;
 
   constructor(
     private loadingController: LoadingController,
@@ -55,8 +62,12 @@ export class GamePage implements OnInit, OnDestroy {
     private autoSaverService: AutoSaverService,
     private layoutHelperService: LayoutHelperService,
     private multiplayerService: MultiplayerService,
-    private multiplayerCursorService: MultiplayerCursorService
-  ) { }
+    private multiplayerCursorService: MultiplayerCursorService,
+    private multiplayerUiService: MultiplayerUiService,
+    chatService: MultiplayerChatService
+  ) {
+    this.unreadCount$ = chatService.unreadCount$;
+  }
 
   async ngOnInit() {
     const loading = await this.loadingController.create({
@@ -111,7 +122,10 @@ export class GamePage implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.cursorSubscription?.unsubscribe();
+    this.stopObservingOverlay?.();
+    this.multiplayerSubscriptions.unsubscribe();
+    // Without this the room, its ping interval and the canvas capture outlive the page.
+    this.multiplayerService.leaveRoom();
   }
 
   async loadGame(): Promise<void> {
@@ -627,73 +641,105 @@ export class GamePage implements OnInit, OnDestroy {
   }
 
   async promptHostRoom() {
-    const alert = await this.alertController.create({
-      header: 'Criar Sala Multiplayer',
-      inputs: [
-        { name: 'hostName', type: 'text', placeholder: 'Seu nome', value: this.hostName },
-        { name: 'roomId', type: 'text', placeholder: 'ID da sala', value: this.hostRoomId },
-        { name: 'password', type: 'text', placeholder: 'Senha da Sala', value: this.hostPassword },
-      ],
-      buttons: [
-        { text: 'Cancelar', role: 'cancel' },
-        {
-          text: 'Criar',
-          handler: async (data) => {
-            this.hostName = data.hostName;
-            this.hostRoomId = data.roomId;
-            this.hostPassword = data.password;
-            await this.startHosting();
-          }
-        }
-      ]
-    });
-    await alert.present();
+    this.hidePopover();
+    const setup = await this.multiplayerUiService.promptRoomSetup('host', this.hostRoomId);
+    if (!setup) return;
+
+    this.hostName = setup.playerName;
+    this.hostRoomId = setup.roomCode;
+    this.hostPassword = setup.password;
+    this.hostColor = setup.playerColor;
+
+    await this.startHosting();
   }
 
   async startHosting() {
     this.isHosting = true;
     const loading = await this.loadingController.create({ message: 'Criando sala e iniciando streaming...' });
     await loading.present();
+
+    let hostingError: Error | undefined;
     try {
       const stream = await this.captureGameCanvasStream();
       await this.multiplayerService.hostGameRoom(
         this.hostName,
         this.hostRoomId,
         this.hostPassword,
-        stream
+        stream,
+        this.hostColor
       );
 
       this.isStreaming = true;
 
       // Subscribe to cursor updates
       this.prepareRemoteCursorContainer();
-      this.cursorSubscription = this.multiplayerCursorService.getCursorsObservable().subscribe(cursors => {
-        this.renderCursors(cursors);
-      });
+      this.multiplayerSubscriptions.add(
+        this.multiplayerCursorService.getCursorsObservable().subscribe(cursors => {
+          this.renderCursors(cursors);
+        })
+      );
 
-      this.cursorClickSubscription = this.multiplayerCursorService.getClickObservable().subscribe(click => {
-        if (click) {
-          this.renderClick(click);
-        }
-      })
+      this.multiplayerSubscriptions.add(
+        this.multiplayerCursorService.getClickObservable().subscribe(click => {
+          if (click) this.renderClick(click);
+        })
+      );
 
+      this.observeCanvasForOverlay();
     } catch (err: any) {
-      const errorMsg = err.message || 'Erro ao criar sala.';
-      await this.showErrorAlert(new Error(errorMsg));
+      // A failed host claim already left the room, but a capture failure did not.
+      this.multiplayerService.leaveRoom();
+      this.isStreaming = false;
+      hostingError = new Error(err.message || 'Erro ao criar sala.');
     } finally {
       this.isHosting = false;
       await loading.dismiss();
     }
+
+    // Both of these present overlays, so they wait until the loader is gone.
+    if (hostingError) {
+      await this.showErrorAlert(hostingError);
+    } else {
+      await this.showRoomInvite();
+    }
   }
 
-  async stopHosting() {
-    this.cursorSubscription?.unsubscribe();
-    this.cursorClickSubscription?.unsubscribe();
+  async promptStopHosting() {
+    this.hidePopover();
+    const confirmed = await this.multiplayerUiService.confirmLeave(
+      'Os espectadores serão desconectados e a transmissão será encerrada.'
+    );
+    if (confirmed) this.stopHosting();
+  }
+
+  stopHosting() {
+    this.stopObservingOverlay?.();
+    this.stopObservingOverlay = undefined;
+
+    // A fresh Subscription: the old one is closed and would reject later additions.
+    this.multiplayerSubscriptions.unsubscribe();
+    this.multiplayerSubscriptions = new Subscription();
+
     this.multiplayerService.leaveRoom();
     this.isStreaming = false;
-    this.hostRoomId = '';
+    this.isChatOpen = false;
     this.hostPassword = '';
-    this.hostName = '';
+
+    this.getOverlayElement()?.remove();
+  }
+
+  async showParticipants() {
+    this.hidePopover();
+    await this.multiplayerUiService.showParticipants();
+  }
+
+  async shareRoom() {
+    this.hidePopover();
+    await this.multiplayerUiService.shareRoom(this.hostRoomId);
+  }
+
+  toggleChat(force?: boolean) {
+    this.isChatOpen = typeof force === 'boolean' ? force : !this.isChatOpen;
   }
 
   async captureGameCanvasStream(): Promise<MediaStream> {
@@ -709,6 +755,28 @@ export class GamePage implements OnInit, OnDestroy {
     const canvasStream = (canvas as HTMLCanvasElement).captureStream(30)
     // Prefer 30fps, fallback to default
     return canvasStream
+  }
+
+  /**
+   * Show the room code straight after hosting starts, so the host has something to
+   * copy or share without hunting through the menu.
+   */
+  private async showRoomInvite() {
+    const alert = await this.alertController.create({
+      header: 'Sala criada!',
+      cssClass: 'alert-whitespace',
+      message: `Compartilhe este código:\n\n${this.hostRoomId}`,
+      buttons: [
+        {
+          text: 'Copiar link',
+          handler: () => {
+            this.multiplayerUiService.shareRoom(this.hostRoomId);
+          }
+        },
+        { text: 'Fechar', role: 'cancel' }
+      ]
+    });
+    await alert.present();
   }
 
   private hidePopover() {
@@ -795,7 +863,7 @@ export class GamePage implements OnInit, OnDestroy {
     }
 
     // Create the cursor overlay if it doesn't exist
-    let cursorOverlay = document.querySelector('#cursors-overlay') as HTMLElement;
+    let cursorOverlay = this.getOverlayElement();
     if (!cursorOverlay) {
       cursorOverlay = document.createElement('div');
       cursorOverlay.id = 'cursors-overlay';
@@ -804,32 +872,49 @@ export class GamePage implements OnInit, OnDestroy {
     }
   }
 
-  private renderCursors(cursors: { [peerId: string]: CursorPositionMessage }) {
-    const canvas = document.querySelector('#cursors-overlay') as HTMLElement;
+  /**
+   * js-dos re-lays-out its canvas whenever `#game-container` changes size, which now
+   * happens every time the chat sidebar is toggled. Without observing it the overlay
+   * only re-aligns when a cursor message happens to arrive, so it goes stale during a
+   * quiet toggle.
+   */
+  private observeCanvasForOverlay() {
+    const canvas = this.getGameCanvas();
+    const container = document.querySelector('#game-container') as HTMLElement | null;
     if (!canvas) return;
-    this.syncOverlayWithGameCanvas();
-    
-    CursorRendererHelper.renderCursors(canvas, cursors);
-  }
-  
-  private renderClick(click: CursorClickMessage) {
-    const canvas = document.querySelector('#cursors-overlay') as HTMLElement;
-    if (!canvas) return;
-    this.syncOverlayWithGameCanvas();
 
-    CursorRendererHelper.renderClick(canvas, click);
+    this.stopObservingOverlay = OverlaySyncHelper.observe(
+      [canvas, container],
+      () => this.syncOverlayWithGameCanvas()
+    );
+    this.syncOverlayWithGameCanvas();
+  }
+
+  private renderCursors(cursors: { [peerId: string]: CursorPositionMessage }) {
+    const overlay = this.getOverlayElement();
+    if (!overlay) return;
+    CursorRendererHelper.renderCursors(overlay, cursors);
+  }
+
+  private renderClick(click: CursorClickMessage) {
+    const overlay = this.getOverlayElement();
+    if (!overlay) return;
+    CursorRendererHelper.renderClick(overlay, click);
+  }
+
+  private getOverlayElement(): HTMLElement | null {
+    return document.querySelector('#cursors-overlay');
+  }
+
+  private getGameCanvas(): HTMLElement | null {
+    return document.querySelector('.emulator-canvas');
   }
 
   private syncOverlayWithGameCanvas() {
-    const gameCanvas = document.querySelector('.emulator-canvas') as HTMLElement;
-    const overlay = document.querySelector('#cursors-overlay') as HTMLElement;
+    const gameCanvas = this.getGameCanvas();
+    const overlay = this.getOverlayElement();
     if (gameCanvas && overlay) {
-      overlay.style.position = 'absolute';
-      overlay.style.pointerEvents = 'none';
-      overlay.style.left = gameCanvas.offsetLeft + 'px';
-      overlay.style.top = gameCanvas.offsetTop + 'px';
-      overlay.style.width = gameCanvas.offsetWidth + 'px';
-      overlay.style.height = gameCanvas.offsetHeight + 'px';
+      OverlaySyncHelper.align(overlay, gameCanvas);
     }
   }
 }
