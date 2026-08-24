@@ -76,22 +76,32 @@ export const MEMORY_SEARCH_PARAMS = {
 export const MULTIPLAYER = {
   APP_ID: 'br.com.elifoot98.multiplayer',
   DEFAULT_CURSOR_COLOR: '#aa00aa',
-  EVENTS: { // WARNING: event names must be unique and have AT MOST 12 characters
+  EVENTS: { // WARNING: names must be unique and at most 32 bytes (trystero's action-wire typeByteLimit)
     PLAYER_IDENT: 'Ident',
     PLAYER_CURSOR_POS: 'pPosition',
     PLAYER_CLICK: 'pClick',
-    HOST_CLAIM: 'hostClaim',
     CHAT_MESSAGE: 'chatMsg',
+    // Ask a peer what it is. Registered by both roles: a host uses it to notice
+    // another host, a guest to pull the host's identity without waiting.
+    ROLE_QUERY: 'roleQuery',
+    // Sent once, targeted, by a host to each joining peer.
+    HOST_ANNOUNCE: 'hostAnnounce',
   },
-  HOST_CLAIM_TIMEOUT: 3000, // 3 seconds
-  HOST_CLAIM_INTERVAL: 500, // 500ms
+  ROLE_QUERY_TIMEOUT: 5000, // 5 seconds
+  // When two hosts collide, the one that has been hosting longer keeps the room. Each
+  // side reports its own elapsed time, so there is no shared clock to skew — but the
+  // two samples are taken moments apart, so differences under this tolerance are
+  // treated as simultaneous and settled by selfId instead.
+  HOST_AGE_TOLERANCE: 2000, // 2 seconds
   PING_TIMEOUT: 5000, // 5 seconds
   PING_REFRESH_INTERVAL: 10000, // 10 seconds
   CURSOR_Z_INDEX: 10, // Cursors should be above the game elements
   CURSOR_CLICK_Z_INDEX: 9, // Click pings should be below the cursors
   // How long a guest waits for the host's video stream before giving up.
-  // Trystero has no notion of "room not found", so a wrong room code or password
-  // is indistinguishable from an empty room: both simply never deliver a stream.
+  // A room code that nobody is hosting is indistinguishable from an empty room —
+  // trystero joins a room name, not a host — so silence is the only signal there is.
+  // Failures trystero *can* report (a wrong password, a dead relay) arrive via
+  // onJoinError and cut this short.
   STREAM_WAIT_TIMEOUT: 20000, // 20 seconds
   // Minimum interval between outgoing cursor position broadcasts (~20/s).
   CURSOR_SEND_THROTTLE_MS: 50,

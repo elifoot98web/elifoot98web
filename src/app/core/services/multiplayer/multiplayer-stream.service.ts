@@ -1,8 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Room } from 'trystero';
 import { MultiplayerUserRole } from '../../models/multiplayer/multiplayer.models';
-import { BehaviorSubject, filter, firstValueFrom, Observable, timeout } from 'rxjs';
-import { MULTIPLAYER } from '../../models/constants';
+import { BehaviorSubject, filter, Observable } from 'rxjs';
 
 @Injectable({
   providedIn: 'root'
@@ -20,19 +19,14 @@ export class MultiplayerStreamService {
   }
 
   /**
-   * Emits once the host's stream actually carries video.
+   * Emits only once a stream actually carries video.
    *
-   * Trystero has no concept of "room not found": a wrong room code or password looks
-   * exactly like an empty room, so the only way to tell a guest that their join failed
-   * is to give up waiting after a while.
+   * A room code nobody is hosting looks exactly like an empty room — trystero joins a
+   * room name, not a host — so callers must pair this with a timeout. Failures
+   * trystero *can* name arrive separately via `MultiplayerService.joinError$`.
    */
-  waitForVideoStream(timeoutMs = MULTIPLAYER.STREAM_WAIT_TIMEOUT): Promise<MediaStream> {
-    return firstValueFrom(
-      this.streamSubject.pipe(
-        filter(stream => stream.getVideoTracks().length > 0),
-        timeout({ first: timeoutMs })
-      )
-    );
+  get videoStream$(): Observable<MediaStream> {
+    return this.streamSubject.pipe(filter(stream => stream.getVideoTracks().length > 0));
   }
 
   /**

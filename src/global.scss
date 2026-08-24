@@ -9,6 +9,11 @@
  * https://ionicframework.com/docs/layout/global-stylesheets
  */
 
+/* Windows 95/98 design tokens, shared by the omatic modal and the multiplayer
+   surfaces. @use must precede every other rule in the file, which is also why this
+   is not a trailing @import. */
+@use './theme/win9x' as *;
+
 /* Core CSS required for Ionic components to work properly */
 @import "@ionic/angular/css/core.css";
 
@@ -231,4 +236,27 @@ canvas {
     transform: scale(8);
     opacity: 0;
   }
+}
+
+/*
+ * Every animated multiplayer surface, in one place. The cursor overlay animates
+ * continuously while a room is live, so this matters more here than in most apps.
+ * Remote cursors keep their positions — only the interpolation is dropped, so they
+ * jump between updates instead of gliding.
+ */
+@media (prefers-reduced-motion: reduce) {
+    .game-stream-container,
+    .chat-sidebar-flex,
+    .chat-toggle-btn,
+    .color-swatch {
+        transition: none !important;
+    }
+
+    .pointer-overlay .cursor {
+        transition: none !important;
+    }
+
+    .cursor-click-ping {
+        animation-duration: 1ms !important;
+    }
 }

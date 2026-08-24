@@ -8,7 +8,7 @@ import { AboutComponent } from './components/about/about.component';
 import { OmaticModalComponent } from './components/omatic-modal/omatic-modal.component';
 import { Observable, Subscription } from 'rxjs';
 import { EmulatorKeyCode } from '../../core/models/game';
-import { CursorClickMessage, CursorPositionMessage } from '../../core/models/multiplayer';
+import { CursorClickMessage, CursorPositionMessage, MultiplayerJoinErrorKind } from '../../core/models/multiplayer';
 import { AutoSaverService, EmulatorControlService, PatchService, SaveGameService } from '../../core/services/game';
 import { LayoutHelperService, LocalStorageService } from '../../core/services/shared';
 import { MultiplayerChatService, MultiplayerCursorService, MultiplayerService, MultiplayerUiService } from '../../core/services/multiplayer';
@@ -686,6 +686,18 @@ export class GamePage implements OnInit, OnDestroy {
       );
 
       this.observeCanvasForOverlay();
+
+      // A collision is now detected whenever it becomes observable, which can be after
+      // hosting has already started — so it arrives here rather than as a throw.
+      this.multiplayerSubscriptions.add(
+        this.multiplayerService.hostCollision$.subscribe(code => this.onRoomCodeTaken(code))
+      );
+      this.multiplayerSubscriptions.add(
+        this.multiplayerService.codeContested$.subscribe(() => this.onCodeContested())
+      );
+      this.multiplayerSubscriptions.add(
+        this.multiplayerService.intrusion$.subscribe(kind => this.onIntrusion(kind))
+      );
     } catch (err: any) {
       // A failed host claim already left the room, but a capture failure did not.
       this.multiplayerService.leaveRoom();
@@ -712,7 +724,61 @@ export class GamePage implements OnInit, OnDestroy {
     if (confirmed) this.stopHosting();
   }
 
+  /**
+   * Another host was already on this code and we are the one that yielded. The service
+   * has already torn the room down; the game itself is untouched.
+   */
+  private async onRoomCodeTaken(code: string) {
+    this.resetHostingUi();
+
+    const alert = await this.alertController.create({
+      header: 'Código de sala já em uso',
+      cssClass: 'alert-whitespace',
+      message: `Já existe uma sala em andamento com o código ${code}. Sua transmissão foi ` +
+        'encerrada e quem estava assistindo foi desconectado, mas seu jogo continua aqui.',
+      backdropDismiss: false,
+      buttons: [
+        { text: 'Fechar', role: 'cancel' },
+        {
+          text: 'Gerar novo código',
+          handler: () => {
+            this.hostRoomId = '';
+            // Deferred so the modal opens after this alert has finished dismissing.
+            setTimeout(() => this.promptHostRoom());
+          }
+        },
+      ]
+    });
+    await alert.present();
+  }
+
+  /** Someone else tried our code and lost the tie-break. Our broadcast is untouched. */
+  private async onCodeContested() {
+    await this.multiplayerUiService.showToast(
+      'Alguém tentou abrir outra sala com o seu código. Sua transmissão continua no ar.',
+      'warning'
+    );
+  }
+
+  private async onIntrusion(kind: MultiplayerJoinErrorKind) {
+    // Informational only: a stranger failing to get in must never disturb a live
+    // broadcast, so this is a toast and never touches the room.
+    const message = kind === 'wrong-password'
+      ? 'Alguém tentou entrar com a senha errada.'
+      : 'Alguém tentou entrar, mas a conexão não foi estabelecida.';
+    await this.multiplayerUiService.showToast(message);
+  }
+
   stopHosting() {
+    this.multiplayerService.leaveRoom();
+    this.resetHostingUi();
+  }
+
+  /**
+   * Tear down the host-side UI. Deliberately does not touch the room: on a code
+   * collision the service has already left before telling us.
+   */
+  private resetHostingUi() {
     this.stopObservingOverlay?.();
     this.stopObservingOverlay = undefined;
 
@@ -720,7 +786,6 @@ export class GamePage implements OnInit, OnDestroy {
     this.multiplayerSubscriptions.unsubscribe();
     this.multiplayerSubscriptions = new Subscription();
 
-    this.multiplayerService.leaveRoom();
     this.isStreaming = false;
     this.isChatOpen = false;
     this.hostPassword = '';

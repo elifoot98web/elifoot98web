@@ -43,7 +43,9 @@ export class RoomSetupModalComponent implements OnInit {
     this.playerName = await this.identityService.getPlayerName();
     this.playerColor = await this.identityService.getPlayerColor();
     // A host gets a fresh code to hand out; a guest gets whatever the share link carried.
-    this.roomCode = this.presetRoomCode || (this.mode === 'host' ? RoomCodeHelper.generate() : '');
+    this.roomCode = this.presetRoomCode
+      ? RoomCodeHelper.sanitize(this.presetRoomCode)
+      : (this.mode === 'host' ? RoomCodeHelper.generate() : '');
   }
 
   get isHost(): boolean {
@@ -55,7 +57,25 @@ export class RoomSetupModalComponent implements OnInit {
   }
 
   get isValid(): boolean {
-    return this.playerName.trim().length > 0 && this.roomCode.trim().length > 0;
+    return this.playerName.trim().length > 0 && RoomCodeHelper.isValid(this.roomCode);
+  }
+
+  /**
+   * A malformed code is only worth pointing out to a guest, who typed or pasted it.
+   * A host's code comes from the generator and is corrected on blur.
+   */
+  get showCodeError(): boolean {
+    return !this.isHost && this.roomCode.trim().length > 0 && !RoomCodeHelper.isValid(this.roomCode);
+  }
+
+  /**
+   * Sanitizing on blur rather than on every keystroke: rewriting the value through
+   * ngModel while typing fights ion-input's internal value and jumps the caret to the
+   * end, which is worst on mobile. A pasted share link is reduced to its code here.
+   */
+  onCodeBlur() {
+    const sanitized = RoomCodeHelper.sanitize(this.roomCode);
+    if (sanitized) this.roomCode = sanitized;
   }
 
   regenerateCode() {
@@ -67,6 +87,7 @@ export class RoomSetupModalComponent implements OnInit {
   }
 
   async confirm() {
+    this.onCodeBlur(); // covers submitting straight from the field without blurring
     if (!this.isValid) return;
 
     await this.identityService.save(this.playerName.trim(), this.playerColor);

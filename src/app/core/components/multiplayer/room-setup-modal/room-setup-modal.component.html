@@ -25,21 +25,26 @@
       </ion-item>
 
       <ion-item>
+        <!-- No maxlength: a pasted share link must survive long enough for
+             RoomCodeHelper.sanitize() to reduce it to its code on blur. -->
         <ion-input
           label="Código da sala"
           labelPlacement="stacked"
           [(ngModel)]="roomCode"
           name="roomCode"
-          maxlength="24"
           required
           autocapitalize="characters"
           autocomplete="off"
-          placeholder="ELI-XXXX"></ion-input>
+          (ionBlur)="onCodeBlur()"
+          placeholder="ELI-XXXX ou cole o link"></ion-input>
         <ion-button *ngIf="isHost" slot="end" fill="clear" type="button" (click)="regenerateCode()"
           aria-label="Gerar outro código">
           <ion-icon slot="icon-only" name="refresh-outline"></ion-icon>
         </ion-button>
       </ion-item>
+      <ion-note *ngIf="showCodeError" color="danger" class="ion-padding-start field-error">
+        O código deve ter o formato ELI-XXXX (sem as letras I, O e sem os números 0 e 1).
+      </ion-note>
 
       <ion-item>
         <ion-input
@@ -51,6 +56,10 @@
           autocomplete="off"
           placeholder="Deixe vazio para sala aberta"></ion-input>
       </ion-item>
+      <ion-note *ngIf="isHost" class="ion-padding-start hint">
+        Use uma senha se quiser garantir que só quem você convidar entre. O link
+        compartilhado não inclui a senha.
+      </ion-note>
     </ion-list>
 
     <ion-list-header class="ion-no-padding ion-padding-top">

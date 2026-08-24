@@ -4,6 +4,7 @@ export enum GameState {
     WAITING_STREAM,
     IN_ROOM,
     HOST_LEFT,
+    ROOM_CODE_TAKEN,
     ERROR
 }
 
@@ -18,4 +19,18 @@ export interface PlayerInfo {
     playerColor?: string; // Optional cursor color for the player
     role: MultiplayerUserRole; // Role of the player (HOST or GUEST)
     latency: number; // Ping time to the player in milliseconds
+}
+
+/**
+ * Failures trystero can actually report through `onJoinError`, as opposed to the
+ * silence of a room nobody is hosting.
+ */
+export type MultiplayerJoinErrorKind = 'wrong-password' | 'connection-failed';
+
+/** Thrown when a join fails for a reason trystero was able to name. */
+export class MultiplayerJoinFailure extends Error {
+    constructor(readonly kind: MultiplayerJoinErrorKind) {
+        super(`Multiplayer join failed: ${kind}`);
+        this.name = 'MultiplayerJoinFailure';
+    }
 }

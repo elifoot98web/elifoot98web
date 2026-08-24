@@ -17,10 +17,20 @@
     </ng-container>
   </div>
 
-  <form class="chat-input-row" (ngSubmit)="sendMessage(`${input.value}`); input.value='';" autocomplete="off">
-    <input #input class="chat-input" type="text" placeholder="Digite uma mensagem..." maxlength="200" />
+  <form class="chat-input-row" (ngSubmit)="send()" autocomplete="off">
+    <!-- [(ngModel)], not a template ref: a native input with no event binding never
+         triggers change detection, so a ref-driven [disabled] stays stale and blocks
+         the form's implicit Enter submit. -->
+    <input
+      class="chat-input"
+      type="text"
+      name="draft"
+      [(ngModel)]="draft"
+      placeholder="Digite uma mensagem..."
+      maxlength="200"
+      aria-label="Mensagem" />
     <ion-button type="submit" fill="solid" color="primary" size="small"
-      [disabled]="!input.value || !`${input.value}`.trim()" aria-label="Enviar mensagem">
+      [disabled]="!canSend" aria-label="Enviar mensagem">
       <ion-icon slot="icon-only" name="send"></ion-icon>
     </ion-button>
   </form>

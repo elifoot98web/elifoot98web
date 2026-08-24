@@ -96,12 +96,12 @@ export class MultiplayerUiService {
     }
   }
 
-  private async showToast(message: string): Promise<void> {
+  async showToast(message: string, color = 'success'): Promise<void> {
     const toast = await this.toastController.create({
       message,
       duration: 2000,
       position: 'bottom',
-      color: 'success',
+      color,
     });
     await toast.present();
   }

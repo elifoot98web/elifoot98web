@@ -1,11 +1,19 @@
 import { Injectable } from '@angular/core';
-import { joinRoom, JoinRoomConfig, Room } from 'trystero';
-import { GameState, HostClaimMessage, MultiplayerUserRole, PlayerIdentMessage } from '../../models/multiplayer';
+import { JoinError, joinRoom, JoinRoomConfig, RequestAction, Room, selfId } from 'trystero';
+import {
+  GameState,
+  HostAnnounceMessage,
+  MultiplayerJoinErrorKind,
+  MultiplayerUserRole,
+  PlayerIdentMessage,
+  RoleDescriptor,
+  RoleQueryRequest
+} from '../../models/multiplayer';
 import { MULTIPLAYER } from '../../models/constants';
 import { MultiplayerChatService } from './multiplayer-chat.service';
 import { MultiplayerCursorService } from './multiplayer-cursor.service';
 import { MultiplayerPlayerInfoService } from './multiplayer-player-info.service';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, Subject } from 'rxjs';
 import { MultiplayerStreamService } from './multiplayer-stream.service';
 import { environment } from 'src/environments/environment';
 
@@ -25,11 +33,36 @@ export class MultiplayerService {
 
   // Trystero room logic and callbacks
   private room?: Room;
+  private roleQuery?: RequestAction<RoleQueryRequest, RoleDescriptor>;
   private onPeerJoinHandlers: ((peerId: string) => void)[] = [];
   private onPeerLeaveHandlers: ((peerId: string) => void)[] = [];
 
+  // Room lifecycle serialisation. See leaveRoom() for why these exist.
+  private leavingPromise?: Promise<void>;
+  private joiningPromise?: Promise<void>;
+  private isLeaving = false;
+
+  /** performance.now() when this device started broadcasting; undefined when not hosting. */
+  private hostingSince?: number;
+
   // Subjects
   gameStateSubject = new BehaviorSubject<GameState>(GameState.NOT_IN_ROOM);
+
+  /** Emits the room code when another host is found on it and we are the one yielding. */
+  private hostCollisionSubject = new Subject<string>();
+  hostCollision$ = this.hostCollisionSubject.asObservable();
+
+  /** Emits when another host tried our code and lost. Informational; we keep the room. */
+  private codeContestedSubject = new Subject<void>();
+  codeContested$ = this.codeContestedSubject.asObservable();
+
+  /** Emits when a stranger fails to join our room. Informational; never fatal to a host. */
+  private intrusionSubject = new Subject<MultiplayerJoinErrorKind>();
+  intrusion$ = this.intrusionSubject.asObservable();
+
+  /** Emits failures trystero could actually name, so a guest need not wait out the timeout. */
+  private joinErrorSubject = new Subject<MultiplayerJoinErrorKind>();
+  joinError$ = this.joinErrorSubject.asObservable();
 
   constructor(
     private multiplayerCursorService: MultiplayerCursorService,
@@ -42,49 +75,66 @@ export class MultiplayerService {
     return this.room !== undefined;
   }
 
+  /** True while a previous room is still tearing down. Callers may show a hint. */
+  get isDraining(): boolean {
+    return this.leavingPromise !== undefined;
+  }
+
   async hostGameRoom(hostName: string, roomName: string, password: string, stream: MediaStream, color?: string) {
-    this.joinRoom(hostName, roomName, password, MultiplayerUserRole.HOST, color);
-    const claimedHost = await this.claimHost();
-    if (!claimedHost) {
-      this.leaveRoom(GameState.ERROR);
-      throw new Error('Já existe outro anfitrião nesta sala. Escolha outro código de sala.');
-    }
+    await this.joinRoom(hostName, roomName, password, MultiplayerUserRole.HOST, color);
     this.setupHost(stream);
   }
 
   async joinGameRoom(playerName: string, roomName: string, password: string, color?: string): Promise<void> {
-    this.joinRoom(playerName, roomName, password, MultiplayerUserRole.GUEST, color);
+    await this.joinRoom(playerName, roomName, password, MultiplayerUserRole.GUEST, color);
     this.setupGuest()
   }
 
   /**
    * Tear down the room and reset all multiplayer state.
    *
+   * Stays synchronous on purpose: both page `ngOnDestroy` hooks call it and cannot
+   * await, and making it async would quietly turn those into fire-and-forget calls
+   * with an unhandled-rejection surface. The teardown is instead captured in
+   * `leavingPromise`, which `joinRoom()` drains before touching trystero again.
+   *
    * @param nextState the state to settle on. Callers that are leaving *because* of a
    *   condition worth reporting (the host vanished, say) pass that state so it is not
    *   overwritten by the default idle state.
    */
   leaveRoom(nextState: GameState = GameState.NOT_IN_ROOM) {
-    this.room?.leave();
-    this.room = undefined;
+    this.isLeaving = true;
+    try {
+      // Captured BEFORE clearing this.room. room.leave() is async and trystero only
+      // drops the room from its registry once it settles (a send plus a ~99ms wait);
+      // until then joinRoom() for the same appId+roomId hands back this same dying
+      // object, which is how retrying the same code used to yield a dead room.
+      this.leavingPromise = (this.room?.leave() ?? Promise.resolve())
+        .catch(err => console.warn('Error while leaving the multiplayer room', err));
+      this.room = undefined;
+      this.roleQuery = undefined;
+      this.hostingSince = undefined;
 
-    this.playerRole = MultiplayerUserRole.GUEST; // Reset role
-    this.playerName = '';
-    this.roomName = '';
-    this.password = '';
-    this.playerColor = MULTIPLAYER.DEFAULT_CURSOR_COLOR;
+      this.playerRole = MultiplayerUserRole.GUEST; // Reset role
+      this.playerName = '';
+      this.roomName = '';
+      this.password = '';
+      this.playerColor = MULTIPLAYER.DEFAULT_CURSOR_COLOR;
 
-    this.onPeerJoinHandlers = []; // Clear join handlers
-    this.onPeerLeaveHandlers = []; // Clear leave handlers
+      this.onPeerJoinHandlers = []; // Clear join handlers
+      this.onPeerLeaveHandlers = []; // Clear leave handlers
 
-    // Clear services
-    this.playerInfoService.clear();
-    this.multiplayerCursorService.clear();
-    this.chatService.clear();
-    this.streamService.clear(); // Clear stream service state
+      // Clear services
+      this.playerInfoService.clear();
+      this.multiplayerCursorService.clear();
+      this.chatService.clear();
+      this.streamService.clear(); // Clear stream service state
 
-    this.setState(nextState);
-    console.log('Left the multiplayer room and reset service state.');
+      this.setState(nextState);
+      console.log('Left the multiplayer room and reset service state.');
+    } finally {
+      this.isLeaving = false;
+    }
   }
 
   /**
@@ -97,7 +147,33 @@ export class MultiplayerService {
     }
   }
 
-  private joinRoom(playerName: string, roomName: string, password: string, role: MultiplayerUserRole, color?: string): void {
+  /**
+   * Serialised entry point. Waits for any in-flight teardown *and* any in-flight join
+   * before entering a room: `isInRoom` is false while a room is draining, so without
+   * the join half of the mutex two rapid calls could both get through.
+   */
+  private joinRoom(
+    playerName: string,
+    roomName: string,
+    password: string,
+    role: MultiplayerUserRole,
+    color?: string
+  ): Promise<void> {
+    // Drained in order, rejections swallowed: this gate only establishes ordering.
+    const drain = (pending?: Promise<void>) => Promise.resolve(pending).catch(() => undefined);
+    const gate = drain(this.joiningPromise).then(() => drain(this.leavingPromise));
+
+    const joined = gate.then(() => {
+      this.leavingPromise = undefined;
+      this.enterRoom(playerName, roomName, password, role, color);
+    });
+    // The stored handle exists only to order the *next* call, so its rejection is
+    // swallowed here; the caller still sees it through the returned promise.
+    this.joiningPromise = joined.catch(() => undefined);
+    return joined;
+  }
+
+  private enterRoom(playerName: string, roomName: string, password: string, role: MultiplayerUserRole, color?: string): void {
     if (this.room) throw new Error('Already in a room. Please leave the current room before joining a new one.');
 
     this.setState(GameState.JOINING_ROOM);
@@ -113,9 +189,19 @@ export class MultiplayerService {
       password: this.password,
       turnConfig: environment.multiplayerConfig.turnConfig
     }
-    this.room = joinRoom(config, this.roomName.toLocaleUpperCase()); // Use uppercase room name for consistency
+    const room = joinRoom(config, this.roomName.toUpperCase(), {
+      onJoinError: details => this.handleJoinError(details),
+    });
+    this.room = room;
 
     this.initPeerListeners(); // Initialize peer listeners for join/leave events
+
+    // Registered on both roles: a host asks joining peers what they are in order to
+    // notice a collision, and a guest can be asked in turn.
+    this.roleQuery = room.makeAction<RoleQueryRequest, RoleDescriptor>(
+      MULTIPLAYER.EVENTS.ROLE_QUERY,
+      { kind: 'request', onRequest: () => this.describeSelf() }
+    );
 
     // Registered before the player info service, whose own leave handler deletes the
     // PlayerInfo this check reads. Handlers run in registration order.
@@ -146,46 +232,25 @@ export class MultiplayerService {
     }
   }
 
-  private async claimHost(): Promise<boolean> {
-    if (!this.room) throw new Error('Room is not initialized');
-
-    const hostClaim = this.room.makeAction<HostClaimMessage>(MULTIPLAYER.EVENTS.HOST_CLAIM);
-
-    let reclaimed = false;
-
-    // Listen for host claims from other peers during the initial timeout
-    hostClaim.onMessage = (data, { peerId }) => {
-      reclaimed = true;
-      console.warn(`Host claim received from ${peerId}:`, data);
+  /** Answer to a roleQuery. Must always return a payload; trystero rejects undefined. */
+  private describeSelf(): RoleDescriptor {
+    return {
+      role: this.playerRole === MultiplayerUserRole.HOST ? 'host' : 'guest',
+      name: this.playerName || '',
+      color: this.playerColor,
+      hostingForMs: this.hostingForMs(),
     };
-
-    // Broadcast our host claim continuously until timeout
-    const hostClaimInterval = setInterval(() => {
-      if (reclaimed) {
-        clearInterval(hostClaimInterval); // Stop sending if we detected a reclaim
-        return;
-      }
-      hostClaim.send({ hostName: this.playerName });
-    }, MULTIPLAYER.HOST_CLAIM_INTERVAL);
-
-    // Wait for a period to detect any host reclaim conflicts
-    const sucessHostClaim = await new Promise<boolean>((resolve) => {
-      setTimeout(() => {
-        if (!reclaimed) {
-          console.log('No host conflict detected, claiming host status.');
-        } else {
-          console.warn('Host conflict detected, cannot proceed with room setup.');
-        }
-        resolve(!reclaimed);
-      }, MULTIPLAYER.HOST_CLAIM_TIMEOUT);
-    });
-    clearInterval(hostClaimInterval); // Clear the interval after timeout
-
-    return sucessHostClaim;
   }
 
   private setupGuest() {
     if (!this.room) return;
+
+    // Registered so the payload is consumed rather than buffered, and so the guest
+    // learns who the host is without waiting for anything else.
+    const hostAnnounce = this.room.makeAction<HostAnnounceMessage>(MULTIPLAYER.EVENTS.HOST_ANNOUNCE);
+    hostAnnounce.onMessage = (data, { peerId }) => {
+      console.log(`Host announced itself: ${data.hostName} (${peerId})`);
+    };
 
     this.setState(GameState.WAITING_STREAM);
     this.setupStreamService();
@@ -193,18 +258,138 @@ export class MultiplayerService {
 
   private setupHost(stream: MediaStream) {
     if (!this.room) return;
+    const room = this.room;
 
-    // Setup host claim listener
-    const hostClaim = this.room.makeAction<HostClaimMessage>(MULTIPLAYER.EVENTS.HOST_CLAIM);
-    hostClaim.onMessage = (data, { peerId }) => {
-      console.warn(`Host claim attempt received from ${peerId}:`, data);
-      // If we receive a claim after our own, we resend our claim to let
-      // the other host candidate know we are still active
-      hostClaim.send({ hostName: this.playerName || 'Host' })
-    }
+    // Recorded before anything else so the collision tie-break can compare ages.
+    this.hostingSince = performance.now();
+
+    const hostAnnounce = room.makeAction<HostAnnounceMessage>(MULTIPLAYER.EVENTS.HOST_ANNOUNCE);
+    // Another host announcing itself is a collision, detected without a round trip.
+    hostAnnounce.onMessage = (data, { peerId }) => {
+      console.warn(`Another host is on this room code: ${data.hostName} (${peerId})`);
+      this.resolveHostCollision(peerId, data.hostingForMs ?? 0);
+    };
+
+    this.addOnPeerJoinHandler((peerId: string) => {
+      hostAnnounce.send(
+        { hostName: this.playerName || 'Anfitrião', hostingForMs: this.hostingForMs() },
+        { target: peerId }
+      );
+      this.detectHostCollision(peerId);
+    });
 
     this.setupStreamService(stream);
     this.setState(GameState.IN_ROOM);
+  }
+
+  /**
+   * Ask a freshly joined peer what it is. Replaces the old timed claim race: a
+   * collision is observed whenever it becomes observable, with no window to miss.
+   */
+  private async detectHostCollision(peerId: string) {
+    const roleQuery = this.roleQuery;
+    if (!roleQuery) return;
+
+    try {
+      const peer = await roleQuery.request({}, {
+        target: peerId,
+        timeoutMs: MULTIPLAYER.ROLE_QUERY_TIMEOUT,
+      });
+      if (peer?.role === 'host') this.resolveHostCollision(peerId, peer.hostingForMs ?? 0);
+    } catch (err) {
+      // Rejects with 'disconnected' if the peer vanished between joining and
+      // answering, and on timeout. Neither is a collision we can act on.
+      console.warn(`Could not read the role of peer ${peerId}`, err);
+    }
+  }
+
+  /**
+   * Two hosts on one room code. The one that has been broadcasting LONGER keeps it:
+   * an established room may already have spectators watching a match, while a
+   * just-started one has nobody, so yielding the older room is always the worse
+   * outcome.
+   *
+   * No shared clock is involved — each side reports elapsed time from its own
+   * monotonic clock, and only the two durations are compared. The two samples are
+   * taken moments apart, so a difference under HOST_AGE_TOLERANCE is treated as
+   * simultaneous and settled by comparing selfId, which both sides always agree on.
+   *
+   * Residual, stated honestly: if ICE between the two hosts never succeeds, neither
+   * observes the other and both keep hosting. In that state they also cannot reach
+   * each other's guests, so the rooms stay separate rather than scrambled.
+   */
+  private resolveHostCollision(peerId: string, theirHostingForMs: number) {
+    if (this.isLeaving || this.playerRole !== MultiplayerUserRole.HOST) return;
+
+    if (!this.shouldYieldRoom(peerId, theirHostingForMs)) {
+      console.warn(`Host collision with ${peerId}; keeping the room (ours is older).`);
+      this.codeContestedSubject.next();
+      return;
+    }
+
+    console.warn(`Host collision with ${peerId}; yielding the room code (theirs is older).`);
+    const code = this.roomName;
+    // Stop any further handler work immediately, then tear down off the current
+    // stack: we may still be inside an onPeerJoin fan-out.
+    this.isLeaving = true;
+    queueMicrotask(() => {
+      this.leaveRoom(GameState.ROOM_CODE_TAKEN);
+      this.hostCollisionSubject.next(code);
+    });
+  }
+
+  private shouldYieldRoom(peerId: string, theirHostingForMs: number): boolean {
+    const mine = this.hostingForMs();
+    const tolerance = MULTIPLAYER.HOST_AGE_TOLERANCE;
+
+    if (mine + tolerance < theirHostingForMs) return true;  // they are clearly older
+    if (theirHostingForMs + tolerance < mine) return false; // we are clearly older
+    // Started within a couple of seconds of each other: no meaningful "first", so fall
+    // back to a comparison both sides compute identically.
+    return selfId > peerId;
+  }
+
+  /** Elapsed broadcast time on our own monotonic clock; 0 when not hosting. */
+  private hostingForMs(): number {
+    return this.hostingSince === undefined ? 0 : Math.round(performance.now() - this.hostingSince);
+  }
+
+  /**
+   * trystero reports what it can: a password that fails to decrypt an offer, a
+   * handshake that never completes, a relay that cannot be reached. Anything it
+   * cannot name still falls through to the guest's stream-wait timeout.
+   */
+  private handleJoinError(details: JoinError) {
+    console.warn('Multiplayer join error reported by trystero', details);
+    const kind = this.classifyJoinError(details.error ?? '');
+    if (!kind) return;
+
+    if (kind === 'connection-failed') {
+      console.warn(
+        'If this persists for every peer, check environment.multiplayerConfig.turnConfig — ' +
+        'a dead TURN relay looks exactly like a user network problem.'
+      );
+    }
+
+    // A host must never tear down a healthy broadcast because a stranger guessed the
+    // password wrong. Note trystero picks the offer leader by selfId, and only the
+    // answering side fails to decrypt, so this fires on whichever side that happens
+    // to be — which is precisely why the guest keeps its timeout as a fallback.
+    if (this.playerRole === MultiplayerUserRole.HOST) {
+      this.intrusionSubject.next(kind);
+      return;
+    }
+
+    this.joinErrorSubject.next(kind);
+  }
+
+  private classifyJoinError(error: string): MultiplayerJoinErrorKind | undefined {
+    // details.error is a plain English string, so substring matching is the only
+    // option. Unrecognised text deliberately returns undefined rather than guessing.
+    const text = error.toLowerCase();
+    if (text.includes('decrypt') || text.includes('password')) return 'wrong-password';
+    if (text.includes('handshake') || text.includes('ice') || text.includes('connect')) return 'connection-failed';
+    return undefined;
   }
 
   private setupChatService() {
@@ -268,7 +453,12 @@ export class MultiplayerService {
   }
 
   private onPeerJoin(peerId: string) {
-    this.onPeerJoinHandlers.forEach(handler => handler(peerId));
+    // Guarded per iteration: a handler can tear the room down (a host yielding a
+    // collided code), and the remaining handlers must not run against cleared state.
+    for (const handler of this.onPeerJoinHandlers) {
+      if (this.isLeaving) return;
+      handler(peerId);
+    }
   }
 
   private addOnPeerLeaveHandler(handler: (peerId: string) => void) {
@@ -276,6 +466,9 @@ export class MultiplayerService {
   }
 
   private onPeerLeave(peerId: string) {
-    this.onPeerLeaveHandlers.forEach(handler => handler(peerId));
+    for (const handler of this.onPeerLeaveHandlers) {
+      if (this.isLeaving) return;
+      handler(peerId);
+    }
   }
 }

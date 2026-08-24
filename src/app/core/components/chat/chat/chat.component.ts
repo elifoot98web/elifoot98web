@@ -18,6 +18,9 @@ export class ChatComponent implements AfterViewInit, OnDestroy {
   players: { [peerdId: string]: PlayerInfo | undefined } = {};
   selfId = selfId;
 
+  /** Bound to the compose field. See the template for why this is not a template ref. */
+  draft = '';
+
   @ViewChild('messageList') private messageList?: ElementRef<HTMLElement>;
 
   private subscriptions = new Subscription();
@@ -57,11 +60,17 @@ export class ChatComponent implements AfterViewInit, OnDestroy {
     return message.id;
   }
 
+  get canSend(): boolean {
+    return this.draft.trim().length > 0;
+  }
+
   /**
-   * Send a chat message
+   * Send the composed message and clear the field.
    */
-  sendMessage(text: string) {
-    this.chatService.sendMessage(text);
+  send() {
+    if (!this.canSend) return;
+    this.chatService.sendMessage(this.draft);
+    this.draft = '';
   }
 
   private scrollToLatest() {

@@ -1,8 +1,14 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { LoadingController } from '@ionic/angular';
-import { GameState, CursorPositionMessage, CursorClickMessage } from '../../core/models/multiplayer';
-import { Observable, Subscription } from 'rxjs';
+import {
+  GameState,
+  CursorPositionMessage,
+  CursorClickMessage,
+  MultiplayerJoinErrorKind,
+  MultiplayerJoinFailure
+} from '../../core/models/multiplayer';
+import { firstValueFrom, map, Observable, race, Subscription, timeout } from 'rxjs';
 import {
   MultiplayerChatService,
   MultiplayerCursorService,
@@ -85,7 +91,6 @@ export class JoinGamePage implements OnInit, OnDestroy {
     const presetRoomCode = this.roomId || (this.route.snapshot.queryParamMap.get('room') ?? '');
     const setup = await this.multiplayerUiService.promptRoomSetup('guest', presetRoomCode);
     if (!setup) return;
-
     this.playerName = setup.playerName;
     this.roomId = setup.roomCode;
     this.password = setup.password;
@@ -95,21 +100,21 @@ export class JoinGamePage implements OnInit, OnDestroy {
   }
 
   async joinRoom() {
-    // A previous attempt, or a host that walked out, can leave us still in a room.
+    // Still in a room (a previous attempt, or a host that walked out)? Leave first.
+    // The service serialises the teardown, so the rejoin no longer races it.
     if (this.multiplayerService.isInRoom) {
       this.resetRoomState();
     }
 
     this.joinError = '';
-    const loading = await this.loadingController.create({ message: 'Entrando na sala...' });
+    const loading = await this.loadingController.create({
+      message: this.multiplayerService.isDraining ? 'Encerrando a sala anterior...' : 'Entrando na sala...',
+    });
     await loading.present();
 
     try {
       await this.multiplayerService.joinGameRoom(this.playerName, this.roomId, this.password, this.cursorColor);
-
-      // Trystero connects to a room name, not to a host: a wrong code or password looks
-      // identical to an empty room, so the only failure signal is the stream never arriving.
-      const stream = await this.multiplayerStreamService.waitForVideoStream();
+      const stream = await this.awaitStream();
       this.attachStream(stream);
       this.subscribeToCursors();
     } catch (err: any) {
@@ -117,6 +122,23 @@ export class JoinGamePage implements OnInit, OnDestroy {
     } finally {
       await loading.dismiss();
     }
+  }
+
+  /**
+   * Wait for the host's video, racing the wait against the failures trystero can
+   * actually name. The timeout stays as the fallback: a room code nobody is hosting
+   * produces no error at all, only silence.
+   */
+  private awaitStream(): Promise<MediaStream> {
+    const failFast$ = this.multiplayerService.joinError$.pipe(
+      map<MultiplayerJoinErrorKind, never>(kind => { throw new MultiplayerJoinFailure(kind); })
+    );
+
+    return firstValueFrom(
+      race(this.multiplayerStreamService.videoStream$, failFast$).pipe(
+        timeout({ first: MULTIPLAYER.STREAM_WAIT_TIMEOUT })
+      )
+    );
   }
 
   async leaveRoom() {
@@ -171,15 +193,29 @@ export class JoinGamePage implements OnInit, OnDestroy {
   }
 
   private async handleJoinFailure(err: any) {
-    // rxjs `timeout` throws a TimeoutError; anything else is a genuine connection fault.
-    const isTimeout = err?.name === 'TimeoutError';
-    this.joinError = isTimeout
-      ? 'Não recebemos a transmissão. Verifique o código da sala e a senha, e confirme que o anfitrião já começou a hospedar.'
-      : err?.message || 'Erro ao entrar na sala.';
-
+    this.joinError = this.describeJoinFailure(err);
     // Settle on ERROR so the page offers a retry instead of silently resetting.
     this.resetRoomState(GameState.ERROR);
     await this.multiplayerUiService.showError(this.joinError);
+  }
+
+  private describeJoinFailure(err: any): string {
+    if (err instanceof MultiplayerJoinFailure) {
+      switch (err.kind) {
+        case 'wrong-password':
+          return `Senha incorreta para a sala ${this.roomId}. Confirme a senha com o anfitrião.`;
+        case 'connection-failed':
+          return 'Não foi possível estabelecer a conexão direta com o anfitrião. ' +
+            'Tente outra rede (Wi-Fi em vez de dados móveis) ou desative a VPN.';
+      }
+    }
+    // rxjs `timeout` throws a TimeoutError. Silence is all we ever get for a room code
+    // nobody is hosting, so this stays the catch-all.
+    if (err?.name === 'TimeoutError') {
+      return 'Não recebemos a transmissão. Verifique o código da sala e a senha, ' +
+        'e confirme que o anfitrião já começou a hospedar.';
+    }
+    return err?.message || 'Erro ao entrar na sala.';
   }
 
   private resetRoomState(nextState: GameState = GameState.NOT_IN_ROOM) {

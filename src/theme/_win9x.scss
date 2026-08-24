@@ -1,0 +1,197 @@
+/*
+ * Windows 95/98 visual language.
+ * ---------------------------------------------------------------------------
+ * Originally written inside omatic-modal.component.scss, where component-scoped
+ * encapsulation meant no other surface could reuse a single token. Promoted here so
+ * the multiplayer chat, roster and dialogs can share it.
+ *
+ * Scope rule (see CLAUDE.md): companion windows are Windows 95; the app shell stays
+ * Elifoot green. Do not restyle the page toolbars, landing cards or FAB stack.
+ *
+ * Two preconditions worth knowing before using these classes:
+ *  - `.win9x-button` only reads as Win9x on an `ion-button` with `fill="clear"`.
+ *    Otherwise Ionic's shadow-encapsulated `.button-native` paints over the host.
+ *  - Rules that moved out of component scope lost the `[_ngcontent]` attribute's
+ *    specificity, so they are qualified by element (`ion-button.win9x-button`) to
+ *    win against Ionic's own selectors.
+ */
+
+:root {
+  --win9x-face: #c0c0c0;      // classic 3D face
+  --win9x-light: #fff;        // top/left highlight
+  --win9x-shadow: #808080;    // bottom/right shade
+  --win9x-dark: #0a0a0a;      // outer shade
+  --win9x-bevel-light: #dfdfdf;
+  --win9x-field: #fff;        // sunken input/list background
+  --win9x-ink: #000;
+  --win9x-ink-disabled: #808080;
+  --win9x-titlebar-bg: linear-gradient(to right, #000080 50%, #3a6ea5 100%);
+  --win9x-titlebar-ink: #fff;
+  --win9x-font: 'MS Sans Serif', Tahoma, Geneva, Verdana, sans-serif;
+  --win9x-font-size: 14px;
+  // Touch target for surfaces that opt in via .win9x-button--touch. Deliberately not
+  // a floor on .win9x-button: it would resize the existing omatic controls.
+  --win9x-hit-target: 44px;
+}
+
+/* Raised edge: light top/left, dark bottom/right. */
+.win9x-element-border {
+  border-bottom-color: var(--win9x-shadow);
+  border-right-color: var(--win9x-shadow);
+  border-top-color: var(--win9x-light);
+  border-left-color: var(--win9x-light);
+  border-width: 2px;
+  border-style: solid;
+  box-sizing: border-box;
+}
+
+/* Sunken edge: the inverse, for fields and list panes. */
+.win9x-element-bevel {
+  border-bottom-color: var(--win9x-light);
+  border-right-color: var(--win9x-light);
+  border-top-color: var(--win9x-shadow);
+  border-left-color: var(--win9x-shadow);
+  border-width: 2px;
+  border-style: solid;
+  box-sizing: border-box;
+}
+
+.win9x-outer-window {
+  background: var(--win9x-face);
+  width: 100%;
+  height: 100%;
+}
+
+.win9x-modal-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  box-sizing: border-box;
+}
+
+ion-toolbar.win9x-titlebar {
+  --background: var(--win9x-titlebar-bg);
+  --color: var(--win9x-titlebar-ink);
+  font-weight: bolder;
+  font-family: var(--win9x-font);
+  user-select: none;
+}
+
+ion-content.win9x-modal-content {
+  padding: 0;
+  --background: var(--win9x-face);
+  font-family: var(--win9x-font);
+}
+
+.win9x-modal-content ion-item {
+  --background: var(--win9x-face);
+  --color: var(--win9x-ink);
+  --border-radius: 0;
+}
+
+.win9x-select {
+  width: 100%;
+  background: var(--win9x-face);
+  color: var(--win9x-ink);
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='16' height='17' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M15 0H0v16h1V1h14V0z' fill='%23DFDFDF'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M2 1H1v14h1V2h12V1H2z' fill='%23fff'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M16 17H0v-1h15V0h1v17z' fill='%23000'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M15 1h-1v14H1v1h14V1z' fill='gray'/%3E%3Cpath fill='silver' d='M2 2h12v13H2z'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M11 6H4v1h1v1h1v1h1v1h1V9h1V8h1V7h1V6z' fill='%23808080'/%3E%3C/svg%3E");
+  background-position: top 4px right 4px;
+  background-repeat: no-repeat;
+  border-radius: 0;
+  padding-right: 16px;
+  position: relative;
+}
+
+/* Split out from the base rule: the omatic modal's select is a disabled fake, but a
+   real enabled one must not render its text grey. */
+.win9x-select:disabled {
+  color: var(--win9x-ink-disabled);
+}
+
+.win9x-info {
+  min-height: 160px;
+}
+
+.win9x-info-text {
+  font-weight: bold;
+  font-family: var(--win9x-font);
+  padding-top: 8px;
+  white-space: pre-wrap;
+}
+
+input.win9x-input,
+.win9x-input {
+  position: relative;
+  background: var(--win9x-field);
+  font-family: var(--win9x-font);
+  color: var(--win9x-ink);
+  padding-inline-start: 8px;
+  padding-inline-end: 8px;
+  width: 100%;
+}
+
+.win9x-button,
+ion-button.win9x-button {
+  background: var(--win9x-face);
+  border: none;
+  border-radius: 0;
+  box-shadow:
+    inset -1px -1px var(--win9x-dark),
+    inset 1px 1px var(--win9x-light),
+    inset -2px -2px var(--win9x-shadow),
+    inset 2px 2px var(--win9x-bevel-light);
+  box-sizing: border-box;
+  color: var(--win9x-ink);
+  font-family: var(--win9x-font);
+  font-weight: bold;
+  padding: 0 12px;
+  font-size: var(--win9x-font-size);
+  cursor: pointer;
+}
+
+/* Pressed: the bevel inverts. */
+.win9x-button:active,
+ion-button.win9x-button:active {
+  box-shadow:
+    inset -1px -1px var(--win9x-light),
+    inset 1px 1px var(--win9x-dark),
+    inset -2px -2px var(--win9x-bevel-light),
+    inset 2px 2px var(--win9x-shadow);
+}
+
+.win9x-button:focus,
+ion-button.win9x-button:focus {
+  outline: 1px dotted var(--win9x-ink);
+  outline-offset: -4px;
+}
+
+/*
+ * Opt-in touch sizing. NOT applied to .win9x-button itself: authentic Win9x controls
+ * are ~16px tall, and forcing a floor on the existing omatic buttons grew them enough
+ * to overflow the modal into a scrollbar. New retro surfaces that need a thumb target
+ * add this class deliberately.
+ */
+.win9x-button--touch {
+  min-height: var(--win9x-hit-target);
+}
+
+ion-button.win9x-button {
+  --ripple-color: transparent !important;
+  --background-hover: transparent !important;
+  --background-focused: transparent !important;
+}
+
+ion-button.win9x-button.button-disabled {
+  background: var(--win9x-face);
+  color: var(--win9x-ink-disabled);
+}
+
+ion-button.win9x-button.button-disabled::part(native) {
+  text-shadow: 1px 1px 0 var(--win9x-light);
+}
