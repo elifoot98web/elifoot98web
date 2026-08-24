@@ -1,5 +1,11 @@
 # Estudo de UI/UX do Multiplayer + Plano de Melhorias
 
+> **Status:** Phase 1 shipped. Phases 2–5 not started.
+> Phase 1's as-built deviations are recorded under §4 Phase 1; where they conflict with
+> the prose above them, the as-built notes win. Phase 2 is blocked on decision §3(b)
+> (docked sidebar vs overlay panel), which reverses an earlier choice and needs an
+> explicit call before work starts.
+
 ## 1. Where it stands
 
 The multiplayer feature is functionally complete and architecturally sane: a spectator can receive the host's canvas over WebRTC, move a shared cursor, chat, and see a roster with real latency numbers. All of the hard parts work. What does not work is everything *around* the pipe.
@@ -17,6 +23,11 @@ Genuinely broken, not merely unpolished:
 5. **Typing a chat message is broken on iOS**, and the send button's `[disabled]` is bound to a template ref with no input binding (`chat.component.html:23`), so Enter can silently drop a message until an unrelated zone tick runs change detection.
 6. **Pasting the share link into the code field cannot work** — and not for the reason it looks like: `maxlength="24"` (`room-setup-modal.component.html:33`) truncates the paste before any parser could see `room=`.
 7. **The installed PWA starts at `/#/game`** (`src/manifest.webmanifest`) and `/game` has no exit, so spectator mode is unreachable for the users who installed the app.
+
+**Fixed since this was written (Phase 1):** items 2 (zombie room), 3 (host election), 6
+(pasted share links), and the `[disabled]` half of item 5. The `.win9x-*` kit named below
+is now extracted to `src/theme/_win9x.scss` and loaded globally. Still open: items 1 and
+the iOS-keyboard half of 5 (Phase 2), item 4 (Phase 4), item 7 (Phase 5).
 
 Merely unpolished, but visible: the chat is modern-flat WhatsApp bubbles next to a 1998 Windows 3.1 canvas; the Win9x design kit exists and is convincing but is component-scoped to `omatic-modal.component.scss`, so nothing can reuse a token of it; the roster is a stock Ionic list where an MSN contact list is already fully backed by data.
 
@@ -188,7 +199,7 @@ These gate later phases; each is a decision for the owner, with a recommendation
 
 **(a) How far does the Win9x/MSN identity spread?**
 **Recommendation: "companion windows are Windows 95; the app shell stays Elifoot green."** Convert the chat panel, the roster, the room-setup modal and the multiplayer panel. Do **not** touch the three `ion-toolbar color="tertiary"` page headers, the landing cards, the FAB stack or the popover — navy `#092469` is close enough to `#000080` that the shell and the retro windows read as deliberately related rather than accidental.
-Reasoning: the retro treatment needs an explicit boundary or it looks like a mistake, and the green/yellow palette mirrors the game's own pitch-green UI. Also, one audit proposed going further and framing `#game-container` in a bevelled Win9x window with a titlebar reading "Elifoot 98". **Reject that:** the frame must wrap the container (a titlebar child would end up under the canvas, since js-dos sizes the canvas to that box), it costs canvas pixels on the device where they are scarcest, it changes the captured track resolution for every spectator, and it buys nothing functional. `MS Sans Serif` also has no `@font-face` anywhere, so on macOS/iOS/Android the whole frame would render in the system sans — acceptable as a wink inside one modal, weak as the app's dominant chrome.
+Reasoning: the retro treatment needs an explicit boundary or it looks like a mistake, and the green/yellow palette mirrors the game's own pitch-green UI. Also, one audit proposed going further and framing `#game-container` in a bevelled Win9x window with a titlebar reading "Elifoot 98". **Reject that:** the frame must wrap the container (a titlebar child would end up under the canvas, since js-dos sizes the canvas to that box), it costs canvas pixels on the device where they are scarcest, and it buys nothing functional. `MS Sans Serif` also has no `@font-face` anywhere, so on macOS/iOS/Android the whole frame would render in the system sans — acceptable as a wink inside one modal, weak as the app's dominant chrome. (An earlier draft also claimed the frame would change the captured track resolution for every spectator. That is wrong, and §2.2 says so: the captured track follows the DOS frame size, not the host's layout. The rejection stands on the grounds above.)
 Forecloses: a full Win95-desktop metaphor; and it means the landing page and the join-game state cards stay flat Ionic, so reversing later means redoing both.
 
 **(b) The mobile chat model: docked sidebar or sheet modal?**
@@ -215,7 +226,7 @@ Forecloses: any "public room" story that does not lean on the password.
 
 Each phase is independently shippable and leaves the app coherent. Every PR must bump `package.json` `version` (`check-version-update-pull-request.yml`), and after any local build restore `src/environments` before committing.
 
-### Phase 1 — Protocol correctness and groundwork (invisible, load-bearing)
+### Phase 1 — Protocol correctness and groundwork (invisible, load-bearing) — **SHIPPED**
 **Goal:** make the room lifecycle deterministic and extract the shared SCSS, so nothing later is built on sand or built twice.
 
 1. `src/app/core/services/multiplayer/multiplayer.service.ts` — `leavingPromise` + `joiningPromise` mutex; `leaveRoom` stays synchronous; drain awaited as the first statement of the private `joinRoom()`.
@@ -230,6 +241,15 @@ Each phase is independently shippable and leaves the app coherent. Every PR must
 **New for the user:** room creation is instant instead of taking 3 s; two people on one code get a clear, actionable error instead of a coin flip; a wrong password fails in seconds with the real reason; pasted share links work; retrying the same code works.
 **Size:** L. **Risk:** the two `ngOnDestroy` call sites must not need to await; the loser's teardown runs from inside a peer handler; `@use` must precede the Ionic imports or Sass errors; the `.button-disabled::part(native)` text-shadow needs a visual re-check after the SCSS move.
 **Depends on:** nothing. **Blocks:** everything.
+
+#### As built — deviations from the plan above
+
+Four changes were made during implementation. The items above are left as written; these override them.
+
+- **The collision tie-break is age-based, not `selfId`-based** (item 3). A pure `selfId` comparison is deterministic and symmetric, but arbitrary with respect to *arrival*: in testing it tore down the established broadcast to preserve a brand-new one, which is strictly the worse outcome — an established room may have spectators mid-match while a newcomer has nobody. Each host now reports its own elapsed broadcast time (`hostingForMs`, from `performance.now()`), and the **older** host keeps the room. No shared clock is involved, so the clock-skew objection in §2.4 does not apply. Differences under `MULTIPLAYER.HOST_AGE_TOLERANCE` (2 s) are treated as simultaneous and still fall back to `selfId`, preserving determinism. The winner is notified on a dedicated `codeContested$`, not by reusing `intrusion$` with a misleading kind.
+- **The a11y hit-target floor is opt-in** (item 7). Applying `min-height: 44px` to `.win9x-button` retrofitted a floor onto the existing Cheat 'O Matic buttons, growing them enough to overflow the modal into a scrollbar — a visible regression in a phase whose contract was zero visual change. The token remains as `--win9x-hit-target` and is applied only via `.win9x-button--touch`, which nothing currently uses. Phase 3 opts in deliberately, where the layout is designed around it. `:focus` was likewise kept rather than modernised to `:focus-visible`, for the same reason.
+- **`maxlength` was removed from the room-code field entirely, not set to 8** (item 5). The two halves of that instruction conflict: any `maxlength` truncates a pasted share link before `sanitize()` can parse the code out of it. Validation is enforced by `isValid()` plus sanitising on `ionBlur` and in `confirm()` instead.
+- **`waitForVideoStream()` was replaced by `videoStream$`** (item 4). The guest races the stream against `joinError$` with rxjs `race` inside a single `firstValueFrom`, so the timeout still applies and no subscription is left dangling when the other branch wins.
 
 ### Phase 2 — Mobile layout and the stream jump
 **Goal:** the game surface never resizes when the chat opens, and a closed chat costs nothing.
@@ -322,7 +342,7 @@ There are zero `.spec.ts` files, so everything below is manual. **Standing setup
 ## 6. Considered and rejected
 
 - **`ion-modal` sheet as the mobile chat** — reaches the same "never resize `#game-container`" goal as a CSS overlay but requires `expandToScroll: false`, `.ion-content-scroll-host`, DOM-gating the sidebar and two hosts for one component; an L of untestable Ionic-internals coupling for no additional user benefit.
-- **Framing `#game-container` in a Win9x window with a titlebar** — costs canvas pixels where they are scarcest, changes the captured track resolution for every spectator, must wrap rather than nest, and renders in the system sans on most platforms.
+- **Framing `#game-container` in a Win9x window with a titlebar** — costs canvas pixels where they are scarcest, must wrap rather than nest, and renders in the system sans on most platforms. (Not, as an earlier draft claimed, because it changes the captured track resolution — see §2.2.)
 - **Bundling a pixel webfont (W95FA) for body text** — hurts legibility for the text users read most, in a language full of accented glyphs at 12 px; also a licence question on a public site. Optional and display-only at best.
 - **MSN nudge/buzz, animated emoticons and winks** — highest annoyance-to-value ratio in the set; the nudge would also risk shaking the emulator container. Ship only the unread flash on the toggle. Sound, if ever, as a WebAudio burst behind a stored preference — not an asset.
 - **A `Reconectando…` chat system line and `O anfitrião encerrou a sala.` in the transcript** — unreachable: the same `leaveRoom` that produces them calls `chatService.clear()` in the same turn, and the sidebar is hidden by then. The state card already says it.

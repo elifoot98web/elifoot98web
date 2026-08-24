@@ -69,7 +69,7 @@ the tag is hand-written).
 - `toggleSoftKeyboard()` — shows/hides the js-dos `.emulator-keyboard` div.
 - `dosInstance` — the raw js-dos instance, needed by `PatchService` for `emulatorsUi.persist`.
 
-[src/app/models/jsdos.d.ts](src/app/models/jsdos.d.ts) is a hand-maintained typing of the js-dos
+[src/app/core/typings/jsdos.d.ts](src/app/core/typings/jsdos.d.ts) is a hand-maintained typing of the js-dos
 command interface (`DosCI`) — screenshot, key/mouse injection, `persist()`, `readMemory`,
 `writeMemory`. `GamePage.dosCI` is `any` and gets threaded into every service as a parameter; there
 is no singleton holding it.
@@ -94,11 +94,11 @@ js-dos keeps the *changed* portion of the virtual disk as a zip inside IndexedDB
 `js-dos-cache*`. `dosCI.persist()` dumps that zip; `saveGameFileSystem()` writes it back. Everything
 the app reads or writes lives under the mounted `d/` tree: game in `d/eli98/`, save games in
 `d/eli98/jogos/*.e98` (`BASE_SAVEGAME_DIR`). Clearing data means deleting those IndexedDB databases
-([save-game.service.ts](src/app/services/save-game.service.ts)) plus the Ionic Storage keys.
+([save-game.service.ts](src/app/core/services/game/save-game.service.ts)) plus the Ionic Storage keys.
 
 ### Patching (the central trick)
 
-[patch.service.ts](src/app/services/patch.service.ts) modifies the virtual disk without any guest-side
+[patch.service.ts](src/app/core/services/game/patch.service.ts) modifies the virtual disk without any guest-side
 file API: it builds a `JSZip` of the desired changed-FS, then hands `emulators-ui` a **fake command
 interface** whose `persist()` returns that zip, and calls
 `dosInstance.emulatorsUi.persist.save(bundleName, dosInstance.layers, fakeCI)` — overwriting the
@@ -118,27 +118,27 @@ Windows app, so there is nothing to hook):
   hardcoded pixels for the game's green background (tolerance 25). Note this waits for the *game's*
   screen, i.e. it also covers the DOS + Windows 3.1 boot time. Failures increment
   `STORAGE_KEY.FAIL_COUNT`; after 3 the user is offered a reload or full data wipe.
-- **Auto-save** — [auto-saver.service.ts](src/app/services/auto-saver.service.ts) ticks every 1.5 s
-  and [emulator-control.service.ts](src/app/services/emulator-control.service.ts) OCRs a fixed
+- **Auto-save** — [auto-saver.service.ts](src/app/core/services/game/auto-saver.service.ts) ticks every 1.5 s
+  and [emulator-control.service.ts](src/app/core/services/game/emulator-control.service.ts) OCRs a fixed
   rectangle (`EMULATOR_CONTROL_CONFIG.DEFAULT_AREA_OF_INTEREST`) with tesseract.js (`por` model)
   looking for "a gravar o jogo…" via sliding-window Levenshtein distance. When the game finishes its
   own save, the VM is persisted so progress survives a browser reload.
 
 Both are coordinate- and color-sensitive: changing the emulator canvas size, the Windows 3.1 video
 mode/resolution, or the game's language will silently break them. Constants live in
-[constants.ts](src/app/models/constants.ts).
+[constants.ts](src/app/core/models/constants.ts).
 
 ### Other services
 
-- [cheat-omatic.service.ts](src/app/services/cheat-omatic.service.ts) — a Cheat-Engine-style memory
+- [cheat-omatic.service.ts](src/app/core/services/game/cheat-omatic.service.ts) — a Cheat-Engine-style memory
   scanner over `readMemory`/`writeMemory`, sweeping the 8 MB address space in 1 MB chunks and
   narrowing matches across successive searches (`SearchState` machine, byte/word/dword/string type
   inference, saveable `0x…` addresses).
-- [emulator-control.service.ts](src/app/services/emulator-control.service.ts) — also converts strings
+- [emulator-control.service.ts](src/app/core/services/game/emulator-control.service.ts) — also converts strings
   to DOSBox keycode sequences (`EmulatorKeyCodeHelper`, 30 ms between strokes) for the text-input dialog.
-- [local-storage.service.ts](src/app/services/local-storage.service.ts) — thin wrapper over
+- [local-storage.service.ts](src/app/core/services/shared/local-storage.service.ts) — thin wrapper over
   `@ionic/storage-angular`; all keys in `STORAGE_KEY`.
-- [layout-helper.service.ts](src/app/services/layout-helper.service.ts) — synchronous
+- [layout-helper.service.ts](src/app/core/services/shared/layout-helper.service.ts) — synchronous
   `window.innerWidth/Height` checks; drives mobile/landscape template branches (e.g. the F1–F12
   formation buttons are reversed in portrait).
 
