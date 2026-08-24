@@ -14,6 +14,7 @@ import { LayoutHelperService, LocalStorageService } from '../../core/services/sh
 import { MultiplayerChatService, MultiplayerCursorService, MultiplayerService, MultiplayerUiService } from '../../core/services/multiplayer';
 import { CursorRendererHelper } from 'src/app/core/helpers/cursor-renderer.helper';
 import { OverlaySyncHelper } from 'src/app/core/helpers/overlay-sync.helper';
+import { ChatPanelHelper } from 'src/app/core/helpers/chat-panel.helper';
 
 
 @Component({
@@ -368,7 +369,23 @@ export class GamePage implements OnInit, OnDestroy {
     await alert.present()
   }
 
+  /**
+   * The js-dos virtual keyboard and the chat panel are mutually exclusive.
+   *
+   * Chosen over "position them so they cannot overlap": the keyboard is
+   * `position:absolute; bottom:0; left:0; right:0; z-index:999` inside #game-container and
+   * js-dos picks its height from its own simple-keyboard layout, so there is no height we
+   * could reserve; and on a portrait phone the two together (~287px panel + ~230px
+   * keyboard) exceed the whole content area anyway. Mutual exclusion is one boolean;
+   * coexistence is unbounded work.
+   */
   toggleKeyboard() {
+    // Opening the game keyboard closes the chat. No toast in this direction: the user
+    // asked for the keyboard and the panel visibly slides away. Routed through toggleChat
+    // so focus is handed back to the emulator, which is where the js-dos keyboard wants it.
+    if (!this.isVirtualKeyboardShowing && this.isChatOpen) {
+      this.toggleChat(false);
+    }
     this.isVirtualKeyboardShowing = !this.isVirtualKeyboardShowing
     toggleSoftKeyboard()
     this.hidePopover()
@@ -790,6 +807,10 @@ export class GamePage implements OnInit, OnDestroy {
     this.isChatOpen = false;
     this.hostPassword = '';
 
+    // The panel unmounts with the room. Without this, focus is orphaned on <body> and the
+    // host's physical keyboard stops reaching the game. No-op if the emulator is gone.
+    ChatPanelHelper.focusEmulator();
+
     this.getOverlayElement()?.remove();
   }
 
@@ -803,8 +824,61 @@ export class GamePage implements OnInit, OnDestroy {
     await this.multiplayerUiService.shareRoom(this.hostRoomId);
   }
 
+  /**
+   * The panel is always mounted while streaming, so opening it is a state flip plus a
+   * focus move — and, if the js-dos keyboard is up, closing that first.
+   */
   toggleChat(force?: boolean) {
-    this.isChatOpen = typeof force === 'boolean' ? force : !this.isChatOpen;
+    const shouldOpen = typeof force === 'boolean' ? force : !this.isChatOpen;
+    if (shouldOpen === this.isChatOpen) return;
+
+    if (shouldOpen && this.isVirtualKeyboardShowing) {
+      this.hideVirtualKeyboard();
+      void this.multiplayerUiService.showToast(
+        'Teclado virtual do jogo fechado para abrir o chat.',
+        'medium'
+      );
+    }
+
+    this.isChatOpen = shouldOpen;
+
+    if (shouldOpen) {
+      ChatPanelHelper.focusPanel();
+    } else {
+      // Back to the game, not to the toggle: js-dos reads keys from .emulator-root.
+      ChatPanelHelper.focusEmulator();
+    }
+  }
+
+  /**
+   * Escape closes the drawer, but only from inside it: on this page ESC is a game key, so a
+   * document-level listener would steal it. stopPropagation also keeps it away from Ionic's
+   * overlay handling.
+   */
+  onChatEscape(event: Event) {
+    event.stopPropagation();
+    this.toggleChat(false);
+  }
+
+  /** Redundant entry point: the drawer must not be reachable only from the handle. */
+  openChatFromMenu() {
+    this.hidePopover();
+    this.toggleChat(true);
+  }
+
+  /** Accessible name for the handle, including the unread count. */
+  chatToggleLabel(unread: number | null): string {
+    return ChatPanelHelper.toggleAriaLabel(this.isChatOpen, unread);
+  }
+
+  /**
+   * `toggleSoftKeyboard()` flips on the div's *current inline display*, so calling it
+   * unconditionally would SHOW an already-hidden keyboard. Branch on our own flag instead.
+   */
+  private hideVirtualKeyboard() {
+    if (!this.isVirtualKeyboardShowing) return;
+    this.isVirtualKeyboardShowing = false;
+    toggleSoftKeyboard();
   }
 
   async captureGameCanvasStream(): Promise<MediaStream> {
@@ -938,10 +1012,20 @@ export class GamePage implements OnInit, OnDestroy {
   }
 
   /**
-   * js-dos re-lays-out its canvas whenever `#game-container` changes size, which now
-   * happens every time the chat sidebar is toggled. Without observing it the overlay
-   * only re-aligns when a cursor message happens to arrive, so it goes stale during a
-   * quiet toggle.
+   * js-dos re-lays-out its canvas whenever `#game-container` changes size: its resize
+   * detector listens to that element (also `.emulator-root`) and re-runs the letterbox
+   * closure from the container's offsetWidth/offsetHeight.
+   *
+   * The chat no longer causes that — it is an overlay and changes no box — but these still
+   * do: a window resize, a rotation (which also drops the header in mobile landscape,
+   * changing ion-content's height), the mobile URL bar collapsing, a fullscreen change, and
+   * `isHidden` flipping `.full` on at boot. The js-dos virtual keyboard does NOT:
+   * `.emulator-keyboard` is `position:absolute; bottom:0` inside the same root, so it
+   * changes no offset box.
+   *
+   * Both the canvas and the container are observed. The container fires first, before
+   * js-dos has rewritten the canvas geometry, so that pass aligns against the old canvas;
+   * the canvas's own entry, one tick later, is what makes the result correct.
    */
   private observeCanvasForOverlay() {
     const canvas = this.getGameCanvas();
@@ -980,6 +1064,10 @@ export class GamePage implements OnInit, OnDestroy {
     const overlay = this.getOverlayElement();
     if (gameCanvas && overlay) {
       OverlaySyncHelper.align(overlay, gameCanvas);
+      // Must run AFTER align: repositionAll reads the overlay's fresh offsetWidth/Height.
+      // Cursors already on screen keep the pixels renderCursors gave them until their peer
+      // moves, so nothing else re-derives them.
+      CursorRendererHelper.repositionAll(overlay);
     }
   }
 }

@@ -30,18 +30,71 @@
   height: 100%;
 }
 
-// Layout for .game-stream-flex-container / .chat-sidebar-flex / .chat-toggle-btn is
-// shared with the host page and lives in src/global.scss.
+// Layout for .game-stream-flex-container / .game-stream-container /
+// .chat-overlay-panel / .chat-toggle-btn is shared with the host page and lives in
+// src/global.scss. The chat is an overlay there, so nothing on this page may size itself
+// against whether the chat is open.
 
+// The stream is letterboxed by CSS, never by TypeScript.
+//
+// This is an absolutely-positioned *replaced* element: the used width comes from the
+// video's intrinsic size, the height from the intrinsic ratio, both clamped by the max-*
+// pair through the min/max constraint table (which preserves the ratio), and the auto
+// margins absorb the leftover space in both axes. Result: the element's border box is
+// EXACTLY the visible picture, centred.
+//
+// That equality is the contract. OverlaySyncHelper.align() positions #cursors-overlay
+// from offsetLeft/offsetTop/offsetWidth/offsetHeight and processCursorEvent() normalises
+// with offsetX / clientWidth, so the moment the box is bigger than the picture every
+// remote cursor is offset by the letterbox bars.
+//
+// Deliberately NOT `width/height: 100% + object-fit: contain`: that letterboxes the
+// content INSIDE a container-sized box, breaking exactly that contract.
+// Deliberately NOT a flex item: a flex item's cross-axis max clamp does not feed back
+// into its resolved main size, so `max-height: 100%` in the row direction can leave a
+// too-wide box with the picture letterboxed inside it.
+// Deliberately NOT `aspect-ratio: 4 / 3`: the ratio is the video's own business, so a
+// host DOS video-mode change re-fits for free, and aspect-ratio needs Safari 15 while
+// .browserslistrc allows Safari 14.
+//
+// Do NOT add `border`, `padding` or `object-fit`. Ionic sets `* { box-sizing:
+// border-box }`, so a border or padding shrinks the content box inside the border box the
+// overlay is aligned to, and the UA default `object-fit: contain` then letterboxes the
+// picture inside the element itself. Never centre with `transform: translate(-50%, -50%)`
+// either — transforms do not move offsetLeft/offsetTop.
 #stream-target {
-  /* Remove object-fit for dynamic sizing via TS */
+  position: absolute;
+  // Longhands, not `inset: 0`: `inset` is Safari 14.1+ and the floor is 14.0.
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  margin: auto;
   width: auto;
   height: auto;
-  max-width: none;
-  max-height: none;
+  max-width: 100%;
+  max-height: 100%;
   display: block;
-  margin: auto;
+  // Only visible in the gap before `loadedmetadata`, where a <video> has the HTML default
+  // 300x150 intrinsic size.
   background: #224422;
-  border-radius: 8px;
+  // The rendered div cursor from CursorRendererHelper is the only pointer a guest sees.
   cursor: none;
+  // Stops pull-to-refresh and the long-press callout over the stream. The page is already
+  // [scrollY]="false", so nothing is lost.
+  touch-action: none;
+  -webkit-touch-callout: none;
+}
+
+// Toolbar entry point for the chat (the drawer must not be reachable only from the
+// floating handle). The badge is inset rather than hung off the corner: ion-button clips
+// slotted children with --overflow: hidden on .button-native.
+.chat-entry-btn ion-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  min-width: 14px;
+  border-radius: 50%;
+  font-size: 9px;
+  padding: 2px 3px;
 }

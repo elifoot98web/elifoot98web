@@ -5,6 +5,13 @@
     </ion-buttons>
     <ion-title>Multiplayer</ion-title>
     <ion-buttons slot="end">
+      <ion-button *ngIf="gameState === GameState.IN_ROOM" class="chat-entry-btn" (click)="toggleChat()"
+        [attr.aria-label]="chatToggleLabel(unreadCount$ | async)"
+        [attr.aria-expanded]="isChatOpen" aria-controls="chat-panel">
+        <ion-icon slot="icon-only" name="chatbubble-ellipses-outline"></ion-icon>
+        <ion-badge *ngIf="!isChatOpen && (unreadCount$ | async) as unread" color="danger"
+          aria-hidden="true">{{ unread }}</ion-badge>
+      </ion-button>
       <ion-button *ngIf="gameState === GameState.IN_ROOM" (click)="showParticipants()" aria-label="Ver participantes">
         <ion-icon slot="icon-only" name="people-outline"></ion-icon>
       </ion-button>
@@ -77,20 +84,32 @@
   }
 
   <!-- Game stream -->
-  <div [ngClass]="{'ion-hide': gameState !== GameState.IN_ROOM }" class="ion-padding full game-stream-flex-container">
-    <div id="game-stream-container" class="game-stream-container full" [ngClass]="{'with-chat': isChatOpen}">
+  <div [ngClass]="{'ion-hide': gameState !== GameState.IN_ROOM }" class="full game-stream-flex-container">
+    <div id="game-stream-container" class="game-stream-container full">
       <div id="cursors-overlay" class="pointer-overlay"></div>
       <video id="stream-target" autoplay playsinline
-      (mousemove)="onPointerMove($event)" (touchmove)="onPointerMove($event)" (click)="onClick($event)"></video>
-      <!-- Toggle sits here, not in the sidebar: a collapsed sidebar would clip it -->
-      <ion-button color="secondary" class="chat-toggle-btn" (click)="toggleChat()"
-        [attr.aria-label]="isChatOpen ? 'Fechar chat' : 'Abrir chat'">
-        <ion-icon slot="icon-only" [name]="isChatOpen ? 'close-outline' : 'chatbubble-ellipses-outline'"></ion-icon>
-        <ion-badge *ngIf="!isChatOpen && (unreadCount$ | async)" color="danger">{{ unreadCount$ | async }}</ion-badge>
-      </ion-button>
+        (mousemove)="onPointerMove($event)" (touchmove)="onPointerMove($event)" (click)="onClick($event)"></video>
+      <!--
+        Chat drawer handle: bottom-centre in portrait, right-edge tab in landscape (see
+        global.scss). Rides the game surface, so a zero-width closed panel cannot clip it. One async subscription feeds both the badge and the accessible name.
+      -->
+      <ng-container *ngIf="{ unread: (unreadCount$ | async) || 0 } as chat">
+        <ion-button *ngIf="gameState === GameState.IN_ROOM" color="secondary" class="chat-toggle-btn"
+          (click)="toggleChat()"
+          [attr.aria-label]="chatToggleLabel(chat.unread)"
+          [attr.aria-expanded]="isChatOpen"
+          aria-controls="chat-panel">
+          <ion-icon slot="start" [name]="isChatOpen ? 'close-outline' : 'chatbubble-ellipses-outline'"></ion-icon>
+          <span class="chat-toggle-label">Chat</span>
+          <ion-badge *ngIf="!isChatOpen && chat.unread" color="danger" aria-hidden="true">{{ chat.unread }}</ion-badge>
+        </ion-button>
+      </ng-container>
     </div>
-    <!-- Chat Sidebar as a flex child -->
-    <div class="chat-sidebar-flex" [ngClass]="{ 'chat-open': isChatOpen, 'chat-collapsed': !isChatOpen }">
+    <!-- Chat docked beside (landscape) or below (portrait) the stream. -->
+    <div id="chat-panel" class="chat-docked-panel" [class.chat-open]="isChatOpen"
+      role="region" aria-label="Chat da sala" tabindex="-1"
+      [attr.aria-hidden]="!isChatOpen"
+      (keydown.escape)="onChatEscape($event)">
       <app-chat [visible]="isChatOpen"></app-chat>
     </div>
   </div>

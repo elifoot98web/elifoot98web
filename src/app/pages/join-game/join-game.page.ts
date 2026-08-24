@@ -18,6 +18,7 @@ import {
 } from '../../core/services/multiplayer';
 import { CursorRendererHelper } from 'src/app/core/helpers/cursor-renderer.helper';
 import { OverlaySyncHelper } from 'src/app/core/helpers/overlay-sync.helper';
+import { ChatPanelHelper } from 'src/app/core/helpers/chat-panel.helper';
 import { MULTIPLAYER } from 'src/app/core/models/constants';
 
 @Component({
@@ -176,7 +177,27 @@ export class JoinGamePage implements OnInit, OnDestroy {
   }
 
   toggleChat(force?: boolean) {
-    this.isChatOpen = typeof force === 'boolean' ? force : !this.isChatOpen;
+    const shouldOpen = typeof force === 'boolean' ? force : !this.isChatOpen;
+    if (shouldOpen === this.isChatOpen) return;
+    this.isChatOpen = shouldOpen;
+
+    if (shouldOpen) {
+      ChatPanelHelper.focusPanel();
+    } else {
+      // No emulator here, so focus goes back to the control that opened the drawer.
+      ChatPanelHelper.focusToggle();
+    }
+  }
+
+  /** Escape closes the drawer, scoped to the panel so nothing else reacts to it. */
+  onChatEscape(event: Event) {
+    event.stopPropagation();
+    this.toggleChat(false);
+  }
+
+  /** Accessible name for both chat controls, including the unread count. */
+  chatToggleLabel(unread: number | null): string {
+    return ChatPanelHelper.toggleAriaLabel(this.isChatOpen, unread);
   }
 
   private onGameStateChange(state: GameState) {
@@ -248,14 +269,39 @@ export class JoinGamePage implements OnInit, OnDestroy {
     video.srcObject = stream;
     this.multiplayerService.setState(GameState.IN_ROOM);
 
-    // The host re-scales its canvas whenever its own chat sidebar is toggled, which
-    // changes this track's resolution mid-call.
+    // `loadedmetadata` delivers the first real intrinsic size; `resize` fires whenever the
+    // received frame size changes afterwards.
+    //
+    // That is NOT the host toggling its chat: canvas.captureStream() follows the canvas
+    // backing store, which js-dos pins to the DOS frame size, so the host's layout cannot
+    // move it. Two things still can — a DOS/Windows video-mode change on the host, and
+    // WebRTC encoder downscaling under bandwidth or CPU pressure. Only the first changes
+    // the aspect ratio, and therefore the box the overlay is aligned to; a downscale is
+    // proportional and is now a no-op for layout. Do not drop this listener: with the
+    // container observer alone, a mid-session ratio change would leave the overlay sized to
+    // the old box until the next window resize.
     video.addEventListener('loadedmetadata', this.syncStreamContainer);
     video.addEventListener('resize', this.syncStreamContainer);
 
-    // Observing the container, not the video: syncStreamContainer sets the video's own
-    // dimensions, so observing it would re-trigger on its own output.
-    this.stopObservingOverlay = OverlaySyncHelper.observe([video.parentElement], this.syncStreamContainer);
+    // Observe the video AND its container.
+    //  - the video, because its CSS box now follows its intrinsic size (width/height auto
+    //    under max-width/max-height: 100%), so a resolution change resizes it;
+    //  - the container, because a container-only resize (window, rotation, the `ion-hide`
+    //    flip) can leave the video's size untouched while MOVING it — it is centred, so
+    //    offsetLeft/offsetTop change, and that is exactly what `align` reads.
+    // Observing the video is only safe because this callback no longer writes the video's
+    // dimensions: it writes the absolutely-positioned overlay's, which cannot feed back
+    // into the video's layout. Double-firing per resize is harmless — the write is
+    // idempotent. `detachStream()` already disconnects both targets in one call.
+    //
+    // Load-bearing for the FIRST alignment: setState(IN_ROOM) above has not rendered yet,
+    // so the call below measures a container still inside the `ion-hide` subtree (0x0).
+    // The observer re-runs it once the class flips, and repositionAll's zero guard makes
+    // the 0x0 pass a no-op instead of collapsing every cursor into the corner.
+    this.stopObservingOverlay = OverlaySyncHelper.observe(
+      [video, video.parentElement],
+      this.syncStreamContainer
+    );
     this.syncStreamContainer();
   }
 
@@ -310,36 +356,23 @@ export class JoinGamePage implements OnInit, OnDestroy {
     return document.querySelector('#cursors-overlay');
   }
 
+  /**
+   * Re-align the cursor overlay with the video's visible box.
+   *
+   * Nothing here sizes the video: `#stream-target` letterboxes itself in CSS (see
+   * join-game.page.scss), so its border box already equals the picture. The deleted
+   * `scaleVideoToContainer()` did a read-then-write layout pass on every observer tick,
+   * and its inline width/height survived `detachStream()` — so a rejoin briefly rendered
+   * the previous room's px size on the reused element. There is no such state now.
+   *
+   * Mirror of `GamePage.syncOverlayWithGameCanvas()`.
+   */
   private syncStreamContainer = () => {
-    this.scaleVideoToContainer();
-
     const video = this.getVideoElement();
     const overlay = this.getOverlayElement();
-    if (video && overlay) {
-      OverlaySyncHelper.align(overlay, video);
-    }
+    if (!video || !overlay) return;
+    OverlaySyncHelper.align(overlay, video);
+    // Must run AFTER align: repositionAll reads the overlay's fresh offsetWidth/Height.
+    CursorRendererHelper.repositionAll(overlay);
   };
-
-  private scaleVideoToContainer() {
-    const video = this.getVideoElement();
-    const container = video?.parentElement as HTMLElement;
-    if (!video || !container || !video.videoWidth || !video.videoHeight) return;
-    const containerW = container.clientWidth;
-    const containerH = container.clientHeight;
-    const videoAR = video.videoWidth / video.videoHeight;
-    const containerAR = containerW / containerH;
-    let width, height;
-    if (containerAR > videoAR) {
-      // Container is wider than video: fit by height
-      height = containerH;
-      width = height * videoAR;
-    } else {
-      // Container is taller than video: fit by width
-      width = containerW;
-      height = width / videoAR;
-    }
-    video.style.width = width + 'px';
-    video.style.height = height + 'px';
-    video.style.objectFit = 'unset'; // Remove object-fit so our sizing works
-  }
 }

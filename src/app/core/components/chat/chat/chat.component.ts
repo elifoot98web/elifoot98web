@@ -2,6 +2,7 @@ import { AfterViewInit, Component, ElementRef, Input, OnDestroy, ViewChild } fro
 import { map, Observable, Subscription } from 'rxjs';
 import { MultiplayerChatMessage, PlayerInfo } from 'src/app/core/models/multiplayer';
 import { MultiplayerChatService, MultiplayerPlayerInfoService } from 'src/app/core/services/multiplayer';
+import { KeyboardInsetService } from 'src/app/core/services/shared';
 import { selfId } from 'trystero';
 
 const MAX_VISIBLE_MESSAGES = 100;
@@ -28,12 +29,17 @@ export class ChatComponent implements AfterViewInit, OnDestroy {
   constructor(
     private chatService: MultiplayerChatService,
     private userInfoService: MultiplayerPlayerInfoService,
+    private keyboardInset: KeyboardInsetService,
   ) {
     // Limit observable to last 100 messages
     this.messages$ = this.chatService.getMessagesObservable().pipe(map(messages => messages.slice(-MAX_VISIBLE_MESSAGES)))
     this.subscriptions.add(
       this.userInfoService.playerList$.subscribe(players => this.updatePlayers(players))
     );
+    // This component is the only consumer of --kb-inset and it exists exactly as long as a
+    // chat panel is mounted (host: gated on isStreaming; guest: page lifetime), so it owns
+    // the service's lifecycle. providedIn:'root' is lazy, so something must.
+    this.keyboardInset.start();
   }
 
   /**
@@ -54,6 +60,7 @@ export class ChatComponent implements AfterViewInit, OnDestroy {
 
   ngOnDestroy() {
     this.subscriptions.unsubscribe();
+    this.keyboardInset.stop();
   }
 
   trackBy(_: number, message: MultiplayerChatMessage) {

@@ -21,7 +21,15 @@
   </ion-toolbar>
 </ion-header>
 
-<ion-content [fullscreen]="true" class="not-selectable" color="primary">
+<!--
+  [scrollY]="!isStreaming" is load-bearing beyond iOS. With scrollY on, `.inner-scroll` is
+  the nearest scrollable ancestor of the chat input, and iOS Safari scrolls it past its
+  bounds to reveal the focused field, dragging #game-container off-screen with no reliable
+  way back. It also drops `.scroll-y { z-index: 0 }`, which is what lets the chat panel
+  (1000) out-paint ion-fab (999). Nothing here scrolls: the content is `.full` plus
+  slot="fixed" FABs, and the popover carries its own ion-content.
+-->
+<ion-content [fullscreen]="true" [scrollY]="!isStreaming" class="not-selectable" color="primary">
   <ion-popover #popover [isOpen]="isPopoverOpen" triggerAction="click" class="menu-popover">
     <ng-template>
       <ion-content>
@@ -48,6 +56,12 @@
             <ion-item button detail="false" (click)="showParticipants()">
               <ion-label>Participantes</ion-label>
               <ion-icon slot="end" name="people-outline"></ion-icon>
+            </ion-item>
+            <ion-item button detail="false" (click)="openChatFromMenu()">
+              <ion-label>Chat</ion-label>
+              <ion-badge *ngIf="(unreadCount$ | async) as unread" slot="end" color="danger"
+                class="chat-menu-badge">{{ unread }}</ion-badge>
+              <ion-icon slot="end" name="chatbubble-ellipses-outline"></ion-icon>
             </ion-item>
             <ion-item button detail="false" (click)="promptStopHosting()">
               <ion-label color="danger">Encerrar sala multiplayer</ion-label>
@@ -153,19 +167,38 @@
   <input style="display:none;" type="file" accept=".zip" #patchFileInput (change)="onPatchFileSelected($event)" />
   <input style="display:none;" type="file" accept=".e98" #saveGameFileInput (change)="onSaveFileSelected($event)" />
   <div class="full game-stream-flex-container">
-    <div class="game-stream-container full" [ngClass]="{'with-chat': isChatOpen && isStreaming}">
+    <div class="game-stream-container full">
       <div [ngClass]="{ hidden: isHidden, full: !isHidden }" class="smooth-canvas not-selectable" id="game-container">
       </div>
-      <!-- Toggle sits here, not in the sidebar: a collapsed sidebar would clip it -->
-      <ion-button *ngIf="isStreaming" color="secondary" class="chat-toggle-btn" (click)="toggleChat()"
-        [attr.aria-label]="isChatOpen ? 'Fechar chat' : 'Abrir chat'">
-        <ion-icon slot="icon-only" [name]="isChatOpen ? 'close-outline' : 'chatbubble-ellipses-outline'"></ion-icon>
-        <ion-badge *ngIf="!isChatOpen && (unreadCount$ | async)" color="danger">{{ unreadCount$ | async }}</ion-badge>
-      </ion-button>
+      <!--
+        Chat drawer handle. Lives here, NOT inside the panel: a closed panel is
+        zero-sized with overflow:hidden and would clip the only way to open it. The object-literal *ngIf is a view model, so ONE async subscription feeds
+        both the badge and the button's accessible name — an aria-label suppresses
+        descendant text, so the unread count has to live inside the label itself.
+      -->
+      <ng-container *ngIf="{ unread: (unreadCount$ | async) || 0 } as chat">
+        <ion-button *ngIf="isStreaming" color="secondary" class="chat-toggle-btn"
+          [class.chat-toggle-btn--kb-up]="isVirtualKeyboardShowing"
+          (click)="toggleChat()"
+          [attr.aria-label]="chatToggleLabel(chat.unread)"
+          [attr.aria-expanded]="isChatOpen"
+          aria-controls="chat-panel">
+          <ion-icon slot="start" [name]="isChatOpen ? 'close-outline' : 'chatbubble-ellipses-outline'"></ion-icon>
+          <span class="chat-toggle-label">Chat</span>
+          <ion-badge *ngIf="!isChatOpen && chat.unread" color="danger" aria-hidden="true">{{ chat.unread }}</ion-badge>
+        </ion-button>
+      </ng-container>
     </div>
-    <!-- Chat sidebar, only while a multiplayer room is live -->
-    <div *ngIf="isStreaming" class="chat-sidebar-flex"
-      [ngClass]="{ 'chat-open': isChatOpen, 'chat-collapsed': !isChatOpen }">
+    <!--
+      Chat docked beside (landscape) or below (portrait) the game, only while a room is
+      live. In portrait the game box is a fixed 4:3 height, so the chat growing into the
+      leftover letterbox space cannot resize it at all.
+    -->
+    <div *ngIf="isStreaming" id="chat-panel" class="chat-docked-panel"
+      [class.chat-open]="isChatOpen"
+      role="region" aria-label="Chat da sala" tabindex="-1"
+      [attr.aria-hidden]="!isChatOpen"
+      (keydown.escape)="onChatEscape($event)">
       <app-chat [visible]="isChatOpen"></app-chat>
     </div>
   </div>

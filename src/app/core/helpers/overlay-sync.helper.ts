@@ -2,12 +2,25 @@
  * Keeps the multiplayer cursor overlay aligned with whatever element it sits on top of —
  * the emulator canvas on the host, the video element on a guest.
  *
- * Both of those elements resize for reasons outside Angular's change detection: js-dos
- * re-lays-out its canvas whenever `#game-container` changes size (it watches the container
- * with its own resize detector), the chat sidebar animates its width over 300ms, and a
- * guest's video changes dimensions when the host's captured track changes resolution.
+ * Both of those elements resize for reasons outside Angular's change detection. On the
+ * host, js-dos re-lays-out its canvas whenever `#game-container` changes size (it watches
+ * that element — also `.emulator-root` — with its own resize detector): a window resize,
+ * a rotation (which also drops the header in mobile landscape), the mobile URL bar
+ * collapsing, a fullscreen change, or `isHidden` flipping `.full` on at boot. NOT a chat
+ * toggle any more — the chat is an overlay that changes no box — and NOT the js-dos
+ * virtual keyboard, which is `position:absolute; bottom:0` inside the same root.
+ *
+ * On a guest, the video's box follows its intrinsic size (CSS letterboxing, see
+ * join-game.page.scss), which changes on a DOS video-mode change or on WebRTC encoder
+ * downscaling. The *captured* track resolution follows the host's DOS frame size and is
+ * independent of the host's layout.
+ *
  * A ResizeObserver covers all of those cases uniformly, including every intermediate
  * frame of a CSS transition.
+ *
+ * Alignment moves the overlay box. Cursors already inside it keep the pixel coordinates
+ * `CursorRendererHelper` gave them, so every caller of `align()` must follow it with
+ * `CursorRendererHelper.repositionAll(overlay)`.
  */
 export class OverlaySyncHelper {
   /**
@@ -25,9 +38,10 @@ export class OverlaySyncHelper {
   /**
    * Re-run `onResize` whenever any of `targets` changes size.
    *
-   * Pass only elements the callback does not itself resize. The guest observes its
-   * container rather than the video, because its callback sets the video's dimensions
-   * and observing it would feed the observer its own output.
+   * Pass only elements the callback does not itself resize, or the observer is fed its
+   * own output. The callback on both pages writes to the absolutely-positioned overlay
+   * only, which cannot affect the layout of the canvas, the video or their container —
+   * so the host observes `[canvas, container]` and the guest `[video, container]`.
    *
    * @returns a disposer that stops observing.
    */

@@ -36,9 +36,9 @@
   display: flex;
   flex-direction: column;
   max-width: 80%;
-  padding: 0.5rem 0.75rem;
+  padding: 0.35rem 0.6rem;
   border-radius: 1.2em;
-  margin: 0.2rem 0;
+  margin: 0.1rem 0;
   word-break: break-word;
 }
 
@@ -56,12 +56,15 @@
   border-bottom-left-radius: 0.2em;
 }
 
+// Single-line meta: never wrap the sender/time pair onto a second row.
 .chat-meta {
-  font-size: 0.75em;
+  font-size: 0.7em;
   color: #888;
   display: flex;
   gap: 0.5em;
-  margin-bottom: 0.1em;
+  margin-bottom: 0;
+  line-height: 1.15;
+  white-space: nowrap;
 }
 
 .chat-sender {
@@ -75,13 +78,17 @@
 
 .chat-text {
   font-size: 1em;
+  line-height: 1.25;
   color: #222;
   white-space: pre-line;
 }
 
+// #e8f5e8 was chosen for the old green gutter; the panel now paints the Win9x face,
+// where a near-white is invisible. Inactive chrome, so grey-on-grey is acceptable here.
 .chat-empty {
   text-align: center;
-  color: #e8f5e8;
+  color: var(--win9x-shadow, #808080);
+  font-style: italic;
   font-size: 0.9em;
   margin: 1rem 0.5rem;
 }
@@ -94,7 +101,13 @@
   background: #fff;
   border-top: 1px solid #e0e0e0;
   padding: 0.4rem;
-  padding-bottom: calc(0.4rem + env(safe-area-inset-bottom));
+  // The soft keyboard is compensated by SHORTENING the docked panel
+  // (`height: calc(... - var(--kb-inset))` in global.scss), not by padding here: in
+  // portrait the panel is docked at the bottom, exactly where the keyboard appears, so
+  // internal padding would only collapse the transcript and then be clipped by the panel's
+  // overflow:hidden. All that is left here is the home-indicator strip, and that strip is
+  // behind the keyboard while typing, so --kb-open zeroes it rather than leaving a dead gap.
+  padding-bottom: calc(0.4rem + env(safe-area-inset-bottom, 0px) * (1 - var(--kb-open, 0)));
 }
 
 .chat-input {

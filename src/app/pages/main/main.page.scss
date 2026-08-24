@@ -1,7 +1,28 @@
+/*
+ * Vertical centring that cannot clip.
+ *
+ * `top: 50%` + `translateY(-50%)` offsets the grid down by half the viewport and up by
+ * half of its OWN height, so once the content is taller than the viewport the grid's top
+ * edge lands above the scroll origin — and the scrollable overflow region never extends in
+ * the block-start direction, so that part is unreachable. Scrolling IS enabled here
+ * (ion-content with scrollY defaulting to true), so the bottom overflow was always
+ * reachable and the card pushed out of reach is the FIRST one, "Jogar Agora!" with
+ * gamescreen.png. Triggers below 768px (size-md stops applying and the two size="9"
+ * columns stack) or on any short viewport.
+ *
+ * A flex column with min-height: 100% grows with its content: there is then no free space
+ * for justify-content: center to distribute, so nothing can overflow either edge, and
+ * short content still centres exactly as before.
+ */
 .center-vertical {
-    position: relative;
-    top: 50%;
-    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 100%;
+    /* ion-grid centres itself with logical margins and declares display: block; restate
+       the physical margins so a `fixed` grid stays centred regardless of order. */
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .home-options-row {
@@ -32,4 +53,21 @@
 
 .big-icon {
     font-size: 72px;
+}
+
+/*
+ * Landscape phones: ~390px of height for a header, two cards and a footer carrying two
+ * lines of legal text. The screenshot is pure decoration and the only element big enough
+ * to matter, so it goes first — which also means it is never downloaded here (ion-img
+ * lazy-loads via IntersectionObserver). `size-sm="6"` would not rescue a 568x320 phone
+ * (Ionic's sm is 576px); this query is what buys the space.
+ */
+@media (max-height: 500px) {
+    .home-main-card ion-img {
+        display: none;
+    }
+
+    .big-icon {
+        font-size: 48px;
+    }
 }

@@ -106,100 +106,236 @@ canvas {
 }
 
 /*
- * Multiplayer chat sidebar. Shared by the host (game) and guest (join-game) pages: both
- * dock the chat next to the game surface, so the layout lives here instead of being
- * duplicated in two page stylesheets.
+ * ---------------------------------------------------------------------------
+ * Multiplayer chat — DOCKED beside/below the game, sized to the letterbox margin.
+ * Shared by the host (game) and guest (join-game) pages.
+ *
+ * The requirement was never "don't dock", it was "don't resize the canvas". A 4:3 frame
+ * (800x600, machine=svga_s3) fitted into a non-4:3 box always leaves slack on one axis,
+ * and spending that slack on the chat costs the game nothing:
+ *
+ *   390x844 portrait phone   content 390x788, canvas 390x292  -> 496px of height free
+ *   360x640 portrait phone   content 360x584, canvas 360x270  -> 314px free
+ *   844x390 landscape phone  content 844x390, canvas 520x390  -> 324px of width free
+ *   1920x1080 desktop        content 1920x1024, canvas 1365x1024 -> 555px free
+ *   1280x800 laptop          content 1280x744, canvas 992x744 -> 288px free
+ *   1024x768 iPad landscape  content 1024x712, canvas 949x712 -> only 75px free
+ *
+ * PORTRAIT is the important case and it is completely free. `.game-stream-container` is
+ * pinned to exactly the 4:3 box the width-fitted canvas needs (height: 75vw — percentage
+ * of the WIDTH, which in portrait is the viewport width), so the game sits flush under
+ * the header with no letterbox at all, and the chat takes every remaining pixel. Because
+ * the game box is a fixed height, growing the chat does not resize it — js-dos's resize
+ * detector never even fires, so the height transition is safe to animate.
+ *
+ * LANDSCAPE/DESKTOP docks as a row with a fixed width. Here the canvas IS height-fitted,
+ * so a panel wider than the free margin does shrink it (only at 1024x768-ish ratios).
+ * That is the accepted cost of docking — but the width change is deliberately NOT
+ * transitioned, so it is ONE re-letterbox per toggle instead of the ~18 the old animated
+ * sidebar caused, which is what made the canvas visibly crawl.
+ *
+ * Spectators are unaffected either way: canvas.captureStream() follows the canvas BACKING
+ * STORE, which js-dos pins to the DOS frame size, so displayed size never changes the
+ * captured track resolution. Both screen-scrapers read dosCI.screenshot() (the fixed
+ * render buffer) for the same reason, so nothing here can break green-pixel load
+ * detection or the tesseract auto-save OCR.
+ *
+ * Nothing overlays the game any more, so the old z-index ladder is gone; the toggle only
+ * needs to sit above the game surface.
+ * ---------------------------------------------------------------------------
  */
+
 .game-stream-flex-container {
+    --chat-panel-width: 320px;
+    // Height of the 4:3 game box in portrait. 75% of the width == 3/4.
+    --game-box-height: 75vw;
+
+    position: relative;
     display: flex;
     flex-direction: row;
     width: 100%;
     height: 100%;
-    min-height: 0;
     min-width: 0;
+    min-height: 0;
 }
 
+/*
+ * Landscape/desktop: the game takes the remaining width. No `transition` on any box —
+ * see the header. `overflow: hidden` keeps a mid-toggle canvas from painting outside.
+ */
 .game-stream-container {
     position: relative;
-    width: 100%;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
     height: 100%;
     overflow: hidden;
     display: flex;
     justify-content: center;
     align-items: center;
-    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    min-width: 0;
-    min-height: 0;
 }
 
-.game-stream-container.with-chat {
-    width: calc(100% - 320px); // Shrink when chat is open
-}
-
-.chat-sidebar-flex {
-    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+.chat-docked-panel {
+    flex: 0 0 auto;
     width: 0;
-    min-width: 0;
     overflow: hidden;
-    background: var(--ion-color-primary-shade, #005500);
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    height: 100%;
-    box-shadow: -2px 0 8px rgba(0, 0, 0, 0.08);
+    box-sizing: border-box;
+    // Grey, not the old --ion-color-primary-shade: that is nearly the game's own #008000
+    // and showed no seam. Grey is also where Phase 3 goes (Win9x window chrome).
+    background: var(--win9x-face, #c0c0c0);
+    border-left: 2px solid var(--win9x-dark, #0a0a0a);
 }
 
-.chat-sidebar-flex.chat-open {
-    width: 320px;
-    min-width: 240px;
-    max-width: 100vw;
+.chat-docked-panel.chat-open {
+    width: var(--chat-panel-width);
+}
+
+.chat-docked-panel > app-chat {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+/* Landscape phones and small tablets: 320px is a big slice of a 700-900px viewport. */
+@media (orientation: landscape) and (max-width: 900px) {
+    .game-stream-flex-container {
+        --chat-panel-width: min(300px, 40vw);
+    }
 }
 
 /*
- * The toggle lives in .game-stream-container, NOT in the sidebar: the sidebar is
- * width:0 + overflow:hidden while collapsed, which would clip the only affordance for
- * opening it.
+ * PORTRAIT: column. The game box is exactly 4:3 and pinned to the top; the chat takes
+ * everything left over. `max-height: 100%` covers a near-square portrait viewport where
+ * 75vw would exceed the available height — there the canvas letterboxes as before and the
+ * chat simply gets nothing, which is correct.
  */
-.chat-toggle-btn {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    z-index: 20;
-    margin: 0;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-}
-
-.chat-toggle-btn ion-badge {
-    position: absolute;
-    top: -6px;
-    right: -6px;
-    border-radius: 50%;
-}
-
-@media (max-width: 900px) {
-    .game-stream-container.with-chat {
-        width: calc(100% - 70vw);
-    }
-    .chat-sidebar-flex.chat-open {
-        width: 70vw;
-        min-width: 120px;
-    }
-}
-
-@media (max-width: 600px) {
+@media (orientation: portrait) {
     .game-stream-flex-container {
         flex-direction: column;
     }
-    .game-stream-container.with-chat {
-        width: 100%;
-        height: calc(100% - 220px);
+
+    /*
+     * The 4:3 game box, top-aligned. The size is carried by flex-basis rather than
+     * `height`, so nothing downstream depends on a percentage resolving.
+     */
+    .game-stream-container {
+        flex: 0 0 var(--game-box-height);
+        height: auto;
+        max-height: 100%;
     }
-    .chat-sidebar-flex.chat-open {
-        width: 100%;
+
+    /*
+     * The chat takes the remainder via flex-grow — deliberately NOT a percentage height.
+     * `height: calc(100% - ...)` looks equivalent but is not: this panel is a flex item
+     * whose containing-block height is not reliably definite, so the percentage resolved
+     * to `auto`, and its only child (app-chat, `:host { height: 100% }`) then collapsed it
+     * to zero — the chat opened with no height at all. flex-grow needs no definite
+     * containing block, and animating grow 0 -> 1 still gives a smooth reveal.
+     */
+    .chat-docked-panel {
+        width: auto;
+        height: auto;
+        flex: 0 0 0px;
+        border-left: 0;
+        border-top: 2px solid var(--win9x-dark, #0a0a0a);
+        // Safe to animate: the game box has a fixed basis, so this cannot resize it and
+        // js-dos's resize detector never fires.
+        transition: flex-grow 220ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .chat-docked-panel.chat-open {
+        width: auto;
+        flex: 1 1 0px;
+        // The panel is docked exactly where the iOS keyboard appears, so lift it clear.
+        // A margin shrinks the space flex hands it, keeping the game box untouched.
+        margin-bottom: var(--kb-inset, 0px);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+}
+
+/*
+ * The toggle. Sits inside .game-stream-container, anchored to the edge the panel docks
+ * against, so it reads as the drawer's grip. It rides the game surface rather than the
+ * panel, so a closed (zero-sized, overflow:hidden) panel can never clip it — the bug that
+ * made the host chat unreachable.
+ */
+.chat-toggle-btn {
+    position: absolute;
+    z-index: 20;
+    margin: 0;
+    height: 44px;                 // coarse-pointer floor
+    min-width: 116px;
+    font-size: 13px;
+    text-transform: none;
+    --border-radius: 10px;
+    --padding-start: 10px;
+    --padding-end: 10px;
+    --box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+
+    // Portrait: bottom-centre of the game box, just above the chat's top edge.
+    left: 50%;
+    bottom: 8px;
+    transform: translateX(-50%);
+}
+
+.chat-toggle-btn .chat-toggle-label {
+    margin-inline-start: 6px;
+}
+
+/* Non-negative offsets: ion-button clips slotted children with --overflow: hidden. */
+.chat-toggle-btn ion-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    border-radius: 50%;
+    font-size: 10px;
+    padding: 3px 5px;
+}
+
+@media (orientation: portrait) and (max-width: 400px) {
+    .chat-toggle-btn {
+        min-width: 56px;
+    }
+    .chat-toggle-btn .chat-toggle-label {
+        display: none;
+    }
+}
+
+/* Landscape/desktop: a vertical tab welded to the right edge of the game surface. */
+@media (orientation: landscape) {
+    .chat-toggle-btn {
+        left: auto;
+        bottom: auto;
+        right: 0;
+        top: 50%;
         min-width: 0;
-        height: 220px;
-        max-height: 60vh;
-        position: relative;
+        width: 34px;
+        height: 92px;
+        --padding-start: 0;
+        --padding-end: 0;
+        --border-radius: 10px 0 0 10px;
+        transform: translateY(-50%);
+    }
+    .chat-toggle-btn .chat-toggle-label {
+        display: none;
+    }
+    .chat-toggle-btn ion-icon {
+        margin-inline-end: 0;
+    }
+}
+
+/*
+ * Short landscape (phones). The arrows fab is [activated]="isMobile", so its side="top"
+ * list is permanently open and reaches ~226px above the bottom edge at the right. A
+ * vertically centred tab would land inside that column, so park it up top — free, because
+ * the header is suppressed whenever this query matches.
+ */
+@media (orientation: landscape) and (max-height: 600px) {
+    .chat-toggle-btn {
+        top: calc(12px + env(safe-area-inset-top, 0px));
+        transform: none;
     }
 }
 
@@ -245,8 +381,12 @@ canvas {
  * jump between updates instead of gliding.
  */
 @media (prefers-reduced-motion: reduce) {
-    .game-stream-container,
-    .chat-sidebar-flex,
+    /* .game-stream-container is gone from this list because its size is now
+       unconditional and never transitions. `transition: none` kills both halves of the
+       panel's transition at once: the transform no longer slides AND the delayed
+       visibility flip becomes immediate, so a closed panel stays hidden, unfocusable and
+       click-transparent. Do NOT add a `visibility: visible` override here. */
+    .chat-docked-panel,
     .chat-toggle-btn,
     .color-swatch {
         transition: none !important;

@@ -48,3 +48,29 @@ ion-fab-list.labeled ion-fab-button::part(native) {
     contain: initial;
     overflow: visible;
 }
+
+/*
+ * While the js-dos virtual keyboard is up it owns the bottom of the game surface
+ * (.emulator-keyboard is position:absolute; bottom:0; z-index:999 inside #game-container),
+ * so the bottom-centre pill would sit on its top key row and eat taps meant for keys. Park
+ * it top-right, which is free in portrait: the menu fab only exists in mobile landscape and
+ * the header lives outside the content. Opening the chat closes the keyboard, which brings
+ * the handle straight back to the panel's edge. Landscape needs nothing — the tab is
+ * already a right-edge control above the keyboard.
+ * Component styles are appended after the global sheet and carry the _ngcontent attribute,
+ * so these win without !important.
+ */
+@media (orientation: portrait) {
+    .chat-toggle-btn.chat-toggle-btn--kb-up {
+        top: 8px;
+        right: 8px;
+        bottom: auto;
+        left: auto;
+        transform: none;
+    }
+}
+
+/* Keeps the unread count off the popover item's trailing icon. */
+.chat-menu-badge {
+    margin-inline-end: 8px;
+}
