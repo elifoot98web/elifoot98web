@@ -1,10 +1,15 @@
 # Estudo de UI/UX do Multiplayer + Plano de Melhorias
 
-> **Status:** Phase 1 shipped. Phases 2–5 not started.
-> Phase 1's as-built deviations are recorded under §4 Phase 1; where they conflict with
-> the prose above them, the as-built notes win. Phase 2 is blocked on decision §3(b)
-> (docked sidebar vs overlay panel), which reverses an earlier choice and needs an
-> explicit call before work starts.
+> **Status:** Phases 1–3 shipped. Phases 4–5 not started.
+> As-built deviations are recorded under each phase in §4; where they conflict with the
+> prose above them, the as-built notes win.
+>
+> **Decision §3(b) was reversed in practice.** The study recommended one overlay panel at
+> every breakpoint. That shipped, was tested on a phone, and was wrong: on a 390x844
+> viewport it left all 496px of letterbox margin empty while overlaying a 253px panel on
+> the game. Phase 2 is now DOCKED — the letterbox margin is a free docking budget, because
+> a 4:3 frame in a non-4:3 box always leaves slack on one axis and spending it costs the
+> canvas nothing. Read §4 Phase 2 "As built" before trusting §3(b).
 
 ## 1. Where it stands
 
@@ -267,6 +272,51 @@ Four changes were made during implementation. The items above are left as writte
 **Size:** L. **Risk:** the `.full` specificity question (settle it in devtools first); `z-index` vs `.emulator-keyboard`'s 999; cursor realignment must be wired or nothing re-aligns once `#game-container` stops resizing; an overlay must not cover the height-fitted canvas centre in landscape.
 **Depends on:** Phase 1 only for the reduced-motion block (cosmetic; can be reordered).
 
+#### As built — Phase 2 deviations
+
+**The overlay was built, tested on a phone, and reversed.** §3(b) argued for one
+`transform`-animated overlay panel at every breakpoint on the grounds that a 4:3 canvas
+leaves letterbox margin an overlay can sit on. The margin data was right; the conclusion
+was backwards. On a 390x844 phone the shipped overlay left all **496px** of vertical
+letterbox empty and put a 253px panel *on top of the game* — reported as "blank space at
+the top" and "chat too thin", which were the same defect.
+
+The margin is a **free docking budget**: a 4:3 frame in a non-4:3 box always leaves slack
+on one axis, and spending that slack costs the canvas nothing. Measured:
+
+| viewport | content | canvas (4:3) | fit | free |
+|---|---|---|---|---|
+| 390x844 portrait | 390x788 | 390x292 | width | **496px height** |
+| 360x640 portrait | 360x584 | 360x270 | width | 314px height |
+| 844x390 landscape | 844x390 | 520x390 | height | 324px width |
+| 1920x1080 | 1920x1024 | 1365x1024 | height | 555px width |
+| 1024x768 iPad ls | 1024x712 | 949x712 | height | only 75px width |
+
+As shipped:
+
+- **Portrait** — `.game-stream-flex-container` is a column; `.game-stream-container` is
+  pinned to exactly the 4:3 box via `flex: 0 0 var(--game-box-height)` where
+  `--game-box-height: 75vw` (a percentage of the *width*). The game therefore sits flush
+  under the header with **no letterbox at all**, and the chat takes the remainder. Because
+  the game box has a fixed basis, growing the chat cannot resize it — js-dos's resize
+  detector never fires, so the reveal is safe to animate.
+- **Landscape/desktop** — a row dock at `--chat-panel-width` (320px, `min(300px, 40vw)`
+  under 900px). Here the canvas *is* height-fitted, so a panel wider than the margin does
+  shrink it, at 1024x768-ish ratios. That is the accepted cost of docking; the width change
+  is deliberately **not** transitioned, making it one re-letterbox per toggle instead of
+  the ~18 the original animated sidebar caused.
+- **The chat height must not be a percentage.** The first docked attempt used
+  `height: max(0px, calc(100% - var(--game-box-height)))`. Sass silently stripped the inner
+  `calc()`, and more importantly that `100%` is a percentage height on a flex item whose
+  containing block is not reliably definite — it resolved to `auto`, and `app-chat`'s
+  `:host { height: 100% }` then collapsed the panel to zero. The chat opened with no
+  height, indistinguishable from not opening. It now grows with `flex: 1 1 0px` and the
+  keyboard inset is a `margin-bottom`, so no percentage is on the growth path.
+- `--kb-inset` moved from the overlay's `bottom` to shortening the docked chat; the game
+  box is untouched either way.
+
+---
+
 ### Phase 3 — The chat as a real Win9x/MSN window
 **Goal:** the surface the user stares at all session belongs to 1998.
 
@@ -281,6 +331,27 @@ Four changes were made during implementation. The items above are left as writte
 **New for the user:** the chat looks like it belongs to the game; it says which room you are in and how many people are there; `Fulano entrou na sala.` appears in the conversation; `:)` becomes a face; the setup dialog no longer looks like a different app.
 **Size:** M-L. **Risk:** the mobile chrome budget (drop the status bar below 601px or raise the drawer); never introduce an `ion-content` into the panel; never call `getCSSFilterFromColor` from a template; `kind` must be a required literal or the build fails under `strict`.
 **Depends on:** Phase 1 item 7 (hard — the component style budget), Phase 2 (do not build the compose row twice).
+
+#### As built — Phase 3 deviations
+
+- **`darkenForText` targets a contrast ratio, not a luminance cap.** The first cut clamped
+  relative luminance to 0.32 and left half the cursor palette failing WCAG AA on the white
+  transcript (#ffe119 at 2.85, #42d4f4 at 2.92). It now scales channels down — which holds
+  the hue — until the ratio against white clears 4.5. Verified across the whole palette:
+  every colour lands between 4.56 and 6.89, and already-dark colours are returned untouched.
+- **Incoming chat messages have `kind` and `senderId` forced.** `kind: 'system'` and the
+  sender are taken from the transport rather than the payload, so a peer cannot forge a
+  system line or impersonate another sender.
+- **Join lines come from a new `playerJoined$`**, not from `playerList$`. The latter also
+  fires on every 10-second latency update, which would have written a join line per ping.
+- `setupChatService()` moved above `setupPlayerInfoService()` so the transcript exists
+  before the ident handler writes to it.
+- **The unread flash is finite** (6 cycles, then rest) rather than infinite, and is dropped
+  entirely under `prefers-reduced-motion` — the badge still carries the count.
+- The status bar is hidden below 600px tall, where it duplicates the titlebar and costs
+  transcript space; the safe-area padding moves back to the compose row with it.
+
+---
 
 ### Phase 4 — Ambient presence, identity and resilience
 **Goal:** answer "who's here / which room / am I still connected" without opening anything, and survive a blip.

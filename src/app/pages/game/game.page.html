@@ -177,8 +177,9 @@
         descendant text, so the unread count has to live inside the label itself.
       -->
       <ng-container *ngIf="{ unread: (unreadCount$ | async) || 0 } as chat">
-        <ion-button *ngIf="isStreaming" color="secondary" class="chat-toggle-btn"
+        <ion-button *ngIf="isStreaming" fill="clear" class="chat-toggle-btn"
           [class.chat-toggle-btn--kb-up]="isVirtualKeyboardShowing"
+          [class.chat-toggle-btn--unread]="!isChatOpen && chat.unread"
           (click)="toggleChat()"
           [attr.aria-label]="chatToggleLabel(chat.unread)"
           [attr.aria-expanded]="isChatOpen"
@@ -199,7 +200,7 @@
       role="region" aria-label="Chat da sala" tabindex="-1"
       [attr.aria-hidden]="!isChatOpen"
       (keydown.escape)="onChatEscape($event)">
-      <app-chat [visible]="isChatOpen"></app-chat>
+      <app-chat [visible]="isChatOpen" [roomCode]="hostRoomId"></app-chat>
     </div>
   </div>
   <ion-fab *ngIf="!(!isMobile || !isLandscape)" slot="fixed" vertical="top" horizontal="start">

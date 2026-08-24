@@ -268,16 +268,63 @@ canvas {
     height: 44px;                 // coarse-pointer floor
     min-width: 116px;
     font-size: 13px;
+    font-family: var(--win9x-font);
+    font-weight: bold;
     text-transform: none;
-    --border-radius: 10px;
+    letter-spacing: 0;
+    // A Win9x taskbar button: square, face-coloured, bevelled via inset shadows. The
+    // transparency trio is required because .win9x-button only reads as Win9x on an
+    // ion-button with fill="clear" — otherwise Ionic's shadow-encapsulated .button-native
+    // paints its own background over the host.
+    --background: transparent;
+    --background-hover: transparent;
+    --background-focused: transparent;
+    --background-activated: transparent;
+    --ripple-color: transparent;
+    --border-radius: 0;
+    --color: var(--win9x-ink);
     --padding-start: 10px;
     --padding-end: 10px;
-    --box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    --box-shadow: none;
+    background: var(--win9x-face);
+    box-shadow:
+        inset -1px -1px var(--win9x-dark),
+        inset 1px 1px var(--win9x-light),
+        inset -2px -2px var(--win9x-shadow),
+        inset 2px 2px var(--win9x-bevel-light);
 
     // Portrait: bottom-centre of the game box, just above the chat's top edge.
     left: 50%;
     bottom: 8px;
     transform: translateX(-50%);
+}
+
+.chat-toggle-btn:active {
+    box-shadow:
+        inset -1px -1px var(--win9x-light),
+        inset 1px 1px var(--win9x-dark),
+        inset -2px -2px var(--win9x-bevel-light),
+        inset 2px 2px var(--win9x-shadow);
+}
+
+/*
+ * Unread: the taskbar button flashes, exactly as a background window did in Windows.
+ * Deliberately not infinite — six flashes then rest, so it draws the eye once instead of
+ * pulsing forever next to a game someone is trying to read.
+ */
+.chat-toggle-btn.chat-toggle-btn--unread {
+    animation: win9x-taskbar-flash 1s steps(1, end) 6;
+}
+
+@keyframes win9x-taskbar-flash {
+    0%, 49% {
+        background: var(--win9x-titlebar-bg);
+        --color: var(--win9x-titlebar-ink);
+    }
+    50%, 100% {
+        background: var(--win9x-face);
+        --color: var(--win9x-ink);
+    }
 }
 
 .chat-toggle-btn .chat-toggle-label {
@@ -289,9 +336,11 @@ canvas {
     position: absolute;
     top: 2px;
     right: 2px;
-    border-radius: 50%;
+    // Squared, not a pill: Windows had no rounded corners.
+    border-radius: 0;
     font-size: 10px;
-    padding: 3px 5px;
+    padding: 2px 4px;
+    font-family: var(--win9x-font);
 }
 
 @media (orientation: portrait) and (max-width: 400px) {
@@ -364,6 +413,24 @@ canvas {
     .omatic-modal {
         --height: 480px;
     }
+
+    .multiplayer-room-setup-modal {
+        --height: 40vh;
+    }
+
+    // Same treatment for the multiplayer dialogs: a Win9x dialog is a small fixed box,
+    // not a full-bleed sheet.
+    .win9x-modal {
+        --width: 470px;
+        --max-height: 90vh;
+    }
+}
+
+// The Win9x window paints its own chrome, so the Ionic modal shell must not add rounded
+// corners or a light background behind it at any breakpoint.
+.win9x-modal {
+    --border-radius: 0;
+    --background: var(--win9x-face);
 }
 
 @keyframes ping {
@@ -398,5 +465,11 @@ canvas {
 
     .cursor-click-ping {
         animation-duration: 1ms !important;
+    }
+
+    // The unread flash is an attention cue, not information: drop it entirely rather
+    // than speed it up. The badge still carries the count.
+    .chat-toggle-btn.chat-toggle-btn--unread {
+        animation: none !important;
     }
 }

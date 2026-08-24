@@ -1,88 +1,78 @@
-<ion-header>
-  <ion-toolbar color="tertiary">
-    <ion-title>{{ title }}</ion-title>
-    <ion-buttons slot="end">
-      <ion-button (click)="cancel()">
-        <ion-icon slot="icon-only" name="close-outline"></ion-icon>
-      </ion-button>
-    </ion-buttons>
-  </ion-toolbar>
-</ion-header>
+<!-- Win9x window chrome, matching the Cheat 'O Matic modal (see src/theme/_win9x.scss). -->
+<div class="win9x-element-border win9x-outer-window">
+  <div class="win9x-modal-container">
+    <ion-header class="ion-no-border">
+      <ion-toolbar class="win9x-titlebar">
+        <ion-title>{{ title }}</ion-title>
+        <ion-buttons slot="end" class="buttons-padding-end">
+          <ion-button fill="clear" class="win9x-button" (click)="cancel()" aria-label="Fechar">
+            <ion-icon name="close" s></ion-icon>
+          </ion-button>
+        </ion-buttons>
+      </ion-toolbar>
+    </ion-header>
 
-<ion-content class="ion-padding">
-  <form (ngSubmit)="confirm()">
-    <ion-list lines="full" class="ion-no-padding">
-      <ion-item>
-        <ion-input
-          label="Seu nome"
-          labelPlacement="stacked"
-          [(ngModel)]="playerName"
-          name="playerName"
-          maxlength="20"
-          required
-          autocomplete="off"
-          placeholder="Como os outros vão te ver"></ion-input>
-      </ion-item>
+    <ion-content class="win9x-modal-content ion-padding">
+      <!-- Native inputs with real <label>s, not ion-input: this is a Win9x dialog, and
+           ion-input's shadow-encapsulated internals cannot take the sunken bevel. -->
+      <form (ngSubmit)="confirm()">
+        <label class="field">
+          <span class="field-label">Seu nome</span>
+          <input class="win9x-input win9x-element-bevel" type="text" name="playerName"
+            [(ngModel)]="playerName" maxlength="20" required autocomplete="off"
+            placeholder="Como os outros vão te ver">
+        </label>
 
-      <ion-item>
-        <!-- No maxlength: a pasted share link must survive long enough for
-             RoomCodeHelper.sanitize() to reduce it to its code on blur. -->
-        <ion-input
-          label="Código da sala"
-          labelPlacement="stacked"
-          [(ngModel)]="roomCode"
-          name="roomCode"
-          required
-          autocapitalize="characters"
-          autocomplete="off"
-          (ionBlur)="onCodeBlur()"
-          placeholder="ELI-XXXX ou cole o link"></ion-input>
-        <ion-button *ngIf="isHost" slot="end" fill="clear" type="button" (click)="regenerateCode()"
-          aria-label="Gerar outro código">
-          <ion-icon slot="icon-only" name="refresh-outline"></ion-icon>
-        </ion-button>
-      </ion-item>
-      <ion-note *ngIf="showCodeError" color="danger" class="ion-padding-start field-error">
-        O código deve ter o formato ELI-XXXX (sem as letras I, O e sem os números 0 e 1).
-      </ion-note>
+        <label class="field">
+          <span class="field-label">Código da sala</span>
+          <span class="field-row">
+            <!-- No maxlength: a pasted share link must survive long enough for
+                 RoomCodeHelper.sanitize() to reduce it to its code on blur. -->
+            <input class="win9x-input win9x-element-bevel" type="text" name="roomCode"
+              [(ngModel)]="roomCode" required autocapitalize="characters" autocomplete="off"
+              (blur)="onCodeBlur()" placeholder="ELI-XXXX ou cole o link">
+            <button *ngIf="isHost" type="button" class="win9x-button win9x-button--touch"
+              (click)="regenerateCode()" aria-label="Gerar outro código">Gerar</button>
+          </span>
+        </label>
+        <p *ngIf="showCodeError" class="field-error">
+          O código deve ter o formato ELI-XXXX (sem as letras I, O e sem os números 0 e 1).
+        </p>
 
-      <ion-item>
-        <ion-input
-          label="Senha da sala (opcional)"
-          labelPlacement="stacked"
-          [(ngModel)]="password"
-          name="password"
-          type="password"
-          autocomplete="off"
-          placeholder="Deixe vazio para sala aberta"></ion-input>
-      </ion-item>
-      <ion-note *ngIf="isHost" class="ion-padding-start hint">
-        Use uma senha se quiser garantir que só quem você convidar entre. O link
-        compartilhado não inclui a senha.
-      </ion-note>
-    </ion-list>
+        <label class="field">
+          <span class="field-label">Senha da sala (opcional)</span>
+          <input class="win9x-input win9x-element-bevel" type="password" name="password"
+            [(ngModel)]="password" autocomplete="off" placeholder="Deixe vazio para sala aberta">
+        </label>
+        <p *ngIf="isHost" class="field-hint">
+          Use uma senha se quiser garantir que só quem você convidar entre. O link
+          compartilhado não inclui a senha.
+        </p>
 
-    <ion-list-header class="ion-no-padding ion-padding-top">
-      <ion-label>Cor do seu cursor</ion-label>
-    </ion-list-header>
-    <div class="color-swatches">
-      <button
-        *ngFor="let color of colors"
-        type="button"
-        class="color-swatch"
-        [class.selected]="color === playerColor"
-        [style.background-color]="color"
-        [attr.aria-label]="'Escolher cor ' + color"
-        [attr.aria-pressed]="color === playerColor"
-        (click)="selectColor(color)"></button>
-    </div>
+        <fieldset class="win9x-element-bevel swatch-group">
+          <legend class="field-label">Cor do seu cursor</legend>
+          <div class="color-swatches">
+            <button
+              *ngFor="let color of colors"
+              type="button"
+              class="color-swatch"
+              [class.selected]="color === playerColor"
+              [style.background-color]="color"
+              [attr.aria-label]="'Escolher cor ' + color"
+              [attr.aria-pressed]="color === playerColor"
+              (click)="selectColor(color)"></button>
+          </div>
+        </fieldset>
 
-    <ion-note *ngIf="isHost" class="ion-padding-top hint">
-      Compartilhe este código com quem for assistir. A senha deve ser combinada por fora.
-    </ion-note>
-
-    <ion-button expand="block" type="submit" class="ion-margin-top" [disabled]="!isValid">
-      {{ isHost ? 'Criar sala' : 'Entrar' }}
-    </ion-button>
-  </form>
-</ion-content>
+        <div class="dialog-actions">
+          <button type="submit" class="win9x-button win9x-button--touch" [disabled]="!isValid">
+            {{ isHost ? 'Criar sala' : 'Entrar' }}
+          </button>
+          <button type="button" class="win9x-button win9x-button--touch" (click)="cancel()">
+            Cancelar
+          </button>
+        </div>
+      </form>
+    </ion-content>
+  </div>
+</div>

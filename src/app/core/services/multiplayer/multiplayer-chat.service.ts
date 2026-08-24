@@ -28,8 +28,11 @@ export class MultiplayerChatService {
   setup(room: Room) {
     this.room = room;
     const chatMessage = room.makeAction<MultiplayerChatMessage>(MULTIPLAYER.EVENTS.CHAT_MESSAGE);
-    chatMessage.onMessage = (msg) => {
-      this.addMessage(msg);
+    chatMessage.onMessage = (msg, { peerId }) => {
+      // Anything off the wire is a user message by definition: system lines are generated
+      // locally, so accepting a remote `kind: 'system'` would let a peer forge one. The
+      // sender is taken from the transport rather than the payload for the same reason.
+      this.addMessage({ ...msg, senderId: peerId, kind: 'user' });
     };
   }
 
@@ -54,10 +57,33 @@ export class MultiplayerChatService {
       senderId: selfId,
       text: text.trim(),
       timestamp: Date.now(),
+      kind: 'user',
     };
     this.addMessage(msg); // add locally
 
     this.room.makeAction<MultiplayerChatMessage>(MULTIPLAYER.EVENTS.CHAT_MESSAGE).send(msg);
+  }
+
+  /**
+   * Append a local-only line to the transcript ("Fulano entrou na sala.").
+   *
+   * Never sent over the wire: every peer observes joins and leaves for itself, so
+   * broadcasting would give everyone duplicates. It also never raises the unread badge —
+   * the read cursor is advanced past it — because a badge that fires on every network
+   * hiccup trains people to ignore it.
+   */
+  addSystemMessage(text: string) {
+    const wasRead = this.readMessageCount === this.messages.length;
+
+    this.addMessage({
+      id: this.generateId(),
+      senderId: '',
+      text,
+      timestamp: Date.now(),
+      kind: 'system',
+    });
+
+    if (wasRead) this.markAllAsRead();
   }
 
   /**

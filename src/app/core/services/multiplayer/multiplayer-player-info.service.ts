@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, Subject } from 'rxjs';
 import { MultiplayerUserRole, PlayerIdentMessage, PlayerInfo } from '../../models/multiplayer';
 import { Room, selfId } from 'trystero';
 import { MULTIPLAYER } from '../../models/constants';
@@ -13,6 +13,14 @@ export class MultiplayerPlayerInfoService {
   private playerListSubject = new BehaviorSubject<PlayerInfo[]>([]);
   private pingInterval?: ReturnType<typeof setInterval>; // For latency updates
 
+  /**
+   * Emits once per peer, the first time we learn who they are. Distinct from
+   * `playerList$`, which also fires on every latency update — a join line must not be
+   * written every 10 seconds.
+   */
+  private playerJoinedSubject = new Subject<PlayerInfo>();
+  playerJoined$ = this.playerJoinedSubject.asObservable();
+
   constructor() { }
 
   playerList$ = this.playerListSubject.asObservable();
@@ -25,6 +33,7 @@ export class MultiplayerPlayerInfoService {
     const playerIdent = room.makeAction<PlayerIdentMessage>(MULTIPLAYER.EVENTS.PLAYER_IDENT);
     playerIdent.onMessage = (ident, { peerId }) => {
       console.log(`Received ident message from ${peerId}`, { ident });
+      const isNew = this.remotePlayers[peerId] === undefined;
       const playerInfo: PlayerInfo = {
         peerId,
         playerName: ident.name,
@@ -33,6 +42,8 @@ export class MultiplayerPlayerInfoService {
         latency: -1 // Initial latency, will be updated later
       }
       this.updatePlayer(playerInfo);
+      // Only the first ident from a peer is a join. A peer may re-send its ident.
+      if (isNew) this.playerJoinedSubject.next(playerInfo);
     };
 
     this.pingInterval = setInterval(() => {

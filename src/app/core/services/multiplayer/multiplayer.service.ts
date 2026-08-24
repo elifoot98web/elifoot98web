@@ -6,6 +6,7 @@ import {
   MultiplayerJoinErrorKind,
   MultiplayerUserRole,
   PlayerIdentMessage,
+  PlayerInfo,
   RoleDescriptor,
   RoleQueryRequest
 } from '../../models/multiplayer';
@@ -13,7 +14,7 @@ import { MULTIPLAYER } from '../../models/constants';
 import { MultiplayerChatService } from './multiplayer-chat.service';
 import { MultiplayerCursorService } from './multiplayer-cursor.service';
 import { MultiplayerPlayerInfoService } from './multiplayer-player-info.service';
-import { BehaviorSubject, Subject } from 'rxjs';
+import { BehaviorSubject, Subject, Subscription } from 'rxjs';
 import { MultiplayerStreamService } from './multiplayer-stream.service';
 import { environment } from 'src/environments/environment';
 
@@ -44,6 +45,10 @@ export class MultiplayerService {
 
   /** performance.now() when this device started broadcasting; undefined when not hosting. */
   private hostingSince?: number;
+
+  /** Feeds join lines into the transcript; torn down with the room. */
+  private playerInfoSubscription?: Subscription;
+
 
   // Subjects
   gameStateSubject = new BehaviorSubject<GameState>(GameState.NOT_IN_ROOM);
@@ -114,6 +119,9 @@ export class MultiplayerService {
       this.room = undefined;
       this.roleQuery = undefined;
       this.hostingSince = undefined;
+
+      this.playerInfoSubscription?.unsubscribe();
+      this.playerInfoSubscription = undefined;
 
       this.playerRole = MultiplayerUserRole.GUEST; // Reset role
       this.playerName = '';
@@ -214,10 +222,11 @@ export class MultiplayerService {
       });
     }
 
-    // Setup shared services
+    // Setup shared services. Chat first: the player-info service emits the join line
+    // from its ident handler, so the transcript has to exist before it can be written to.
+    this.setupChatService();
     this.setupCursorService();
     this.setupPlayerInfoService();
-    this.setupChatService();
   }
 
   private initPeerListeners() {
@@ -230,6 +239,11 @@ export class MultiplayerService {
     this.room.onPeerLeave = (peerId) => {
       this.onPeerLeave(peerId);
     }
+  }
+
+  /** Falls back to a short peer id so a nameless peer still reads sensibly. */
+  private describePlayer(player: PlayerInfo): string {
+    return player.playerName?.trim() || player.peerId.slice(0, 6);
   }
 
   /** Answer to a roleQuery. Must always return a payload; trystero rejects undefined. */
@@ -414,6 +428,21 @@ export class MultiplayerService {
 
     this.playerInfoService.setup(room); // Setup player info service
     this.playerInfoService.setLocalPlayer(this.playerName, this.playerColor, this.playerRole);
+
+    // Join/leave lines. Generated locally on every peer rather than broadcast: everyone
+    // observes these events for themselves, so sending them would duplicate them.
+    this.playerInfoSubscription?.unsubscribe();
+    this.playerInfoSubscription = this.playerInfoService.playerJoined$.subscribe(player => {
+      this.chatService.addSystemMessage(`${this.describePlayer(player)} entrou na sala.`);
+    });
+
+    this.addOnPeerLeaveHandler((peerId: string) => {
+      // Read the name BEFORE the removal handler below deletes it.
+      const player = this.playerInfoService.getPlayer(peerId);
+      if (player) {
+        this.chatService.addSystemMessage(`${this.describePlayer(player)} saiu da sala.`);
+      }
+    });
 
     this.addOnPeerLeaveHandler((peerId: string) => {
       this.playerInfoService.removePlayer(peerId); // Remove player info for this peer

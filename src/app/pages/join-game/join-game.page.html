@@ -94,7 +94,8 @@
         global.scss). Rides the game surface, so a zero-width closed panel cannot clip it. One async subscription feeds both the badge and the accessible name.
       -->
       <ng-container *ngIf="{ unread: (unreadCount$ | async) || 0 } as chat">
-        <ion-button *ngIf="gameState === GameState.IN_ROOM" color="secondary" class="chat-toggle-btn"
+        <ion-button *ngIf="gameState === GameState.IN_ROOM" fill="clear" class="chat-toggle-btn"
+          [class.chat-toggle-btn--unread]="!isChatOpen && chat.unread"
           (click)="toggleChat()"
           [attr.aria-label]="chatToggleLabel(chat.unread)"
           [attr.aria-expanded]="isChatOpen"
@@ -110,7 +111,7 @@
       role="region" aria-label="Chat da sala" tabindex="-1"
       [attr.aria-hidden]="!isChatOpen"
       (keydown.escape)="onChatEscape($event)">
-      <app-chat [visible]="isChatOpen"></app-chat>
+      <app-chat [visible]="isChatOpen" [roomCode]="currentRoomCode"></app-chat>
     </div>
   </div>
 </ion-content>

@@ -26,6 +26,7 @@ export class MultiplayerUiService {
     const modal = await this.modalController.create({
       component: RoomSetupModalComponent,
       componentProps: { mode, presetRoomCode },
+      cssClass: 'win9x-modal multiplayer-room-setup-modal',
     });
     await modal.present();
 
@@ -34,7 +35,10 @@ export class MultiplayerUiService {
   }
 
   async showParticipants(): Promise<void> {
-    const modal = await this.modalController.create({ component: ParticipantsModalComponent });
+    const modal = await this.modalController.create({
+      component: ParticipantsModalComponent,
+      cssClass: 'win9x-modal',
+    });
     await modal.present();
   }
 

@@ -1,30 +1,35 @@
-<ion-header>
-  <ion-toolbar color="tertiary">
-    <ion-title>Participantes</ion-title>
-    <ion-buttons slot="end">
-      <ion-button (click)="close()">
-        <ion-icon slot="icon-only" name="close-outline"></ion-icon>
-      </ion-button>
-    </ion-buttons>
-  </ion-toolbar>
-</ion-header>
+<!-- Win9x window chrome, matching the Cheat 'O Matic modal (see src/theme/_win9x.scss). -->
+<div class="win9x-element-border win9x-outer-window">
+  <div class="win9x-modal-container">
+    <ion-header class="ion-no-border">
+      <ion-toolbar class="win9x-titlebar">
+        <ion-title><ion-icon name="people" aria-hidden="true"></ion-icon> Participantes</ion-title>
+        <ion-buttons slot="end" class="buttons-padding-end">
+          <ion-button fill="clear" class="win9x-button" (click)="close()" aria-label="Fechar">
+            <ion-icon name="close" slot="icon-only"></ion-icon>
+          </ion-button>
+        </ion-buttons>
+      </ion-toolbar>
+    </ion-header>
 
-<ion-content>
-  <ion-list lines="full">
-    <ion-item *ngFor="let player of players$ | async; trackBy: trackByPeerId">
-      <div slot="start" class="player-color" [style.background-color]="player.playerColor"></div>
-      <ion-label>
-        <h2>
-          {{ player.playerName || player.peerId.slice(0, 6) }}
-          <ion-badge *ngIf="player.role === MultiplayerUserRole.HOST" color="warning">anfitrião</ion-badge>
-        </h2>
-        <p>{{ player.peerId === selfId ? 'Este dispositivo' : player.peerId.slice(0, 8) }}</p>
-      </ion-label>
-      <ion-note slot="end" [color]="latencyColor(player)">{{ latencyLabel(player) }}</ion-note>
-    </ion-item>
-  </ion-list>
+    <ion-content class="win9x-modal-content ion-padding">
+      <!-- Sunken list pane, the Win9x idiom for a scrollable listing. -->
+      <div class="win9x-element-bevel participant-list">
+        <div *ngFor="let player of players$ | async; trackBy: trackByPeerId" class="participant-row">
+          <span class="player-color" [style.background-color]="player.playerColor" aria-hidden="true"></span>
+          <span class="participant-name">
+            {{ player.playerName || player.peerId.slice(0, 6) }}
+            <span *ngIf="player.role === MultiplayerUserRole.HOST" class="host-tag">anfitrião</span>
+          </span>
+          <span class="participant-latency" [attr.data-quality]="latencyColor(player)">
+            {{ latencyLabel(player) }}
+          </span>
+        </div>
 
-  <ion-note *ngIf="(players$ | async)?.length === 0" class="ion-padding empty-note">
-    Ninguém na sala ainda.
-  </ion-note>
-</ion-content>
+        <p *ngIf="(players$ | async)?.length === 0" class="empty-note">
+          Ninguém na sala ainda.
+        </p>
+      </div>
+    </ion-content>
+  </div>
+</div>

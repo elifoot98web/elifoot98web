@@ -142,6 +142,36 @@ mode/resolution, or the game's language will silently break them. Constants live
   `window.innerWidth/Height` checks; drives mobile/landscape template branches (e.g. the F1–F12
   formation buttons are reversed in portrait).
 
+### Retro visual identity (scope rule)
+
+The Windows 95/98 vocabulary lives in [_win9x.scss](src/theme/_win9x.scss) — `:root`
+tokens (`--win9x-face`, `--win9x-shadow`, `--win9x-field`, `--win9x-titlebar-bg`,
+`--win9x-font`, `--win9x-hit-target`) plus `.win9x-element-border` / `-bevel`,
+`.win9x-outer-window`, `.win9x-modal-container`, `.win9x-titlebar`, `.win9x-input`,
+`.win9x-button`. It is loaded via `@use` as the **first statement** of
+[global.scss](src/global.scss); `@use` must precede all other rules, so it cannot be moved
+below the Ionic imports.
+
+**The boundary: companion windows are Windows 95; the app shell stays Elifoot green.**
+Retro treatment applies to the multiplayer chat panel, the room-setup and participants
+modals, the chat toggle, and the Cheat 'O Matic modal. It does **not** apply to the page
+toolbars (`ion-toolbar color="tertiary"`), the landing cards, the FAB clusters or the
+options popover — the navy `#092469` in [variables.scss](src/theme/variables.scss) is
+close enough to `#000080` that shell and retro windows read as deliberately related. A
+retro treatment without an explicit boundary reads as a mistake rather than a choice.
+
+Two gotchas the partial documents but are worth repeating:
+
+- `.win9x-button` only renders correctly on an `ion-button` with `fill="clear"`; otherwise
+  Ionic's shadow-encapsulated `.button-native` paints over the host.
+- The 44px touch floor is **opt-in** via `.win9x-button--touch`. Applying it to
+  `.win9x-button` itself grew the omatic modal's buttons enough to overflow it into a
+  scrollbar. Authentic Win9x controls are ~16px tall.
+
+`ion-toolbar ion-button` is deliberately **not** in the shared partial — that selector is
+unqualified and would restyle toolbar buttons on every page, so it stays local to the
+omatic modal.
+
 ### PWA
 
 `@angular/service-worker` with [ngsw-config.json](ngsw-config.json) prefetching the game bundle and

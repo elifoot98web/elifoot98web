@@ -142,6 +142,11 @@ export class JoinGamePage implements OnInit, OnDestroy {
     );
   }
 
+  /** The chat titlebar shows which room you are watching. */
+  get currentRoomCode(): string {
+    return this.roomId;
+  }
+
   async leaveRoom() {
     const confirmed = await this.multiplayerUiService.confirmLeave('Você vai parar de assistir a esta partida.');
     if (!confirmed) return;

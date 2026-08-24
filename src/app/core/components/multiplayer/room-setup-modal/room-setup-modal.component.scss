@@ -1,32 +1,121 @@
-.color-swatches {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  padding: 8px 0;
+/*
+ * Win9x chrome comes from src/theme/_win9x.scss. Only this dialog's own layout lives here.
+ *
+ * `ion-toolbar ion-button` is deliberately NOT restated — that unqualified selector stays
+ * local to the omatic modal so it cannot restyle toolbars app-wide.
+ */
+.buttons-padding-end {
+  padding-right: 4px !important;
 }
 
-.color-swatch {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.5);
-  padding: 0;
-  cursor: pointer;
-  transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
-}
-
-.color-swatch.selected {
-  transform: scale(1.15);
-  border-color: var(--ion-color-dark, #000);
-  box-shadow: 0 0 0 3px var(--ion-color-light, #fff), 0 2px 6px rgba(0, 0, 0, 0.3);
-}
-
-.hint {
+.field {
   display: block;
-  font-size: 0.85rem;
+  margin-bottom: 10px;
+  font-family: var(--win9x-font);
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 12px;
+  color: var(--win9x-ink);
+}
+
+/* Code field + its Gerar button share a row. */
+.field-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+
+input.win9x-input {
+  padding-top: 6px;
+  padding-bottom: 6px;
+  font-size: 13px;
+  border: none; // the bevel comes from .win9x-element-bevel
+}
+
+input.win9x-input:focus {
+  outline: 1px dotted var(--win9x-ink);
+  outline-offset: -3px;
+}
+
+.field-error,
+.field-hint {
+  margin: -4px 0 10px;
+  font-family: var(--win9x-font);
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 .field-error {
-  display: block;
-  font-size: 0.8rem;
+  // Not the Ionic danger red: that is a flat modern hue next to Win9x greys.
+  color: #a11;
+  font-weight: bold;
+}
+
+.field-hint {
+  color: var(--win9x-shadow);
+}
+
+/* A real fieldset/legend: the Win9x group box, and it is the correct semantics for a
+   set of related radio-like controls. */
+.swatch-group {
+  margin: 0 0 12px;
+  padding: 6px 8px 8px;
+  background: var(--win9x-face);
+}
+
+.swatch-group legend {
+  padding: 0 4px;
+}
+
+.color-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/*
+ * 44px square: the coarse-pointer floor, and square because Windows had no round
+ * controls. Selection is shown by the bevel inverting (pressed-in), exactly like a
+ * toolbar toggle — not by a coloured ring, which would be invisible against the swatch
+ * whose colour it matches.
+ */
+.color-swatch {
+  width: 44px;
+  height: 44px;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  box-shadow:
+    inset -1px -1px var(--win9x-dark),
+    inset 1px 1px var(--win9x-light),
+    inset -2px -2px var(--win9x-shadow),
+    inset 2px 2px var(--win9x-bevel-light);
+}
+
+.color-swatch.selected {
+  box-shadow:
+    inset -1px -1px var(--win9x-light),
+    inset 1px 1px var(--win9x-dark),
+    inset -2px -2px var(--win9x-bevel-light),
+    inset 2px 2px var(--win9x-shadow);
+}
+
+.color-swatch:focus-visible {
+  outline: 2px dotted var(--win9x-ink);
+  outline-offset: -6px;
+}
+
+/* Win9x dialogs put their buttons bottom-right, confirm first. */
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.dialog-actions .win9x-button {
+  min-width: 96px;
 }

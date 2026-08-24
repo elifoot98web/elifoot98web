@@ -1,17 +1,79 @@
-.player-color {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.6);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+/*
+ * Win9x chrome comes from src/theme/_win9x.scss. Only this modal's own layout lives here.
+ *
+ * `ion-toolbar ion-button` is NOT restated: that unqualified selector is kept local to the
+ * omatic modal precisely so it cannot restyle toolbars app-wide. The .win9x-button class
+ * carries what this titlebar needs on its own.
+ */
+.buttons-padding-end {
+  padding-right: 4px !important;
 }
+
+.participant-list {
+  background: var(--win9x-field);
+  min-height: 120px;
+  padding: 2px;
+}
+
+.participant-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  font-family: var(--win9x-font);
+  font-size: 13px;
+  color: var(--win9x-ink);
+}
+
+/* Classic alternating list shading. */
+.participant-row:nth-child(even) {
+  background: #eaeaea;
+}
+
+.player-color {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  // Squared, and bevelled rather than rounded: this is a Win9x colour chip.
+  border: 1px solid var(--win9x-shadow);
+  box-shadow: inset -1px -1px var(--win9x-shadow), inset 1px 1px var(--win9x-light);
+}
+
+.participant-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.host-tag {
+  margin-inline-start: 6px;
+  padding: 0 4px;
+  font-size: 11px;
+  background: var(--win9x-titlebar-bg);
+  color: var(--win9x-titlebar-ink);
+}
+
+.participant-latency {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--win9x-shadow);
+}
+
+/*
+ * Connection quality by colour, but never by colour ALONE — the millisecond figure is
+ * always present next to it, so this only reinforces what the text already says.
+ */
+.participant-latency[data-quality='success'] { color: #0a7a0a; }
+.participant-latency[data-quality='warning'] { color: #8a6100; }
+.participant-latency[data-quality='danger']  { color: #a11; }
 
 .empty-note {
-  display: block;
   text-align: center;
-}
-
-ion-badge {
-  vertical-align: middle;
-  margin-left: 6px;
+  font-family: var(--win9x-font);
+  font-size: 12px;
+  font-style: italic;
+  color: var(--win9x-shadow);
+  margin: 1rem 0.5rem;
 }

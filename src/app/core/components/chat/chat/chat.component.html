@@ -1,17 +1,39 @@
-<div class="chat-panel">
-  <div class="chat-messages" #messageList>
-    <ng-container *ngIf="messages$ | async as messages">
-      <div *ngFor="let msg of messages; trackBy:trackBy" class="chat-row"
-        [ngClass]="{'my-message': msg.senderId === selfId, 'remote-message': msg.senderId !== selfId}">
-        <div class="chat-bubble">
-          <div class="chat-meta">
-            <span class="chat-sender" [style.color]="msg.senderId !== selfId ? players[msg.senderId]?.playerColor : null">{{ msg.senderId !== selfId ? players[msg.senderId]?.playerName || msg.senderId.slice(0,6) : ''}}</span>
-            <span class="chat-time">{{ msg.timestamp | date:'shortTime' }}</span>
+<!--
+  Four-band Win9x window: titlebar / transcript / compose / status bar.
+
+  The titlebar is a plain div, NOT an ion-toolbar: ion-toolbar brings a min-height and
+  safe-area padding that make no sense inside a docked panel, and it would need the whole
+  Ionic toolbar reset undone to look like Windows.
+-->
+<div class="chat-panel win9x-element-border">
+  <div class="chat-titlebar">
+    <ion-icon name="chatbubble-ellipses" aria-hidden="true"></ion-icon>
+    <span class="chat-titlebar-text">
+      {{ roomCode || 'Sala' }}
+      <span class="chat-titlebar-count">&middot; {{ participantCount$ | async }}</span>
+    </span>
+  </div>
+
+  <div class="chat-messages win9x-element-bevel" #messageList>
+    <ng-container *ngIf="lines$ | async as lines">
+      <div *ngFor="let line of lines; trackBy: trackBy"
+        class="chat-line"
+        [class.chat-line--system]="line.kind === 'system'"
+        [class.chat-line--grouped]="!line.showHeader">
+        <!-- System lines carry no sender and never group. -->
+        <ng-container *ngIf="line.kind === 'system'; else userLine">
+          <span class="chat-system-text">{{ line.text }}</span>
+        </ng-container>
+        <ng-template #userLine>
+          <div *ngIf="line.showHeader" class="chat-says" [style.color]="line.senderColor">
+            {{ line.senderName }} diz:
+            <span class="chat-time">{{ line.timestamp | date:'shortTime' }}</span>
           </div>
-          <div class="chat-text">{{ msg.text }}</div>
-        </div>
+          <div class="chat-text">{{ line.text | msnEmoticon }}</div>
+        </ng-template>
       </div>
-      <p *ngIf="messages.length === 0" class="chat-empty">
+
+      <p *ngIf="lines.length === 0" class="chat-empty">
         Nenhuma mensagem ainda. Diga oi!
       </p>
     </ng-container>
@@ -22,16 +44,23 @@
          triggers change detection, so a ref-driven [disabled] stays stale and blocks
          the form's implicit Enter submit. -->
     <input
-      class="chat-input"
+      class="chat-input win9x-element-bevel"
       type="text"
       name="draft"
       [(ngModel)]="draft"
       placeholder="Digite uma mensagem..."
       maxlength="200"
       aria-label="Mensagem" />
-    <ion-button type="submit" fill="solid" color="primary" size="small"
-      [disabled]="!canSend" aria-label="Enviar mensagem">
-      <ion-icon slot="icon-only" name="send"></ion-icon>
-    </ion-button>
+    <button type="submit" class="win9x-button win9x-button--touch" [disabled]="!canSend">
+      Enviar
+    </button>
   </form>
+
+  <!-- Carries the safe-area padding so the compose row does not have to. Hidden on short
+       viewports, where the chrome budget is tighter than the information is useful. -->
+  <div class="chat-statusbar">
+    <span class="win9x-element-bevel chat-statusbar-cell">
+      {{ (participantCount$ | async) === 1 ? '1 pessoa na sala' : (participantCount$ | async) + ' pessoas na sala' }}
+    </span>
+  </div>
 </div>
