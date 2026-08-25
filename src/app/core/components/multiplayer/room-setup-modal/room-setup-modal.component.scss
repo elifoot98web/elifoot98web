@@ -1,9 +1,18 @@
 /*
  * Win9x chrome comes from src/theme/_win9x.scss. Only this dialog's own layout lives here.
  *
- * `ion-toolbar ion-button` is deliberately NOT restated — that unqualified selector stays
- * local to the omatic modal so it cannot restyle toolbars app-wide.
+ * `ion-toolbar ion-button` is deliberately restated — that unqualified selector stays
+ * local so it cannot restyle toolbars app-wide. while still restyle ours to make the button square-ish
  */
+
+ ion-toolbar ion-button {
+  --padding-start: 0px !important;
+  --padding-end: 0px !important;
+  --padding-top: 4px !important;
+  --padding-bottom: 4px !important;
+  padding: 0 8px !important;
+}
+
 .buttons-padding-end {
   padding-right: 4px !important;
 }
