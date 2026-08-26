@@ -31,19 +31,31 @@ export class ParticipantsModalComponent {
   }
 
   /**
-   * Latency is -1 until the first ping round completes, and 0 for the local player.
+   * Latency is -1 until the first ping round completes, and 0 for the local player. A peer
+   * whose link went bad keeps its last measured number, so the state has to be read from
+   * `quality` rather than inferred from the figure.
    */
   latencyLabel(player: PlayerInfo): string {
     if (player.peerId === selfId) return 'você';
+    if (player.quality === 'lost') return 'sem resposta';
     if (player.latency < 0) return 'medindo…';
     return `${Math.round(player.latency)} ms`;
   }
 
+  /**
+   * The bands themselves live in `MULTIPLAYER.PING_*` and are applied by
+   * `MultiplayerPlayerInfoService`, so the roster, the pill and the instability notice
+   * cannot disagree about what "poor" means. This only maps health onto a colour.
+   */
   latencyColor(player: PlayerInfo): string {
-    if (player.peerId === selfId || player.latency < 0) return 'medium';
-    if (player.latency < 150) return 'success';
-    if (player.latency < 400) return 'warning';
-    return 'danger';
+    if (player.peerId === selfId) return 'medium';
+    switch (player.quality) {
+      case 'good': return 'success';
+      case 'fair': return 'warning';
+      case 'poor':
+      case 'lost': return 'danger';
+      case 'unknown': return 'medium';
+    }
   }
 
   trackByPeerId(_: number, player: PlayerInfo) {

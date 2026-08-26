@@ -5,17 +5,17 @@
     </ion-buttons>
     <ion-title>Multiplayer</ion-title>
     <ion-buttons slot="end">
-      <ion-button *ngIf="gameState === GameState.IN_ROOM" class="chat-entry-btn" (click)="toggleChat()"
+      <ion-button *ngIf="isSpectating" class="chat-entry-btn" (click)="toggleChat()"
         [attr.aria-label]="chatToggleLabel(unreadCount$ | async)"
         [attr.aria-expanded]="isChatOpen" aria-controls="chat-panel">
         <ion-icon slot="icon-only" name="chatbubble-ellipses-outline"></ion-icon>
         <ion-badge *ngIf="!isChatOpen && (unreadCount$ | async) as unread" color="danger"
           aria-hidden="true">{{ unread }}</ion-badge>
       </ion-button>
-      <ion-button *ngIf="gameState === GameState.IN_ROOM" (click)="showParticipants()" aria-label="Ver participantes">
+      <ion-button *ngIf="isSpectating" (click)="showParticipants()" aria-label="Ver participantes">
         <ion-icon slot="icon-only" name="people-outline"></ion-icon>
       </ion-button>
-      <ion-button *ngIf="gameState === GameState.IN_ROOM" color="danger" (click)="leaveRoom()" aria-label="Sair da sala">
+      <ion-button *ngIf="isSpectating" color="danger" (click)="leaveRoom()" aria-label="Sair da sala">
         <ion-icon slot="icon-only" name="exit-outline"></ion-icon>
       </ion-button>
     </ion-buttons>
@@ -83,18 +83,28 @@
     }
   }
 
-  <!-- Game stream -->
-  <div [ngClass]="{'ion-hide': gameState !== GameState.IN_ROOM }" class="full game-stream-flex-container">
+  <!-- Game stream. Stays mounted through a reconnect so the last frame survives the blip. -->
+  <div [ngClass]="{'ion-hide': !isSpectating }" class="full game-stream-flex-container">
     <div id="game-stream-container" class="game-stream-container full">
       <div id="cursors-overlay" class="pointer-overlay"></div>
       <video id="stream-target" autoplay playsinline
         (mousemove)="onPointerMove($event)" (touchmove)="onPointerMove($event)" (click)="onClick($event)"></video>
       <!--
+        Reconnect notice. Absolutely positioned, so it never becomes a flex item of the
+        container and never moves the video (see the #stream-target contract in the scss).
+        Deliberately not a @switch card: a card would unmount the video and lose the frame
+        this is drawn over.
+      -->
+      <div *ngIf="isReconnecting" class="stream-scrim" role="status" aria-live="polite">
+        <ion-spinner name="crescent"></ion-spinner>
+        <p>Tentando reconectar…</p>
+      </div>
+      <!--
         Chat drawer handle: bottom-centre in portrait, right-edge tab in landscape (see
         global.scss). Rides the game surface, so a zero-width closed panel cannot clip it. One async subscription feeds both the badge and the accessible name.
       -->
       <ng-container *ngIf="{ unread: (unreadCount$ | async) || 0 } as chat">
-        <ion-button *ngIf="gameState === GameState.IN_ROOM" fill="clear" class="chat-toggle-btn"
+        <ion-button *ngIf="isSpectating" fill="clear" class="chat-toggle-btn"
           [class.chat-toggle-btn--unread]="!isChatOpen && chat.unread"
           (click)="toggleChat()"
           [attr.aria-label]="chatToggleLabel(chat.unread)"

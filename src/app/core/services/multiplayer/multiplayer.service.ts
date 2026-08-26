@@ -46,6 +46,16 @@ export class MultiplayerService {
   /** performance.now() when this device started broadcasting; undefined when not hosting. */
   private hostingSince?: number;
 
+  /** Pending "wait for the host to come back" timer; see startHostGrace(). */
+  private hostGraceTimer?: ReturnType<typeof setTimeout>;
+
+  /**
+   * Bumped on every room entry and exit, so anything deferred can tell whether the room it
+   * was armed for is still the current one. `leaveRoom` is synchronous and a rejoin can
+   * begin while the previous room is still draining, which a bare clear cannot cover.
+   */
+  private roomEpoch = 0;
+
   /** Feeds join lines into the transcript; torn down with the room. */
   private playerInfoSubscription?: Subscription;
 
@@ -110,6 +120,9 @@ export class MultiplayerService {
   leaveRoom(nextState: GameState = GameState.NOT_IN_ROOM) {
     this.isLeaving = true;
     try {
+      this.roomEpoch += 1; // Invalidates anything deferred by the room we are leaving
+      this.clearHostGrace();
+
       // Captured BEFORE clearing this.room. room.leave() is async and trystero only
       // drops the room from its registry once it settles (a send plus a ~99ms wait);
       // until then joinRoom() for the same appId+roomId hands back this same dying
@@ -150,9 +163,43 @@ export class MultiplayerService {
    * that the subject and the current state can never drift apart.
    */
   setState(state: GameState) {
+    // A room that is live again is a room that is no longer waiting. Done here rather than
+    // at the call site so every route back to IN_ROOM disarms the timer, including the
+    // reattach the guest page drives.
+    if (state === GameState.IN_ROOM) this.clearHostGrace();
+
     if (this.gameStateSubject.value !== state) {
       this.gameStateSubject.next(state);
     }
+  }
+
+  /**
+   * Hold the room open for a host that dropped, instead of ending it on the first blip.
+   *
+   * The timer is keyed on the room generation because `leaveRoom` is synchronous and
+   * returns while trystero is still draining: a guest can be in a *new* room well before a
+   * timer armed in the old one fires, and clearing alone cannot cover the case where the
+   * rejoin happens between the two.
+   */
+  private startHostGrace() {
+    this.clearHostGrace();
+    this.setState(GameState.HOST_RECONNECTING);
+
+    const epoch = this.roomEpoch;
+    this.hostGraceTimer = setTimeout(() => {
+      this.hostGraceTimer = undefined;
+      if (epoch !== this.roomEpoch) {
+        console.log('Host grace period expired for a room we have already left; ignoring.');
+        return;
+      }
+      console.warn('Host did not come back within the grace period. Ending the room.');
+      this.setState(GameState.HOST_LEFT);
+    }, MULTIPLAYER.HOST_GRACE_TIMEOUT);
+  }
+
+  private clearHostGrace() {
+    clearTimeout(this.hostGraceTimer);
+    this.hostGraceTimer = undefined;
   }
 
   /**
@@ -184,6 +231,7 @@ export class MultiplayerService {
   private enterRoom(playerName: string, roomName: string, password: string, role: MultiplayerUserRole, color?: string): void {
     if (this.room) throw new Error('Already in a room. Please leave the current room before joining a new one.');
 
+    this.roomEpoch += 1; // A new generation, so a stale grace timer cannot fire into it
     this.setState(GameState.JOINING_ROOM);
 
     this.playerName = playerName;
@@ -211,13 +259,16 @@ export class MultiplayerService {
       { kind: 'request', onRequest: () => this.describeSelf() }
     );
 
-    // Registered before the player info service, whose own leave handler deletes the
-    // PlayerInfo this check reads. Handlers run in registration order.
+    // The host is whoever delivered the video track, not whoever claims to be — see the
+    // multiplayer UX study, decisions (c) and (e). `releaseHost` runs after the check so a
+    // returning host can claim identity again; the host-only `handlePeerLeave` in the
+    // stream service never fires on a guest, so this is where it has to happen.
     if (role === MultiplayerUserRole.GUEST) {
       this.addOnPeerLeaveHandler((peerId: string) => {
-        if (this.playerInfoService.getPlayer(peerId)?.role === MultiplayerUserRole.HOST) {
-          console.warn(`Host ${peerId} left the room.`);
-          this.setState(GameState.HOST_LEFT);
+        if (this.streamService.hostPeerId === peerId) {
+          console.warn(`Host ${peerId} left the room. Holding the last frame.`);
+          this.streamService.releaseHost(peerId);
+          this.startHostGrace();
         }
       });
     }
@@ -432,9 +483,17 @@ export class MultiplayerService {
     // Join/leave lines. Generated locally on every peer rather than broadcast: everyone
     // observes these events for themselves, so sending them would duplicate them.
     this.playerInfoSubscription?.unsubscribe();
-    this.playerInfoSubscription = this.playerInfoService.playerJoined$.subscribe(player => {
+    const playerInfoSubscriptions = new Subscription();
+    playerInfoSubscriptions.add(this.playerInfoService.playerJoined$.subscribe(player => {
       this.chatService.addSystemMessage(`${this.describePlayer(player)} entrou na sala.`);
-    });
+    }));
+    // Roles follow the stream, so the roster has to be re-stamped whenever host identity
+    // changes. Safe to subscribe before the stream service is set up: `hostPeerId$` is a
+    // BehaviorSubject, so this just replays the current (null) value first.
+    playerInfoSubscriptions.add(this.streamService.hostPeerId$.subscribe(hostPeerId => {
+      this.playerInfoService.setHostPeer(hostPeerId);
+    }));
+    this.playerInfoSubscription = playerInfoSubscriptions;
 
     this.addOnPeerLeaveHandler((peerId: string) => {
       // Read the name BEFORE the removal handler below deletes it.
@@ -454,6 +513,10 @@ export class MultiplayerService {
       const ident: PlayerIdentMessage = {
         name: this.playerName,
         color: this.playerColor,
+        // Deprecated and no longer read on receive — roles are derived from who delivered
+        // the video track. Still SENT for one release so a guest running the new code
+        // against a host that has not reloaded yet is not the odd case out. Drop the field
+        // once no old hosts are in the wild.
         host: (this.playerRole === MultiplayerUserRole.HOST)
       };
       playerIdent.send(ident, { target: peerId });

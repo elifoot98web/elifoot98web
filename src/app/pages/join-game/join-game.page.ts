@@ -40,6 +40,17 @@ export class JoinGamePage implements OnInit, OnDestroy {
 
   isChatOpen = false;
 
+  /** True only inside the host grace period, while the last frame is still on screen. */
+  isReconnecting = false;
+
+  /**
+   * Whether the video surface should be on screen. A reconnect keeps it there: the whole
+   * point of the grace period is that the last frame survives the blip.
+   */
+  get isSpectating(): boolean {
+    return this.gameState === GameState.IN_ROOM || this.gameState === GameState.HOST_RECONNECTING;
+  }
+
   /** Drives the badge on the chat toggle, which sits outside the chat component. */
   unreadCount$: Observable<number>;
 
@@ -64,6 +75,19 @@ export class JoinGamePage implements OnInit, OnDestroy {
   ngOnInit() {
     this.pageSubscriptions.add(
       this.multiplayerService.gameStateSubject.subscribe(state => this.onGameStateChange(state))
+    );
+
+    // Page-lifetime, and the ONLY place the stream is attached. `awaitStream()` used to do
+    // it from a one-shot firstValueFrom, which meant that after the first attach nothing
+    // was subscribed here at all: a host that re-added its stream emitted into a subject
+    // with no listener and the guest went on showing a dead MediaStream — the frozen frame
+    // a reconnect used to leave behind. Every emission now detaches and reattaches, so the
+    // recovered picture is live.
+    this.pageSubscriptions.add(
+      this.multiplayerStreamService.videoStream$.subscribe(stream => {
+        this.detachStream();
+        this.attachStream(stream);
+      })
     );
 
     // Arriving via a share link should feel like following a link, so open the join
@@ -115,8 +139,9 @@ export class JoinGamePage implements OnInit, OnDestroy {
 
     try {
       await this.multiplayerService.joinGameRoom(this.playerName, this.roomId, this.password, this.cursorColor);
-      const stream = await this.awaitStream();
-      this.attachStream(stream);
+      // Awaited for its timeout and fail-fast behaviour only; the subscription in ngOnInit
+      // is what attaches, and has already done so by the time this resolves.
+      await this.awaitStream();
       this.subscribeToCursors();
     } catch (err: any) {
       await this.handleJoinFailure(err);
@@ -207,6 +232,12 @@ export class JoinGamePage implements OnInit, OnDestroy {
 
   private onGameStateChange(state: GameState) {
     this.gameState = state;
+    // Drives the scrim from a plain field rather than from the shared subject in the
+    // template. The stream block and the cursor overlay have to stay mounted through a
+    // reconnect — gating any of that DOM on the room state is exactly what would throw the
+    // last frame away.
+    this.isReconnecting = state === GameState.HOST_RECONNECTING;
+
     if (state === GameState.HOST_LEFT) {
       this.joinError = 'O anfitrião saiu da sala. A transmissão foi encerrada.';
       // Nothing left to spectate, so drop the room — but keep HOST_LEFT on screen
@@ -269,7 +300,13 @@ export class JoinGamePage implements OnInit, OnDestroy {
 
   private attachStream(stream: MediaStream) {
     const video = this.getVideoElement();
-    if (!video) throw new Error('Video element not found');
+    // Reported rather than thrown: this now runs from the stream subscription, where a
+    // throw would surface as an unhandled error instead of reaching a caller. The element
+    // is static in the template, so this only fires if the page is being torn down.
+    if (!video) {
+      console.error('Cannot attach the stream: #stream-target is not in the DOM.');
+      return;
+    }
 
     video.srcObject = stream;
     this.multiplayerService.setState(GameState.IN_ROOM);

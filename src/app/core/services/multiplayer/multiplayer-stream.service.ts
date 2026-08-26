@@ -11,8 +11,24 @@ export class MultiplayerStreamService {
   private room?: Room;
   private role?: MultiplayerUserRole;
   private streamSubject = new BehaviorSubject<MediaStream>(new MediaStream());
+  private hostPeerIdSubject = new BehaviorSubject<string | null>(null);
 
   constructor() { }
+
+  /**
+   * The peer that actually delivered a video track, or null while nobody has.
+   *
+   * Host identity is derived from the stream rather than from a claim: a guest has no
+   * emulator and cannot serve one, so there is nothing to elect, and a self-declared
+   * `host` flag is forgeable by any spectator with devtools. Only ever populated on a
+   * guest — a host receives no streams, and knows its own role locally.
+   */
+  hostPeerId$ = this.hostPeerIdSubject.asObservable();
+
+  /** Synchronous read for the peer-leave handler, which cannot wait for an emission. */
+  get hostPeerId(): string | null {
+    return this.hostPeerIdSubject.value;
+  }
 
   getStreamObservable(): Observable<MediaStream> {
     return this.streamSubject.asObservable();
@@ -41,15 +57,50 @@ export class MultiplayerStreamService {
     } else {
       console.log('Setting up stream for GUEST role');
       this.room.onPeerStream = (peerStream, peerId) => {
-        if (this.role === MultiplayerUserRole.GUEST) {
-          console.log(`[STREAM] Received stream from peer: ${peerId}`, { role: this.role, room: this.room, peerStream });
-          // For GUEST, just update the local stream reference
-          this.stream = peerStream;
-          this.streamSubject.next(peerStream); // Notify subscribers of the new stream
-        } else {
+        if (this.role !== MultiplayerUserRole.GUEST) {
           console.warn('Received stream as HOST, but should not handle streams from peers.');
+          return;
         }
+
+        // `onPeerStream` is a single assignable property, not a listener list, so without
+        // the guards below the last stream from ANY peer would win — replacing the picture
+        // and, now that host identity is derived from it, reassigning who the host is.
+        // First video track wins, and keeps winning until that peer leaves
+        // (`releaseHost`) or the room is torn down.
+        if (peerStream.getVideoTracks().length === 0) {
+          console.log(`[STREAM] Ignoring stream without video from peer: ${peerId}`);
+          return;
+        }
+
+        const currentHost = this.hostPeerIdSubject.value;
+        if (currentHost !== null && currentHost !== peerId) {
+          console.warn(`[STREAM] Ignoring video from ${peerId}: ${currentHost} is already the host.`);
+          return;
+        }
+
+        console.log(`[STREAM] Received stream from peer: ${peerId}`, { role: this.role, room: this.room, peerStream });
+        this.stream = peerStream;
+        if (currentHost === null) {
+          this.hostPeerIdSubject.next(peerId);
+        }
+        // Emitted after the host id, so a subscriber reacting to the stream can already
+        // read `hostPeerId`. A re-emission from the same peer is the reconnect path.
+        this.streamSubject.next(peerStream);
       }
+    }
+  }
+
+  /**
+   * Forget the current host so a returning or replacing one can claim identity again.
+   * A no-op unless `peerId` is the peer that delivered the stream.
+   *
+   * Called from the guest's peer-leave path in `MultiplayerService`: the host-only
+   * `handlePeerLeave` below never runs on a guest.
+   */
+  releaseHost(peerId: string) {
+    if (this.hostPeerIdSubject.value === peerId) {
+      console.warn(`[STREAM] Host ${peerId} left; host identity is now unclaimed.`);
+      this.hostPeerIdSubject.next(null);
     }
   }
 
@@ -111,6 +162,7 @@ export class MultiplayerStreamService {
     }
     this.stream = undefined;
     this.streamSubject.next(new MediaStream()); // Reset the stream subject
+    this.hostPeerIdSubject.next(null); // Host identity does not survive a room
     this.room = undefined;
     this.role = undefined;
   }

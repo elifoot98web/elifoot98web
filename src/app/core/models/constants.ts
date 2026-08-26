@@ -95,6 +95,17 @@ export const MULTIPLAYER = {
   HOST_AGE_TOLERANCE: 2000, // 2 seconds
   PING_TIMEOUT: 5000, // 5 seconds
   PING_REFRESH_INTERVAL: 10000, // 10 seconds
+  // Latency bands for PlayerInfo.quality. Owned here rather than in the roster component so
+  // the pill, the roster and the instability warning cannot disagree about what "poor" is.
+  PING_GOOD_MAX: 150, // under this, 'good'
+  PING_FAIR_MAX: 400, // under this, 'fair'; at or above, 'poor'
+  // Minimum gap between two "connection is unstable" notices about the same peer. The
+  // notice is edge-triggered as well, so this only bounds a peer that keeps flapping.
+  CONNECTION_WARNING_COOLDOWN: 30000, // 30 seconds
+  // How long a guest holds the last frame, waiting for a dropped host to come back, before
+  // giving up and reporting the room as over. Long enough to ride out a WiFi handover or a
+  // brief tunnel, short enough that a genuinely closed room does not feel hung.
+  HOST_GRACE_TIMEOUT: 13000, // 13 seconds
   CURSOR_Z_INDEX: 10, // Cursors should be above the game elements
   CURSOR_CLICK_Z_INDEX: 9, // Click pings should be below the cursors
   // How long a guest waits for the host's video stream before giving up.

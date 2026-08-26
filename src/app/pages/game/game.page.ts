@@ -8,10 +8,10 @@ import { AboutComponent } from './components/about/about.component';
 import { OmaticModalComponent } from './components/omatic-modal/omatic-modal.component';
 import { Observable, Subscription } from 'rxjs';
 import { EmulatorKeyCode } from '../../core/models/game';
-import { CursorClickMessage, CursorPositionMessage, MultiplayerJoinErrorKind } from '../../core/models/multiplayer';
+import { CursorClickMessage, CursorPositionMessage, MultiplayerJoinErrorKind, PlayerInfo } from '../../core/models/multiplayer';
 import { AutoSaverService, EmulatorControlService, PatchService, SaveGameService } from '../../core/services/game';
 import { LayoutHelperService, LocalStorageService } from '../../core/services/shared';
-import { MultiplayerChatService, MultiplayerCursorService, MultiplayerService, MultiplayerUiService } from '../../core/services/multiplayer';
+import { MultiplayerChatService, MultiplayerCursorService, MultiplayerPlayerInfoService, MultiplayerService, MultiplayerUiService } from '../../core/services/multiplayer';
 import { CursorRendererHelper } from 'src/app/core/helpers/cursor-renderer.helper';
 import { OverlaySyncHelper } from 'src/app/core/helpers/overlay-sync.helper';
 import { ChatPanelHelper } from 'src/app/core/helpers/chat-panel.helper';
@@ -65,6 +65,7 @@ export class GamePage implements OnInit, OnDestroy {
     private multiplayerService: MultiplayerService,
     private multiplayerCursorService: MultiplayerCursorService,
     private multiplayerUiService: MultiplayerUiService,
+    private playerInfoService: MultiplayerPlayerInfoService,
     chatService: MultiplayerChatService
   ) {
     this.unreadCount$ = chatService.unreadCount$;
@@ -715,6 +716,12 @@ export class GamePage implements OnInit, OnDestroy {
       this.multiplayerSubscriptions.add(
         this.multiplayerService.intrusion$.subscribe(kind => this.onIntrusion(kind))
       );
+      // Host-only on purpose: a spectator can do nothing about another spectator's link,
+      // and the roster already tells anyone who opens it. Edge-triggered and rate-limited
+      // upstream, so this cannot become a toast storm.
+      this.multiplayerSubscriptions.add(
+        this.playerInfoService.connectionWarning$.subscribe(player => this.onConnectionWarning(player))
+      );
     } catch (err: any) {
       // A failed host claim already left the room, but a capture failure did not.
       this.multiplayerService.leaveRoom();
@@ -784,6 +791,15 @@ export class GamePage implements OnInit, OnDestroy {
       ? 'Alguém tentou entrar com a senha errada.'
       : 'Alguém tentou entrar, mas a conexão não foi estabelecida.';
     await this.multiplayerUiService.showToast(message);
+  }
+
+  /**
+   * A spectator's link went bad. Named rather than counted: the host's only real recourse
+   * is to tell that person, so the name is the whole point of the notice.
+   */
+  private async onConnectionWarning(player: PlayerInfo) {
+    const name = player.playerName?.trim() || player.peerId.slice(0, 6);
+    await this.multiplayerUiService.showToast(`Conexão instável com ${name}.`, 'warning');
   }
 
   stopHosting() {

@@ -44,7 +44,14 @@ export interface CursorClickMessage extends BaseMessage {
 export interface PlayerIdentMessage extends BaseMessage {
     name: string;
     color: string;
-    host: boolean; // true if this is the host player
+    /**
+     * @deprecated Self-declared and therefore forgeable — a spectator with devtools could
+     * award itself the host badge and end the room by leaving. Roles are now derived from
+     * who actually delivered a video track (`MultiplayerStreamService.hostPeerId$`), and
+     * nothing reads this field any more. Still populated on send so a new guest talking to
+     * a not-yet-reloaded old host behaves; remove once old hosts are gone.
+     */
+    host: boolean;
 }
 
 /**
