@@ -622,6 +622,70 @@ export class GamePage implements OnInit, OnDestroy {
     await alert.present()
   }
 
+  /**
+   * Leave the game and go back to the landing page.
+   *
+   * `/game` had no exit at all, which is why the installed PWA could never reach spectator
+   * mode: it opened straight into the emulator and stayed there.
+   */
+  async confirmLeaveGame() {
+    this.hidePopover()
+    const alert = await this.alertController.create({
+      header: 'Voltar ao menu?',
+      message: this.isStreaming
+        ? 'O jogo será salvo e a sala será encerrada. Os espectadores serão desconectados.'
+        : 'O jogo será salvo antes de sair.',
+      cssClass: 'alert-whitespace',
+      buttons: [{
+        text: 'Cancelar',
+        role: 'cancel'
+      }, {
+        text: 'Sair',
+        handler: async () => {
+          await this.leaveGameToMenu()
+        }
+      }]
+    })
+    await alert.present()
+  }
+
+  /**
+   * Full teardown, in an order that matters.
+   *
+   * The tickers stop first: the auto-saver OCRs the framebuffer every 1.5s and would
+   * otherwise fire a persist into a VM that is already exiting. The room is left explicitly
+   * so spectators get a clean departure instead of waiting out a grace period on a host that
+   * simply vanished. Only then is the disk flushed and the emulator told to exit.
+   */
+  private async leaveGameToMenu() {
+    const loading = await this.loadingController.create({
+      message: 'Salvando e saindo...',
+      backdropDismiss: false
+    })
+    await loading.present()
+
+    try {
+      this.autoSaverService.stop()
+      this.autoSaverService.stopPeriodicSave()
+      this.stopObservingOverlay?.()
+      this.multiplayerService.leaveRoom()
+      await this.saveGameService.saveGame()
+      await this.dosCI?.exit()
+    } catch (e: any) {
+      // Never strand the user in the emulator over a failed save: report and leave anyway.
+      console.error('Failed to tear the game down cleanly', e)
+    } finally {
+      await loading.dismiss()
+    }
+
+    // A hard document load, NOT a routerLink. Angular would tear the page down while js-dos
+    // keeps its DOSBox instance and wasm module alive, so re-entering /game would create a
+    // second one on top of the first. Changing only the hash does not reload, hence both
+    // statements.
+    window.location.hash = '#/main'
+    window.location.reload()
+  }
+
   async promptInputText() {
     const placeholders = [
       'Tite\nFelipao\nParreira',
