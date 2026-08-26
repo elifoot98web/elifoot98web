@@ -48,6 +48,14 @@
           Use uma senha se quiser garantir que só quem você convidar entre. O link
           compartilhado não inclui a senha.
         </p>
+        <!--
+          Mirrors the host hint above. A guest arriving from a share link has no idea what
+          they are about to get, and the word "sala" alone suggests they will be playing.
+        -->
+        <p *ngIf="!isHost" class="field-hint">
+          Você vai assistir à partida do anfitrião ao vivo, com chat e cursor compartilhado —
+          quem joga é ele. Deixe a senha vazia se a sala não tiver uma.
+        </p>
 
         <fieldset class="win9x-element-bevel swatch-group">
           <legend class="field-label">Cor do seu cursor</legend>

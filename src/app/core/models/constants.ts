@@ -9,6 +9,9 @@ export const STORAGE_KEY = {
   FAIL_COUNT: 'failCount',
   PLAYER_NAME: 'playerName',
   PLAYER_COLOR: 'playerColor',
+  // Room CODES only, never passwords. A share link deliberately omits the password
+  // (room-code.helper.ts), and persisting one here would undo that.
+  RECENT_ROOMS: 'recentRooms',
 }
 
 export const GAME_INPUT_FN_BTNS = [

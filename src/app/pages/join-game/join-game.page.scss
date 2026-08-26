@@ -23,6 +23,54 @@
   max-height: 200px;
 }
 
+/*
+ * The onboarding card carries an explainer, a field and a recent-rooms row, none of which
+ * fit the 200px cap the status cards use. It sizes to its content instead; the page enables
+ * scrollY while not spectating so a short viewport can reach the bottom of it. Scrolling is
+ * only forbidden once there is a video, which must not move.
+ */
+.join-game-card--onboarding {
+  width: 100%;
+  max-width: 420px;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+}
+
+.onboarding-icon {
+  font-size: 56px;
+  color: var(--ion-color-primary);
+}
+
+.onboarding-title {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.onboarding-text {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  text-align: start;
+}
+
+.onboarding-form ion-input {
+  text-transform: uppercase;
+}
+
+.recent-rooms {
+  margin-top: 0.75rem;
+}
+
+.recent-rooms-label {
+  margin: 0 0 0.25rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+
 .info-card-container {
   display: flex;
   align-items: center;

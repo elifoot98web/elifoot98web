@@ -16,31 +16,43 @@
           <ion-card-header color="secondary">
             <ion-toolbar color="secondary">
               <ion-card-title class="not-selectable">Jogar Agora!</ion-card-title>
-              <ion-buttons slot="end">
-                <ion-button fill="solid" color="secondary">
-                  <ion-icon slot="icon-only" name="game-controller-outline"></ion-icon>
-                </ion-button>
-              </ion-buttons>
             </ion-toolbar>
-            <ion-card-subtitle class="not-selectable">Modo Solo ou Criar Sala Multiplayer</ion-card-subtitle>
+            <ion-card-subtitle class="not-selectable">Elifoot 98 completo, direto no navegador</ion-card-subtitle>
           </ion-card-header>
         </ion-card>
       </ion-col>
+      <!--
+        Same ion-card-header structure as the card beside it, not ion-card-content: the two
+        used different skeletons, which is why they never lined up.
+      -->
       <ion-col size="9" size-md="4" class="ion-padding home-option-col">
         <ion-card button [routerLink]="['/join-game']" color="light" class="home-join-card">
-          <ion-card-content color="light" class="ion-text-center">
-            <ion-icon slot="icon-only" name="people-outline" class="big-icon"></ion-icon>
+          <ion-card-header color="light" class="ion-text-center">
+            <ion-icon name="eye-outline" class="big-icon" aria-hidden="true"></ion-icon>
             <ion-toolbar color="light">
-              <ion-card-title class="not-selectable">Entrar em Sala</ion-card-title>
-              <!-- <ion-buttons slot="end">
-                <ion-button color="primary">
-                  <ion-icon slot="icon-only" name="people-outline"></ion-icon>
-                </ion-button>
-              </ion-buttons> -->
+              <ion-card-title class="not-selectable">Assistir a uma Partida</ion-card-title>
             </ion-toolbar>
-            <ion-card-subtitle class="not-selectable">Junte-se a uma partida existente</ion-card-subtitle>
-          </ion-card-content>
+            <!--
+              "Junte-se a uma partida existente" promised something the feature does not do:
+              a spectator has no emulator and cannot play, only watch and point.
+            -->
+            <ion-card-subtitle class="not-selectable">Acompanhe a sala de um amigo como espectador</ion-card-subtitle>
+          </ion-card-header>
         </ion-card>
+      </ion-col>
+    </ion-row>
+    <!--
+      Hosting was previously reachable only from a 13-item popover inside the game, so nobody
+      found it. Deliberately a secondary action rather than a third card: it is the same
+      "Jogar Agora!" destination with the room dialog opened on arrival, and giving it equal
+      weight would imply it is a separate mode.
+    -->
+    <ion-row class="ion-justify-content-center">
+      <ion-col size="12" class="ion-text-center">
+        <ion-button fill="clear" color="light" [routerLink]="['/game']" [queryParams]="{ host: 1 }">
+          <ion-icon slot="start" name="share-social-outline" aria-hidden="true"></ion-icon>
+          Jogar e transmitir para amigos
+        </ion-button>
       </ion-col>
     </ion-row>
   </ion-grid>

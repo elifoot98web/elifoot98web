@@ -13,6 +13,7 @@ import { firstValueFrom, map, Observable, race, Subscription, timeout } from 'rx
 import {
   MultiplayerChatService,
   MultiplayerCursorService,
+  MultiplayerIdentityService,
   MultiplayerPlayerInfoService,
   MultiplayerService,
   MultiplayerStreamService,
@@ -21,6 +22,7 @@ import {
 import { CursorRendererHelper } from 'src/app/core/helpers/cursor-renderer.helper';
 import { OverlaySyncHelper } from 'src/app/core/helpers/overlay-sync.helper';
 import { ChatPanelHelper } from 'src/app/core/helpers/chat-panel.helper';
+import { RoomCodeHelper } from 'src/app/core/helpers/room-code.helper';
 import { MULTIPLAYER } from 'src/app/core/models/constants';
 
 @Component({
@@ -62,6 +64,12 @@ export class JoinGamePage implements OnInit, OnDestroy {
    */
   hostName$: Observable<string>;
 
+  /** Bound to the onboarding card's inline field. Accepts a bare code or a full share link. */
+  inlineRoomCode = '';
+
+  /** Codes only. Populated on entry and after every successful join. */
+  recentRooms: string[] = [];
+
   /** Lives as long as the page. */
   private pageSubscriptions = new Subscription();
   /** Recreated per room, so a rejoin does not stack duplicate cursor subscriptions. */
@@ -75,6 +83,7 @@ export class JoinGamePage implements OnInit, OnDestroy {
     private multiplayerCursorService: MultiplayerCursorService,
     private multiplayerStreamService: MultiplayerStreamService,
     private multiplayerUiService: MultiplayerUiService,
+    private identityService: MultiplayerIdentityService,
     playerInfoService: MultiplayerPlayerInfoService,
     chatService: MultiplayerChatService
   ) {
@@ -90,7 +99,9 @@ export class JoinGamePage implements OnInit, OnDestroy {
     return this.password.length > 0;
   }
 
-  ngOnInit() {
+  async ngOnInit() {
+    this.recentRooms = await this.identityService.getRecentRooms();
+
     this.pageSubscriptions.add(
       this.multiplayerService.gameStateSubject.subscribe(state => this.onGameStateChange(state))
     );
@@ -131,7 +142,8 @@ export class JoinGamePage implements OnInit, OnDestroy {
   async promptJoinInfo() {
     // Once the guest has typed a code of their own it wins over the one in the URL,
     // otherwise retrying with a different room would be impossible.
-    const presetRoomCode = this.roomId || (this.route.snapshot.queryParamMap.get('room') ?? '');
+    const presetRoomCode = this.roomId || this.inlineRoomCode ||
+      (this.route.snapshot.queryParamMap.get('room') ?? '');
     const setup = await this.multiplayerUiService.promptRoomSetup('guest', presetRoomCode);
     if (!setup) return;
     this.playerName = setup.playerName;
@@ -140,6 +152,35 @@ export class JoinGamePage implements OnInit, OnDestroy {
     this.cursorColor = setup.playerColor;
 
     await this.joinRoom();
+  }
+
+  /**
+   * Join straight from the onboarding field, skipping the modal.
+   *
+   * Only viable once we know who they are: a name is required to appear in the roster and on
+   * the cursor, so a first-time visitor still goes through the dialog. A password cannot be
+   * supplied this way either, so a locked room falls back to the dialog as well.
+   */
+  async joinFromInlineCode() {
+    const code = RoomCodeHelper.sanitize(this.inlineRoomCode);
+    if (!code) return;
+
+    const savedName = await this.identityService.getPlayerName();
+    if (!savedName) {
+      await this.promptJoinInfo();
+      return;
+    }
+
+    this.playerName = savedName;
+    this.cursorColor = await this.identityService.getPlayerColor();
+    this.roomId = code;
+    this.password = '';
+    await this.joinRoom();
+  }
+
+  async joinRecentRoom(code: string) {
+    this.inlineRoomCode = code;
+    await this.joinFromInlineCode();
   }
 
   async joinRoom() {
@@ -161,6 +202,10 @@ export class JoinGamePage implements OnInit, OnDestroy {
       // is what attaches, and has already done so by the time this resolves.
       await this.awaitStream();
       this.subscribeToCursors();
+      // Only after the stream actually arrived: a code that never produced a picture is not
+      // a room worth offering again.
+      await this.identityService.rememberRoom(this.roomId);
+      this.recentRooms = await this.identityService.getRecentRooms();
     } catch (err: any) {
       this.handleJoinFailure(err);
     } finally {

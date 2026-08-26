@@ -32,15 +32,48 @@
   </ion-toolbar>
 </ion-header>
 
-<ion-content [scrollX]="false" [scrollY]="false" [fullscreen]="true" color="primary" class="page-background ion-align-items-center ion-justify-content-center">
+<!--
+  scrollY is off only while spectating. The video's border box must be exactly the visible
+  picture for cursor alignment, so nothing may scroll it — but the onboarding card below is
+  taller than a short viewport, and with scrolling off unconditionally its bottom (the
+  recent-rooms row) was unreachable.
+-->
+<ion-content [scrollX]="false" [scrollY]="!isSpectating" [fullscreen]="true" color="primary" class="page-background ion-align-items-center ion-justify-content-center">
   @switch (gameState) {
     @case (GameState.NOT_IN_ROOM) {
+      <!--
+        A share link lands here, so this is the first thing a newcomer sees. It used to be a
+        single unlabelled button, which explained neither what spectating is nor that they
+        cannot play. The inline field skips the modal when we already know who they are.
+      -->
       <div class="info-card-container ion-padding ion-text-center">
-        <ion-card class="join-game-card">
-          <ion-card-content class="ion-text-center full centered">
-            <ion-button (click)="promptJoinInfo()">
-              Entrar em um jogo Multiplayer
+        <ion-card class="join-game-card join-game-card--onboarding">
+          <ion-card-content class="ion-text-center">
+            <ion-icon name="eye-outline" class="onboarding-icon" aria-hidden="true"></ion-icon>
+            <h2 class="onboarding-title">Assistir a uma partida</h2>
+            <p class="onboarding-text">
+              Você vai acompanhar a partida de outra pessoa ao vivo, conversar pelo chat e
+              apontar na tela com o seu cursor. Quem joga é o anfitrião.
+            </p>
+
+            <form class="onboarding-form" (ngSubmit)="joinFromInlineCode()" autocomplete="off">
+              <ion-input label="Código da sala ou link" labelPlacement="stacked" fill="outline"
+                [(ngModel)]="inlineRoomCode" name="inlineRoomCode" autocapitalize="characters"
+                placeholder="ELI-XXXX" enterkeyhint="go"></ion-input>
+              <ion-button type="submit" expand="block" class="ion-margin-top" [disabled]="!inlineRoomCode.trim()">
+                Entrar
+              </ion-button>
+            </form>
+
+            <ion-button fill="clear" size="small" (click)="promptJoinInfo()">
+              Entrar com senha ou trocar de apelido
             </ion-button>
+
+            <div *ngIf="recentRooms.length > 0" class="recent-rooms">
+              <p class="recent-rooms-label">Salas recentes</p>
+              <ion-button *ngFor="let code of recentRooms" fill="outline" size="small"
+                (click)="joinRecentRoom(code)">{{ code }}</ion-button>
+            </div>
           </ion-card-content>
         </ion-card>
       </div>

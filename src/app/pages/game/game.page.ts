@@ -1,4 +1,5 @@
 import { Component, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
 import { AlertController, LoadingController, ModalController } from '@ionic/angular';
 import JSZip from 'jszip';
 import { environment } from 'src/environments/environment';
@@ -70,6 +71,8 @@ export class GamePage implements OnInit, OnDestroy {
     private emulatorControlService: EmulatorControlService,
     private autoSaverService: AutoSaverService,
     private layoutHelperService: LayoutHelperService,
+    private route: ActivatedRoute,
+    private router: Router,
     private multiplayerService: MultiplayerService,
     private multiplayerCursorService: MultiplayerCursorService,
     private multiplayerUiService: MultiplayerUiService,
@@ -97,6 +100,7 @@ export class GamePage implements OnInit, OnDestroy {
       await loading.dismiss()
       await this.handleShowTutorial()
       await this.storageService.set(STORAGE_KEY.FAIL_COUNT, 0)
+      await this.consumeHostIntent()
     } catch (e: any) {
       console.error(e)
       await loading.dismiss()
@@ -684,6 +688,27 @@ export class GamePage implements OnInit, OnDestroy {
     // statements.
     window.location.hash = '#/main'
     window.location.reload()
+  }
+
+  /**
+   * Open the room dialog when arrival asked for it — the landing page's "Jogar e transmitir
+   * para amigos" action and the PWA's "Hospedar" shortcut both arrive as `?host=1`.
+   *
+   * Stripping it is load-bearing, not tidiness: PatchService applies a patch by rewriting the
+   * IndexedDB disk image and forcing `window.location.reload()`. With the flag still on the
+   * URL, every patch reload — and every failure retry, which also reloads — would re-open this
+   * dialog, forever. `replaceUrl` keeps it out of the history too, so Back does not resurrect
+   * it either.
+   */
+  private async consumeHostIntent() {
+    if (this.route.snapshot.queryParamMap.get('host') !== '1') return
+
+    await this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: {},
+      replaceUrl: true
+    })
+    await this.promptHostRoom()
   }
 
   async promptInputText() {
