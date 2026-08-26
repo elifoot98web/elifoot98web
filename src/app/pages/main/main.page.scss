@@ -48,7 +48,30 @@
   min-width: 200px;
   max-width: 340px;
   width: 100%;
-  border: 2px solid var(--ion-color-primary);
+  /*
+   * NOT --ion-color-primary: that is #008000, the exact page background, so the border was
+   * invisible by construction while the sibling card's read clearly.
+   *
+   * Matching the sibling's yellow rather than picking a second accent: #008000 sits at mid
+   * luminance, so anything in the shell's navy family lands near 2.8:1 against it — under the
+   * 3:1 non-text floor — and only a much lighter or much darker colour clears it. The two
+   * cards are a matched pair anyway, which is what card parity was asking for; their
+   * difference in weight comes from size and content, not from accent colour.
+   */
+  border: 2px solid var(--ion-color-secondary);
+}
+
+/*
+ * The host entry point is deliberately secondary to the two cards, but `color="light"` put
+ * #d5d5d5 text on #008000 — 3.5:1, under the 4.5:1 AA floor for normal text, and it read as
+ * disabled. White clears 5.1:1 on the same background.
+ */
+.host-action {
+  --color: var(--ion-color-primary-contrast);
+  --color-hover: var(--ion-color-primary-contrast);
+  --color-focused: var(--ion-color-primary-contrast);
+  --color-activated: var(--ion-color-secondary);
+  font-weight: 600;
 }
 
 .big-icon {

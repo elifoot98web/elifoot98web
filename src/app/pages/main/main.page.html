@@ -7,7 +7,12 @@
   </ion-toolbar>
 </ion-header>
 
-<ion-content [fullscreen]="true" color="primary">
+<!--
+  NOT [fullscreen]="true": that extends the scroll area behind the header and footer, which
+  is only useful under a translucent bar. Both bars here are solid color="tertiary", so all
+  it did was let the footer occlude the last row — the host action, at 390x844.
+-->
+<ion-content color="primary">
   <ion-grid fixed class="center-vertical">
     <ion-row class="ion-justify-content-center home-options-row">
       <ion-col size="9" size-md="6" class="ion-padding home-option-col">
@@ -49,7 +54,7 @@
     -->
     <ion-row class="ion-justify-content-center">
       <ion-col size="12" class="ion-text-center">
-        <ion-button fill="clear" color="light" [routerLink]="['/game']" [queryParams]="{ host: 1 }">
+        <ion-button fill="clear" class="host-action" [routerLink]="['/game']" [queryParams]="{ host: 1 }">
           <ion-icon slot="start" name="share-social-outline" aria-hidden="true"></ion-icon>
           Jogar e transmitir para amigos
         </ion-button>
