@@ -3,7 +3,17 @@
     <ion-buttons slot="start">
       <ion-back-button defaultHref="/main" text=""></ion-back-button>
     </ion-buttons>
-    <ion-title>Multiplayer</ion-title>
+    <!--
+      "Multiplayer" told a spectator nothing they did not already know. In a room the title
+      becomes the room itself; outside one it falls back to the mode name. No landscape
+      instance is needed here, unlike the host page: this header is unconditional.
+    -->
+    <ion-title *ngIf="!isSpectating">Multiplayer</ion-title>
+    <ion-title *ngIf="isSpectating">
+      <app-room-status-pill [roomCode]="currentRoomCode" [locked]="isRoomLocked"
+        [hostName]="(hostName$ | async) || ''" [state]="isReconnecting ? 'reconnecting' : 'live'">
+      </app-room-status-pill>
+    </ion-title>
     <ion-buttons slot="end">
       <ion-button *ngIf="isSpectating" class="chat-entry-btn" (click)="toggleChat()"
         [attr.aria-label]="chatToggleLabel(unreadCount$ | async)"

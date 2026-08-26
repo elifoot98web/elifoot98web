@@ -5,6 +5,12 @@ import { RoomSetupModalComponent, RoomSetupResult } from '../../components/multi
 import { RoomCodeHelper } from '../../helpers/room-code.helper';
 
 /**
+ * Long enough to read the code and reach one of the three buttons, per the study's "≥8 s"
+ * note. The pill keeps the code afterwards, so nothing is lost when this expires.
+ */
+const ROOM_TOAST_DURATION = 9000;
+
+/**
  * Shared multiplayer dialogs. Host and guest pages need the same room-setup form,
  * participants roster, leave confirmation and share affordances, so they live here
  * rather than being duplicated in both pages.
@@ -100,10 +106,33 @@ export class MultiplayerUiService {
     }
   }
 
-  async showToast(message: string, color = 'success'): Promise<void> {
+  /**
+   * Announce a newly created room without blocking the game behind an alert.
+   *
+   * Replaces the old "Sala criada!" dialog: the status pill now carries the code
+   * permanently, so this only has to be a nudge with the sharing shortcuts on it. Longer
+   * than the default toast because it has buttons that have to be reachable, and it is
+   * dismissible so it never sits over the pitch.
+   */
+  async showRoomCreated(roomCode: string): Promise<void> {
+    const toast = await this.toastController.create({
+      message: `Sala ${roomCode} no ar.`,
+      duration: ROOM_TOAST_DURATION,
+      position: 'bottom',
+      color: 'success',
+      buttons: [
+        { text: 'Copiar link', handler: () => { void this.copyToClipboard(RoomCodeHelper.buildJoinLink(roomCode), 'Link da sala copiado!'); } },
+        { text: 'Compartilhar', handler: () => { void this.shareRoom(roomCode); } },
+        { text: 'Fechar', role: 'cancel' },
+      ],
+    });
+    await toast.present();
+  }
+
+  async showToast(message: string, color = 'success', duration = 2000): Promise<void> {
     const toast = await this.toastController.create({
       message,
-      duration: 2000,
+      duration,
       position: 'bottom',
       color,
     });

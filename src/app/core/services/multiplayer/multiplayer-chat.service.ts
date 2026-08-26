@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { Room, selfId } from 'trystero';
-import { MultiplayerChatMessage } from '../../models/multiplayer';
+import { MultiplayerChatMessage, TypingMessage } from '../../models/multiplayer';
 import { MULTIPLAYER } from '../../models/constants';
 
 @Injectable({
@@ -20,6 +20,17 @@ export class MultiplayerChatService {
 
   unreadCount$ = this.unreadCountSubject.asObservable();
 
+  // Typing state. Held as peerId -> expiry so a peer that goes silent (or drops) stops
+  // showing as typing without needing a "stopped" message that may never arrive.
+  private typingUntil = new Map<string, number>();
+  private typingSubject = new BehaviorSubject<string[]>([]);
+  private typingSweep?: ReturnType<typeof setInterval>;
+  private lastTypingSentAt = 0;
+  private typingAction?: { send: (data: TypingMessage) => Promise<void> };
+
+  /** Peer ids currently composing. */
+  typingPeers$ = this.typingSubject.asObservable();
+
   constructor() {}
 
   /**
@@ -33,7 +44,20 @@ export class MultiplayerChatService {
       // locally, so accepting a remote `kind: 'system'` would let a peer forge one. The
       // sender is taken from the transport rather than the payload for the same reason.
       this.addMessage({ ...msg, senderId: peerId, kind: 'user' });
+      // Their message arrived, so whatever they were typing is now sent.
+      this.clearTyping(peerId);
     };
+
+    const typing = room.makeAction<TypingMessage>(MULTIPLAYER.EVENTS.TYPING);
+    this.typingAction = typing;
+    typing.onMessage = (_data, { peerId }) => {
+      this.typingUntil.set(peerId, Date.now() + MULTIPLAYER.TYPING_EXPIRY_MS);
+      this.publishTyping();
+    };
+
+    // A sweep rather than a timer per peer: expiries are all the same length, and one
+    // interval cannot leak a handle per typist.
+    this.typingSweep = setInterval(() => this.expireTyping(), MULTIPLAYER.TYPING_SEND_THROTTLE_MS);
   }
 
   /**
@@ -108,6 +132,40 @@ export class MultiplayerChatService {
   }
 
   /**
+   * Tell peers we are composing. Throttled, and deliberately fire-and-forget: a dropped
+   * ping just means the indicator expires a little early, which is the harmless direction.
+   */
+  notifyTyping() {
+    if (!this.typingAction) return;
+
+    const now = Date.now();
+    if (now - this.lastTypingSentAt < MULTIPLAYER.TYPING_SEND_THROTTLE_MS) return;
+    this.lastTypingSentAt = now;
+
+    this.typingAction.send({}).catch(err => console.warn('Typing ping failed', err));
+  }
+
+  private clearTyping(peerId: string) {
+    if (this.typingUntil.delete(peerId)) this.publishTyping();
+  }
+
+  private expireTyping() {
+    const now = Date.now();
+    let changed = false;
+    for (const [peerId, expiry] of this.typingUntil) {
+      if (expiry <= now) {
+        this.typingUntil.delete(peerId);
+        changed = true;
+      }
+    }
+    if (changed) this.publishTyping();
+  }
+
+  private publishTyping() {
+    this.typingSubject.next([...this.typingUntil.keys()]);
+  }
+
+  /**
    * Clear chat (e.g., on room leave)
    */
   clear() {
@@ -117,6 +175,13 @@ export class MultiplayerChatService {
     this.readMessageCount = 0;
     this.isChatVisible = false;
     this.unreadCountSubject.next(0);
+
+    clearInterval(this.typingSweep);
+    this.typingSweep = undefined;
+    this.typingAction = undefined;
+    this.lastTypingSentAt = 0;
+    this.typingUntil.clear();
+    this.typingSubject.next([]);
   }
 
   private addMessage(msg: MultiplayerChatMessage) {

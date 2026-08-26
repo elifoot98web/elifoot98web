@@ -86,6 +86,8 @@ export const MULTIPLAYER = {
     ROLE_QUERY: 'roleQuery',
     // Sent once, targeted, by a host to each joining peer.
     HOST_ANNOUNCE: 'hostAnnounce',
+    // "I am composing". Fire and forget: never retried, never acknowledged.
+    TYPING: 'typing',
   },
   ROLE_QUERY_TIMEOUT: 5000, // 5 seconds
   // When two hosts collide, the one that has been hosting longer keeps the room. Each
@@ -106,6 +108,12 @@ export const MULTIPLAYER = {
   // giving up and reporting the room as over. Long enough to ride out a WiFi handover or a
   // brief tunnel, short enough that a genuinely closed room does not feel hung.
   HOST_GRACE_TIMEOUT: 13000, // 13 seconds
+  // Minimum gap between outgoing "I am typing" pings, so a fast typist sends a handful of
+  // them rather than one per keystroke.
+  TYPING_SEND_THROTTLE_MS: 2000,
+  // How long a received typing ping stands before it is assumed stale. Must exceed the
+  // throttle above, or a peer that keeps typing would flicker in and out.
+  TYPING_EXPIRY_MS: 5000,
   CURSOR_Z_INDEX: 10, // Cursors should be above the game elements
   CURSOR_CLICK_Z_INDEX: 9, // Click pings should be below the cursors
   // How long a guest waits for the host's video stream before giving up.

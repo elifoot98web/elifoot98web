@@ -13,23 +13,8 @@
     </ion-header>
 
     <ion-content class="win9x-modal-content ion-padding">
-      <!-- Sunken list pane, the Win9x idiom for a scrollable listing. -->
-      <div class="win9x-element-bevel participant-list">
-        <div *ngFor="let player of players$ | async; trackBy: trackByPeerId" class="participant-row">
-          <span class="player-color" [style.background-color]="player.playerColor" aria-hidden="true"></span>
-          <span class="participant-name">
-            {{ player.playerName || player.peerId.slice(0, 6) }}
-            <span *ngIf="player.role === MultiplayerUserRole.HOST" class="host-tag">anfitrião</span>
-          </span>
-          <span class="participant-latency" [attr.data-quality]="latencyColor(player)">
-            {{ latencyLabel(player) }}
-          </span>
-        </div>
-
-        <p *ngIf="(players$ | async)?.length === 0" class="empty-note">
-          Ninguém na sala ainda.
-        </p>
-      </div>
+      <!-- The roster itself is shared with the chat's contact strip. -->
+      <app-participant-list></app-participant-list>
     </ion-content>
   </div>
 </div>

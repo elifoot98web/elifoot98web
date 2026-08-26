@@ -69,3 +69,10 @@ export interface MultiplayerChatMessage extends BaseMessage {
     timestamp: number; // set by the sender, so all peers order messages identically
     kind: MultiplayerChatMessageKind;
 }
+
+/**
+ * "I am composing." Deliberately empty: the sender comes from the transport, and the
+ * indicator expires on a timer rather than on a matching "stopped" message, which may
+ * never arrive if the peer drops mid-sentence.
+ */
+export interface TypingMessage extends BaseMessage {}

@@ -49,6 +49,14 @@ export class GamePage implements OnInit, OnDestroy {
   /** Drives the badge on the chat toggle, which sits outside the chat component. */
   unreadCount$: Observable<number>;
 
+  /**
+   * Reactive breakpoints for the floating status pill. The synchronous getters below are
+   * fine for markup that is re-evaluated anyway, but the pill has to appear and disappear on
+   * rotation, which needs an emission.
+   */
+  isMobile$: Observable<boolean>;
+  isLandscape$: Observable<boolean>;
+
   private multiplayerSubscriptions = new Subscription();
   private stopObservingOverlay?: () => void;
 
@@ -69,6 +77,8 @@ export class GamePage implements OnInit, OnDestroy {
     chatService: MultiplayerChatService
   ) {
     this.unreadCount$ = chatService.unreadCount$;
+    this.isMobile$ = this.layoutHelperService.isMobile$;
+    this.isLandscape$ = this.layoutHelperService.isLandscape$;
   }
 
   async ngOnInit() {
@@ -736,7 +746,10 @@ export class GamePage implements OnInit, OnDestroy {
     if (hostingError) {
       await this.showErrorAlert(hostingError);
     } else {
-      await this.showRoomInvite();
+      // A toast, not the old blocking "Sala criada!" alert: the status pill carries the
+      // code for as long as the room is up, so nothing has to be memorised before
+      // dismissing anything.
+      await this.multiplayerUiService.showRoomCreated(this.hostRoomId);
     }
   }
 
@@ -790,7 +803,8 @@ export class GamePage implements OnInit, OnDestroy {
     const message = kind === 'wrong-password'
       ? 'Alguém tentou entrar com a senha errada.'
       : 'Alguém tentou entrar, mas a conexão não foi estabelecida.';
-    await this.multiplayerUiService.showToast(message);
+    // 'warning', not the default green: a failed entry attempt is not good news.
+    await this.multiplayerUiService.showToast(message, 'warning');
   }
 
   /**
@@ -910,28 +924,6 @@ export class GamePage implements OnInit, OnDestroy {
     const canvasStream = (canvas as HTMLCanvasElement).captureStream(30)
     // Prefer 30fps, fallback to default
     return canvasStream
-  }
-
-  /**
-   * Show the room code straight after hosting starts, so the host has something to
-   * copy or share without hunting through the menu.
-   */
-  private async showRoomInvite() {
-    const alert = await this.alertController.create({
-      header: 'Sala criada!',
-      cssClass: 'alert-whitespace',
-      message: `Compartilhe este código:\n\n${this.hostRoomId}`,
-      buttons: [
-        {
-          text: 'Copiar link',
-          handler: () => {
-            this.multiplayerUiService.shareRoom(this.hostRoomId);
-          }
-        },
-        { text: 'Fechar', role: 'cancel' }
-      ]
-    });
-    await alert.present();
   }
 
   private hidePopover() {

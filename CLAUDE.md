@@ -160,6 +160,12 @@ options popover — the navy `#092469` in [variables.scss](src/theme/variables.s
 close enough to `#000080` that shell and retro windows read as deliberately related. A
 retro treatment without an explicit boundary reads as a mistake rather than a choice.
 
+The room status pill (`.mp-status-pill` in [global.scss](src/global.scss)) is on the shell
+side of that line and is deliberately flat, not Win9x: it renders inside the page toolbars,
+and half a retro toolbar reads as a bug. Its landscape instance rides the game surface but
+keeps the same flat look, because one component changing identity by position is worse than
+one that does not. Do not "fix" it by moving it into `_win9x.scss`.
+
 Two gotchas the partial documents but are worth repeating:
 
 - `.win9x-button` only renders correctly on an `ion-button` with `fill="clear"`; otherwise

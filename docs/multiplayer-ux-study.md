@@ -1,6 +1,6 @@
 # Estudo de UI/UX do Multiplayer + Plano de Melhorias
 
-> **Status:** Phases 1–3 shipped. Phases 4–5 not started.
+> **Status:** Phases 1–4 shipped. Phase 5 not started.
 > As-built deviations are recorded under each phase in §4; where they conflict with the
 > prose above them, the as-built notes win.
 >
@@ -33,6 +33,11 @@ Genuinely broken, not merely unpolished:
 (pasted share links), and the `[disabled]` half of item 5. The `.win9x-*` kit named below
 is now extracted to `src/theme/_win9x.scss` and loaded globally. Still open: items 1 and
 the iOS-keyboard half of 5 (Phase 2), item 4 (Phase 4), item 7 (Phase 5).
+
+**Fixed in Phases 2–4:** item 1 (the collapsed-sidebar bug, Phase 2 — `.chat-sidebar-flex`
+no longer exists), the iOS-keyboard half of item 5 (Phase 2), and item 4 (Phase 4 — a blip
+is now a grace period, not a terminal state). Still open: **item 7 only** (the installed PWA
+starting at `/#/game` with no exit), which is Phase 5 item 1.
 
 Merely unpolished, but visible: the chat is modern-flat WhatsApp bubbles next to a 1998 Windows 3.1 canvas; the Win9x design kit exists and is convincing but is component-scoped to `omatic-modal.component.scss`, so nothing can reuse a token of it; the roster is a stock Ionic list where an MSN contact list is already fully backed by data.
 
@@ -368,6 +373,62 @@ As shipped:
 **New for the user:** the host can see at a glance that they are live, in which room, locked or not, and how many people are watching — in every orientation; a dropped connection shows `Tentando reconectar…` over the last frame and recovers by itself instead of ejecting everyone; the roster looks like a contact list and tells the truth about a bad link; the room code can never be lost.
 **Size:** L. **Risk:** never gate the sidebar or the overlay DOM on the shared `gameStateSubject`; the guest pill must not live inside the `ion-hide` subtree; do not add a `@switch` card for `HOST_RECONNECTING`; coalesce join toasts.
 **Depends on:** Phase 1 (deterministic lifecycle), Phase 3 (`--win9x-face`, `.win9x-button`, the status bar).
+
+#### As built — Phase 4 deviations
+
+- **Two of the item list's file references were already stale.** `claimHost` no longer exists
+  (Phase 1 replaced it with `HOST_ANNOUNCE` + `roleQuery`), and `showRoomInvite()` was on
+  `GamePage`, not in `multiplayer-ui.service.ts`.
+- **`hostPeerId$` came from the stream, per decision (c), not from `HOST_ANNOUNCE`.** The
+  announce was tempting — a guest already receives one and its handler only logged — but it is
+  a *claim*, which is exactly what decisions (c) and (e) rule out. It now lives on
+  `MultiplayerStreamService`, set from the peer that delivered a video track, first one wins.
+  That closed a second hole in the same change: `onPeerStream` is a single assignable property,
+  so the last stream from any peer used to win.
+- **`PlayerIdentMessage.host` is still sent, just never read.** Dropping the field outright
+  breaks new-host-to-old-guest: the old guest reads `undefined`, treats the host as a guest and
+  loses both the badge and HOST_LEFT. Host and guest are the same deployment but not
+  necessarily the same *loaded* version. Marked `@deprecated`; delete it a release later.
+- **The grace timer needed an epoch, not just a clear.** `leaveRoom` is synchronous and returns
+  while trystero drains, so a fast rejoin can start a new room while a timer armed in the old
+  one is already queued. `MultiplayerService.roomEpoch` is bumped in both `enterRoom` and
+  `leaveRoom`, and the timer no-ops if the generation moved.
+- **The item list missed the gate that would have hidden the frame it wants to scrim.** The
+  guest's stream block was `[ngClass]="{'ion-hide': gameState !== GameState.IN_ROOM}"`, so
+  during `HOST_RECONNECTING` the block — and the last frame — would have been hidden. Replaced
+  with an `isSpectating` getter admitting both states, which the toolbar buttons now use too so
+  they do not blink out mid-blip.
+- **`attachStream` moved out of `awaitStream` entirely** rather than being duplicated. The
+  one-shot `firstValueFrom` meant nothing was subscribed to `videoStream$` after the first
+  attach, which is the actual cause of the frozen frame. `awaitStream` still owns the 20 s
+  timeout and the `failFast$` race; the page-lifetime subscription owns attaching. A `skip(1)`
+  would have papered over the race instead of removing it.
+- **The status pill is toolbar-docked, not the overlay item 3 describes, and is deliberately
+  not Win9x.** After Phase 2 there is zero letterbox in portrait, so an overlay would sit
+  permanently on the strip where Windows 3.1 draws the game's own title bar — while the
+  toolbar's title slot sits empty on phones (`ion-hide-md-down`). Same lesson as Phase 2's
+  reversal of §3(b): spend free chrome before spending canvas. An absolute instance still
+  exists for mobile landscape, where the header is suppressed entirely; it parks in the free
+  left gutter and is allowed to overhang the canvas edge at 667×375, where the gutter is only
+  ~83px. And because it renders inside `ion-toolbar color="tertiary"`, it stays flat per the
+  boundary rule in decision (a) — recorded in CLAUDE.md so it does not get "fixed" later.
+- **`quality` is a five-member union, and `poor` and `lost` are different facts.** A peer that
+  misses a ping while its `RTCPeerConnection` is still up has a bad link; one whose connection
+  failed or vanished is gone. `getPeers()` — never called anywhere before this — is what tells
+  them apart. The rewrite also fixed the uncaught `room.ping`, the `setTimeout` leaked per slow
+  or failed ping, and the in-place mutation that made `playerList$` emit new arrays of
+  unchanged object references.
+- **Shared roster chrome went to `_win9x.scss`, not the chat's stylesheet.** `.win9x-roster-*`
+  and `.win9x-expander` are global and unbudgeted; `chat.component.scss` was already at
+  2.28 kB against a 4 kB hard error, and only the 87-byte titlebar fallback rule was added to
+  it. The contact strip and status bar share the `601px` height threshold rather than sitting
+  at two adjacent ones.
+- **The typing indicator expires on a timer, with no "stopped" message.** A peer that drops
+  mid-sentence would never send one. One sweep interval rather than a timer per typist, and the
+  notice takes over the status-bar cell from the participant count instead of adding a second
+  cell — the count is ambient, the notice is momentary.
+- **Nothing was needed for "coalesce join toasts".** Phase 3 had already routed joins to the
+  transcript as system lines, so there were no join toasts left to coalesce.
 
 ### Phase 5 — Discoverability and entry points
 **Goal:** people can find, understand and enter the feature.

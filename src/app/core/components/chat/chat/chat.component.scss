@@ -188,3 +188,11 @@
     padding-bottom: calc(4px + env(safe-area-inset-bottom, 0px) * (1 - var(--kb-open, 0)));
   }
 }
+
+// Stand-in for the status bar's typing notice on short viewports, where that whole band is
+// hidden. A glyph rather than a name: the titlebar has room for one character, not a phrase.
+.chat-titlebar-typing {
+  margin-inline-start: auto;
+  padding-inline-start: 6px;
+  font-size: 12px;
+}

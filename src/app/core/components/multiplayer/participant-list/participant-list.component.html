@@ -1,0 +1,33 @@
+<!--
+  Sunken list pane, the Win9x idiom for a scrollable listing. One async subscription feeds
+  both the rows and the empty note.
+-->
+<div class="win9x-element-bevel win9x-roster" [class.win9x-roster--compact]="compact">
+  <ng-container *ngIf="players$ | async as players">
+    <!--
+      Row layout reserved for a future "may inject keys/clicks" control, per decision (c) of
+      the multiplayer UX study: a guest gaining input authority does not become the host, so
+      the capability gets its own per-row slot here rather than reusing the host tag. Space
+      reserved deliberately; nothing designed yet.
+    -->
+    <div *ngFor="let player of players; trackBy: trackByPeerId" class="win9x-roster-row">
+      <span class="win9x-roster-swatch" [style.background-color]="player.playerColor" aria-hidden="true"></span>
+      <span class="win9x-roster-name">
+        {{ player.playerName || player.peerId.slice(0, 6) }}
+        <span *ngIf="player.role === MultiplayerUserRole.HOST" class="win9x-roster-tag">anfitrião</span>
+      </span>
+      <!--
+        Compact rows have no room for a figure, so they show a status dot and move the link
+        state into the accessible name — colour is never the only carrier.
+      -->
+      <span class="win9x-roster-meta" [attr.data-quality]="latencyColor(player)"
+        [attr.aria-label]="qualityLabel(player)" [attr.title]="qualityLabel(player)">
+        {{ compact ? '●' : latencyLabel(player) }}
+      </span>
+    </div>
+
+    <p *ngIf="players.length === 0" class="win9x-roster-empty">
+      Ninguém na sala ainda.
+    </p>
+  </ng-container>
+</div>

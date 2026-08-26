@@ -1,0 +1,11 @@
+/*
+ * Intentionally near-empty: every roster rule lives in src/theme/_win9x.scss as
+ * `.win9x-roster-*`, because the chat's contact strip renders the same rows and the
+ * per-component style budget (2 kB warn / 4 kB error) is already tight in the chat.
+ *
+ * Only the host element's own box belongs here.
+ */
+:host {
+  display: block;
+  min-width: 0;
+}

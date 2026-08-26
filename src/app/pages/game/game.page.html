@@ -11,7 +11,19 @@
         <ion-icon slot="icon-only" src="../../assets/icon/cheese.svg"></ion-icon>
       </ion-button>
     </ion-buttons>
-    <ion-title class="ion-hide-md-down">Elifoot 98 Online</ion-title>
+    <!--
+      The pill is the ambient answer to "am I live, in which room, with how many people".
+      It sits in the title slot because that is the one piece of toolbar real estate that is
+      already empty on a phone (the app name is ion-hide-md-down), and because centring it
+      costs the canvas nothing — unlike an overlay, which after Phase 2 would sit on the
+      game's own title bar in portrait. A second instance covers mobile landscape, where
+      this whole header is suppressed.
+    -->
+    <ion-title>
+      <span class="ion-hide-md-down">Elifoot 98 Online</span>
+      <app-room-status-pill *ngIf="isStreaming" [roomCode]="hostRoomId" [locked]="!!hostPassword">
+      </app-room-status-pill>
+    </ion-title>
 
     <ion-buttons slot="end">
       <ion-button (click)="showPopover($event)">
@@ -41,8 +53,13 @@
             <ion-label>Abrir 'O Matic</ion-label>
             <ion-icon slot="end" color="warning" src="../../assets/icon/cheese.svg"></ion-icon>
           </ion-item>
-          <ion-item *ngIf="!isStreaming" button detail="false" (click)="promptHostRoom()">
-            <ion-label>Hospedar Jogo Multiplayer</ion-label>
+          <!--
+            [disabled] on isHosting, which used to be set and never read: room creation
+            captures the canvas and can take a couple of seconds, and a second tap in that
+            window would start a competing claim on the same code.
+          -->
+          <ion-item *ngIf="!isStreaming" button detail="false" [disabled]="isHosting" (click)="promptHostRoom()">
+            <ion-label>{{ isHosting ? 'Criando sala…' : 'Hospedar Jogo Multiplayer' }}</ion-label>
             <ion-icon slot="end" name="people-outline"></ion-icon>
           </ion-item>
           <ng-container *ngIf="isStreaming">
@@ -169,6 +186,17 @@
   <div class="full game-stream-flex-container">
     <div class="game-stream-container full">
       <div [ngClass]="{ hidden: isHidden, full: !isHidden }" class="smooth-canvas not-selectable" id="game-container">
+      </div>
+      <!--
+        Mobile landscape only: the header above is suppressed in that range, so without this
+        the room code is unreachable without opening the menu. Parks in the free left gutter
+        of the height-fitted canvas. Async pipes rather than the synchronous getters, because
+        those only re-read on an unrelated change-detection pass and this has to appear and
+        disappear on rotation.
+      -->
+      <div *ngIf="isStreaming && (isMobile$ | async) && (isLandscape$ | async)" class="mp-status-pill-floating">
+        <app-room-status-pill [roomCode]="hostRoomId" [locked]="!!hostPassword" [compact]="true">
+        </app-room-status-pill>
       </div>
       <!--
         Chat drawer handle. Lives here, NOT inside the panel: a closed panel is

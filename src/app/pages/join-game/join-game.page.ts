@@ -6,12 +6,14 @@ import {
   CursorPositionMessage,
   CursorClickMessage,
   MultiplayerJoinErrorKind,
-  MultiplayerJoinFailure
+  MultiplayerJoinFailure,
+  MultiplayerUserRole
 } from '../../core/models/multiplayer';
 import { firstValueFrom, map, Observable, race, Subscription, timeout } from 'rxjs';
 import {
   MultiplayerChatService,
   MultiplayerCursorService,
+  MultiplayerPlayerInfoService,
   MultiplayerService,
   MultiplayerStreamService,
   MultiplayerUiService
@@ -54,6 +56,12 @@ export class JoinGamePage implements OnInit, OnDestroy {
   /** Drives the badge on the chat toggle, which sits outside the chat component. */
   unreadCount$: Observable<number>;
 
+  /**
+   * Whose game this is. Read from the roster rather than from any claim, so it names the
+   * peer that actually delivered the stream; empty until that peer's ident arrives.
+   */
+  hostName$: Observable<string>;
+
   /** Lives as long as the page. */
   private pageSubscriptions = new Subscription();
   /** Recreated per room, so a rejoin does not stack duplicate cursor subscriptions. */
@@ -67,9 +75,19 @@ export class JoinGamePage implements OnInit, OnDestroy {
     private multiplayerCursorService: MultiplayerCursorService,
     private multiplayerStreamService: MultiplayerStreamService,
     private multiplayerUiService: MultiplayerUiService,
+    playerInfoService: MultiplayerPlayerInfoService,
     chatService: MultiplayerChatService
   ) {
     this.unreadCount$ = chatService.unreadCount$;
+    this.hostName$ = playerInfoService.playerList$.pipe(
+      map(players => players.find(player => player.role === MultiplayerUserRole.HOST)),
+      map(host => host ? (host.playerName?.trim() || host.peerId.slice(0, 6)) : '')
+    );
+  }
+
+  /** Whether this room needed a password, so the pill can show the lock. */
+  get isRoomLocked(): boolean {
+    return this.password.length > 0;
   }
 
   ngOnInit() {
@@ -144,7 +162,7 @@ export class JoinGamePage implements OnInit, OnDestroy {
       await this.awaitStream();
       this.subscribeToCursors();
     } catch (err: any) {
-      await this.handleJoinFailure(err);
+      this.handleJoinFailure(err);
     } finally {
       await loading.dismiss();
     }
@@ -249,11 +267,13 @@ export class JoinGamePage implements OnInit, OnDestroy {
     }
   }
 
-  private async handleJoinFailure(err: any) {
+  private handleJoinFailure(err: any) {
     this.joinError = this.describeJoinFailure(err);
-    // Settle on ERROR so the page offers a retry instead of silently resetting.
+    // Settle on ERROR so the page offers a retry instead of silently resetting. No alert on
+    // top of that: the ERROR card below renders this same string with a retry button, and
+    // the dialog only added a tap between the guest and trying again.
+    console.warn('Failed to join the room', { reason: err });
     this.resetRoomState(GameState.ERROR);
-    await this.multiplayerUiService.showError(this.joinError);
   }
 
   private describeJoinFailure(err: any): string {

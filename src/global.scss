@@ -472,4 +472,119 @@ canvas {
     .chat-toggle-btn.chat-toggle-btn--unread {
         animation: none !important;
     }
+
+    // Same reasoning: the dot's colour and the pill's accessible name already say which
+    // state we are in, so the pulse is pure decoration.
+    .mp-status-dot[data-state='live'],
+    .mp-status-dot[data-state='reconnecting'] {
+        animation: none !important;
+    }
+}
+
+/*
+ * Ambient room status pill.
+ *
+ * Deliberately flat rather than Win9x. The retro boundary in CLAUDE.md keeps the page
+ * toolbars as app shell, and this renders inside one — a half-retro toolbar reads as a
+ * mistake. The landscape instance rides the game surface but keeps the same look, because a
+ * component that changes identity by position is worse than one that does not.
+ */
+.mp-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    min-width: 0;
+    margin: 0;
+    padding: 3px 10px;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.28);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.4;
+    cursor: pointer;
+    // Tapping copies the link, so it must never be a text-selection target instead.
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.mp-status-pill:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+}
+
+.mp-status-dot {
+    flex: 0 0 auto;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--ion-color-medium, #92949c);
+}
+
+.mp-status-dot[data-state='live'] {
+    background: #2dd36f;
+    animation: mp-status-breathe 2s ease-in-out infinite;
+}
+
+.mp-status-dot[data-state='reconnecting'] {
+    background: #ffc409;
+    animation: mp-status-breathe 0.8s ease-in-out infinite;
+}
+
+@keyframes mp-status-breathe {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+}
+
+// The code is the one part that must survive truncation intact, so it never shrinks.
+.mp-status-code {
+    flex: 0 0 auto;
+    letter-spacing: 0.02em;
+}
+
+.mp-status-lock {
+    flex: 0 0 auto;
+    font-size: 12px;
+}
+
+// The host's name is the first thing to go when the pill runs out of room.
+.mp-status-host {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 400;
+    opacity: 0.85;
+}
+
+.mp-status-count {
+    flex: 0 0 auto;
+    padding-inline-start: 6px;
+    border-inline-start: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+/*
+ * Landscape-only instance on the host, where the header is suppressed entirely. Parks in the
+ * left gutter that the height-fitted canvas leaves free; .chat-toggle-btn owns the right edge
+ * and the top-right in short landscape, so this corner is the free one. z-index matches the
+ * toggle (20) and stays well clear of js-dos's 999 keyboard layer.
+ *
+ * At the narrowest landscape phones (667x375 leaves ~83px per side) it will overhang the
+ * canvas edge. Accepted: a few pixels of a 4:3 frame's margin, against the alternative of no
+ * room code on screen at all in the one orientation that has no toolbar.
+ */
+.mp-status-pill-floating {
+    position: absolute;
+    top: calc(8px + env(safe-area-inset-top, 0px));
+    left: calc(8px + env(safe-area-inset-left, 0px));
+    z-index: 20;
+    max-width: 60%;
+}
+
+.mp-status-pill-floating .mp-status-pill {
+    background: rgba(0, 0, 0, 0.55);
 }
