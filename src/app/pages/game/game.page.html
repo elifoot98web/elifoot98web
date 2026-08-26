@@ -63,26 +63,19 @@
             <ion-icon slot="end" name="people-outline"></ion-icon>
           </ion-item>
           <ng-container *ngIf="isStreaming">
-            <ion-item button detail="false" (click)="shareRoom()">
+            <!--
+              One entry for the whole room, replacing four (Compartilhar sala / Participantes /
+              Chat / Encerrar sala). The subtitle carries the state, so the menu answers
+              "which room, how many people" without being opened twice.
+            -->
+            <ion-item button detail="true" (click)="openMultiplayerPanel()">
               <ion-label>
-                Compartilhar sala
-                <p>{{ hostRoomId }}</p>
+                Sala multiplayer
+                <p>{{ hostRoomId }} &middot; {{ (participantCount$ | async) || 1 }} na sala</p>
               </ion-label>
-              <ion-icon slot="end" name="share-social-outline"></ion-icon>
-            </ion-item>
-            <ion-item button detail="false" (click)="showParticipants()">
-              <ion-label>Participantes</ion-label>
-              <ion-icon slot="end" name="people-outline"></ion-icon>
-            </ion-item>
-            <ion-item button detail="false" (click)="openChatFromMenu()">
-              <ion-label>Chat</ion-label>
               <ion-badge *ngIf="(unreadCount$ | async) as unread" slot="end" color="danger"
                 class="chat-menu-badge">{{ unread }}</ion-badge>
-              <ion-icon slot="end" name="chatbubble-ellipses-outline"></ion-icon>
-            </ion-item>
-            <ion-item button detail="false" (click)="promptStopHosting()">
-              <ion-label color="danger">Encerrar sala multiplayer</ion-label>
-              <ion-icon slot="end" color="danger" name="exit-outline"></ion-icon>
+              <ion-icon slot="end" name="people-outline"></ion-icon>
             </ion-item>
           </ng-container>
           <ion-item detail="false">
@@ -165,6 +158,11 @@
           <ion-item button detail="false" (click)="showFAQAndManualModal()">
             <ion-label>FAQ e Manual</ion-label>
             <ion-icon slot="end" name="help-circle-outline"></ion-icon>
+          </ion-item>
+          <!-- The welcome dialog, back on demand: "Entendi" now retires it permanently. -->
+          <ion-item button detail="false" (click)="showTutorial()">
+            <ion-label>Primeiros passos</ion-label>
+            <ion-icon slot="end" name="footsteps-outline"></ion-icon>
           </ion-item>
           <ion-item button detail="false" (click)="showAboutModal()">
             <ion-label>Sobre e Créditos</ion-label>

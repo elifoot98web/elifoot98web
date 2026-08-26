@@ -1,6 +1,6 @@
 # Estudo de UI/UX do Multiplayer + Plano de Melhorias
 
-> **Status:** Phases 1–4 shipped. Phase 5 not started.
+> **Status:** All five phases shipped, none manually verified end to end yet.
 > As-built deviations are recorded under each phase in §4; where they conflict with the
 > prose above them, the as-built notes win.
 >
@@ -38,6 +38,8 @@ the iOS-keyboard half of 5 (Phase 2), item 4 (Phase 4), item 7 (Phase 5).
 no longer exists), the iOS-keyboard half of item 5 (Phase 2), and item 4 (Phase 4 — a blip
 is now a grace period, not a terminal state). Still open: **item 7 only** (the installed PWA
 starting at `/#/game` with no exit), which is Phase 5 item 1.
+
+**Item 7 closed in Phase 5.** Every item in the list above is now addressed.
 
 Merely unpolished, but visible: the chat is modern-flat WhatsApp bubbles next to a 1998 Windows 3.1 canvas; the Win9x design kit exists and is convincing but is component-scoped to `omatic-modal.component.scss`, so nothing can reuse a token of it; the roster is a stock Ionic list where an MSN contact list is already fully backed by data.
 
@@ -445,6 +447,53 @@ As shipped:
 **New for the user:** an installed app can reach spectator mode and can leave the game; a shared link lands somewhere that explains what is about to happen; hosting is one tap from the landing page; the manual actually documents multiplayer; returning guests get their last rooms.
 **Size:** M-L. **Risk:** a naive back button leaves a live DOSBox and duplicates the wasm instance; `?host=1` must be stripped or every post-patch reload re-opens the modal; the onboarding content must not be clipped by `[scrollY]="false"`.
 **Depends on:** Phase 4 for the panel's state subtitle and the roster component; item 1 depends on nothing.
+
+#### As built — Phase 5 deviations
+
+- **Item 3's flex-centring half was already done.** Phase 2 item 8 had shipped the
+  `.center-vertical` rewrite and the `@media (max-height: 500px)` `ion-img` rule, so item 3
+  came down to copy, card parity and the host action.
+- **`?host=1` is produced by `main.page` but consumed by `game.page`.** The item list files it
+  under item 3, which is where the link is built, but the stripping has to happen where the
+  reload happens: `PatchService` applies a patch by rewriting the IndexedDB image and forcing
+  `window.location.reload()`, and the failure path in `ngOnInit` reloads too. Left on the URL,
+  the flag would re-open the room dialog after every one of those, forever.
+- **The copy was not just vague, it was wrong.** "Entrar em Sala" / "Junte-se a uma partida
+  existente" describes joining a game. A spectator has no emulator and cannot play. The
+  landing card, the guest onboarding and the new guest-side setup hint all say so now, which
+  is a bigger change than "corrected copy" implies but the whole point of the phase.
+- **The two cards used different skeletons** — `ion-card-header` against
+  `ion-card-content` — which is why they never lined up. Parity meant making the second match
+  the first, not tuning sizes.
+- **`scrollY` on the guest page became conditional rather than the card becoming
+  auto-height.** Both were offered; the card is auto-height *and* the page scrolls while not
+  spectating. Scrolling is only forbidden once there is a video whose border box must stay
+  exactly the visible picture, and the onboarding card is taller than a short landscape
+  viewport, so relying on the card alone would still have clipped the recent-rooms row.
+- **The panel absorbed the participants modal by deleting it.** `ParticipantsModalComponent`
+  is gone, `showParticipants()` with it. The panel dismisses with an *action* rather than
+  calling back into a page, because both pages host it and "leave" means `promptStopHosting()`
+  on one and `leaveRoom()` on the other. It collapsed four popover entries, not three —
+  `Encerrar sala multiplayer` folded in as well, since the panel is where the room lives.
+- **Recent rooms store codes only, and only after a stream actually arrived.** A code that
+  never produced a picture is not worth offering again, and persisting a password would undo
+  the deliberate omission of it from share links.
+- **Item 8 was two real bugs, not polish.** `loadGame()` resolved identically whether it saw
+  the game's green screen or hit the 10s timeout, so a failed boot went on to show the welcome
+  dialog over a black screen; it now returns `{ detected }`. And `HIDE_TUTORIAL` was only ever
+  written from the checkbox's own toggle handler, so anyone who simply read the dialog and
+  pressed `Entendi` got it again on every launch. `Entendi` now writes the flag and the
+  checkbox is gone as redundant, with `Primeiros passos` in the menu to bring the dialog back.
+- **`FAIL_COUNT` semantics were left alone deliberately.** It is still reset to 0 after a
+  non-detecting load, so the "three failures, offer a wipe" path still only triggers on a
+  thrown error rather than on a silent timeout. Changing that risks offering to delete
+  someone's saves because their device is merely slow, which is a bigger decision than this
+  phase.
+- **The "two stale FAQ strings" were not named in the study.** The two fixed: `Dados e
+  Backups > Baixar Jogos Salvos`, whose real label is `Exportar jogos salvos`, and the claim
+  that the keyboard and text-input buttons are "na parte superior da tela", which stopped
+  being true in mobile landscape once the header was suppressed — they are in the menu FAB
+  there.
 
 ---
 

@@ -241,8 +241,25 @@ export class JoinGamePage implements OnInit, OnDestroy {
     this.resetRoomState();
   }
 
-  async showParticipants() {
-    await this.multiplayerUiService.showParticipants();
+  /** Same room window the host gets, minus the ability to end anything for anyone else. */
+  async openMultiplayerPanel() {
+    const action = await this.multiplayerUiService.showMultiplayerPanel(
+      'guest', this.roomId, this.isRoomLocked
+    );
+
+    switch (action) {
+      case 'chat':
+        this.toggleChat(true);
+        break;
+      case 'share':
+        await this.multiplayerUiService.shareRoom(this.roomId);
+        break;
+      case 'leave':
+        await this.leaveRoom();
+        break;
+      case 'close':
+        break;
+    }
   }
 
   /**

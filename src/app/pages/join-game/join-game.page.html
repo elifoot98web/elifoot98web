@@ -22,7 +22,7 @@
         <ion-badge *ngIf="!isChatOpen && (unreadCount$ | async) as unread" color="danger"
           aria-hidden="true">{{ unread }}</ion-badge>
       </ion-button>
-      <ion-button *ngIf="isSpectating" (click)="showParticipants()" aria-label="Ver participantes">
+      <ion-button *ngIf="isSpectating" (click)="openMultiplayerPanel()" aria-label="Informações da sala">
         <ion-icon slot="icon-only" name="people-outline"></ion-icon>
       </ion-button>
       <ion-button *ngIf="isSpectating" color="danger" (click)="leaveRoom()" aria-label="Sair da sala">

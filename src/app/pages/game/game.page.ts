@@ -7,7 +7,7 @@ import { GAME_INPUT_FN_BTNS, GAME_INPUT_FN_BTNS_REVERSED, MULTIPLAYER, STORAGE_K
 import { UserGuideComponent } from './components/user-guide/user-guide.component';
 import { AboutComponent } from './components/about/about.component';
 import { OmaticModalComponent } from './components/omatic-modal/omatic-modal.component';
-import { Observable, Subscription } from 'rxjs';
+import { map, Observable, Subscription } from 'rxjs';
 import { EmulatorKeyCode } from '../../core/models/game';
 import { CursorClickMessage, CursorPositionMessage, MultiplayerJoinErrorKind, PlayerInfo } from '../../core/models/multiplayer';
 import { AutoSaverService, EmulatorControlService, PatchService, SaveGameService } from '../../core/services/game';
@@ -50,6 +50,9 @@ export class GamePage implements OnInit, OnDestroy {
   /** Drives the badge on the chat toggle, which sits outside the chat component. */
   unreadCount$: Observable<number>;
 
+  /** Feeds the menu entry's state subtitle, so the menu answers "how many" when opened. */
+  participantCount$: Observable<number>;
+
   /**
    * Reactive breakpoints for the floating status pill. The synchronous getters below are
    * fine for markup that is re-evaluated anyway, but the pill has to appear and disappear on
@@ -80,6 +83,7 @@ export class GamePage implements OnInit, OnDestroy {
     chatService: MultiplayerChatService
   ) {
     this.unreadCount$ = chatService.unreadCount$;
+    this.participantCount$ = this.playerInfoService.playerList$.pipe(map(players => players.length));
     this.isMobile$ = this.layoutHelperService.isMobile$;
     this.isLandscape$ = this.layoutHelperService.isLandscape$;
   }
@@ -93,12 +97,17 @@ export class GamePage implements OnInit, OnDestroy {
 
     try {
       console.time("carregando game...")
-      await this.loadGame()
+      const { detected } = await this.loadGame()
       console.timeEnd("carregando game...")
       await this.loadConfig()
       this.isHidden = false
       await loading.dismiss()
-      await this.handleShowTutorial()
+      // A wall of welcome text over a screen that never rendered is worse than silence.
+      if (detected) {
+        await this.handleShowTutorial()
+      } else {
+        console.warn('Game screen was never detected; skipping the welcome dialog.')
+      }
       await this.storageService.set(STORAGE_KEY.FAIL_COUNT, 0)
       await this.consumeHostIntent()
     } catch (e: any) {
@@ -144,7 +153,14 @@ export class GamePage implements OnInit, OnDestroy {
     this.multiplayerService.leaveRoom();
   }
 
-  async loadGame(): Promise<void> {
+  /**
+   * Boot the emulator and wait for the game's own green screen.
+   *
+   * Returns whether it was actually seen: the polling loop exits both on success and on the
+   * 10s timeout, and resolving identically for both meant a failed boot went on to show the
+   * welcome dialog over a black screen.
+   */
+  async loadGame(): Promise<{ detected: boolean }> {
     this.dosCI = await elifootMain(environment.prefixPath, environment.gameBundleURL)
     let timeout = false
     let loaded = false
@@ -216,6 +232,8 @@ export class GamePage implements OnInit, OnDestroy {
         await new Promise(resolve => setTimeout(resolve, 500));
       }
     }
+
+    return { detected: loaded }
   }
 
   async loadConfig() {
@@ -232,8 +250,12 @@ export class GamePage implements OnInit, OnDestroy {
     }
   }
 
+  /**
+   * The welcome dialog. Reachable from the menu as "Primeiros passos" as well, so retiring it
+   * is not a one-way door.
+   */
   async showTutorial() {
-    const hideTutorial = await this.storageService.get<boolean>(STORAGE_KEY.HIDE_TUTORIAL)
+    this.hidePopover()
     const alert = await this.alertController.create({
       header: 'Informações Importantes',
       message:
@@ -257,18 +279,15 @@ export class GamePage implements OnInit, OnDestroy {
           }
         },
         {
-          text: 'Entendi'
+          // Acknowledging it IS the "don't show again". The old checkbox only wrote the flag
+          // when toggled, so anyone who read the dialog and pressed Entendi got it again on
+          // every single launch.
+          text: 'Entendi',
+          handler: async () => {
+            await this.storageService.set(STORAGE_KEY.HIDE_TUTORIAL, true)
+          }
         }
-      ],
-      inputs: [{
-        type: 'checkbox',
-        label: 'Não mostrar novamente',
-        value: 'showTutorial',
-        checked: hideTutorial,
-        handler: async (e) => {
-          await this.storageService.set(STORAGE_KEY.HIDE_TUTORIAL, e.checked)
-        }
-      }]
+      ]
     });
     await alert.present();
   }
@@ -933,14 +952,29 @@ export class GamePage implements OnInit, OnDestroy {
     this.getOverlayElement()?.remove();
   }
 
-  async showParticipants() {
+  /**
+   * The room's own window. Replaces the Compartilhar/Participantes/Chat/Encerrar quartet
+   * that used to sit in the menu; the panel reports back what the user picked.
+   */
+  async openMultiplayerPanel() {
     this.hidePopover();
-    await this.multiplayerUiService.showParticipants();
-  }
+    const action = await this.multiplayerUiService.showMultiplayerPanel(
+      'host', this.hostRoomId, !!this.hostPassword
+    );
 
-  async shareRoom() {
-    this.hidePopover();
-    await this.multiplayerUiService.shareRoom(this.hostRoomId);
+    switch (action) {
+      case 'chat':
+        this.toggleChat(true);
+        break;
+      case 'share':
+        await this.multiplayerUiService.shareRoom(this.hostRoomId);
+        break;
+      case 'leave':
+        await this.promptStopHosting();
+        break;
+      case 'close':
+        break;
+    }
   }
 
   /**

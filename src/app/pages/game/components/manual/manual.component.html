@@ -179,7 +179,97 @@
               </p>
             </div>
           </ion-accordion>
+          <ion-accordion>
+            <ion-item slot="header">
+              <ion-label>
+                <strong>Voltar ao menu</strong>
+              </ion-label>
+            </ion-item>
+            <div class="ion-padding" slot="content">
+              <p>
+                Salva o jogo, encerra o emulador e volta para a tela inicial, de onde é possível
+                entrar em uma sala como espectador.
+              </p>
+              <p>
+                Se você estiver hospedando uma sala, ela será encerrada e os espectadores serão
+                desconectados.
+              </p>
+            </div>
+          </ion-accordion>
         </ion-accordion-group>
+      </div>
+    </ion-accordion>
+    <ion-accordion value="multiplayer">
+      <ion-item slot="header" color="light">
+        <ion-label>Multiplayer</ion-label>
+        <ion-icon slot="end" name="people"></ion-icon>
+      </ion-item>
+      <div class="ion-padding" slot="content">
+        <p>
+          O multiplayer do Elifoot 98 Online é um modo <strong>de assistir junto</strong>, não de
+          jogar junto. Quem joga é sempre o anfitrião: ele transmite a tela do próprio jogo, e os
+          convidados acompanham ao vivo, conversam pelo chat e podem apontar na tela com o cursor.
+        </p>
+        <p>
+          A transmissão é direta entre os navegadores (P2P). O jogo não passa por nenhum servidor
+          nosso, e nada é gravado.
+        </p>
+
+        <h4>Criar uma sala <ion-icon name="share-social-outline"></ion-icon></h4>
+        <p>
+          Na tela inicial, use <strong>Jogar e transmitir para amigos</strong>, ou, já dentro do
+          jogo, o menu de opções <ion-icon name="ellipsis-vertical-outline"></ion-icon> >
+          <strong>Hospedar Jogo Multiplayer</strong>.
+        </p>
+        <p>
+          Escolha um apelido, uma cor para o seu cursor e, se quiser, uma senha. O código da sala é
+          gerado automaticamente no formato <strong>ELI-XXXX</strong> — você pode gerar outro se
+          preferir.
+        </p>
+        <p>
+          <strong>Nota:</strong> o link compartilhado <em>não</em> inclui a senha. Se a sala tiver
+          uma, combine-a por outro meio.
+        </p>
+
+        <h4>Assistir a uma sala <ion-icon name="eye-outline"></ion-icon></h4>
+        <p>
+          Na tela inicial, use <strong>Assistir a uma Partida</strong>. Cole o código ou o link que
+          o anfitrião enviou — os dois funcionam no mesmo campo. Salas em que você já entrou ficam
+          disponíveis em <strong>Salas recentes</strong>.
+        </p>
+
+        <h4>Enquanto a sala está no ar</h4>
+        <p>
+          O código, o cadeado (se houver senha) e quantas pessoas estão na sala ficam visíveis na
+          barra superior. Toque nessa indicação para copiar o link novamente.
+        </p>
+        <p>
+          O menu de opções passa a mostrar <strong>Sala multiplayer</strong>, que reúne o código,
+          a lista de participantes com a qualidade da conexão de cada um, o chat e a opção de
+          encerrar a sala.
+        </p>
+
+        <h4>Chat <ion-icon name="chatbubble-ellipses-outline"></ion-icon></h4>
+        <p>
+          O chat abre pelo botão <strong>Chat</strong> sobre a tela do jogo — embaixo no modo
+          retrato, na borda direita no modo paisagem. Ele fica ao lado (ou abaixo) do jogo sem
+          nunca redimensionar a tela da partida.
+        </p>
+        <p>
+          Emoticons clássicos funcionam: <strong>:)</strong>, <strong>:D</strong>,
+          <strong>;)</strong> e companhia viram carinhas.
+        </p>
+
+        <h4>Se a conexão cair</h4>
+        <p>
+          Uma queda curta do anfitrião não encerra mais a sala: os espectadores veem
+          <strong>Tentando reconectar…</strong> sobre a última imagem recebida e a transmissão
+          volta sozinha. Só depois de alguns segundos sem retorno a sala é considerada encerrada.
+        </p>
+        <p>
+          <strong>Dica:</strong> se a conexão não se estabelecer, tente outra rede (Wi-Fi em vez de
+          dados móveis) ou desative a VPN — a conexão direta entre navegadores é sensível a isso.
+        </p>
       </div>
     </ion-accordion>
     <ion-accordion value="aux-controls">

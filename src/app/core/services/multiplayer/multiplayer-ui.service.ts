@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { AlertController, ModalController, ToastController } from '@ionic/angular';
-import { ParticipantsModalComponent } from '../../components/multiplayer/participants-modal/participants-modal.component';
+import { MultiplayerPanelComponent, MultiplayerPanelAction } from '../../components/multiplayer/multiplayer-panel/multiplayer-panel.component';
 import { RoomSetupModalComponent, RoomSetupResult } from '../../components/multiplayer/room-setup-modal/room-setup-modal.component';
 import { RoomCodeHelper } from '../../helpers/room-code.helper';
 
@@ -40,12 +40,27 @@ export class MultiplayerUiService {
     return role === 'confirm' && data ? data : null;
   }
 
-  async showParticipants(): Promise<void> {
+  /**
+   * The room's own window: code, presence, sharing and the way out, in one place.
+   *
+   * Replaced `showParticipants()` and the participants modal behind it. Returns the action the
+   * user picked rather than acting, because "open the chat" and "leave" mean different things
+   * on the host and the guest and neither page's internals belong in this service.
+   */
+  async showMultiplayerPanel(
+    mode: 'host' | 'guest',
+    roomCode: string,
+    locked: boolean
+  ): Promise<MultiplayerPanelAction> {
     const modal = await this.modalController.create({
-      component: ParticipantsModalComponent,
+      component: MultiplayerPanelComponent,
+      componentProps: { mode, roomCode, locked },
       cssClass: 'win9x-modal',
     });
     await modal.present();
+
+    const { role } = await modal.onWillDismiss();
+    return (role as MultiplayerPanelAction) || 'close';
   }
 
   async confirmLeave(message: string): Promise<boolean> {
