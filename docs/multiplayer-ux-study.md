@@ -1,6 +1,8 @@
 # Estudo de UI/UX do Multiplayer + Plano de Melhorias
 
-> **Status:** All five phases shipped, none manually verified end to end yet.
+> **Status:** All five phases shipped, plus a review round (§7). The single-context surface is
+> verified in a headless browser; **nothing needing two peers has been verified at all** — the
+> pill, panel, chat, typing indicator, `hostPeerId$`, connection quality and the reconnect path.
 > As-built deviations are recorded under each phase in §4; where they conflict with the
 > prose above them, the as-built notes win.
 >
@@ -311,7 +313,9 @@ As shipped:
   under 900px). Here the canvas *is* height-fitted, so a panel wider than the margin does
   shrink it, at 1024x768-ish ratios. That is the accepted cost of docking; the width change
   is deliberately **not** transitioned, making it one re-letterbox per toggle instead of
-  the ~18 the original animated sidebar caused.
+  the ~18 the original animated sidebar caused. **Superseded by §7:** the toggle does now
+  animate in both orientations, but the width still snaps — the motion comes from the chat
+  sliding *inside* the panel, so the re-letterbox count is unchanged.
 - **The chat height must not be a percentage.** The first docked attempt used
   `height: max(0px, calc(100% - var(--game-box-height)))`. Sass silently stripped the inner
   `calc()`, and more importantly that `100%` is a percentage height on a flex item whose
@@ -465,6 +469,11 @@ As shipped:
 - **The two cards used different skeletons** — `ion-card-header` against
   `ion-card-content` — which is why they never lined up. Parity meant making the second match
   the first, not tuning sizes.
+- **The card's inline code field is gone again (see §7).** It shipped as this phase describes,
+  and in review the split between it and the win9x dialog read as two surfaces disagreeing
+  about where you type a room code. The dialog now owns joining outright, recent rooms
+  included; the card explains spectating and hands off. The notes below still describe why the
+  card had to stop being 200px tall, which remains true of the explainer.
 - **`scrollY` on the guest page became conditional rather than the card becoming
   auto-height.** Both were offered; the card is auto-height *and* the page scrolls while not
   spectating. Scrolling is only forbidden once there is a video whose border box must stay
@@ -538,3 +547,58 @@ There are zero `.spec.ts` files, so everything below is manual. **Standing setup
 - **Persisting the room password (for "recent rooms" or host reload resume)** — a privacy regression on a shared device, and it would have to survive the data-wipe paths. Codes only.
 - **Host session resume across a reload** — deferred, not rejected, but explicitly out of this plan: it needs new `STORAGE_KEY`s, a canvas-ready gate and a `Retomar a transmissão da sala {{código}}?` prompt, and the grace period does *not* cover it (nothing about hosting is persisted today, so a reloaded host is simply gone).
 - **Control handoff** — out of scope by decision. The protocol reframing in §3(c) deliberately leaves room for it without designing it.
+
+---
+
+## 7. Review round (post-Phase 5)
+
+Eight findings from a pass over the shipped feature. Recorded here because four of them
+contradict decisions taken above, and because two were defects the phase notes claimed were
+handled.
+
+**Design decisions revisited:**
+
+- **One chat entry point, not three.** The guest had a toolbar button, the floating toggle, and
+  a panel row, all doing the same thing. The floating toggle over the game won: it is the only
+  one that exists at every breakpoint, since mobile landscape suppresses the header entirely.
+- **The toggle now animates in both orientations.** §4 Phase 2 justified the asymmetry (portrait
+  animates free, landscape snaps to avoid ~18 re-letterboxes). That reasoning still holds for
+  *width*, so width still snaps — the motion is the chat sliding inside the panel, clipped by
+  its overflow, with the closing snap delayed by the slide. One re-letterbox per toggle, as
+  before. First attempt used `translateX(100%)`, which resolves against the chat's own width and
+  therefore computed to `0px` in a closed panel: only closing appeared to animate.
+- **The pill copies; only the panel shares.** Four controls had two behaviours, one of which
+  changed by platform — tapping an ambient indicator opened an OS share sheet on a phone and
+  silently copied on desktop.
+- **The join dialog owns joining.** See the Phase 5 note above.
+
+**Defects:**
+
+- **A closed chat panel was never free.** `box-sizing: border-box` turned `width: 0` plus a 2px
+  `border-left` into a permanent 2px seam beside the game — the opposite of the docked layout's
+  premise. The border now applies only while open.
+- **The transcript lost its authors.** Names resolved from `playerList$`, so every message from
+  someone who left collapsed to a raw peer id. Hence `knownPlayers$` (sticky history) alongside
+  `playerList$` (live presence); the headcount still uses the latter.
+- **The roster could not say which row was you**, and nothing prevents two people picking the
+  same nickname or cursor colour. Your row is tinted and marked `(você)`; a short peer-id suffix
+  is appended only to rows that actually collide. **Still open:** colliding *cursor colours*
+  still put two indistinguishable pointers on the game surface. The roster fix does not address
+  that.
+- **The guest's picture grew over the first seconds of every stream.** Phase 2's as-built claimed
+  an encoder downscale was "proportional and a no-op for layout". That was wrong: CSS sized the
+  element from *intrinsic pixels*, so WebRTC ramping resolution up resized it. The fit moved into
+  TypeScript and is computed from the frame's **ratio**, which still keeps the border box equal to
+  the picture.
+- **"O anfitrião saiu da sala" asserted something unknowable.** `onPeerLeave` for the host fires
+  when *our* link drops, indistinguishable from the host leaving — a spectator whose own
+  connection died was told the match had ended while the host and the other guests carried on.
+  This also exposed a limit of Phase 4 item 6: the grace period only recovers links trystero
+  re-establishes itself, which it will not do when the break is local. Copy now describes what we
+  observed, and offers a retry using credentials still in memory.
+
+**Verification.** Four headless-browser passes cover the single-context surface: landing page
+(including measured contrast — the host action was 3.5:1 against the page, under AA), the join
+flow and dialog, tutorial gating and `Primeiros passos`, `Voltar ao menu` with re-entry proving
+one wasm instance, the manual and FAQ, and the animation timings sampled mid-transition. Nothing
+requiring two peers has been verified.

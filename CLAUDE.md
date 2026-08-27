@@ -128,7 +128,57 @@ Both are coordinate- and color-sensitive: changing the emulator canvas size, the
 mode/resolution, or the game's language will silently break them. Constants live in
 [constants.ts](src/app/core/models/constants.ts).
 
-### Other services
+### Multiplayer (watch-together, not play-together)
+
+A host streams its own canvas to spectators over WebRTC; guests watch, chat and move a shared
+cursor. **A guest has no emulator and cannot play.** That asymmetry drives the whole design and
+most of the user-facing copy. Transport is [trystero](https://github.com/dmotz/trystero) (P2P,
+`appId` + room name + optional password, TURN creds in `environment.multiplayerConfig`), so no
+game traffic touches a server of ours.
+
+The full design record — findings, decisions, five phases, and as-built deviations — is
+[docs/multiplayer-ux-study.md](docs/multiplayer-ux-study.md). Read it before changing behaviour
+here; several obvious-looking "improvements" are things it explicitly rejected, with reasons.
+
+Services in `src/app/core/services/multiplayer/`, all `providedIn: 'root'`:
+`multiplayer.service.ts` orchestrates the room lifecycle and owns `gameStateSubject`; the rest
+(`-stream`, `-chat`, `-cursor`, `-player-info`, `-identity`, `-ui`) are set up and cleared by it.
+Every one exposes `clear()`, and `leaveRoom()` calls all of them.
+
+Load-bearing invariants — each of these was a bug once:
+
+- **Host identity comes from the stream, never from a claim.** `hostPeerId$` on
+  `multiplayer-stream.service.ts` is set to whichever peer delivered a video track (first one
+  wins). `PlayerIdentMessage.host` still exists on the wire but is `@deprecated` and read by
+  nothing: it was forgeable, so a spectator with devtools could take the badge and end the room
+  by leaving. Roles are stamped onto the roster from `hostPeerId$` via `setHostPeer`.
+- **`playerList$` is presence; `knownPlayers$` is history.** The roster and headcount must show
+  who is *here*; the chat transcript must keep naming people after they leave. Resolving chat
+  names from the live list collapsed a departed author's messages to a raw peer id.
+- **`leaveRoom()` is synchronous on purpose** (see its docblock) and returns while trystero is
+  still draining. Anything deferred must be guarded by `roomEpoch`, not just cleared — a fast
+  rejoin can start a new room before an old timer fires.
+- **`GameState` is a numeric enum with no explicit values.** Append members; inserting one
+  silently renumbers every later member.
+- **`#stream-target`'s border box must equal the visible picture exactly.** `OverlaySyncHelper`
+  positions the cursor overlay from the video's `offset*`, and cursor coords normalise against
+  `clientWidth`, so any letterbox bar *inside* the element offsets every remote cursor. The fit
+  is computed in TypeScript (`fitVideoToContainer`) from the frame's **ratio**, deliberately not
+  from its intrinsic pixels: WebRTC ramps its encoder up from a low resolution on every join, and
+  intrinsic sizing made the picture visibly grow. The long comment in
+  [join-game.page.scss](src/app/pages/join-game/join-game.page.scss) lists what must not be added.
+- **A dropped host is not a departed host.** `onPeerLeave` for the host fires when *our* link
+  drops, which is indistinguishable from the host leaving. Hence `HOST_RECONNECTING` plus a grace
+  timer, copy that says we lost the connection, and a retry button — the grace period only
+  recovers links trystero re-establishes itself, which it will not do when the break is local.
+
+Components in `src/app/core/components/multiplayer/` (plus `chat/`): `room-setup-modal` (owns
+joining outright, including recent rooms), `multiplayer-panel` (the room's own window — code,
+roster, share, leave; it absorbed a former participants modal), `participant-list` (shared by the
+panel and the chat's contact strip), `room-status-pill` (the ambient code/lock/count indicator;
+flat, not Win9x — see the scope rule below). The chat toggle floating over the game surface is
+the **only** chat entry point, because it is the one control that exists at every breakpoint.
+
 
 - [cheat-omatic.service.ts](src/app/core/services/game/cheat-omatic.service.ts) — a Cheat-Engine-style memory
   scanner over `readMemory`/`writeMemory`, sweeping the 8 MB address space in 1 MB chunks and
@@ -138,9 +188,12 @@ mode/resolution, or the game's language will silently break them. Constants live
   to DOSBox keycode sequences (`EmulatorKeyCodeHelper`, 30 ms between strokes) for the text-input dialog.
 - [local-storage.service.ts](src/app/core/services/shared/local-storage.service.ts) — thin wrapper over
   `@ionic/storage-angular`; all keys in `STORAGE_KEY`.
-- [layout-helper.service.ts](src/app/core/services/shared/layout-helper.service.ts) — synchronous
-  `window.innerWidth/Height` checks; drives mobile/landscape template branches (e.g. the F1–F12
-  formation buttons are reversed in portrait).
+- [layout-helper.service.ts](src/app/core/services/shared/layout-helper.service.ts) — two APIs
+  for the same facts: synchronous `window.innerWidth/Height` getters (used by templates that are
+  re-evaluated for other reasons, e.g. the F1–F12 formation buttons reversed in portrait), and
+  `matchMedia`-backed observables (`isMobile$`, `isLandscape$`, `matches$(query)`) for anything
+  that must appear or disappear *on rotation*, which the getters cannot do because nothing
+  re-reads them. Observables are cached per query string, so one listener serves all subscribers.
 
 ### Retro visual identity (scope rule)
 
@@ -153,12 +206,13 @@ tokens (`--win9x-face`, `--win9x-shadow`, `--win9x-field`, `--win9x-titlebar-bg`
 below the Ionic imports.
 
 **The boundary: companion windows are Windows 95; the app shell stays Elifoot green.**
-Retro treatment applies to the multiplayer chat panel, the room-setup and participants
-modals, the chat toggle, and the Cheat 'O Matic modal. It does **not** apply to the page
-toolbars (`ion-toolbar color="tertiary"`), the landing cards, the FAB clusters or the
-options popover — the navy `#092469` in [variables.scss](src/theme/variables.scss) is
-close enough to `#000080` that shell and retro windows read as deliberately related. A
-retro treatment without an explicit boundary reads as a mistake rather than a choice.
+Retro treatment applies to the multiplayer chat panel, the room-setup dialog, the
+multiplayer panel, the roster rows, the chat toggle, and the Cheat 'O Matic modal. It does
+**not** apply to the page toolbars (`ion-toolbar color="tertiary"`), the landing cards, the
+FAB clusters or the options popover — the navy `#092469` in
+[variables.scss](src/theme/variables.scss) is close enough to `#000080` that shell and retro
+windows read as deliberately related. A retro treatment without an explicit boundary reads
+as a mistake rather than a choice.
 
 The room status pill (`.mp-status-pill` in [global.scss](src/global.scss)) is on the shell
 side of that line and is deliberately flat, not Win9x: it renders inside the page toolbars,
