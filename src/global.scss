@@ -190,11 +190,15 @@ canvas {
     // Grey, not the old --ion-color-primary-shade: that is nearly the game's own #008000
     // and showed no seam. Grey is also where Phase 3 goes (Win9x window chrome).
     background: var(--win9x-face, #c0c0c0);
-    border-left: 2px solid var(--win9x-dark, #0a0a0a);
+    // Only while open. `box-sizing: border-box` means a 2px border on a 0-width panel still
+    // occupies 2px, which left a permanent dark seam down the edge of the game with the chat
+    // closed — "a closed chat costs nothing" was the whole point of the docked layout.
+    border-left: 0;
 }
 
 .chat-docked-panel.chat-open {
     width: var(--chat-panel-width);
+    border-left: 2px solid var(--win9x-dark, #0a0a0a);
     // Opening: make room instantly, then slide the panel into it (see below).
     transition: width 0s linear 0s;
 }
@@ -220,7 +224,10 @@ canvas {
  * to animate directly and the slide would double up.
  */
 .chat-docked-panel > app-chat {
-    transform: translateX(100%);
+    // The panel width, NOT translateX(100%). A percentage resolves against the chat's OWN
+    // width, and in a closed (zero-width) panel that is 0px — so the open transition had
+    // nowhere to travel from and only closing appeared to animate.
+    transform: translateX(var(--chat-panel-width));
     transition: transform 220ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -269,7 +276,7 @@ canvas {
         height: auto;
         flex: 0 0 0px;
         border-left: 0;
-        border-top: 2px solid var(--win9x-dark, #0a0a0a);
+        border-top: 0;
         // Safe to animate: the game box has a fixed basis, so this cannot resize it and
         // js-dos's resize detector never fires.
         transition: flex-grow 220ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -286,6 +293,8 @@ canvas {
     .chat-docked-panel.chat-open {
         width: auto;
         flex: 1 1 0px;
+        border-left: 0;
+        border-top: 2px solid var(--win9x-dark, #0a0a0a);
         // The panel is docked exactly where the iOS keyboard appears, so lift it clear.
         // A margin shrinks the space flex hands it, keeping the game box untouched.
         margin-bottom: var(--kb-inset, 0px);
