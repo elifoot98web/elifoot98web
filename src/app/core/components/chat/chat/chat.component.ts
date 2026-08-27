@@ -72,9 +72,12 @@ export class ChatComponent implements AfterViewInit, OnDestroy {
   ) {
     // The view model is built once per emission, off the change-detection path: grouping,
     // name resolution and colour darkening all happen here rather than in the template.
+    // knownPlayers$, NOT playerList$: the transcript is history, and resolving names from the
+    // live roster made every message from a departed peer collapse to a raw peer id the moment
+    // they left. The live roster is still what participantCount$ counts below.
     this.lines$ = combineLatest([
       this.chatService.getMessagesObservable(),
-      this.userInfoService.playerList$,
+      this.userInfoService.knownPlayers$,
     ]).pipe(
       map(([messages, players]) => this.toLines(messages.slice(-MAX_VISIBLE_MESSAGES), players))
     );

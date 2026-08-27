@@ -22,12 +22,17 @@
         </span>
       </div>
 
+      <!--
+        Copy and share are separate on purpose: this is where an OS share sheet is expected,
+        whereas the ambient pill just copies. No "Abrir chat" row — the floating toggle over
+        the game is the single chat control.
+      -->
       <div class="panel-actions">
-        <button type="button" class="win9x-button win9x-button--touch" (click)="close('share')">
-          Compartilhar link
+        <button type="button" class="win9x-button win9x-button--touch" (click)="close('copy')">
+          Copiar link
         </button>
-        <button type="button" class="win9x-button win9x-button--touch" (click)="close('chat')">
-          Abrir chat
+        <button type="button" class="win9x-button win9x-button--touch" (click)="close('share')">
+          Compartilhar
         </button>
       </div>
 

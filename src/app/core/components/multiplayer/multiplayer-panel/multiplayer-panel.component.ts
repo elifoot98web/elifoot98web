@@ -4,7 +4,7 @@ import { map, Observable } from 'rxjs';
 import { MultiplayerPlayerInfoService } from 'src/app/core/services/multiplayer';
 
 /** What the caller should do once the panel closes. */
-export type MultiplayerPanelAction = 'chat' | 'leave' | 'share' | 'close';
+export type MultiplayerPanelAction = 'copy' | 'share' | 'leave' | 'close';
 
 /**
  * One window for everything about the current room.

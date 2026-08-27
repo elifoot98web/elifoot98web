@@ -963,8 +963,8 @@ export class GamePage implements OnInit, OnDestroy {
     );
 
     switch (action) {
-      case 'chat':
-        this.toggleChat(true);
+      case 'copy':
+        await this.multiplayerUiService.copyRoomLink(this.hostRoomId);
         break;
       case 'share':
         await this.multiplayerUiService.shareRoom(this.hostRoomId);

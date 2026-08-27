@@ -243,6 +243,34 @@ ion-button.win9x-button.button-disabled::part(native) {
   white-space: nowrap;
 }
 
+/* Marks the local player. Weight, not colour, so it survives the compact strip. */
+.win9x-roster-self {
+  margin-inline-start: 4px;
+  font-weight: bold;
+  color: var(--win9x-shadow);
+}
+
+/*
+ * Peer-id suffix, rendered only when two rows would otherwise read identically. Monospace so
+ * it is legible at 11px and obviously not part of the chosen nickname.
+ */
+.win9x-roster-suffix {
+  margin-inline-start: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 10px;
+  color: var(--win9x-shadow);
+}
+
+/*
+ * A faint tint so your own row is findable at a glance in a long list.
+ *
+ * Doubled class on purpose: `.win9x-roster-row:nth-of-type(even)` above is (0,2,0), so a
+ * single-class rule here would lose on every even row no matter where it sits in the file.
+ */
+.win9x-roster-row.win9x-roster-row--self {
+  background: #e8eef7;
+}
+
 .win9x-roster-tag {
   margin-inline-start: 6px;
   padding: 0 4px;

@@ -35,6 +35,18 @@
               (click)="regenerateCode()" aria-label="Gerar outro código">Gerar</button>
           </span>
         </label>
+        <!--
+          Recent rooms live next to the field they fill, so joining is owned by one surface.
+          Guest-only: a host is creating a room, not returning to one.
+        -->
+        <div *ngIf="!isHost && recentRooms.length > 0" class="recent-rooms">
+          <span class="field-label">Salas recentes</span>
+          <div class="recent-rooms-list">
+            <button type="button" *ngFor="let code of recentRooms" class="win9x-button recent-room"
+              (click)="useRecentRoom(code)">{{ code }}</button>
+          </div>
+        </div>
+
         <p *ngIf="showCodeError" class="field-error">
           O código deve ter o formato ELI-XXXX (sem as letras I, O e sem os números 0 e 1).
         </p>

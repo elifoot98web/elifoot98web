@@ -83,27 +83,29 @@
 // src/global.scss. The chat is an overlay there, so nothing on this page may size itself
 // against whether the chat is open.
 
-// The stream is letterboxed by CSS, never by TypeScript.
+// The stream is letterboxed from the frame's RATIO by syncStreamContainer(), which writes
+// explicit width/height in px. It used to be pure CSS, deriving the used size from the
+// video's intrinsic width clamped by the max-* pair — but that conflates a DOS video-mode
+// change (ratio changes, must re-fit) with WebRTC ramping its encoder up from a low starting
+// resolution (same ratio, must not re-fit). The second happens on every join and made the
+// picture grow from a small box to full size over the first seconds.
 //
-// This is an absolutely-positioned *replaced* element: the used width comes from the
-// video's intrinsic size, the height from the intrinsic ratio, both clamped by the max-*
-// pair through the min/max constraint table (which preserves the ratio), and the auto
-// margins absorb the leftover space in both axes. Result: the element's border box is
-// EXACTLY the visible picture, centred.
+// The element's border box is still EXACTLY the visible picture, centred. That equality is
+// the contract: OverlaySyncHelper.align() positions #cursors-overlay from
+// offsetLeft/offsetTop/offsetWidth/offsetHeight and processCursorEvent() normalises with
+// offsetX / clientWidth, so the moment the box is bigger than the picture every remote cursor
+// is offset by the letterbox bars.
 //
-// That equality is the contract. OverlaySyncHelper.align() positions #cursors-overlay
-// from offsetLeft/offsetTop/offsetWidth/offsetHeight and processCursorEvent() normalises
-// with offsetX / clientWidth, so the moment the box is bigger than the picture every
-// remote cursor is offset by the letterbox bars.
+// The max-* pair below is now a safety net, not the mechanism: Math.min in the fit function
+// already guarantees the box never exceeds the container.
 //
-// Deliberately NOT `width/height: 100% + object-fit: contain`: that letterboxes the
-// content INSIDE a container-sized box, breaking exactly that contract.
+// Deliberately NOT `width/height: 100% + object-fit: contain`: that letterboxes the content
+// INSIDE a container-sized box, breaking exactly that contract.
 // Deliberately NOT a flex item: a flex item's cross-axis max clamp does not feed back
 // into its resolved main size, so `max-height: 100%` in the row direction can leave a
 // too-wide box with the picture letterboxed inside it.
-// Deliberately NOT `aspect-ratio: 4 / 3`: the ratio is the video's own business, so a
-// host DOS video-mode change re-fits for free, and aspect-ratio needs Safari 15 while
-// .browserslistrc allows Safari 14.
+// Deliberately NOT `aspect-ratio`: it needs Safari 15 and .browserslistrc allows Safari 14 —
+// which is also why the ratio fit is done in TypeScript rather than declaratively.
 //
 // Do NOT add `border`, `padding` or `object-fit`. Ionic sets `* { box-sizing:
 // border-box }`, so a border or padding shrinks the content box inside the border box the
@@ -118,8 +120,6 @@
   bottom: 0;
   left: 0;
   margin: auto;
-  width: auto;
-  height: auto;
   max-width: 100%;
   max-height: 100%;
   display: block;
@@ -165,15 +165,3 @@
   }
 }
 
-// Toolbar entry point for the chat (the drawer must not be reachable only from the
-// floating handle). The badge is inset rather than hung off the corner: ion-button clips
-// slotted children with --overflow: hidden on .button-native.
-.chat-entry-btn ion-badge {
-  position: absolute;
-  top: 0;
-  right: 0;
-  min-width: 14px;
-  border-radius: 50%;
-  font-size: 9px;
-  padding: 2px 3px;
-}

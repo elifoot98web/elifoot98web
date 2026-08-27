@@ -4,6 +4,15 @@ import { MultiplayerUserRole, PlayerInfo } from 'src/app/core/models/multiplayer
 import { MultiplayerPlayerInfoService } from 'src/app/core/services/multiplayer';
 import { selfId } from 'trystero';
 
+/** One rendered row: the player plus everything the template would otherwise compute. */
+interface RosterRow {
+  player: PlayerInfo;
+  isSelf: boolean;
+  name: string;
+  /** A short peer-id suffix, present only when another row shows the same name. */
+  disambiguator: string;
+}
+
 /**
  * The room roster, as a Win9x contact listing.
  *
@@ -23,15 +32,47 @@ export class ParticipantListComponent {
   @Input() compact = false;
 
   /** Host first, then guests by name, so the list does not reshuffle on every ping. */
-  players$: Observable<PlayerInfo[]>;
+  players$: Observable<RosterRow[]>;
 
   constructor(private playerInfoService: MultiplayerPlayerInfoService) {
     this.players$ = this.playerInfoService.playerList$.pipe(
       map(players => [...players].sort((a, b) => {
         if (a.role !== b.role) return a.role === MultiplayerUserRole.HOST ? -1 : 1;
         return a.playerName.localeCompare(b.playerName);
-      }))
+      })),
+      map(players => this.toRows(players))
     );
+  }
+
+  /**
+   * Nothing stops two people picking the same nickname, or the same cursor colour, or both —
+   * the setup dialog validates neither, and a room where two rows read "Leo" in the same
+   * yellow is unreadable. Rather than rejecting duplicates at entry (which would mean telling
+   * someone their name is taken in a four-person room), the roster disambiguates on display:
+   * a short peer-id suffix is appended, but only to the rows that actually collide.
+   */
+  private toRows(players: PlayerInfo[]): RosterRow[] {
+    const nameCounts = new Map<string, number>();
+    for (const player of players) {
+      const key = this.displayName(player).toLocaleLowerCase();
+      nameCounts.set(key, (nameCounts.get(key) || 0) + 1);
+    }
+
+    return players.map(player => {
+      const name = this.displayName(player);
+      const collides = (nameCounts.get(name.toLocaleLowerCase()) || 0) > 1;
+      return {
+        player,
+        isSelf: player.peerId === selfId,
+        name,
+        // Only rendered when it earns its place.
+        disambiguator: collides ? `#${player.peerId.slice(0, 4)}` : ''
+      };
+    });
+  }
+
+  private displayName(player: PlayerInfo): string {
+    return player.playerName?.trim() || player.peerId.slice(0, 6);
   }
 
   /**
@@ -74,7 +115,7 @@ export class ParticipantListComponent {
     }
   }
 
-  trackByPeerId(_: number, player: PlayerInfo) {
-    return player.peerId;
+  trackByPeerId(_: number, row: RosterRow) {
+    return row.player.peerId;
   }
 }

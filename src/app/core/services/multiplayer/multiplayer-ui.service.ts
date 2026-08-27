@@ -86,6 +86,17 @@ export class MultiplayerUiService {
   }
 
   /**
+   * Copy the join link, always. No share sheet, no platform-dependent branching.
+   *
+   * This is what the ambient pill does: tapping a status indicator and getting an OS share
+   * sheet on a phone but a silent clipboard write on desktop was the same control behaving
+   * two different ways. Sharing stays an explicit, separately-labelled choice in the panel.
+   */
+  async copyRoomLink(roomCode: string): Promise<void> {
+    await this.copyToClipboard(RoomCodeHelper.buildJoinLink(roomCode), 'Link da sala copiado!');
+  }
+
+  /**
    * Share the join link via the native share sheet where available, falling back to
    * copying it to the clipboard.
    */
@@ -136,7 +147,7 @@ export class MultiplayerUiService {
       position: 'bottom',
       color: 'success',
       buttons: [
-        { text: 'Copiar link', handler: () => { void this.copyToClipboard(RoomCodeHelper.buildJoinLink(roomCode), 'Link da sala copiado!'); } },
+        { text: 'Copiar link', handler: () => { void this.copyRoomLink(roomCode); } },
         { text: 'Compartilhar', handler: () => { void this.shareRoom(roomCode); } },
         { text: 'Fechar', role: 'cancel' },
       ],

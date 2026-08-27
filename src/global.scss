@@ -130,9 +130,10 @@ canvas {
  *
  * LANDSCAPE/DESKTOP docks as a row with a fixed width. Here the canvas IS height-fitted,
  * so a panel wider than the free margin does shrink it (only at 1024x768-ish ratios).
- * That is the accepted cost of docking — but the width change is deliberately NOT
- * transitioned, so it is ONE re-letterbox per toggle instead of the ~18 the old animated
- * sidebar caused, which is what made the canvas visibly crawl.
+ * That is the accepted cost of docking — but the width is still never ANIMATED: it snaps,
+ * so it is ONE re-letterbox per toggle instead of the ~18 the old animated sidebar caused,
+ * which is what made the canvas visibly crawl. The open/close motion comes from the chat
+ * sliding inside the panel instead, clipped by its overflow (see .chat-docked-panel below).
  *
  * Spectators are unaffected either way: canvas.captureStream() follows the canvas BACKING
  * STORE, which js-dos pins to the DOS frame size, so displayed size never changes the
@@ -178,6 +179,9 @@ canvas {
 .chat-docked-panel {
     flex: 0 0 auto;
     width: 0;
+    // Closing: hold the width until the slide-out has finished, so the panel is seen leaving.
+    // Duration is 0s either way — this is a delayed snap, never an animated width.
+    transition: width 0s linear 220ms;
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -191,11 +195,37 @@ canvas {
 
 .chat-docked-panel.chat-open {
     width: var(--chat-panel-width);
+    // Opening: make room instantly, then slide the panel into it (see below).
+    transition: width 0s linear 0s;
 }
 
 .chat-docked-panel > app-chat {
     flex: 1 1 auto;
     min-height: 0;
+}
+
+/*
+ * Landscape/desktop open-close animation.
+ *
+ * The naive version — `transition: width` on the panel — is what an earlier revision had and
+ * what Phase 2 removed: the game is the panel's flex sibling, so every animation frame resizes
+ * #game-container and js-dos re-letterboxes the canvas, ~18 times per toggle.
+ *
+ * This gets the same motion for one re-layout. The panel's WIDTH still snaps, so the canvas
+ * re-fits exactly once; what animates is the chat sliding within the space, clipped by the
+ * panel's own `overflow: hidden`. Closing delays the width snap by the slide duration (the
+ * `0s linear 220ms` above) so the panel is seen leaving rather than vanishing.
+ *
+ * Portrait overrides this below: there the game box has a fixed basis, so flex-grow is free
+ * to animate directly and the slide would double up.
+ */
+.chat-docked-panel > app-chat {
+    transform: translateX(100%);
+    transition: transform 220ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.chat-docked-panel.chat-open > app-chat {
+    transform: translateX(0);
 }
 
 /* Landscape phones and small tablets: 320px is a big slice of a 700-900px viewport. */
@@ -243,6 +273,14 @@ canvas {
         // Safe to animate: the game box has a fixed basis, so this cannot resize it and
         // js-dos's resize detector never fires.
         transition: flex-grow 220ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    // Portrait animates flex-grow directly (free: the game box has a fixed basis), so the
+    // landscape slide must be switched off or the panel would both grow and slide.
+    .chat-docked-panel > app-chat,
+    .chat-docked-panel.chat-open > app-chat {
+        transform: none;
+        transition: none;
     }
 
     .chat-docked-panel.chat-open {
@@ -454,9 +492,16 @@ canvas {
        visibility flip becomes immediate, so a closed panel stays hidden, unfocusable and
        click-transparent. Do NOT add a `visibility: visible` override here. */
     .chat-docked-panel,
+    .chat-docked-panel > app-chat,
     .chat-toggle-btn,
     .color-swatch {
         transition: none !important;
+    }
+
+    // Without this the panel would stay translated off its own edge forever, since the
+    // transition that would have brought it back is gone.
+    .chat-docked-panel > app-chat {
+        transform: none !important;
     }
 
     .pointer-overlay .cursor {

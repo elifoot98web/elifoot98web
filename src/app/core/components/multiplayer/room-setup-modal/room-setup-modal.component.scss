@@ -128,3 +128,24 @@ input.win9x-input:focus {
 .dialog-actions .win9x-button {
   min-width: 96px;
 }
+
+/*
+ * Recent rooms, sitting with the code field they fill. Wraps rather than scrolls: the list is
+ * capped at four entries upstream, so it can never need more than two rows.
+ */
+.recent-rooms {
+  margin-bottom: 0.6rem;
+}
+
+.recent-rooms-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.recent-room {
+  font-size: 12px;
+  padding: 2px 8px;
+  font-family: 'Courier New', monospace;
+}

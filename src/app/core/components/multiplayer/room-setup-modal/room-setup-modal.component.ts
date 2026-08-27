@@ -39,6 +39,16 @@ export class RoomSetupModalComponent implements OnInit {
     private identityService: MultiplayerIdentityService
   ) { }
 
+  /**
+   * Rooms this device has joined before, offered as one-tap fills.
+   *
+   * They live here rather than on the join page so that a single surface owns joining: the
+   * guest used to meet an inline code field on the card AND this dialog, which read as two
+   * different apps disagreeing about where you type a room code. Guest-only — a host is
+   * creating a room, not returning to one.
+   */
+  recentRooms: string[] = [];
+
   async ngOnInit() {
     this.playerName = await this.identityService.getPlayerName();
     this.playerColor = await this.identityService.getPlayerColor();
@@ -46,6 +56,10 @@ export class RoomSetupModalComponent implements OnInit {
     this.roomCode = this.presetRoomCode
       ? RoomCodeHelper.sanitize(this.presetRoomCode)
       : (this.mode === 'host' ? RoomCodeHelper.generate() : '');
+
+    if (!this.isHost) {
+      this.recentRooms = await this.identityService.getRecentRooms();
+    }
   }
 
   get isHost(): boolean {
@@ -76,6 +90,11 @@ export class RoomSetupModalComponent implements OnInit {
   onCodeBlur() {
     const sanitized = RoomCodeHelper.sanitize(this.roomCode);
     if (sanitized) this.roomCode = sanitized;
+  }
+
+  /** Fill the field from history rather than making them retype a code they already used. */
+  useRecentRoom(code: string) {
+    this.roomCode = RoomCodeHelper.sanitize(code);
   }
 
   regenerateCode() {

@@ -60,9 +60,15 @@ export class RoomStatusPillComponent {
     return `${parts.join(', ')}. Toque para copiar o link.`;
   }
 
-  /** The code must never be recoverable only from a toast that has already expired. */
+  /**
+   * The code must never be recoverable only from a toast that has already expired.
+   *
+   * Copies rather than opening the share sheet: this is an ambient indicator, and a tap on it
+   * should do one predictable thing on every platform. The panel offers explicit
+   * Copiar/Compartilhar buttons where a share sheet is what you expect.
+   */
   async copyLink() {
     if (!this.roomCode) return;
-    await this.multiplayerUiService.shareRoom(this.roomCode);
+    await this.multiplayerUiService.copyRoomLink(this.roomCode);
   }
 }

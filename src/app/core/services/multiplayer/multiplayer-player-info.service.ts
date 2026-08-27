@@ -17,6 +17,20 @@ export class MultiplayerPlayerInfoService {
    * peer whose stream already arrived; fed by `setHostPeer` from `MultiplayerService`.
    */
   private hostPeerId: string | null = null;
+  /**
+   * Everyone we have EVER seen in this room, never pruned on leave.
+   *
+   * Distinct from `remotePlayers` on purpose: the roster and the headcount must reflect who is
+   * present, but the transcript has to keep attributing old messages after their author
+   * leaves. Resolving names only from the live roster made a departing peer's history collapse
+   * to a raw peer id. Cleared with the room, so it never leaks across rooms.
+   */
+  private knownPlayers: { [peerId: string]: PlayerInfo } = {};
+  private knownPlayersSubject = new BehaviorSubject<PlayerInfo[]>([]);
+
+  /** For anything rendering history rather than presence. */
+  knownPlayers$ = this.knownPlayersSubject.asObservable();
+
   /** Last time we complained about each peer, so a flapping link cannot spam the host. */
   private lastWarnedAt: { [peerId: string]: number } = {};
 
@@ -151,9 +165,11 @@ export class MultiplayerPlayerInfoService {
     clearInterval(this.pingInterval); // Stop ping updates
     this.pingInterval = undefined;
     this.remotePlayers = {};
+    this.knownPlayers = {};
     this.hostPeerId = null;
     this.lastWarnedAt = {};
     this.playerListSubject.next([]);
+    this.knownPlayersSubject.next([]);
   }
 
   /**
@@ -189,7 +205,10 @@ export class MultiplayerPlayerInfoService {
 
   updatePlayer(playerInfo: PlayerInfo) {
     this.remotePlayers[playerInfo.peerId] = playerInfo;
+    // Mirrored into the sticky map so the transcript can still name this peer after it leaves.
+    this.knownPlayers[playerInfo.peerId] = playerInfo;
     this.playerListSubject.next(Object.values(this.remotePlayers));
+    this.knownPlayersSubject.next(Object.values(this.knownPlayers));
   }
 
   removePlayer(peerId: string) {

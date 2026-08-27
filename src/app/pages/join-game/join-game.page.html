@@ -15,13 +15,11 @@
       </app-room-status-pill>
     </ion-title>
     <ion-buttons slot="end">
-      <ion-button *ngIf="isSpectating" class="chat-entry-btn" (click)="toggleChat()"
-        [attr.aria-label]="chatToggleLabel(unreadCount$ | async)"
-        [attr.aria-expanded]="isChatOpen" aria-controls="chat-panel">
-        <ion-icon slot="icon-only" name="chatbubble-ellipses-outline"></ion-icon>
-        <ion-badge *ngIf="!isChatOpen && (unreadCount$ | async) as unread" color="danger"
-          aria-hidden="true">{{ unread }}</ion-badge>
-      </ion-button>
+      <!--
+        No chat button here. The floating toggle over the video is the single chat control on
+        both pages: it is the only one that exists at every breakpoint (mobile landscape has
+        no header at all), and duplicating it here meant the same job in three places.
+      -->
       <ion-button *ngIf="isSpectating" (click)="openMultiplayerPanel()" aria-label="Informações da sala">
         <ion-icon slot="icon-only" name="people-outline"></ion-icon>
       </ion-button>
@@ -42,9 +40,10 @@
   @switch (gameState) {
     @case (GameState.NOT_IN_ROOM) {
       <!--
-        A share link lands here, so this is the first thing a newcomer sees. It used to be a
-        single unlabelled button, which explained neither what spectating is nor that they
-        cannot play. The inline field skips the modal when we already know who they are.
+        A share link lands here, so this is the first thing a newcomer sees. It explains what
+        spectating is and then hands off to ONE place that owns joining: the setup dialog,
+        which holds the code field, the password, the nickname and recent rooms. An inline
+        code field here as well meant two surfaces disagreeing about where you type a code.
       -->
       <div class="info-card-container ion-padding ion-text-center">
         <ion-card class="join-game-card join-game-card--onboarding">
@@ -55,25 +54,9 @@
               Você vai acompanhar a partida de outra pessoa ao vivo, conversar pelo chat e
               apontar na tela com o seu cursor. Quem joga é o anfitrião.
             </p>
-
-            <form class="onboarding-form" (ngSubmit)="joinFromInlineCode()" autocomplete="off">
-              <ion-input label="Código da sala ou link" labelPlacement="stacked" fill="outline"
-                [(ngModel)]="inlineRoomCode" name="inlineRoomCode" autocapitalize="characters"
-                placeholder="ELI-XXXX" enterkeyhint="go"></ion-input>
-              <ion-button type="submit" expand="block" class="ion-margin-top" [disabled]="!inlineRoomCode.trim()">
-                Entrar
-              </ion-button>
-            </form>
-
-            <ion-button fill="clear" size="small" (click)="promptJoinInfo()">
-              Entrar com senha ou trocar de apelido
+            <ion-button expand="block" (click)="promptJoinInfo()">
+              Entrar em uma sala
             </ion-button>
-
-            <div *ngIf="recentRooms.length > 0" class="recent-rooms">
-              <p class="recent-rooms-label">Salas recentes</p>
-              <ion-button *ngFor="let code of recentRooms" fill="outline" size="small"
-                (click)="joinRecentRoom(code)">{{ code }}</ion-button>
-            </div>
           </ion-card-content>
         </ion-card>
       </div>
@@ -100,13 +83,18 @@
     }
     @case (GameState.HOST_LEFT) {
       <div class="info-card-container ion-padding ion-text-center">
-        <ion-card class="join-game-card">
-          <ion-card-content class="ion-text-center full centered">
-            <div>
-              <ion-icon name="cloud-offline-outline" size="large" color="warning"></ion-icon>
-              <p>O anfitrião saiu da sala.</p>
-              <ion-button (click)="promptJoinInfo()">Entrar em outra sala</ion-button>
-            </div>
+        <ion-card class="join-game-card join-game-card--onboarding">
+          <ion-card-content class="ion-text-center">
+            <ion-icon name="cloud-offline-outline" size="large" color="warning"></ion-icon>
+            <!--
+              Not "o anfitrião saiu": we cannot tell a host leaving from our own link dropping,
+              and claiming the former sent spectators away from rooms that were still running.
+            -->
+            <p class="onboarding-text ion-text-center">{{ joinError || 'Perdemos a conexão com o anfitrião.' }}</p>
+            <ion-button *ngIf="canRetryLastRoom" expand="block" (click)="retryLastRoom()">
+              Tentar reconectar
+            </ion-button>
+            <ion-button fill="clear" size="small" (click)="promptJoinInfo()">Entrar em outra sala</ion-button>
           </ion-card-content>
         </ion-card>
       </div>

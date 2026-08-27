@@ -22,7 +22,6 @@ import {
 import { CursorRendererHelper } from 'src/app/core/helpers/cursor-renderer.helper';
 import { OverlaySyncHelper } from 'src/app/core/helpers/overlay-sync.helper';
 import { ChatPanelHelper } from 'src/app/core/helpers/chat-panel.helper';
-import { RoomCodeHelper } from 'src/app/core/helpers/room-code.helper';
 import { MULTIPLAYER } from 'src/app/core/models/constants';
 
 @Component({
@@ -64,12 +63,6 @@ export class JoinGamePage implements OnInit, OnDestroy {
    */
   hostName$: Observable<string>;
 
-  /** Bound to the onboarding card's inline field. Accepts a bare code or a full share link. */
-  inlineRoomCode = '';
-
-  /** Codes only. Populated on entry and after every successful join. */
-  recentRooms: string[] = [];
-
   /** Lives as long as the page. */
   private pageSubscriptions = new Subscription();
   /** Recreated per room, so a rejoin does not stack duplicate cursor subscriptions. */
@@ -99,9 +92,7 @@ export class JoinGamePage implements OnInit, OnDestroy {
     return this.password.length > 0;
   }
 
-  async ngOnInit() {
-    this.recentRooms = await this.identityService.getRecentRooms();
-
+  ngOnInit() {
     this.pageSubscriptions.add(
       this.multiplayerService.gameStateSubject.subscribe(state => this.onGameStateChange(state))
     );
@@ -142,8 +133,7 @@ export class JoinGamePage implements OnInit, OnDestroy {
   async promptJoinInfo() {
     // Once the guest has typed a code of their own it wins over the one in the URL,
     // otherwise retrying with a different room would be impossible.
-    const presetRoomCode = this.roomId || this.inlineRoomCode ||
-      (this.route.snapshot.queryParamMap.get('room') ?? '');
+    const presetRoomCode = this.roomId || (this.route.snapshot.queryParamMap.get('room') ?? '');
     const setup = await this.multiplayerUiService.promptRoomSetup('guest', presetRoomCode);
     if (!setup) return;
     this.playerName = setup.playerName;
@@ -155,32 +145,23 @@ export class JoinGamePage implements OnInit, OnDestroy {
   }
 
   /**
-   * Join straight from the onboarding field, skipping the modal.
+   * Rejoin the room we just lost, without re-entering anything.
    *
-   * Only viable once we know who they are: a name is required to appear in the roster and on
-   * the cursor, so a first-time visitor still goes through the dialog. A password cannot be
-   * supplied this way either, so a locked room falls back to the dialog as well.
+   * The grace period only recovers a link trystero re-establishes by itself. When the drop is
+   * on our side it does not, and the room stays perfectly alive for everyone else — so the
+   * useful thing is a retry with the credentials we still hold in memory, rather than sending
+   * the guest back to the code field for a room they never really left.
    */
-  async joinFromInlineCode() {
-    const code = RoomCodeHelper.sanitize(this.inlineRoomCode);
-    if (!code) return;
+  get canRetryLastRoom(): boolean {
+    return this.roomId.length > 0 && this.playerName.length > 0;
+  }
 
-    const savedName = await this.identityService.getPlayerName();
-    if (!savedName) {
+  async retryLastRoom() {
+    if (!this.canRetryLastRoom) {
       await this.promptJoinInfo();
       return;
     }
-
-    this.playerName = savedName;
-    this.cursorColor = await this.identityService.getPlayerColor();
-    this.roomId = code;
-    this.password = '';
     await this.joinRoom();
-  }
-
-  async joinRecentRoom(code: string) {
-    this.inlineRoomCode = code;
-    await this.joinFromInlineCode();
   }
 
   async joinRoom() {
@@ -205,7 +186,6 @@ export class JoinGamePage implements OnInit, OnDestroy {
       // Only after the stream actually arrived: a code that never produced a picture is not
       // a room worth offering again.
       await this.identityService.rememberRoom(this.roomId);
-      this.recentRooms = await this.identityService.getRecentRooms();
     } catch (err: any) {
       this.handleJoinFailure(err);
     } finally {
@@ -248,8 +228,8 @@ export class JoinGamePage implements OnInit, OnDestroy {
     );
 
     switch (action) {
-      case 'chat':
-        this.toggleChat(true);
+      case 'copy':
+        await this.multiplayerUiService.copyRoomLink(this.roomId);
         break;
       case 'share':
         await this.multiplayerUiService.shareRoom(this.roomId);
@@ -319,7 +299,11 @@ export class JoinGamePage implements OnInit, OnDestroy {
     this.isReconnecting = state === GameState.HOST_RECONNECTING;
 
     if (state === GameState.HOST_LEFT) {
-      this.joinError = 'O anfitrião saiu da sala. A transmissão foi encerrada.';
+      // Deliberately does NOT say the host left. `onPeerLeave(hostPeerId)` fires when OUR link
+      // to the host drops, which is indistinguishable from the host actually leaving — a
+      // spectator whose own connection died was being told the match had ended while the host
+      // and everyone else carried on. Describe what we observed, not what we inferred.
+      this.joinError = 'Perdemos a conexão com o anfitrião. Pode ser a sua rede ou a dele.';
       // Nothing left to spectate, so drop the room — but keep HOST_LEFT on screen
       // rather than falling back to the idle card.
       this.detachStream();
@@ -495,8 +479,43 @@ export class JoinGamePage implements OnInit, OnDestroy {
     const video = this.getVideoElement();
     const overlay = this.getOverlayElement();
     if (!video || !overlay) return;
+    // Must run BEFORE align: align reads the video's box, so the box has to be final first.
+    this.fitVideoToContainer(video);
     OverlaySyncHelper.align(overlay, video);
     // Must run AFTER align: repositionAll reads the overlay's fresh offsetWidth/Height.
     CursorRendererHelper.repositionAll(overlay);
   };
+
+  /**
+   * Size the video to the container from the frame's *ratio*, not its pixel count.
+   *
+   * The CSS letterboxing this replaces derived the used size from the video's intrinsic
+   * width, clamped by `max-width/height: 100%`. That silently conflates two different
+   * events: a DOS video-mode change (the ratio changes — must re-fit) and WebRTC ramping its
+   * encoder up from a low starting resolution (the ratio is identical — must NOT re-fit).
+   * The second is the common case on every join, and it made the picture visibly grow from a
+   * small box to the full container over the first seconds of a stream.
+   *
+   * The border box still equals the visible picture, which is the contract the cursor
+   * overlay depends on — `Math.min` guarantees the computed box never exceeds the container
+   * and exactly fills one axis, so the `max-*` pair in the stylesheet stays a no-op safety
+   * net rather than the mechanism.
+   */
+  private fitVideoToContainer(video: HTMLVideoElement) {
+    const container = video.parentElement;
+    if (!container) return;
+
+    const { videoWidth, videoHeight } = video;
+    // No metadata yet; the loadedmetadata listener will call back.
+    if (!videoWidth || !videoHeight) return;
+
+    const { clientWidth, clientHeight } = container;
+    // Measured inside the `ion-hide` subtree on the first pass. The container observer
+    // re-runs this once the class flips, so bailing here is correct rather than clamping to 0.
+    if (!clientWidth || !clientHeight) return;
+
+    const scale = Math.min(clientWidth / videoWidth, clientHeight / videoHeight);
+    video.style.width = `${Math.round(videoWidth * scale)}px`;
+    video.style.height = `${Math.round(videoHeight * scale)}px`;
+  }
 }
