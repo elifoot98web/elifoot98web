@@ -20,6 +20,7 @@
     "watch:prod": "ng build --watch --configuration production",
     "test": "ng test",
     "lint": "ng lint",
+    "mp:launch": "node ./scripts/multiplayer-harness/launch.mjs",
     "version:config": "node ./scripts/version-config.js"
   },
   "private": true,

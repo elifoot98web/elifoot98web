@@ -21,10 +21,18 @@ npm run build:githubpages # what CI deploys
 npm run lint             # ng lint (eslint, src/**/*.ts + src/**/*.html)
 npm test                 # ng test (karma + jasmine, Chrome, watch mode)
 npx ng test --include='**/my.spec.ts' --watch=false   # single spec
+npm run mp:launch        # two browsers for a multiplayer session (see the harness README)
 ```
 
 There are currently **zero `.spec.ts` files** in the repo; the karma/jasmine harness is configured
 but unused.
+
+Multiplayer needs two or more peers to test at all, so that part is covered by a CDP-driven
+browser harness in [scripts/multiplayer-harness/](scripts/multiplayer-harness/README.md) —
+launcher, driver and the scenario checklist, plus the traps that silently invalidate a run (a
+covered window throttles timers and stalls Ionic's overlay animations, which hangs the join
+dialog). Read its README before doing multiplayer work by hand. Nothing in `scripts/` reaches
+the bundle: `angular.json`'s inputs are all under `src/`.
 
 Git LFS is required: `*.jsdos` is LFS-tracked (`src/assets/elifoot/elifoot98.jsdos`, ~6.7 MB holding
 the entire Windows 3.1 + game environment). Without LFS the game bundle is a pointer file and the app
