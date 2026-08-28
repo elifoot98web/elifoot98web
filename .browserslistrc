@@ -8,9 +8,16 @@
 # You can see what browsers were selected by your queries by running:
 #   npx browserslist
 
+# Safari/iOS floors are 14.1/14.5, not 14.0, and that is deliberate: esbuild >=0.25.12
+# refuses to transform destructuring for a safari14.0 target rather than emit output it
+# believes is broken, which fails the build with hundreds of "Transforming destructuring
+# to the configured target environment is not supported yet" errors. Every current Angular
+# line pins an esbuild past that boundary (19.2.27 -> 0.28.0, 20.3.35 -> 0.28.1,
+# 22.1.6 -> 0.28.2), so raising the floor is a prerequisite for any dependency update, not
+# a preference. Bisected: 14/14 -> 764 errors, 14.1/14.5 -> 0.
 Chrome >=79
 ChromeAndroid >=79
 Firefox >=70
 Edge >=79
-Safari >=14
-iOS >=14
+Safari >=14.1
+iOS >=14.5
