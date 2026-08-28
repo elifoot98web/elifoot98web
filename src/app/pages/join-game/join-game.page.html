@@ -106,7 +106,12 @@
             <div>
               <ion-icon name="alert-circle-outline" size="large" color="danger"></ion-icon>
               <p>{{ joinError || 'Não foi possível entrar na sala.' }}</p>
-              <ion-button (click)="promptJoinInfo()">Tentar novamente</ion-button>
+              <!--
+                Reloads rather than reopening the dialog: a failed handshake leaves trystero
+                reusing a dead connection for minutes, so retrying in place cannot work. See
+                retryAfterFailure().
+              -->
+              <ion-button (click)="retryAfterFailure()">Tentar novamente</ion-button>
             </div>
           </ion-card-content>
         </ion-card>

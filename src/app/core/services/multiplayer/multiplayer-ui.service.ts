@@ -19,6 +19,9 @@ const ROOM_TOAST_DURATION = 9000;
   providedIn: 'root'
 })
 export class MultiplayerUiService {
+  /** The "room is on air" toast while it is on screen; see dismissRoomCreated(). */
+  private roomCreatedToast?: HTMLIonToastElement;
+
   constructor(
     private modalController: ModalController,
     private alertController: AlertController,
@@ -152,7 +155,23 @@ export class MultiplayerUiService {
         { text: 'Fechar', role: 'cancel' },
       ],
     });
+    this.roomCreatedToast = toast;
+    // Kept only while it is on screen, so `dismissRoomCreated` can never reach a later one.
+    void toast.onDidDismiss().then(() => {
+      if (this.roomCreatedToast === toast) this.roomCreatedToast = undefined;
+    });
     await toast.present();
+  }
+
+  /**
+   * Take the "room is on air" toast down early, for when the room stops being on air inside
+   * its nine seconds. Losing a room-code collision is the case that matters: the yielding
+   * host was left reading `Sala ELI-XXXX no ar.` next to an alert saying the code was taken.
+   */
+  async dismissRoomCreated(): Promise<void> {
+    const toast = this.roomCreatedToast;
+    this.roomCreatedToast = undefined;
+    await toast?.dismiss();
   }
 
   async showToast(message: string, color = 'success', duration = 2000): Promise<void> {

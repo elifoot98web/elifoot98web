@@ -253,9 +253,16 @@ export class GamePage implements OnInit, OnDestroy {
   /**
    * The welcome dialog. Reachable from the menu as "Primeiros passos" as well, so retiring it
    * is not a one-way door.
+   *
+   * Resolves only once the user is done with it — including the guide, if they went there —
+   * because `ngOnInit` runs `consumeHostIntent()` next: awaiting `present()` alone opened the
+   * room dialog on top of this alert on every `?host=1` arrival, which is the entry point the
+   * landing page's "Jogar e transmitir para amigos" uses.
    */
   async showTutorial() {
     this.hidePopover()
+    // Assigned by the FAQ button so this method can wait for that path too.
+    let followUp: Promise<void> = Promise.resolve()
     const alert = await this.alertController.create({
       header: 'Informações Importantes',
       message:
@@ -273,9 +280,13 @@ export class GamePage implements OnInit, OnDestroy {
       buttons: [
         {
           text: 'FAQ e Manual',
-          handler: async () => {
-            await alert.dismiss()
-            await this.showFAQAndManualModal()
+          handler: () => {
+            // `false` because we dismiss it ourselves, in order, before the guide opens.
+            followUp = (async () => {
+              await alert.dismiss()
+              await this.showFAQAndManualModal()
+            })()
+            return false
           }
         },
         {
@@ -290,8 +301,11 @@ export class GamePage implements OnInit, OnDestroy {
       ]
     });
     await alert.present();
+    await alert.onDidDismiss();
+    await followUp;
   }
 
+  /** Resolves when the guide is closed, so callers can queue something after it. */
   async showFAQAndManualModal() {
     this.hidePopover()
     const modal = await this.modalController.create({
@@ -299,6 +313,7 @@ export class GamePage implements OnInit, OnDestroy {
       backdropDismiss: false
     })
     await modal.present()
+    await modal.onDidDismiss()
   }
 
   async showAboutModal() {
@@ -853,10 +868,11 @@ export class GamePage implements OnInit, OnDestroy {
     // Both of these present overlays, so they wait until the loader is gone.
     if (hostingError) {
       await this.showErrorAlert(hostingError);
-    } else {
+    } else if (this.isStreaming) {
       // A toast, not the old blocking "Sala criada!" alert: the status pill carries the
       // code for as long as the room is up, so nothing has to be memorised before
-      // dismissing anything.
+      // dismissing anything. Skipped when the room is already gone — a collision can be
+      // resolved before we get here, and announcing a dead room reads as a bug.
       await this.multiplayerUiService.showRoomCreated(this.hostRoomId);
     }
   }
@@ -875,6 +891,9 @@ export class GamePage implements OnInit, OnDestroy {
    */
   private async onRoomCodeTaken(code: string) {
     this.resetHostingUi();
+    // The room was on air long enough to be announced, so take that announcement down
+    // before saying the code is taken. `startHosting` covers the opposite order.
+    await this.multiplayerUiService.dismissRoomCreated();
 
     const alert = await this.alertController.create({
       header: 'Código de sala já em uso',

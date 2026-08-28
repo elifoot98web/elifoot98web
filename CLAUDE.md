@@ -171,6 +171,19 @@ Load-bearing invariants — each of these was a bug once:
   drops, which is indistinguishable from the host leaving. Hence `HOST_RECONNECTING` plus a grace
   timer, copy that says we lost the connection, and a retry button — the grace period only
   recovers links trystero re-establishes itself, which it will not do when the break is local.
+- **A spectator only ever joins from a fresh page load.** trystero keeps one connection per peer
+  in a module-level registry that outlives any room (~2 min idle) and does not renegotiate media
+  onto a connection that is already up: `pc.onnegotiationneeded` fires on the host and the offer
+  never lands. A guest that rejoins within one page load therefore gets the data channel —
+  ident, host announce, roster, chat, headcount, all instant and correct — and no video, then
+  times out. So `leaveRoom` and the failed-join retry both go through
+  `JoinGamePage.reloadSpectator`, which costs a spectator nothing (no emulator, no save state)
+  while the code travels on the URL. The host page must *never* do this. Belt and braces on the
+  other side: `MultiplayerStreamService.publishStream` wraps the tracks in a new `MediaStream`
+  per add, because trystero caches a remote stream per sender-side stream object and would
+  otherwise hand a returning peer its previous, dead one — a frozen picture presented as live.
+  Measured residual: under rapid churn the first join after a reload often fails
+  (`connection-failed`) and needs one retry.
 
 Components in `src/app/core/components/multiplayer/` (plus `chat/`): `room-setup-modal` (owns
 joining outright, including recent rooms), `multiplayer-panel` (the room's own window — code,

@@ -117,6 +117,12 @@ export const MULTIPLAYER = {
   // How long a received typing ping stands before it is assumed stale. Must exceed the
   // throttle above, or a peer that keeps typing would flicker in and out.
   TYPING_EXPIRY_MS: 5000,
+  // How long an arrival must last before "Fulano entrou na sala." is written to the
+  // transcript. A second host that tries a code already in use joins, loses the tie-break
+  // and yields within a few hundred milliseconds; without this, every spectator in the
+  // established room reads a join and a leave for someone who was never in their room.
+  // The line is stamped with the moment of arrival, not of flushing, so ordering holds.
+  SYSTEM_JOIN_LINE_DELAY: 1500,
   CURSOR_Z_INDEX: 10, // Cursors should be above the game elements
   CURSOR_CLICK_Z_INDEX: 9, // Click pings should be below the cursors
   // How long a guest waits for the host's video stream before giving up.

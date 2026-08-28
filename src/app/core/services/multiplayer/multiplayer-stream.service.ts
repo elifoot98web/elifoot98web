@@ -111,13 +111,45 @@ export class MultiplayerStreamService {
   handlePeerJoin(peerId: string) {
     console.log(`[STREAM] Peer joined: ${peerId}`, { role: this.role, room: this.room, stream: this.stream });
     if (this.role === MultiplayerUserRole.HOST && this.room && this.stream) {
-      this.room.addStream(this.stream, { target: peerId });
+      this.publishStream(peerId);
     }
+  }
+
+  /**
+   * Hand trystero a NEW MediaStream around the same tracks on every add. Never pass the same
+   * stream object twice.
+   *
+   * trystero labels a stream with a key it caches per stream *object* (a WeakMap in its media
+   * manager), sends that key ahead of the tracks, and the receiving side caches the remote
+   * stream under it on a shared peer that outlives any single room. Re-adding one object
+   * therefore replays a key the other side has seen: its `receiveStreamMeta` finds the
+   * previous remote stream and hands *that* to `onPeerStream`, so a spectator rejoining an
+   * old connection was handed a MediaStream whose tracks belonged to a closed one — IN_ROOM,
+   * roster and chat all correct, `videoWidth` stuck at 0, no error anywhere.
+   *
+   * A fresh wrapper misses that cache on both its key and its `id`, so that failure mode
+   * becomes an honest timeout instead of a dead picture. It is not on its own enough to make
+   * such a rejoin work — trystero will not renegotiate media onto a connection that is
+   * already up, which is why the guest page rejoins from a fresh page load (see
+   * `JoinGamePage.reloadSpectator`). Keep both: this is the half that guarantees a spectator
+   * is never shown a frozen picture as if it were live.
+   *
+   * The tracks are shared, so this costs no extra capture or encoding, and removal is
+   * unaffected: trystero matches senders by track, not by stream identity.
+   */
+  private publishStream(target?: string) {
+    if (!this.room || !this.stream) return;
+    const wrapped = new MediaStream(this.stream.getTracks());
+    this.room.addStream(wrapped, target ? { target } : {});
   }
 
   /**
    * Call this when a peer leaves (from MultiplayerService).
    * For HOST, removes the stream from the peer.
+   *
+   * trystero logs `no peer with id …` here whenever it dropped the peer before we got the
+   * event, which is most of the time. Harmless: the senders went with the connection, and
+   * `publishStream` no longer depends on this having succeeded.
    */
   handlePeerLeave(peerId: string) {
     if (this.role === MultiplayerUserRole.HOST && this.room && this.stream) {
@@ -143,7 +175,7 @@ export class MultiplayerStreamService {
       if(currentStream) {
         this.stopBroadcasting(currentStream);
       }
-      this.startBroadcast(stream);
+      this.startBroadcast();
     } else {
       // For GUEST, just update the local stream reference
       this.stream = stream;
@@ -172,8 +204,8 @@ export class MultiplayerStreamService {
     this.room.removeStream(stream);
   }
 
-  private startBroadcast(stream: MediaStream) {
-    if (!this.room) return;
-    this.room.addStream(stream);
+  /** Broadcasts the current stream to every peer in the room. */
+  private startBroadcast() {
+    this.publishStream();
   }
 }

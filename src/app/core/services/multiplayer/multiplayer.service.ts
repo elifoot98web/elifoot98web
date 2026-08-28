@@ -49,6 +49,9 @@ export class MultiplayerService {
   /** Pending "wait for the host to come back" timer; see startHostGrace(). */
   private hostGraceTimer?: ReturnType<typeof setTimeout>;
 
+  /** Join lines still serving out their delay, by peer; see scheduleJoinLine(). */
+  private pendingJoinLines = new Map<string, ReturnType<typeof setTimeout>>();
+
   /**
    * Bumped on every room entry and exit, so anything deferred can tell whether the room it
    * was armed for is still the current one. `leaveRoom` is synchronous and a rejoin can
@@ -122,6 +125,7 @@ export class MultiplayerService {
     try {
       this.roomEpoch += 1; // Invalidates anything deferred by the room we are leaving
       this.clearHostGrace();
+      this.clearPendingJoinLines();
 
       // Captured BEFORE clearing this.room. room.leave() is async and trystero only
       // drops the room from its registry once it settles (a send plus a ~99ms wait);
@@ -200,6 +204,53 @@ export class MultiplayerService {
   private clearHostGrace() {
     clearTimeout(this.hostGraceTimer);
     this.hostGraceTimer = undefined;
+  }
+
+  /**
+   * Write "Fulano entrou na sala." only once the arrival has lasted, so a peer that turns up
+   * and leaves again at once produces no transcript lines at all.
+   *
+   * The case this exists for is a second host trying a code that is already in use: it joins,
+   * discovers the collision and yields within a few hundred milliseconds, which used to leave
+   * every spectator in the established room reading a join and a leave for someone who was
+   * never in their room. Deferring rather than reading the peer's own claimed role is
+   * deliberate — that would be trusting exactly the self-declaration host identity does not.
+   *
+   * Keyed on the room generation for the same reason as the host grace timer: `leaveRoom` is
+   * synchronous and a rejoin can begin before a timer armed in the previous room fires.
+   */
+  private scheduleJoinLine(player: PlayerInfo) {
+    const peerId = player.peerId;
+    const observedAt = Date.now();
+    const epoch = this.roomEpoch;
+
+    clearTimeout(this.pendingJoinLines.get(peerId));
+    this.pendingJoinLines.set(peerId, setTimeout(() => {
+      this.pendingJoinLines.delete(peerId);
+      if (epoch !== this.roomEpoch) return;
+      // Re-read: an ident carrying the name may have landed after the join event did.
+      const current = this.playerInfoService.getPlayer(peerId) ?? player;
+      this.chatService.addSystemMessage(`${this.describePlayer(current)} entrou na sala.`, observedAt);
+    }, MULTIPLAYER.SYSTEM_JOIN_LINE_DELAY));
+  }
+
+  /**
+   * Drop a join line that never made it to the transcript.
+   *
+   * @returns true when there was one, meaning the departure must not be announced either.
+   */
+  private cancelJoinLine(peerId: string): boolean {
+    const timer = this.pendingJoinLines.get(peerId);
+    if (timer === undefined) return false;
+
+    clearTimeout(timer);
+    this.pendingJoinLines.delete(peerId);
+    return true;
+  }
+
+  private clearPendingJoinLines() {
+    this.pendingJoinLines.forEach(timer => clearTimeout(timer));
+    this.pendingJoinLines.clear();
   }
 
   /**
@@ -481,11 +532,12 @@ export class MultiplayerService {
     this.playerInfoService.setLocalPlayer(this.playerName, this.playerColor, this.playerRole);
 
     // Join/leave lines. Generated locally on every peer rather than broadcast: everyone
-    // observes these events for themselves, so sending them would duplicate them.
+    // observes these events for themselves, so sending them would duplicate them. The join
+    // half is deferred — see scheduleJoinLine().
     this.playerInfoSubscription?.unsubscribe();
     const playerInfoSubscriptions = new Subscription();
     playerInfoSubscriptions.add(this.playerInfoService.playerJoined$.subscribe(player => {
-      this.chatService.addSystemMessage(`${this.describePlayer(player)} entrou na sala.`);
+      this.scheduleJoinLine(player);
     }));
     // Roles follow the stream, so the roster has to be re-stamped whenever host identity
     // changes. Safe to subscribe before the stream service is set up: `hostPeerId$` is a
@@ -498,6 +550,8 @@ export class MultiplayerService {
     this.addOnPeerLeaveHandler((peerId: string) => {
       // Read the name BEFORE the removal handler below deletes it.
       const player = this.playerInfoService.getPlayer(peerId);
+      // Nothing was announced, so there is nothing to close off either.
+      if (this.cancelJoinLine(peerId)) return;
       if (player) {
         this.chatService.addSystemMessage(`${this.describePlayer(player)} saiu da sala.`);
       }

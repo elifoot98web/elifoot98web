@@ -95,15 +95,19 @@ export class MultiplayerChatService {
    * broadcasting would give everyone duplicates. It also never raises the unread badge —
    * the read cursor is advanced past it — because a badge that fires on every network
    * hiccup trains people to ignore it.
+   *
+   * @param timestamp when the event happened, for callers that add the line later than that.
+   *   The transcript is timestamp-ordered, so a deferred join line stamped on flush would
+   *   sort after the first message of a guest who greets the room within the delay.
    */
-  addSystemMessage(text: string) {
+  addSystemMessage(text: string, timestamp = Date.now()) {
     const wasRead = this.readMessageCount === this.messages.length;
 
     this.addMessage({
       id: this.generateId(),
       senderId: '',
       text,
-      timestamp: Date.now(),
+      timestamp,
       kind: 'system',
     });
 

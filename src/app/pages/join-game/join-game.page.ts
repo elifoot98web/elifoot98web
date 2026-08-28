@@ -164,6 +164,45 @@ export class JoinGamePage implements OnInit, OnDestroy {
     await this.joinRoom();
   }
 
+  /**
+   * Retry after a join that *failed*, from a clean page load.
+   *
+   * A rejected handshake — a wrong password being the ordinary way to get one — leaves
+   * trystero reusing a dead connection, so retrying in place cannot work: measured, two
+   * further attempts with the *correct* password both sat out the 20 s stream timeout, while
+   * a reload joined first time. Retrying in place showed `Não recebemos a transmissão`, which
+   * sends the guest back to check a password that is already right.
+   */
+  retryAfterFailure() {
+    this.reloadSpectator(this.roomId);
+  }
+
+  /**
+   * Reload the page as a spectator who has not joined anything yet, optionally with a room
+   * code preset so the dialog comes back filled in.
+   *
+   * Every route back into a room goes through here, and it is a reload rather than an
+   * in-page rejoin for one reason: trystero keeps one connection per peer in a module-level
+   * registry that outlives any room and only lapses after ~2 minutes idle, and it does not
+   * renegotiate media onto a connection that is already up. `pc.onnegotiationneeded` fires on
+   * the host and the offer never lands, so a spectator who rejoins within the same page load
+   * gets the data channel — ident, host announce, roster, chat, headcount, all correct and
+   * instant — and no video at all, then times out. A fresh load means a fresh `selfId`, a
+   * fresh handshake, and the host's track in the initial SDP.
+   *
+   * The cost is nil where it applies: a spectator has no emulator and no save state, the code
+   * travels on the URL and the name comes back from storage. Contrast the host page, where
+   * reloading would throw away the running game — which is why nothing here reloads while a
+   * guest is actually watching.
+   */
+  private reloadSpectator(presetRoomCode?: string) {
+    window.location.hash = presetRoomCode
+      ? `#/join-game?room=${encodeURIComponent(presetRoomCode)}`
+      : '#/join-game';
+    // Changing only the hash does not reload, hence both statements.
+    window.location.reload();
+  }
+
   async joinRoom() {
     // Still in a room (a previous attempt, or a host that walked out)? Leave first.
     // The service serialises the teardown, so the rejoin no longer races it.
@@ -218,7 +257,11 @@ export class JoinGamePage implements OnInit, OnDestroy {
   async leaveRoom() {
     const confirmed = await this.multiplayerUiService.confirmLeave('Você vai parar de assistir a esta partida.');
     if (!confirmed) return;
+    // Tell the room first, so the host's roster and transcript update at once rather than
+    // waiting for the unload to be noticed, then come back on a clean page: the next join
+    // has to be a new peer to receive any video. See reloadSpectator().
     this.resetRoomState();
+    this.reloadSpectator();
   }
 
   /** Same room window the host gets, minus the ability to end anything for anyone else. */
