@@ -14,7 +14,13 @@ jobs:
         with:
           file-url: https://raw.githubusercontent.com/${{ github.event.pull_request.base.repo.full_name }}/${{ github.event.pull_request.base.ref }}/package.json
           static-checking: localIsNew
+      # Dependabot cannot bump `version` — it only ever edits package.json's dependency
+      # ranges — so without this exemption every Dependabot PR fails this gate and its
+      # updates silently pile up as open alerts instead of landing. Keyed on who OPENED
+      # the PR rather than `github.actor`, which changes when a human pushes to the
+      # branch or re-runs the job. The check step above still runs and reports, so a
+      # Dependabot PR shows the version as unchanged without that being fatal.
       - name: Fail when unchanged
-        if: steps.version-check.outputs.changed == 'false'
+        if: steps.version-check.outputs.changed == 'false' && github.event.pull_request.user.login != 'dependabot[bot]'
         run: 'echo "No version change detected. Please update the version in package.json." && exit 1'
   
