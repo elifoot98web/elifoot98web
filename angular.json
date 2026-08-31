@@ -107,6 +107,11 @@
         },
         "serve": {
           "builder": "@angular-devkit/build-angular:dev-server",
+          "options": {
+            "headers": {
+              "Access-Control-Allow-Origin": "http://localhost:4200"
+            }
+          },
           "configurations": {
             "production": {
               "buildTarget": "app:build:production"
