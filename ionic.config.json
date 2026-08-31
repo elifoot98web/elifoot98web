@@ -1,7 +1,4 @@
 {
   "name": "Elifoot98Web",
-  "integrations": {
-    "capacitor": {}
-  },
   "type": "angular"
 }

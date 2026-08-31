@@ -1,0 +1,32 @@
+name: Lockfile Hygiene
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  registry-urls:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Every `resolved` URL must point at the public registry. An `npm install` run on a
+      # machine configured against a private mirror rewrites all of them to that mirror's
+      # hostname, which is meaningless to everyone else and publishes internal
+      # infrastructure names into this repo's history -- unfixable after the fact without
+      # a force push. .npmrc pins the public registry, but an NPM_CONFIG_REGISTRY
+      # environment variable silently outranks it, so this check is the actual guarantee.
+      #
+      # Deliberately POSIX grep, no -P: this also has to be runnable locally on macOS,
+      # whose BSD grep has no PCRE support.
+      - name: Every resolved URL must be the public registry
+        run: |
+          foreign=$(grep -oE '"resolved": "https://[a-z0-9.-]+' package-lock.json \
+            | sed 's|.*https://||' | sort -u | grep -v '^registry\.npmjs\.org$' || true)
+          if [ -n "$foreign" ]; then
+            echo "::error::package-lock.json resolves packages from non-public registries:"
+            echo "$foreign" | sed 's/^/  /'
+            echo ""
+            echo "Regenerate the lockfile against the public registry:"
+            echo "  env -u NPM_CONFIG_REGISTRY npm install --registry=https://registry.npmjs.org"
+            exit 1
+          fi
+          echo "All resolved URLs point at registry.npmjs.org."
