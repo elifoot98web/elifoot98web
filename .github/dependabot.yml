@@ -1,0 +1,48 @@
+# Grouped so a single advisory affecting one transitive package does not arrive as nine
+# separate pull requests. Before this file existed, minimatch alone was reported nine
+# times, once per dependent pulling a different major, and the noise is a large part of
+# why the alert backlog grew unattended.
+#
+# Note the version-bump gate in check-version-update-pull-request.yml exempts
+# dependabot[bot]: Dependabot only edits dependency ranges and cannot bump `version`, so
+# without that exemption every PR opened here fails CI and none of them can land.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # The Angular packages must move together -- the framework requires a matching
+      # major/minor across @angular/*, and compiler-cli's TypeScript peer moves with them.
+      # A per-package PR here would be unmergeable on its own.
+      angular:
+        patterns:
+          - "@angular/*"
+          - "@angular-devkit/*"
+          - "@ngtools/*"
+          - "@schematics/*"
+        update-types:
+          - minor
+          - patch
+      dev-dependencies:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+      # Production stays patch-only and ungrouped-by-default on purpose: these are the only
+      # updates that reach a user's browser, and the repo has no automated coverage for the
+      # js-dos boot chain, so each one wants the manual game pass.
+      production:
+        dependency-type: production
+        update-types:
+          - patch
+    ignore:
+      # Angular pins these to exact versions, so Dependabot's PRs against them cannot
+      # actually change the resolved tree -- only the `overrides` block in package.json
+      # moves them. Revisit if the build ever migrates to @angular/build:application,
+      # which drops the webpack-based pins entirely.
+      - dependency-name: "webpack-dev-server"
+      - dependency-name: "less"
+      - dependency-name: "uuid"

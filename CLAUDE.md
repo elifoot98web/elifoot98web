@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Elifoot 98 Online — an Angular 19 + Ionic 8 PWA that runs the 1998 football manager game Elifoot 98
+Elifoot 98 Online — an Angular 21 + Ionic 9 PWA that runs the 1998 football manager game Elifoot 98
 in the browser. Elifoot 98 is a **16-bit Windows 3.1 application**, so the stack is: js-dos (DOSBox
 compiled to WebAssembly) → Windows 3.1 (shipped inside the game bundle) → `ELIFOOT.EXE`. All
 user-facing strings are Brazilian Portuguese; keep new UI text in pt-BR.
@@ -41,8 +41,48 @@ placeholders (`git checkout src/environments`) before committing. The commit has
 ### CI / release
 
 - PRs to `main` fail unless `package.json` `version` changed (`check-version-update-pull-request.yml`).
+  `dependabot[bot]` is exempt — it only edits dependency ranges and cannot bump `version`, so without
+  that exemption none of its PRs could ever land.
 - Push to `main` → build `githubpages` config, deploy to GitHub Pages, push a `v<version>` tag.
 - Push to the `firebase` branch → Firebase Hosting (project `elifoot-98`); PRs also get preview channels.
+- `lockfile-hygiene.yml` fails any PR whose `package-lock.json` resolves from a non-public registry.
+
+### Dependency traps
+
+Each of these cost a broken build or a rewritten history once. Bump `version` with
+`npm version <v> --no-git-tag-version` so `package.json` and both lockfile version fields stay in
+sync; hand-editing `package.json` leaves the lock stale.
+
+- **The registry.** A committed `.npmrc` pins `registry.npmjs.org`, but an `NPM_CONFIG_REGISTRY`
+  environment variable outranks it (npm's precedence is cli > env > project > user), and
+  `npm config list` only reveals this as a quiet `; overridden by env`. On a machine that exports
+  one, regenerate lockfiles with
+  `env -u NPM_CONFIG_REGISTRY npm install --registry=https://registry.npmjs.org` or every `resolved`
+  URL is rewritten to the mirror's hostname.
+- **`.browserslistrc` is coupled to esbuild.** esbuild ≥0.25.12 refuses to transform destructuring
+  for a `safari14.0` target rather than emit output it thinks is broken, and every current Angular
+  line pins an esbuild past that boundary. The `Safari >=14.1` / `iOS >=14.5` floors are load-bearing:
+  lowering them to `14` breaks the build with hundreds of errors.
+- **`typescript` must be pinned with `~`, not `^`.** `@angular/compiler-cli` peers a TypeScript
+  *range*, so a caret resolves the newest minor in it — which is generally one Angular does not build
+  against yet.
+- **`@ionic/angular-toolkit` and `@angular-eslint` track the Angular major** through their
+  `@angular-devkit` dependency, and a caret floats them into the *next* major, nesting a second
+  devkit tree beside the real one. Pin both with `~` to the line matching Angular.
+- **`moduleResolution` must be `bundler`.** `node` predates the package `exports` field and cannot
+  resolve subpath exports (`@angular/common/http`, `@ionic/angular/lazy`), failing with TS2307 from
+  inside Angular's own `.d.ts` files.
+- **`IonicModule` and the controllers come from `@ionic/angular/lazy`,** not `@ionic/angular` — Ionic 9
+  flipped the default entry point to the standalone build. All importing files must move together, or
+  `ModalController` lands in a different injector graph from `IonicModule`. That path is deprecated in
+  favour of `provideIonicAngular()`, which does *not* require abandoning NgModules.
+- **Three `overrides` exist because Angular pins those versions exactly** and nothing else can move
+  them. `less@^4.9.0` is the important one: it swapped `image-size` for optional `probe-image-size`,
+  and `image-size` has no fixed version in existence. Re-check the overrides after every Angular bump —
+  once Angular ships past a pin, the override silently holds the tree *back*.
+- **`vite` advisories are inert only because the webpack `browser` builder is used.**
+  `ng serve --force-esbuild`, or migrating to `@angular/build:application`, activates them; since
+  `@angular/build` pins vite exactly, such a change must carry a `vite` override in the same PR.
 
 ## Architecture
 
