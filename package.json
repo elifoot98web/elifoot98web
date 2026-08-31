@@ -1,6 +1,6 @@
 {
   "name": "elifoot98_web",
-  "version": "2.1.9",
+  "version": "2.2.0",
   "author": "Leonardo Pereira <jlcvp>",
   "homepage": "https://www.elifoot98.com.br",
   "repository": {
@@ -24,15 +24,15 @@
   },
   "private": true,
   "dependencies": {
-    "@angular/common": "^19.2.16",
-    "@angular/compiler": "^19.2.16",
-    "@angular/core": "^19.2.16",
-    "@angular/forms": "^19.2.16",
-    "@angular/platform-browser": "^19.2.16",
-    "@angular/platform-browser-dynamic": "^19.2.16",
-    "@angular/router": "^19.2.16",
-    "@angular/service-worker": "^19.2.16",
-    "@ionic/angular": "^8.5.7",
+    "@angular/common": "^21.2.22",
+    "@angular/compiler": "^21.2.22",
+    "@angular/core": "^21.2.22",
+    "@angular/forms": "^21.2.22",
+    "@angular/platform-browser": "^21.2.22",
+    "@angular/platform-browser-dynamic": "^21.2.22",
+    "@angular/router": "^21.2.22",
+    "@angular/service-worker": "^21.2.22",
+    "@ionic/angular": "^9.0.1",
     "@ionic/storage-angular": "^4.0.0",
     "ionicons": "^7.0.0",
     "jszip": "^3.10.1",
@@ -42,16 +42,16 @@
     "zone.js": "~0.15.0"
   },
   "devDependencies": {
-    "@angular-devkit/build-angular": "^19.2.11",
+    "@angular-devkit/build-angular": "^21.2.22",
     "@angular-eslint/builder": "^19.4.0",
     "@angular-eslint/eslint-plugin": "^19.4.0",
     "@angular-eslint/eslint-plugin-template": "^19.4.0",
     "@angular-eslint/schematics": "^19.4.0",
     "@angular-eslint/template-parser": "^19.4.0",
-    "@angular/cli": "^19.2.11",
-    "@angular/compiler-cli": "^19.2.16",
-    "@angular/language-service": "^19.2.16",
-    "@ionic/angular-toolkit": "~12.2.0",
+    "@angular/cli": "^21.2.22",
+    "@angular/compiler-cli": "^21.2.22",
+    "@angular/language-service": "^21.2.22",
+    "@ionic/angular-toolkit": "~13.0.0",
     "@types/jasmine": "~4.3.0",
     "@types/node": "^12.11.1",
     "@typescript-eslint/eslint-plugin": "^8.33.0",
@@ -70,7 +70,12 @@
     "karma-jasmine-html-reporter": "~2.0.0",
     "replace-in-file": "^6.3.5",
     "ts-node": "^8.3.0",
-    "typescript": "^5.8.3"
+    "typescript": "~5.9.3"
   },
-  "description": "Aplicação que permite jogar Elifoot 98 diretamente no navegador! Reviva a nostalgia deste clássico jogo de gerenciamento de futebol. Compatível com dispositivos móveis e desktops."
+  "description": "Aplicação que permite jogar Elifoot 98 diretamente no navegador! Reviva a nostalgia deste clássico jogo de gerenciamento de futebol. Compatível com dispositivos móveis e desktops.",
+  "overrides": {
+    "less": "^4.9.0",
+    "uuid": "^11.1.1",
+    "webpack-dev-server": "^5.2.6"
+  }
 }

@@ -11,6 +11,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           lfs: true
+      # Pinned because Angular 21 requires node ^20.19.0 || ^22.12.0 || >=24.0.0 and this
+      # workflow previously used whatever the runner image happened to ship. An image
+      # rolling forward or back is not something this repo controls, and the failure mode
+      # is a build break on an unrelated PR.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Prepare Commit SHA
         uses: ./.github/actions/prepare-sha
       - name: Build

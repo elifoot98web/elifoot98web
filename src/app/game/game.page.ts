@@ -1,5 +1,5 @@
 import { Component, OnInit, ViewChild } from '@angular/core';
-import { AlertController, LoadingController, ModalController } from '@ionic/angular';
+import { AlertController, LoadingController, ModalController } from '@ionic/angular/lazy';
 import { SaveGameService } from '../services/save-game.service';
 import { LocalStorageService } from '../services/local-storage.service';
 import { PatchService } from '../services/patch.service';
