@@ -1,6 +1,8 @@
 name: Lockfile Hygiene
 on:
   pull_request:
+permissions:
+  contents: read
 jobs:
   registry-urls:
     runs-on: ubuntu-latest
