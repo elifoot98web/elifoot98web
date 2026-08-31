@@ -62,7 +62,10 @@ sync; hand-editing `package.json` leaves the lock stale.
 - **`.browserslistrc` is coupled to esbuild.** esbuild ≥0.25.12 refuses to transform destructuring
   for a `safari14.0` target rather than emit output it thinks is broken, and every current Angular
   line pins an esbuild past that boundary. The `Safari >=14.1` / `iOS >=14.5` floors are load-bearing:
-  lowering them to `14` breaks the build with hundreds of errors.
+  lowering them to `14` breaks the build with hundreds of errors. Raising them is a *product*
+  decision — Angular 21 warns on every build that these floors fall outside its supported set
+  (Chrome/Edge ≥111, Firefox ≥112, Safari/iOS ≥16.4). **That warning is expected and accepted**;
+  the file explains why. Don't silence it without deciding to drop iPhone 7 and older.
 - **`typescript` must be pinned with `~`, not `^`.** `@angular/compiler-cli` peers a TypeScript
   *range*, so a caret resolves the newest minor in it — which is generally one Angular does not build
   against yet.
