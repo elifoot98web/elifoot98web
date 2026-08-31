@@ -3,6 +3,7 @@ import { BehaviorSubject, Subject } from 'rxjs';
 import { MultiplayerUserRole, PlayerConnectionQuality, PlayerIdentMessage, PlayerInfo } from '../../models/multiplayer';
 import { Room, selfId } from 'trystero';
 import { MULTIPLAYER } from '../../models/constants';
+import { WireGuardHelper } from '../../helpers/wire-guard.helper';
 
 @Injectable({
   providedIn: 'root'
@@ -64,8 +65,12 @@ export class MultiplayerPlayerInfoService {
       const isNew = this.remotePlayers[peerId] === undefined;
       const playerInfo: PlayerInfo = {
         peerId,
-        playerName: ident.name,
-        playerColor: ident.color,
+        // Length-capped and format-checked for the same reason `host` below is ignored:
+        // every field here is a claim. The colour matters most — it reaches
+        // `ColorHelper.getCSSFilterFromColor` during cursor rendering, which throws on an
+        // unparseable hex from inside a subscription with nothing catching above it.
+        playerName: WireGuardHelper.text(ident.name, MULTIPLAYER.WIRE_MAX_NAME_LENGTH),
+        playerColor: WireGuardHelper.color(ident.color),
         // Deliberately NOT `ident.host`: a role is a fact about who delivered a video
         // track, not a claim a peer makes about itself. `setHostPeer` owns this field for
         // every remote peer; a peer whose stream has not arrived yet is a guest until it

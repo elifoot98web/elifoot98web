@@ -16,6 +16,7 @@ import { MultiplayerCursorService } from './multiplayer-cursor.service';
 import { MultiplayerPlayerInfoService } from './multiplayer-player-info.service';
 import { BehaviorSubject, Subject, Subscription } from 'rxjs';
 import { MultiplayerStreamService } from './multiplayer-stream.service';
+import { WireGuardHelper } from '../../helpers/wire-guard.helper';
 import { environment } from 'src/environments/environment';
 
 @Injectable({
@@ -383,7 +384,7 @@ export class MultiplayerService {
     // Another host announcing itself is a collision, detected without a round trip.
     hostAnnounce.onMessage = (data, { peerId }) => {
       console.warn(`Another host is on this room code: ${data.hostName} (${peerId})`);
-      this.resolveHostCollision(peerId, data.hostingForMs ?? 0);
+      this.resolveHostCollision(peerId, data.hostingForMs);
     };
 
     this.addOnPeerJoinHandler((peerId: string) => {
@@ -411,7 +412,9 @@ export class MultiplayerService {
         target: peerId,
         timeoutMs: MULTIPLAYER.ROLE_QUERY_TIMEOUT,
       });
-      if (peer?.role === 'host') this.resolveHostCollision(peerId, peer.hostingForMs ?? 0);
+      // Passed raw: `resolveHostCollision` sanitises the duration for both entry points,
+      // so the guard lives in one place rather than at each caller.
+      if (peer?.role === 'host') this.resolveHostCollision(peerId, peer.hostingForMs);
     } catch (err) {
       // Rejects with 'disconnected' if the peer vanished between joining and
       // answering, and on timeout. Neither is a collision we can act on.
@@ -437,7 +440,17 @@ export class MultiplayerService {
   private resolveHostCollision(peerId: string, theirHostingForMs: number) {
     if (this.isLeaving || this.playerRole !== MultiplayerUserRole.HOST) return;
 
-    if (!this.shouldYieldRoom(peerId, theirHostingForMs)) {
+    // `theirHostingForMs` is a self-reported duration, so a peer can claim any number it
+    // likes and the tie-break below would hand it the room — the same forgeable-claim
+    // problem that got `PlayerIdentMessage.host` deprecated. Unlike the role badge there
+    // is no transport-level fact to substitute here: elapsed time genuinely only exists on
+    // the sender's clock. So it is bounded instead. A claim above the ceiling is treated
+    // as zero rather than clamped to the ceiling, because a value that large is not a
+    // plausible session — it is a peer trying to win, and the right answer is to not
+    // reward it.
+    const theirs = WireGuardHelper.hostingDuration(theirHostingForMs);
+
+    if (!this.shouldYieldRoom(peerId, theirs)) {
       console.warn(`Host collision with ${peerId}; keeping the room (ours is older).`);
       this.codeContestedSubject.next();
       return;

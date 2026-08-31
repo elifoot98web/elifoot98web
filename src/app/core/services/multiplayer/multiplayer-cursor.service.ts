@@ -3,6 +3,7 @@ import { BehaviorSubject, Observable } from 'rxjs';
 import { Room, selfId } from 'trystero';
 import { CursorClickMessage, CursorPositionMessage } from '../../models/multiplayer';
 import { MULTIPLAYER } from '../../models/constants';
+import { WireGuardHelper } from '../../helpers/wire-guard.helper';
 
 @Injectable({
   providedIn: 'root'
@@ -30,13 +31,30 @@ export class MultiplayerCursorService {
     // Listen for player pointer (cursor) messages
     const cursorPosition = this.room.makeAction<CursorPositionMessage>(MULTIPLAYER.EVENTS.PLAYER_CURSOR_POS);
     cursorPosition.onMessage = (data, { peerId }) => {
-      this.updateCursor(peerId, data);
+      // Sanitised here rather than in the renderer because both consumers are DOM writers
+      // reached from a subscription: `CursorRendererHelper.renderCursors` calls
+      // `ColorHelper.getCSSFilterFromColor`, which throws on an unparseable hex, and the
+      // coordinates are multiplied by the container's offset size, where a non-finite
+      // value yields NaN. Cursors are shared, so one peer's bad payload is everyone's
+      // broken overlay.
+      this.updateCursor(peerId, {
+        ...data,
+        x: WireGuardHelper.unitInterval(data.x),
+        y: WireGuardHelper.unitInterval(data.y),
+        color: WireGuardHelper.color(data.color),
+        name: WireGuardHelper.text(data.name, MULTIPLAYER.WIRE_MAX_NAME_LENGTH),
+      });
     };
 
     const playerClick = this.room.makeAction<CursorClickMessage>(MULTIPLAYER.EVENTS.PLAYER_CLICK);
     playerClick.onMessage = (data) => {
       if (data) {
-        this.clickSubject.next(data);
+        this.clickSubject.next({
+          ...data,
+          x: WireGuardHelper.unitInterval(data.x),
+          y: WireGuardHelper.unitInterval(data.y),
+          color: WireGuardHelper.color(data.color),
+        });
       }
     }
   }

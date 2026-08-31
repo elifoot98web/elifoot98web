@@ -142,4 +142,17 @@ export const MULTIPLAYER = {
     '#aa00aa', '#e6194b', '#f58231', '#ffe119',
     '#3cb44b', '#42d4f4', '#4363d8', '#911eb4',
   ],
+  // Ceilings applied to anything arriving off the wire. A peer is not the dialog: the
+  // `maxlength` attributes in the chat composer (200) and the room-setup name field (20)
+  // bind our own UI and nothing else, so these mirror them on the receiving side. Sized
+  // to match rather than to be generous — a value a peer's own UI could not have produced
+  // is not one we need to render.
+  WIRE_MAX_TEXT_LENGTH: 200,
+  WIRE_MAX_NAME_LENGTH: 20,
+  WIRE_MAX_ID_LENGTH: 64,
+  // Ceiling on a peer's self-reported hosting duration, used by the host-collision
+  // tie-break. Generous (24h) because a real host may legitimately run for hours and
+  // disbelieving a marathon session would be a worse failure than the forgery it guards
+  // against.
+  WIRE_MAX_HOSTING_MS: 86400000,
 }

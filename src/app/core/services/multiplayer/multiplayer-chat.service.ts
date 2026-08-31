@@ -3,6 +3,7 @@ import { BehaviorSubject, Observable } from 'rxjs';
 import { Room, selfId } from 'trystero';
 import { MultiplayerChatMessage, TypingMessage } from '../../models/multiplayer';
 import { MULTIPLAYER } from '../../models/constants';
+import { WireGuardHelper } from '../../helpers/wire-guard.helper';
 
 @Injectable({
   providedIn: 'root'
@@ -43,7 +44,22 @@ export class MultiplayerChatService {
       // Anything off the wire is a user message by definition: system lines are generated
       // locally, so accepting a remote `kind: 'system'` would let a peer forge one. The
       // sender is taken from the transport rather than the payload for the same reason.
-      this.addMessage({ ...msg, senderId: peerId, kind: 'user' });
+      //
+      // The remaining fields get the same distrust. They are typed `string`/`number`, but
+      // trystero hands us `JSON.parse` output, so the types describe intent and enforce
+      // nothing: an unguarded `timestamp` of `{}` throws out of DatePipe during change
+      // detection, and `'1e400'` coerces to Infinity, which sorts permanently last and so
+      // never leaves the transcript's trailing window. Either one bricks the panel until
+      // reload, for the host as well, because the transcript is mounted on `isStreaming`
+      // rather than on whether the panel is open.
+      this.addMessage({
+        ...msg,
+        id: WireGuardHelper.text(msg.id, MULTIPLAYER.WIRE_MAX_ID_LENGTH, this.generateId()),
+        text: WireGuardHelper.text(msg.text, MULTIPLAYER.WIRE_MAX_TEXT_LENGTH),
+        timestamp: WireGuardHelper.timestamp(msg.timestamp),
+        senderId: peerId,
+        kind: 'user',
+      });
       // Their message arrived, so whatever they were typing is now sent.
       this.clearTyping(peerId);
     };
