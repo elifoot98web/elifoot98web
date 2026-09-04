@@ -79,10 +79,12 @@ sync; hand-editing `package.json` leaves the lock stale.
   flipped the default entry point to the standalone build. All importing files must move together, or
   `ModalController` lands in a different injector graph from `IonicModule`. That path is deprecated in
   favour of `provideIonicAngular()`, which does *not* require abandoning NgModules.
-- **Three `overrides` exist because Angular pins those versions exactly** and nothing else can move
+- **Four `overrides` exist because a dependency pins those versions exactly** and nothing else can move
   them. `less@^4.9.0` is the important one: it swapped `image-size` for optional `probe-image-size`,
-  and `image-size` has no fixed version in existence. Re-check the overrides after every Angular bump —
-  once Angular ships past a pin, the override silently holds the tree *back*.
+  and `image-size` has no fixed version in existence. `qs` is there because `express`/`body-parser`
+  pin `~6.15.1`, which excludes the patched 6.16.0 — the same shape of problem, different pinner.
+  Re-check the overrides after every Angular bump — once Angular ships past a pin, the override
+  silently holds the tree *back*.
 - **`vite` advisories are inert only because the webpack `browser` builder is used.**
   `ng serve --force-esbuild`, or migrating to `@angular/build:application`, activates them; since
   `@angular/build` pins vite exactly, such a change must carry a `vite` override in the same PR.
