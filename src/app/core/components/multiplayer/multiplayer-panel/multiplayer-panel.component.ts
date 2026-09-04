@@ -1,5 +1,5 @@
 import { Component, Input } from '@angular/core';
-import { ModalController } from '@ionic/angular';
+import { ModalController } from '@ionic/angular/lazy';
 import { map, Observable } from 'rxjs';
 import { MultiplayerPlayerInfoService } from 'src/app/core/services/multiplayer';
 

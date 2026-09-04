@@ -1,6 +1,6 @@
 import { Component } from '@angular/core';
 import { SwUpdate } from '@angular/service-worker';
-import { AlertController, Platform } from '@ionic/angular';
+import { AlertController, Platform } from '@ionic/angular/lazy';
 import { STORAGE_KEY } from './core/models/constants';
 import { LayoutHelperService, LocalStorageService } from './core/services/shared';
 

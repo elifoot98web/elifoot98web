@@ -1,5 +1,5 @@
 import { Component } from '@angular/core';
-import { AlertController, ModalController } from '@ionic/angular';
+import { AlertController, ModalController } from '@ionic/angular/lazy';
 import { DosCI } from 'src/app/core/typings/jsdos';
 import { SavedCheat, SearchState } from 'src/app/core/models/game';
 import { LayoutHelperService } from 'src/app/core/services/shared';

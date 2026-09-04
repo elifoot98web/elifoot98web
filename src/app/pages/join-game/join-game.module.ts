@@ -1,7 +1,7 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { IonicModule } from '@ionic/angular';
+import { IonicModule } from '@ionic/angular/lazy';
 import { JoinGamePageRoutingModule } from './join-game-routing.module';
 import { JoinGamePage } from './join-game.page';
 import { CoreComponentsModule } from 'src/app/core/components/core-components.module';

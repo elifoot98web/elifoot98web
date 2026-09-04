@@ -1,6 +1,6 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { IonicModule } from '@ionic/angular';
+import { IonicModule } from '@ionic/angular/lazy';
 import { ChatComponent } from './chat/chat/chat.component';
 import { MsnEmoticonPipe } from './chat/msn-emoticon.pipe';
 import { FormsModule } from '@angular/forms';

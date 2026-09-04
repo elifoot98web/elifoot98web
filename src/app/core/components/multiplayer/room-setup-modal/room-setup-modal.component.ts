@@ -1,5 +1,5 @@
 import { Component, Input, OnInit } from '@angular/core';
-import { ModalController } from '@ionic/angular';
+import { ModalController } from '@ionic/angular/lazy';
 import { MULTIPLAYER } from 'src/app/core/models/constants';
 import { RoomCodeHelper } from 'src/app/core/helpers/room-code.helper';
 import { MultiplayerIdentityService } from 'src/app/core/services/multiplayer';

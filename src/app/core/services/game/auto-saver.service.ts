@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { SaveGameService } from './save-game.service';
 import { DosCI } from '../../typings/jsdos';
 import { EmulatorControlService } from './emulator-control.service';
-import { LoadingController } from '@ionic/angular';
+import { LoadingController } from '@ionic/angular/lazy';
 import { AUTO_SAVER } from '../../models/constants';
 
 @Injectable({

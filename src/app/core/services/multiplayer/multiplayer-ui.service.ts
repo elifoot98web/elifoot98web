@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { AlertController, ModalController, ToastController } from '@ionic/angular';
+import { AlertController, ModalController, ToastController } from '@ionic/angular/lazy';
 import { MultiplayerPanelComponent, MultiplayerPanelAction } from '../../components/multiplayer/multiplayer-panel/multiplayer-panel.component';
 import { RoomSetupModalComponent, RoomSetupResult } from '../../components/multiplayer/room-setup-modal/room-setup-modal.component';
 import { RoomCodeHelper } from '../../helpers/room-code.helper';

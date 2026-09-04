@@ -15,6 +15,26 @@
 # line pins an esbuild past that boundary (19.2.27 -> 0.28.0, 20.3.35 -> 0.28.1,
 # 22.1.6 -> 0.28.2), so raising the floor is a prerequisite for any dependency update, not
 # a preference. Bisected: 14/14 -> 764 errors, 14.1/14.5 -> 0.
+#
+# THE BUILD WARNING BELOW IS EXPECTED AND DELIBERATE. DO NOT "FIX" IT BY RAISING THESE.
+#
+#   One or more browsers which are configured in the project's Browserslist configuration
+#   fall outside Angular's browser support for this version.
+#
+# Angular 21 defines its supported set as `baseline widely available on 2025-10-20`, which
+# resolves to Chrome/Edge >=111, Firefox >=112, Safari/iOS >=16.4. Everything this file
+# admits below those lines gets listed on every build. The check is new in Angular 21 --
+# Angular 19 only warned about browsers lacking ES6 module support -- so the warning
+# appeared with that upgrade rather than indicating anything newly wrong.
+#
+# It is advisory: Angular's own comment is "any other unsupported browser we will attempt
+# to use, but provide no support for". The build succeeds and esbuild still downlevels for
+# these targets. Deliberate call to keep the wider reach: raising to Angular's floor would
+# silence the warning and save ~57 KB of downleveling (2,151,239 -> 2,094,028 bytes,
+# measured), but it drops Safari 14.1-16.3 and iOS 14.5-16.3 -- meaning iPhone 7 and older,
+# since iOS 16.4 needs an iPhone 8. For a nostalgia game the old hardware is the audience.
+# Note Ionic 9's recommended floor (Safari >=16) would NOT silence it either: 16.0-16.3 are
+# still outside Angular's set.
 Chrome >=79
 ChromeAndroid >=79
 Firefox >=70
