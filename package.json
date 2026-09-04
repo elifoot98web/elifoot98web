@@ -34,7 +34,7 @@
     "@angular/service-worker": "^21.2.22",
     "@ionic/angular": "^9.0.1",
     "@ionic/storage-angular": "^4.0.0",
-    "ionicons": "^7.0.0",
+    "ionicons": "^8.1.0",
     "jszip": "^3.10.1",
     "rxjs": "~7.8.0",
     "tesseract.js": "^6.0.1",
