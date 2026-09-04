@@ -14,7 +14,13 @@
     "sourceMap": true,
     "declaration": false,
     "experimentalDecorators": true,
-    "moduleResolution": "node",
+    // "node" predates the package `exports` field and resolves by walking the filesystem,
+    // so it cannot see subpath exports at all. Angular 21 and Ionic 9 both ship
+    // exports-only entry points -- @angular/core/primitives/di, @angular/common/http,
+    // @ionic/angular/lazy -- and every one of them fails to resolve under "node" with
+    // TS2307, including from inside Angular's own .d.ts files. "bundler" is what the
+    // Angular CLI scaffolds for new projects and matches how the build actually resolves.
+    "moduleResolution": "bundler",
     "importHelpers": true,
     "target": "es2022",
     "module": "es2020",
