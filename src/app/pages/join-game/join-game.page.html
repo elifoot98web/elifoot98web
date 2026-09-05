@@ -1,0 +1,163 @@
+<ion-header [translucent]="true">
+  <ion-toolbar color="tertiary">
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/main" text=""></ion-back-button>
+    </ion-buttons>
+    <!--
+      "Multiplayer" told a spectator nothing they did not already know. In a room the title
+      becomes the room itself; outside one it falls back to the mode name. No landscape
+      instance is needed here, unlike the host page: this header is unconditional.
+    -->
+    <ion-title *ngIf="!isSpectating">Multiplayer</ion-title>
+    <ion-title *ngIf="isSpectating">
+      <app-room-status-pill [roomCode]="currentRoomCode" [locked]="isRoomLocked"
+        [hostName]="(hostName$ | async) || ''" [state]="isReconnecting ? 'reconnecting' : 'live'">
+      </app-room-status-pill>
+    </ion-title>
+    <ion-buttons slot="end">
+      <!--
+        No chat button here. The floating toggle over the video is the single chat control on
+        both pages: it is the only one that exists at every breakpoint (mobile landscape has
+        no header at all), and duplicating it here meant the same job in three places.
+      -->
+      <ion-button *ngIf="isSpectating" (click)="openMultiplayerPanel()" aria-label="Informações da sala">
+        <ion-icon slot="icon-only" name="people-outline"></ion-icon>
+      </ion-button>
+      <ion-button *ngIf="isSpectating" color="danger" (click)="leaveRoom()" aria-label="Sair da sala">
+        <ion-icon slot="icon-only" name="exit-outline"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<!--
+  scrollY is off only while spectating. The video's border box must be exactly the visible
+  picture for cursor alignment, so nothing may scroll it — but the onboarding card below is
+  taller than a short viewport, and with scrolling off unconditionally its bottom (the
+  recent-rooms row) was unreachable.
+-->
+<ion-content [scrollX]="false" [scrollY]="!isSpectating" [fullscreen]="true" color="primary" class="page-background ion-align-items-center ion-justify-content-center">
+  @switch (gameState) {
+    @case (GameState.NOT_IN_ROOM) {
+      <!--
+        A share link lands here, so this is the first thing a newcomer sees. It explains what
+        spectating is and then hands off to ONE place that owns joining: the setup dialog,
+        which holds the code field, the password, the nickname and recent rooms. An inline
+        code field here as well meant two surfaces disagreeing about where you type a code.
+      -->
+      <div class="info-card-container ion-padding ion-text-center">
+        <ion-card class="join-game-card join-game-card--onboarding">
+          <ion-card-content class="ion-text-center">
+            <ion-icon name="eye-outline" class="onboarding-icon" aria-hidden="true"></ion-icon>
+            <h2 class="onboarding-title">Assistir a uma partida</h2>
+            <p class="onboarding-text">
+              Você vai acompanhar a partida de outra pessoa ao vivo, conversar pelo chat e
+              apontar na tela com o seu cursor. Quem joga é o anfitrião.
+            </p>
+            <ion-button expand="block" (click)="promptJoinInfo()">
+              Entrar em uma sala
+            </ion-button>
+          </ion-card-content>
+        </ion-card>
+      </div>
+    }
+    @case (GameState.JOINING_ROOM) {
+      <div class="info-card-container ion-padding ion-text-center">
+        <ion-card class="join-game-card">
+          <ion-card-content class="ion-text-center full centered">
+            <ion-spinner name="crescent"></ion-spinner>
+            <p>Conectando à sala...</p>
+          </ion-card-content>
+        </ion-card>
+      </div>
+    }
+    @case (GameState.WAITING_STREAM) {
+      <div class="info-card-container ion-padding ion-text-center">
+        <ion-card class="join-game-card">
+          <ion-card-content class="ion-text-center full centered">
+            <ion-spinner name="crescent"></ion-spinner>
+            <p>Aguardando a transmissão do anfitrião...</p>
+          </ion-card-content>
+        </ion-card>
+      </div>
+    }
+    @case (GameState.HOST_LEFT) {
+      <div class="info-card-container ion-padding ion-text-center">
+        <ion-card class="join-game-card join-game-card--onboarding">
+          <ion-card-content class="ion-text-center">
+            <ion-icon name="cloud-offline-outline" size="large" color="warning"></ion-icon>
+            <!--
+              Not "o anfitrião saiu": we cannot tell a host leaving from our own link dropping,
+              and claiming the former sent spectators away from rooms that were still running.
+            -->
+            <p class="onboarding-text ion-text-center">{{ joinError || 'Perdemos a conexão com o anfitrião.' }}</p>
+            <ion-button *ngIf="canRetryLastRoom" expand="block" (click)="retryLastRoom()">
+              Tentar reconectar
+            </ion-button>
+            <ion-button fill="clear" size="small" (click)="promptJoinInfo()">Entrar em outra sala</ion-button>
+          </ion-card-content>
+        </ion-card>
+      </div>
+    }
+    @case (GameState.ERROR) {
+      <div class="info-card-container ion-padding ion-text-center">
+        <ion-card class="join-game-card">
+          <ion-card-content class="ion-text-center full centered">
+            <div>
+              <ion-icon name="alert-circle-outline" size="large" color="danger"></ion-icon>
+              <p>{{ joinError || 'Não foi possível entrar na sala.' }}</p>
+              <!--
+                Reloads rather than reopening the dialog: a failed handshake leaves trystero
+                reusing a dead connection for minutes, so retrying in place cannot work. See
+                retryAfterFailure().
+              -->
+              <ion-button (click)="retryAfterFailure()">Tentar novamente</ion-button>
+            </div>
+          </ion-card-content>
+        </ion-card>
+      </div>
+    }
+  }
+
+  <!-- Game stream. Stays mounted through a reconnect so the last frame survives the blip. -->
+  <div [ngClass]="{'ion-hide': !isSpectating }" class="full game-stream-flex-container">
+    <div id="game-stream-container" class="game-stream-container full">
+      <div id="cursors-overlay" class="pointer-overlay"></div>
+      <video id="stream-target" autoplay playsinline
+        (mousemove)="onPointerMove($event)" (touchmove)="onPointerMove($event)" (click)="onClick($event)"></video>
+      <!--
+        Reconnect notice. Absolutely positioned, so it never becomes a flex item of the
+        container and never moves the video (see the #stream-target contract in the scss).
+        Deliberately not a @switch card: a card would unmount the video and lose the frame
+        this is drawn over.
+      -->
+      <div *ngIf="isReconnecting" class="stream-scrim" role="status" aria-live="polite">
+        <ion-spinner name="crescent"></ion-spinner>
+        <p>Tentando reconectar…</p>
+      </div>
+      <!--
+        Chat drawer handle: bottom-centre in portrait, right-edge tab in landscape (see
+        global.scss). Rides the game surface, so a zero-width closed panel cannot clip it. One async subscription feeds both the badge and the accessible name.
+      -->
+      <ng-container *ngIf="{ unread: (unreadCount$ | async) || 0 } as chat">
+        <ion-button *ngIf="isSpectating" fill="clear" class="chat-toggle-btn"
+          [class.chat-toggle-btn--unread]="!isChatOpen && chat.unread"
+          (click)="toggleChat()"
+          [attr.aria-label]="chatToggleLabel(chat.unread)"
+          [attr.aria-expanded]="isChatOpen"
+          aria-controls="chat-panel">
+          <ion-icon slot="start" [name]="isChatOpen ? 'close-outline' : 'chatbubble-ellipses-outline'"></ion-icon>
+          <span class="chat-toggle-label">Chat</span>
+          <ion-badge *ngIf="!isChatOpen && chat.unread" color="danger" aria-hidden="true">{{ chat.unread }}</ion-badge>
+        </ion-button>
+      </ng-container>
+    </div>
+    <!-- Chat docked beside (landscape) or below (portrait) the stream. -->
+    <div id="chat-panel" class="chat-docked-panel" [class.chat-open]="isChatOpen"
+      role="region" aria-label="Chat da sala" tabindex="-1"
+      [attr.aria-hidden]="!isChatOpen"
+      (keydown.escape)="onChatEscape($event)">
+      <app-chat [visible]="isChatOpen" [roomCode]="currentRoomCode"></app-chat>
+    </div>
+  </div>
+</ion-content>

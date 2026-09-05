@@ -1,0 +1,97 @@
+<!--
+  Four-band Win9x window: titlebar / transcript / compose / status bar.
+
+  The titlebar is a plain div, NOT an ion-toolbar: ion-toolbar brings a min-height and
+  safe-area padding that make no sense inside a docked panel, and it would need the whole
+  Ionic toolbar reset undone to look like Windows.
+-->
+<div class="chat-panel win9x-element-border">
+  <div class="chat-titlebar">
+    <ion-icon name="chatbubble-ellipses" aria-hidden="true"></ion-icon>
+    <span class="chat-titlebar-text">
+      {{ roomCode || 'Sala' }}
+      <span class="chat-titlebar-count">&middot; {{ participantCount$ | async }}</span>
+    </span>
+    <!-- Where the typing notice goes when the status bar is gone. -->
+    <span *ngIf="(hasRoomForChrome$ | async) === false && (typingLabel$ | async)" class="chat-titlebar-typing"
+      aria-hidden="true">✎</span>
+  </div>
+
+  <!--
+    Contact strip, MSN-style. Collapsed by default and gated on vertical room: at 600px tall
+    and under, every row it takes comes straight out of the transcript. Same threshold as the
+    status bar below, so the panel does not lose its chrome in two stages.
+  -->
+  <ng-container *ngIf="hasRoomForChrome$ | async">
+    <button type="button" class="win9x-expander" (click)="toggleRoster()"
+      [attr.aria-expanded]="isRosterOpen" aria-controls="chat-roster">
+      <ion-icon [name]="isRosterOpen ? 'caret-down-outline' : 'caret-forward-outline'" aria-hidden="true"></ion-icon>
+      <span>Participantes ({{ participantCount$ | async }})</span>
+    </button>
+    <div id="chat-roster" *ngIf="isRosterOpen">
+      <app-participant-list [compact]="true"></app-participant-list>
+    </div>
+  </ng-container>
+
+  <div class="chat-messages win9x-element-bevel" #messageList>
+    <ng-container *ngIf="lines$ | async as lines">
+      <div *ngFor="let line of lines; trackBy: trackBy"
+        class="chat-line"
+        [class.chat-line--system]="line.kind === 'system'"
+        [class.chat-line--grouped]="!line.showHeader">
+        <!-- System lines carry no sender and never group. -->
+        <ng-container *ngIf="line.kind === 'system'; else userLine">
+          <span class="chat-system-text">{{ line.text }}</span>
+        </ng-container>
+        <ng-template #userLine>
+          <div *ngIf="line.showHeader" class="chat-says" [style.color]="line.senderColor">
+            {{ line.senderName }} diz:
+            <span class="chat-time">{{ line.timestamp | date:'shortTime' }}</span>
+          </div>
+          <div class="chat-text">{{ line.text | msnEmoticon }}</div>
+        </ng-template>
+      </div>
+
+      <p *ngIf="lines.length === 0" class="chat-empty">
+        Nenhuma mensagem ainda. Diga oi!
+      </p>
+    </ng-container>
+  </div>
+
+  <form class="chat-input-row" (ngSubmit)="send()" autocomplete="off">
+    <!-- [(ngModel)], not a template ref: a native input with no event binding never
+         triggers change detection, so a ref-driven [disabled] stays stale and blocks
+         the form's implicit Enter submit. -->
+    <input
+      class="chat-input win9x-element-bevel"
+      type="text"
+      name="draft"
+      [(ngModel)]="draft"
+      (input)="onDraftInput()"
+      placeholder="Digite uma mensagem..."
+      maxlength="200"
+      aria-label="Mensagem" />
+    <button type="submit" class="win9x-button win9x-button--touch" [disabled]="!canSend">
+      Enviar
+    </button>
+  </form>
+
+  <!--
+    Carries the safe-area padding so the compose row does not have to. Hidden on short
+    viewports, where the chrome budget is tighter than the information is useful.
+
+    One async subscription per fact, and the typing notice takes the cell over when there is
+    one: the count is ambient and the notice is momentary, so they never need to coexist.
+    On short viewports this whole band is gone, and the titlebar carries the notice instead.
+  -->
+  <div class="chat-statusbar">
+    <span class="win9x-element-bevel chat-statusbar-cell">
+      <ng-container *ngIf="typingLabel$ | async as typing; else roomCount">{{ typing }}</ng-container>
+      <ng-template #roomCount>
+        <ng-container *ngIf="{ count: (participantCount$ | async) || 0 } as room">
+          {{ room.count === 1 ? '1 pessoa na sala' : room.count + ' pessoas na sala' }}
+        </ng-container>
+      </ng-template>
+    </span>
+  </div>
+</div>

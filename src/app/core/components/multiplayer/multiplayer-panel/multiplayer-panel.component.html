@@ -1,0 +1,51 @@
+<!-- Win9x window chrome, matching the other multiplayer dialogs (see src/theme/_win9x.scss). -->
+<div class="win9x-element-border win9x-outer-window">
+  <div class="win9x-modal-container">
+    <ion-header class="ion-no-border">
+      <ion-toolbar class="win9x-titlebar">
+        <ion-title><ion-icon name="people" aria-hidden="true"></ion-icon> Sala {{ roomCode }}</ion-title>
+        <ion-buttons slot="end" class="buttons-padding-end">
+          <ion-button fill="clear" class="win9x-button" (click)="close()" aria-label="Fechar">
+            <ion-icon name="close" slot="icon-only"></ion-icon>
+          </ion-button>
+        </ion-buttons>
+      </ion-toolbar>
+    </ion-header>
+
+    <ion-content class="win9x-modal-content ion-padding">
+      <!-- The code, big enough to read out loud over a call. -->
+      <div class="win9x-element-bevel panel-code">
+        <span class="panel-code-value">{{ roomCode }}</span>
+        <span class="panel-code-lock">
+          <ion-icon [name]="locked ? 'lock-closed' : 'lock-open'" aria-hidden="true"></ion-icon>
+          {{ locked ? 'Com senha' : 'Sala aberta' }}
+        </span>
+      </div>
+
+      <!--
+        Copy and share are separate on purpose: this is where an OS share sheet is expected,
+        whereas the ambient pill just copies. No "Abrir chat" row — the floating toggle over
+        the game is the single chat control.
+      -->
+      <div class="panel-actions">
+        <button type="button" class="win9x-button win9x-button--touch" (click)="close('copy')">
+          Copiar link
+        </button>
+        <button type="button" class="win9x-button win9x-button--touch" (click)="close('share')">
+          Compartilhar
+        </button>
+      </div>
+
+      <p class="panel-section-label">
+        Participantes ({{ count$ | async }})
+      </p>
+      <app-participant-list></app-participant-list>
+
+      <div class="panel-actions panel-actions--end">
+        <button type="button" class="win9x-button win9x-button--touch panel-danger" (click)="close('leave')">
+          {{ leaveLabel }}
+        </button>
+      </div>
+    </ion-content>
+  </div>
+</div>

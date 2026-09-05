@@ -1,0 +1,98 @@
+<!-- Win9x window chrome, matching the Cheat 'O Matic modal (see src/theme/_win9x.scss). -->
+<div class="win9x-element-border win9x-outer-window">
+  <div class="win9x-modal-container">
+    <ion-header class="ion-no-border">
+      <ion-toolbar class="win9x-titlebar">
+        <ion-title>{{ title }}</ion-title>
+        <ion-buttons slot="end" class="buttons-padding-end">
+          <ion-button fill="clear" class="win9x-button" (click)="cancel()" aria-label="Fechar">
+            <ion-icon name="close"></ion-icon>
+          </ion-button>
+        </ion-buttons>
+      </ion-toolbar>
+    </ion-header>
+
+    <ion-content class="win9x-modal-content ion-padding">
+      <!-- Native inputs with real <label>s, not ion-input: this is a Win9x dialog, and
+           ion-input's shadow-encapsulated internals cannot take the sunken bevel. -->
+      <form (ngSubmit)="confirm()">
+        <label class="field">
+          <span class="field-label">Seu nome</span>
+          <input class="win9x-input win9x-element-bevel" type="text" name="playerName"
+            [(ngModel)]="playerName" maxlength="20" required autocomplete="off"
+            placeholder="Como os outros vão te ver">
+        </label>
+
+        <label class="field">
+          <span class="field-label">Código da sala</span>
+          <span class="field-row">
+            <!-- No maxlength: a pasted share link must survive long enough for
+                 RoomCodeHelper.sanitize() to reduce it to its code on blur. -->
+            <input class="win9x-input win9x-element-bevel" type="text" name="roomCode"
+              [(ngModel)]="roomCode" required autocapitalize="characters" autocomplete="off"
+              (blur)="onCodeBlur()" placeholder="ELI-XXXX ou cole o link">
+            <button *ngIf="isHost" type="button" class="win9x-button win9x-button--touch"
+              (click)="regenerateCode()" aria-label="Gerar outro código">Gerar</button>
+          </span>
+        </label>
+        <!--
+          Recent rooms live next to the field they fill, so joining is owned by one surface.
+          Guest-only: a host is creating a room, not returning to one.
+        -->
+        <div *ngIf="!isHost && recentRooms.length > 0" class="recent-rooms">
+          <span class="field-label">Salas recentes</span>
+          <div class="recent-rooms-list">
+            <button type="button" *ngFor="let code of recentRooms" class="win9x-button recent-room"
+              (click)="useRecentRoom(code)">{{ code }}</button>
+          </div>
+        </div>
+
+        <p *ngIf="showCodeError" class="field-error">
+          O código deve ter o formato ELI-XXXX (sem as letras I, O e sem os números 0 e 1).
+        </p>
+
+        <label class="field">
+          <span class="field-label">Senha da sala (opcional)</span>
+          <input class="win9x-input win9x-element-bevel" type="password" name="password"
+            [(ngModel)]="password" autocomplete="off" placeholder="Deixe vazio para sala aberta">
+        </label>
+        <p *ngIf="isHost" class="field-hint">
+          Use uma senha se quiser garantir que só quem você convidar entre. O link
+          compartilhado não inclui a senha.
+        </p>
+        <!--
+          Mirrors the host hint above. A guest arriving from a share link has no idea what
+          they are about to get, and the word "sala" alone suggests they will be playing.
+        -->
+        <p *ngIf="!isHost" class="field-hint">
+          Você vai assistir à partida do anfitrião ao vivo, com chat e cursor compartilhado —
+          quem joga é ele. Deixe a senha vazia se a sala não tiver uma.
+        </p>
+
+        <fieldset class="win9x-element-bevel swatch-group">
+          <legend class="field-label">Cor do seu cursor</legend>
+          <div class="color-swatches">
+            <button
+              *ngFor="let color of colors"
+              type="button"
+              class="color-swatch"
+              [class.selected]="color === playerColor"
+              [style.background-color]="color"
+              [attr.aria-label]="'Escolher cor ' + color"
+              [attr.aria-pressed]="color === playerColor"
+              (click)="selectColor(color)"></button>
+          </div>
+        </fieldset>
+
+        <div class="dialog-actions">
+          <button type="submit" class="win9x-button win9x-button--touch" [disabled]="!isValid">
+            {{ isHost ? 'Criar sala' : 'Entrar' }}
+          </button>
+          <button type="button" class="win9x-button win9x-button--touch" (click)="cancel()">
+            Cancelar
+          </button>
+        </div>
+      </form>
+    </ion-content>
+  </div>
+</div>

@@ -1,0 +1,18 @@
+/*
+ * The Win9x design language this modal uses now lives in src/theme/_win9x.scss and is
+ * loaded globally. Only rules that must NOT leak outside this component remain here.
+ */
+
+/* Unqualified on purpose in the original, and dangerous globally: it would restyle
+   the toolbar buttons on the main, game and join-game pages. */
+ion-toolbar ion-button {
+  --padding-start: 0px !important;
+  --padding-end: 0px !important;
+  --padding-top: 4px !important;
+  --padding-bottom: 4px !important;
+  padding: 0 8px !important;
+}
+
+.buttons-padding-end {
+  padding-right: 4px !important;
+}

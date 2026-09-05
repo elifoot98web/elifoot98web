@@ -1,0 +1,16 @@
+<!--
+  One async subscription feeds both the visible count and the accessible name.
+  A <button>, not a div: copying the link is a real action and must be keyboard reachable.
+-->
+<ng-container *ngIf="{ count: (count$ | async) || 0 } as room">
+  <button type="button" class="mp-status-pill" [class.mp-status-pill--compact]="compact"
+    (click)="copyLink()" [attr.aria-label]="ariaLabel(room.count)" [title]="ariaLabel(room.count)">
+    <span class="mp-status-dot" [attr.data-state]="state" aria-hidden="true"></span>
+    <span class="mp-status-code">{{ roomCode }}</span>
+    <ion-icon *ngIf="locked" name="lock-closed" class="mp-status-lock" aria-hidden="true"></ion-icon>
+    <ng-container *ngIf="!compact">
+      <span *ngIf="hostName" class="mp-status-host">{{ hostName }}</span>
+      <span class="mp-status-count" aria-hidden="true">{{ room.count }}</span>
+    </ng-container>
+  </button>
+</ng-container>

@@ -1,0 +1,298 @@
+<ion-content>
+  <ion-accordion-group value="options-menu">
+    <ion-accordion value="options-menu">
+      <ion-item slot="header" color="light">
+        <ion-label>Menu de Opções</ion-label>
+        <ion-icon slot="end" name="ellipsis-vertical"></ion-icon>
+      </ion-item>
+      <div class="ion-padding" slot="content">
+        <p>
+          O menu de opções (<ion-icon name="menu-outline"></ion-icon> <ion-icon name="arrow-forward-outline"></ion-icon> <ion-icon name="options-outline"></ion-icon> ou
+          <ion-icon name="ellipsis-vertical-outline"></ion-icon>)
+          está localizado no canto superior da tela.
+        </p>
+        <ion-accordion-group expand="inset">
+          <ion-accordion>
+            <ion-item slot="header">
+              <ion-label>
+                <strong>Abrir 'O Matic</strong>
+              </ion-label>
+            </ion-item>
+            <div class="ion-padding" slot="content">
+                Selecione esta opção para abrir o nosso 'O Matic personalizado para o Elifoot 98 Online.<br>
+                <p class="ion-padding-top">
+                O Cheat 'O Matic era um programa popular no Windows 98 que permitia buscar e modificar valores na memória do jogo, facilitando alterações como dinheiro e força dos jogadores.
+                </p>
+                <p class="ion-padding-top">
+                O programa original não é compatível com o nosso emulador, então criamos uma versão adaptada exclusiva para o Elifoot 98 Online.
+                </p>
+                <p class="ion-padding-top">
+                Nossa versão mantém as principais funções e uma interface semelhante ao original, facilitando o uso para quem já conhece o programa.
+                <br>
+                <strong>Nota:</strong> O 'O Matic é uma ferramenta avançada. Alterações incorretas podem corromper o jogo ou causar problemas. Use com responsabilidade.
+                </p>
+                <p class="ion-padding-top">
+                Veja abaixo um vídeo demonstrando como usar o 'O Matic no Elifoot 98 Online:
+                <iframe width="480" height="315" src="https://www.youtube.com/embed/m5QaqyveP6U?si=jGCrrdDsF2TVnIVn" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen="false"></iframe>
+                </p>
+            </div>
+          </ion-accordion>
+          <ion-accordion>
+            <ion-item slot="header">
+              <ion-label>
+                <strong>Desativar Suavização</strong>
+              </ion-label>
+            </ion-item>
+            <div class="ion-padding" slot="content">
+              Desativa o filtro de suavização de imagem do emulador. Caso prefira os pixels quadrados, ative esta opção.
+              <p class="ion-padding-top">Essa opção pode ser útil para quem está jogando em telas de baixa resolução ou
+                dispositivos mais antigos, onde a suavização pode deixar a imagem menos legível.</p>
+            </div>
+          </ion-accordion>
+          <ion-accordion>
+            <ion-item slot="header">
+              <ion-label>
+                <strong>Auto-Save</strong>
+              </ion-label>
+            </ion-item>
+            <div class="ion-padding" slot="content">
+              <p>Submenu com opções de salvamento de dados da máquina virtual/emulador.</p>
+
+              <h4>Salvar Máquina Virtual <ion-icon name="save-outline"></ion-icon></h4>
+              <p>
+                Salva o estado atual da máquina virtual, incluindo o sistema de arquivos do emulador em geral.
+                Essa opção é útil caso você tenha feito alterações nos arquivos em geral, como a utilização do editor de
+                equipes do Elifoot 98 ou mudanças nas configurações do Windows 3.1, por exemplo.
+              </p>
+
+              <h4>Desativar Sync Save</h4>
+              <p>
+                Por padrão, o sistema detecta automaticamente quando o jogo é salvo e dispara
+                o salvamento da máquina virtual/emulador. Caso você deseje desativar essa funcionalidade, utilize esta opção.
+              </p>
+
+              <h4>Save Periódico (5min)</h4>
+              <p>
+                Utilize esta opção para ativar o salvamento automático da máquina virtual/emulador a cada 5 minutos.
+              </p>
+              <p>
+                Note que esta opção é independente da de Sync Save, ou seja, é possível ativar as duas opções ao mesmo
+                tempo.
+              </p>
+            </div>
+          </ion-accordion>
+          <ion-accordion>
+            <ion-item slot="header">
+              <ion-label>
+                <strong>Dados e Backups</strong>
+              </ion-label>
+            </ion-item>
+            <div class="ion-padding" slot="content">
+              <p>Este submenu oferece opções para gerenciar dados de jogos, incluindo exportação, importação e
+                redefinição completa da máquina virtual.</p>
+
+              <h4>Exportar Jogos Salvos <ion-icon name="share-outline"></ion-icon></h4>
+              <p>
+                Permite baixar os jogos salvos (arquivos .e98) da máquina virtual para o seu dispositivo.<br>
+                <strong>Nota:</strong> O download será feito em um arquivo compactado (.zip) contendo todos os jogos
+                salvos.
+              </p>
+
+              <h4>Importar Jogos Salvos <ion-icon name="download-outline"></ion-icon></h4>
+              <p>
+                Permite adicionar um jogo salvo de outro local (arquivo .e98) para dentro da máquina virtual.<br>
+                <strong>Atenção:</strong> Caso já exista um arquivo com o mesmo nome na máquina virtual, o arquivo
+                importado irá SUBSTITUIR o existente.
+              </p>
+              <ion-text color="danger">
+                <h4 color="danger">Apagar Todos os Dados <ion-icon name="trash-outline"></ion-icon></h4>
+              </ion-text>
+              <p>
+                Remove todos os dados da máquina virtual, incluindo jogos salvos, configurações e outros arquivos.<br>
+                <strong>Aviso:</strong> Esta ação é irreversível. Após a exclusão, os dados não poderão ser recuperados.
+              </p>
+            </div>
+          </ion-accordion>
+          <ion-accordion>
+            <ion-item slot="header">
+              <ion-label>
+                <strong>Input de Texto</strong>
+              </ion-label>
+            </ion-item>
+            <div class="ion-padding" slot="content">
+              <p>
+                Permite abrir uma caixa de texto para enviar conteúdo diretamente para a máquina virtual.<br>
+                Essa funcionalidade é útil para colar textos do seu computador ou celular diretamente no emulador, ou
+                para digitar caracteres que não estão disponíveis no teclado virtual.
+              </p>
+            </div>
+          </ion-accordion>
+          <ion-accordion>
+            <ion-item slot="header">
+              <ion-label>
+                <strong>Teclado Virtual</strong>
+              </ion-label>
+            </ion-item>
+            <div class="ion-padding" slot="content">
+              <p>
+                Ativa ou desativa o teclado virtual.<br>
+              </p>
+            </div>
+          </ion-accordion>
+          <ion-accordion>
+            <ion-item slot="header">
+              <ion-label>
+                <strong>Opções de Patch</strong>
+              </ion-label>
+            </ion-item>
+            <div class="ion-padding" slot="content">
+              <p>Este submenu oferece opções para aplicação de patches para alteração de times, bandeiras, países,
+                árbitros e demais opções dentro do jogo.</p>
+              <p>
+                Esses patches podem ser encontrados em sites especializados, como os dos nossos amigos do <strong><a
+                    href="https://turboelifoot.com" target="_blank">Turbo Elifoot <ion-icon
+                      name="open-outline"></ion-icon></a></strong>.
+              </p>
+              <h4>Carregar Patch <ion-icon name="cloud-upload-outline"></ion-icon></h4>
+              <p>
+                Permite selecionar um arquivo de patch para aplicar na máquina virtual.<br>
+                <strong>Nota:</strong> Apenas arquivos ZIP com estrutura compatível com o Elifoot 98.
+              </p>
+
+              <h4>Remover Patch <ion-icon name="cloud-offline-outline"></ion-icon></h4>
+              <p>
+                Remove o patch atualmente aplicado na máquina virtual e restaura o jogo original.<br>
+                <strong>Atenção:</strong> Jogos salvos não serão apagados, mas podem ficar em estado corrompido até que
+                o patch seja reaplicado.
+              </p>
+            </div>
+          </ion-accordion>
+          <ion-accordion>
+            <ion-item slot="header">
+              <ion-label>
+                <strong>Recarregar</strong>
+              </ion-label>
+            </ion-item>
+            <div class="ion-padding" slot="content">
+              <p>
+                Recarrega a aplicação.<br>
+              </p>
+            </div>
+          </ion-accordion>
+          <ion-accordion>
+            <ion-item slot="header">
+              <ion-label>
+                <strong>Voltar ao menu</strong>
+              </ion-label>
+            </ion-item>
+            <div class="ion-padding" slot="content">
+              <p>
+                Salva o jogo, encerra o emulador e volta para a tela inicial, de onde é possível
+                entrar em uma sala como espectador.
+              </p>
+              <p>
+                Se você estiver hospedando uma sala, ela será encerrada e os espectadores serão
+                desconectados.
+              </p>
+            </div>
+          </ion-accordion>
+        </ion-accordion-group>
+      </div>
+    </ion-accordion>
+    <ion-accordion value="multiplayer">
+      <ion-item slot="header" color="light">
+        <ion-label>Multiplayer</ion-label>
+        <ion-icon slot="end" name="people"></ion-icon>
+      </ion-item>
+      <div class="ion-padding" slot="content">
+        <p>
+          O multiplayer do Elifoot 98 Online é um modo <strong>de assistir junto</strong>, não de
+          jogar junto. Quem joga é sempre o anfitrião: ele transmite a tela do próprio jogo, e os
+          convidados acompanham ao vivo, conversam pelo chat e podem apontar na tela com o cursor.
+        </p>
+        <p>
+          A transmissão é direta entre os navegadores (P2P). O jogo não passa por nenhum servidor
+          nosso, e nada é gravado.
+        </p>
+
+        <h4>Criar uma sala <ion-icon name="share-social-outline"></ion-icon></h4>
+        <p>
+          Na tela inicial, use <strong>Jogar e transmitir para amigos</strong>, ou, já dentro do
+          jogo, o menu de opções <ion-icon name="ellipsis-vertical-outline"></ion-icon> >
+          <strong>Hospedar Jogo Multiplayer</strong>.
+        </p>
+        <p>
+          Escolha um apelido, uma cor para o seu cursor e, se quiser, uma senha. O código da sala é
+          gerado automaticamente no formato <strong>ELI-XXXX</strong> — você pode gerar outro se
+          preferir.
+        </p>
+        <p>
+          <strong>Nota:</strong> o link compartilhado <em>não</em> inclui a senha. Se a sala tiver
+          uma, combine-a por outro meio.
+        </p>
+
+        <h4>Assistir a uma sala <ion-icon name="eye-outline"></ion-icon></h4>
+        <p>
+          Na tela inicial, use <strong>Assistir a uma Partida</strong> e depois
+          <strong>Entrar em uma sala</strong>. Cole o código ou o link que o anfitrião enviou — os
+          dois funcionam no mesmo campo. Salas em que você já entrou aparecem ali mesmo, em
+          <strong>Salas recentes</strong>.
+        </p>
+
+        <h4>Enquanto a sala está no ar</h4>
+        <p>
+          O código, o cadeado (se houver senha) e quantas pessoas estão na sala ficam visíveis na
+          barra superior. Toque nessa indicação para copiar o link novamente.
+        </p>
+        <p>
+          O menu de opções passa a mostrar <strong>Sala multiplayer</strong>, que reúne o código,
+          a lista de participantes com a qualidade da conexão de cada um, os botões de copiar e
+          compartilhar o link, e a opção de encerrar a sala.
+        </p>
+
+        <h4>Chat <ion-icon name="chatbubble-ellipses-outline"></ion-icon></h4>
+        <p>
+          O chat abre pelo botão <strong>Chat</strong> sobre a tela do jogo — embaixo no modo
+          retrato, na borda direita no modo paisagem. Ele fica ao lado (ou abaixo) do jogo sem
+          nunca redimensionar a tela da partida.
+        </p>
+        <p>
+          Emoticons clássicos funcionam: <strong>:)</strong>, <strong>:D</strong>,
+          <strong>;)</strong> e companhia viram carinhas.
+        </p>
+
+        <h4>Se a conexão cair</h4>
+        <p>
+          Uma queda curta não encerra mais a sala: os espectadores veem
+          <strong>Tentando reconectar…</strong> sobre a última imagem recebida, e a transmissão
+          costuma voltar sozinha.
+        </p>
+        <p>
+          Se não voltar, aparece a opção <strong>Tentar reconectar</strong> — use-a. Não é possível
+          saber, do lado de quem assiste, se foi o anfitrião que saiu ou se foi a sua própria
+          conexão que caiu: a sala pode continuar no ar normalmente para todos os outros.
+        </p>
+        <p>
+          <strong>Dica:</strong> se a conexão não se estabelecer, tente outra rede (Wi-Fi em vez de
+          dados móveis) ou desative a VPN — a conexão direta entre navegadores é sensível a isso.
+        </p>
+      </div>
+    </ion-accordion>
+    <ion-accordion value="aux-controls">
+      <ion-item slot="header" color="light">
+        <ion-label>Controles Auxiliares</ion-label>
+        <ion-icon slot="end" name="game-controller"></ion-icon>
+      </ion-item>
+      <div class="ion-padding" slot="content">
+        <p>
+          Os botões flutuantes de controles auxiliares são exibidos como ícones de joystick na parte inferior da tela.<br>
+          Esses botões são úteis para acessar rapidamente atalhos e teclas do teclado com ações específicas para o jogo.
+        </p>
+        <p>
+          Em um dos botões flutuantes, você encontrará os botões <strong>F1 ao F12</strong>, <strong>A</strong> e <strong>M</strong>, utilizados para escolher táticas para a partida.<br>
+          Enquanto no outro, há atalhos de teclas de navegação, como as <strong>setas direcionais <ion-icon name="caret-back-outline"></ion-icon> <ion-icon name="caret-up-outline"></ion-icon> <ion-icon name="caret-forward-outline"></ion-icon> <ion-icon name="caret-down-outline"></ion-icon></strong> e <strong>Enter <ion-icon name="return-down-back-outline"></ion-icon></strong>.
+        </p>
+      </div>
+    </ion-accordion>
+  </ion-accordion-group>
+</ion-content>
