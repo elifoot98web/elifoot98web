@@ -1,8 +1,13 @@
 # Estudo de UI/UX do Multiplayer + Plano de Melhorias
 
-> **Status:** All five phases shipped, plus a review round (§7). The single-context surface is
-> verified in a headless browser; **nothing needing two peers has been verified at all** — the
-> pill, panel, chat, typing indicator, `hostPeerId$`, connection quality and the reconnect path.
+> **Status:** All five phases shipped, plus a review round (§7) and a two-peer round (§8).
+> The single-context surface is verified in a headless browser. The two-peer surface — stream
+> delivery, host identity, presence, the collision tie-break, the grace period and the join
+> failure paths — is verified with the CDP harness in
+> [scripts/multiplayer-harness/](../scripts/multiplayer-harness/README.md); earlier drafts of
+> this header said none of it had been verified at all, which was true until that harness
+> existed. What remains unverified is narrower and named at the end of §8: a real network
+> drop, phones, and anything visual.
 > As-built deviations are recorded under each phase in §4; where they conflict with the
 > prose above them, the as-built notes win.
 >
@@ -408,7 +413,9 @@ As shipped:
   one-shot `firstValueFrom` meant nothing was subscribed to `videoStream$` after the first
   attach, which is the actual cause of the frozen frame. `awaitStream` still owns the 20 s
   timeout and the `failFast$` race; the page-lifetime subscription owns attaching. A `skip(1)`
-  would have papered over the race instead of removing it.
+  would have papered over the race instead of removing it. **Amended by §8.2:** that was *a*
+  cause, not *the* cause — a rejoining guest could still be handed a frozen picture, from
+  trystero's per-stream-object cache on the sending side.
 - **The status pill is toolbar-docked, not the overlay item 3 describes, and is deliberately
   not Win9x.** After Phase 2 there is zero letterbox in portrait, so an overlay would sit
   permanently on the strip where Windows 3.1 draws the game's own title bar — while the
@@ -508,7 +515,7 @@ As shipped:
 
 ## 5. Verification per phase
 
-There are zero `.spec.ts` files, so everything below is manual. **Standing setup for every phase:** two browser contexts on the same machine — a normal window as host and a *separate profile or incognito* window as guest (`selfId` is per page load, and two tabs of one profile share IndexedDB, which will confuse save-state observations). Keep both devtools consoles open; several of these bugs are silent by design. Have `npm run lint` and `npm run build` green before manual testing — the component-style budget (2 kB warn / 4 kB error) is the one that will bite in phases 1 and 3.
+There are zero `.spec.ts` files, so everything below is manual — though the two-peer half is now driven by the harness rather than by hand (§8). **Standing setup for every phase:** two browser contexts on the same machine — a normal window as host and a *separate profile or incognito* window as guest (`selfId` is per page load, and two tabs of one profile share IndexedDB, which will confuse save-state observations), neither of them covered by another window (§8 explains what occlusion does to the timings). Keep both devtools consoles open; several of these bugs are silent by design. Have `npm run lint` and `npm run build` green before manual testing — the component-style budget (2 kB warn / 4 kB error) is the one that will bite in phases 1 and 3.
 
 **Standing regression checks, to run at the end of every phase.** These four are the ones that break silently:
 
@@ -547,6 +554,10 @@ There are zero `.spec.ts` files, so everything below is manual. **Standing setup
 - **Persisting the room password (for "recent rooms" or host reload resume)** — a privacy regression on a shared device, and it would have to survive the data-wipe paths. Codes only.
 - **Host session resume across a reload** — deferred, not rejected, but explicitly out of this plan: it needs new `STORAGE_KEY`s, a canvas-ready gate and a `Retomar a transmissão da sala {{código}}?` prompt, and the grace period does *not* cover it (nothing about hosting is persisted today, so a reloaded host is simply gone).
 - **Control handoff** — out of scope by decision. The protocol reframing in §3(c) deliberately leaves room for it without designing it.
+- **Reading a peer's own declared role to decide whether it deserves a join line** (§8) — it is exactly the claim decisions (c) and (e) rule out, re-entering by a side door. A short delay before writing the line is claim-free and costs nothing.
+- **Clamping a forged `hostingForMs` to the ceiling** (§8) — a clamped liar still beats every genuinely shorter host, which is the whole exploit. Over the ceiling is treated as `0`.
+- **A custom retro alert component** (§8) — `ion-alert` is Stencil *scoped*, not shadow DOM, so the global sheet already reaches every internal node. A component would have to re-implement the focus trap, backdrop, Esc handling and `onDidDismiss()` to buy nothing.
+- **A blanket `ion-alert` rule for the Win9x skin** (§8) — opt-in via `cssClass` matches how every other retro surface here works and keeps the boundary in decision (a) explicit at the call site. The cost is a `grep` parity check before each PR, which is written down in CLAUDE.md.
 
 ---
 
@@ -601,4 +612,141 @@ handled.
 (including measured contrast — the host action was 3.5:1 against the page, under AA), the join
 flow and dialog, tutorial gating and `Primeiros passos`, `Voltar ao menu` with re-entry proving
 one wasm instance, the manual and FAQ, and the animation timings sampled mid-transition. Nothing
-requiring two peers has been verified.
+requiring two peers was verified in this round; §8 is that round.
+
+---
+
+## 8. Two-peer verification and hardening (post-§7)
+
+§7 ended by admitting that nothing needing two peers had been checked. Four changes closed
+most of that gap: a test harness, the defects the harness immediately found, validation of
+everything arriving over the data channel, and the alert skin. Recorded here because two of
+them add invariants the sections above do not have, and because one of them found a *second*
+cause of the frozen picture that §4 Phase 4 believed it had removed.
+
+### 8.1 The harness
+
+[scripts/multiplayer-harness/](../scripts/multiplayer-harness/README.md) — one Chrome per peer
+over the DevTools Protocol, no dependencies (node 22 has a global `WebSocket`, so it is 200
+lines rather than a puppeteer install). Peer 0 opens `#/game?host=1`, the rest `#/join-game`,
+each with its own profile and port because `selfId` is per page load and IndexedDB is per
+profile. The README carries the scenario checklist with what "pass" actually looked like: 13
+behaviours, verified 2026-08-27.
+
+Nothing there reaches the bundle, by construction rather than convention — `angular.json`'s
+build inputs are all under `src/`, which is also why `scripts/version-config.js` has always
+lived there. It is outside the checks too: ESLint is scoped to `src/**/*.ts` and
+`tsconfig.app.json` lists only `src` entry points.
+
+Two findings belong in §5 rather than in a README, because they invalidate runs silently:
+
+- **A covered window is a broken window.** Chrome reports an occluded window as hidden, which
+  throttles its timers *and* suspends its animation frames. Throttling turns the 13 s host
+  grace, the 20 s stream wait and the 1.5 s auto-saver tick into noise — one game boot took
+  112 s. Suspended frames strand Ionic overlays mid-animation, so an awaited
+  `modalController.dismiss()` never settles: the room dialog just sits there, the join never
+  starts, and the console says nothing. The launcher's flags fix the timers; the animations
+  need the window frontmost, which is why the harness has a `front` command.
+- **Signalling is flaky under churn, independently of this app.** trystero's default nostr
+  relays include dead ones, and the first join right after a guest reload often fails with
+  `connection-failed`, succeeding on a retry. Retry before believing a failure.
+
+### 8.2 Defects only reachable with two peers
+
+- **A spectator only ever joins from a fresh page load.** A guest who rejoined inside one page
+  load reached `IN_ROOM` with a correct roster, chat and headcount, and no picture. trystero
+  keeps one connection per peer in a module-level registry that outlives any room, and does not
+  renegotiate media onto a connection that is already up: `onnegotiationneeded` fires on the
+  host and the offer never lands, so the data channel returns instantly while `onPeerStream`
+  never fires and the guest sits out the 20 s timeout. Every guest re-entry now goes through
+  `JoinGamePage.reloadSpectator`, which costs a spectator nothing — no emulator, no save state,
+  the code travels on the URL and the name comes back from storage. **The host page must never
+  do this.** The same connection reuse made a rejected password unrecoverable: after one wrong
+  password, two further attempts with the *correct* one both timed out while the copy told the
+  guest to go and check the password. The error card's retry reloads as well.
+- **A returning peer was served its previous, dead stream.** trystero caches a remote stream per
+  sender-side stream object, on a shared peer that outlives the room, so re-adding the same
+  object handed a rejoining guest a frozen picture presented as live rather than an honest
+  failure. `publishStream` now wraps the same tracks in a new `MediaStream` on every add; the
+  tracks are shared, so it costs no extra capture or encoding. Belt and braces beside the
+  reload above.
+- **The `?host=1` deep link opened the room dialog on top of the welcome alert.** Phase 5 built
+  the landing page's `Jogar e transmitir para amigos` on the assumption that `showTutorial()`
+  resolves when the reader is done; it resolved once the alert was *presented*. It now waits for
+  the alert, and for the guide if that is where the reader went.
+- **A host that lost a collision was left contradicting itself** — `Sala ELI-XXXX no ar.` beside
+  an alert saying the code was taken. The toast is dismissed on yielding, and skipped outright
+  if the collision resolves before it would appear.
+- **A colliding host's few hundred milliseconds in the room wrote a join *and* a leave line into
+  every spectator's transcript,** for someone who was never in their room. Join lines now wait
+  out a short delay, and a peer that leaves first produces neither line. Deliberately claim-free
+  — see the §6 entry. The line carries the *arrival* timestamp, because the transcript is
+  timestamp-ordered and would otherwise sort a fast greeter's first message above their own
+  arrival.
+
+### 8.3 Everything on the wire is a claim
+
+Every field on a `*Message` interface describes what a well-behaved peer sends and constrains
+nothing at runtime: trystero payloads are `JSON.parse` output, so a peer with devtools can put
+any JSON value in any field. The services already understood this for identity — `senderId`
+comes from the transport, `kind` is forced, and `PlayerIdentMessage.host` is deprecated
+precisely because it was forgeable. `WireGuardHelper` extends it to the fields that were still
+trusted. Its functions are all total (they take `unknown` and always return something usable),
+because the alternative at a message handler is a `try`/`catch`, and a handler that throws takes
+its whole subscription with it.
+
+Four sinks, found by tracing each field to where it lands:
+
+1. **chat `timestamp`** → `DatePipe` and the transcript's sort comparator. The worst of them:
+   `DatePipe` rethrows as NG02100 for `{}`, `[]`, `'pwned'` or `undefined`, during change
+   detection so the throw escapes into Angular; and `Number('1e400')` is `Infinity`, which sorts
+   permanently last, past the `slice(-100)` window that would otherwise scroll it away. One
+   message bricks the panel until reload — for the host too, since the transcript is mounted on
+   `isStreaming`, not on whether the panel is open.
+2. **ident `color`** → three sinks failing three ways. `getCSSFilterFromColor` throws on a bad
+   hex and runs per cursor per render with nothing catching above it; `darkenForText` catches;
+   the roster swatch and click ping write to the DOM. Not XSS — Angular writes via
+   `el.style.setProperty`, which rejects a declaration breakout, and `background-color` cannot
+   take `url()` — but that is how Angular happens to write styles, not a guarantee to build on.
+   Validated once at ingest instead of at each sink.
+3. **cursor `x`/`y`** → multiplied by the container's offset size, so non-finite yields `NaN` and
+   large values park the pointer off-surface. Cursors are shared, so one peer's payload is
+   everyone's overlay.
+4. **`hostingForMs`** on `hostAnnounce`/`roleQuery` → the collision tie-break from §4 Phase 1's
+   as-built note. Not a crash but an eviction primitive: an unbounded self-reported duration
+   means `1e308` makes a real host with spectators mid-match tear itself down and report
+   `ROOM_CODE_TAKEN`. Same class as the deprecated `host` flag, but with no transport-level fact
+   to replace it — elapsed time only exists on the sender's clock — so it is bounded instead.
+
+String caps mirror the `maxlength` attributes already on the composer (200) and the name field
+(20), which bind our own UI and nothing else. Verified with a probe over 14 hostile shapes,
+confirming `timestamp` always yields a Date-representable number, all 196 pairwise comparator
+differences finite, `color` always a parseable hex, and no forged duration winning the
+tie-break. **Not verified with two real peers** — that needs hostile payloads injected from a
+guest under `npm run mp:launch`.
+
+### 8.4 Alerts joined the retro side of the boundary
+
+`ion-alert` was the last companion window still rendering as a Material card, so a confirm
+dialog appeared mid-surface looking nothing like the omatic modal beside it. Decision (a)'s
+boundary puts it on the retro side; the mechanics are in CLAUDE.md and at the end of
+`_win9x.scss`, and the two that will bite anyone editing it are that Stencil suffixes *every
+compound* of its selectors (so an Ionic rule can score (0,4,0) and a rule one class short fails
+silently, reading as a paint bug) and that `mode: 'md'` is pinned globally, which is why the
+pressed bevel keys off `:active` rather than `.ion-activated`.
+
+### 8.5 Still open
+
+- **Colliding cursor colours.** §7 fixed the roster — your row is tinted and marked, and a short
+  peer-id suffix disambiguates duplicate names — but the game surface is unchanged: colours are
+  drawn at random from an 8-entry palette (`MultiplayerIdentityService.randomColor`) with nothing
+  enforcing uniqueness, so two spectators can still put two indistinguishable pointers on the
+  canvas.
+- **The `connection-failed` residual in 8.1.** Mitigated by the retry button, not fixed. It is
+  the nostr signalling layer rather than anything in this feature, so the fix is a relay list,
+  not a code path.
+- **Hostile payloads have not been through the harness** (8.3).
+- **A real network drop, phones, and every visual judgement** — the harness README's own list.
+  CDP `offline` cuts HTTP and WebSocket traffic, so it breaks signalling but does not reliably
+  stop media on an established WebRTC connection; testing "the host fell off the network" still
+  means turning Wi-Fi off for 8 s (expect recovery) and 30 s (expect the room to end).
