@@ -123,7 +123,7 @@ export class GamePage implements OnInit, OnDestroy {
       } else {
         const alert = await this.alertController.create({
           header: `É ${failCount} papapá...`,
-          cssClass: 'alert-whitespace',
+          cssClass: 'win9x-alert alert-whitespace',
           message: `Multiplas tentativas(${failCount}) de carregar o jogo falharam\n\nMotivo: (${e.message})`,
           backdropDismiss: false,
           buttons: [
@@ -276,7 +276,7 @@ export class GamePage implements OnInit, OnDestroy {
         '- No celular, mova o cursor deslizando o dedo na tela, como em um touchpad de notebook.\n' +
         '\nAproveite para reviver a nostalgia do clássico Elifoot 98 diretamente no seu navegador!\n',
       backdropDismiss: false,
-      cssClass: 'alert-whitespace wide-alert',
+      cssClass: 'win9x-alert alert-whitespace wide-alert',
       buttons: [
         {
           text: 'FAQ e Manual',
@@ -364,6 +364,7 @@ export class GamePage implements OnInit, OnDestroy {
         header: 'Aviso',
         message: 'Não há jogos salvos para baixar',
         backdropDismiss: false,
+        cssClass: 'win9x-alert',
         buttons: ['OK']
       });
       await alert.present();
@@ -382,6 +383,7 @@ export class GamePage implements OnInit, OnDestroy {
         header: 'Aviso',
         message: 'Não há alterações no disco para baixar',
         backdropDismiss: false,
+        cssClass: 'win9x-alert',
         buttons: ['OK']
       });
       await alert.present();
@@ -393,7 +395,7 @@ export class GamePage implements OnInit, OnDestroy {
       header: 'Aviso',
       message: 'Tem certeza que deseja limpar todos os dados? Isso irá apagar todos os jogos salvos e configurações.',
       backdropDismiss: false,
-      cssClass: 'alert-whitespace',
+      cssClass: 'win9x-alert alert-whitespace',
       buttons: [{
         text: 'Não',
         role: 'cancel'
@@ -530,7 +532,7 @@ export class GamePage implements OnInit, OnDestroy {
       const alert = await this.alertController.create({
         header: 'Patch aplicado',
         message: 'O patch foi aplicado com sucesso.\nO jogo será reiniciado.',
-        cssClass: 'alert-whitespace',
+        cssClass: 'win9x-alert alert-whitespace',
         backdropDismiss: false,
         buttons: [{
           text: 'Recarregar',
@@ -553,7 +555,7 @@ export class GamePage implements OnInit, OnDestroy {
       header: 'Aviso',
       message: 'Tem certeza que deseja remover o patch customizado? \nOs times e bandeiras serão revertidos ao estado original',
       backdropDismiss: false,
-      cssClass: 'alert-whitespace',
+      cssClass: 'win9x-alert alert-whitespace',
       buttons: [{
         text: 'Não',
         role: 'cancel'
@@ -585,7 +587,7 @@ export class GamePage implements OnInit, OnDestroy {
         header: 'Aviso',
         message: `Se já existir um arquivo com o mesmo nome do save, ele será substituído.\nDeseja continuar?`,
         backdropDismiss: false,
-        cssClass: 'alert-whitespace',
+        cssClass: 'win9x-alert alert-whitespace',
         buttons: [{
           text: 'Não',
           role: 'cancel'
@@ -622,7 +624,7 @@ export class GamePage implements OnInit, OnDestroy {
         header: 'Confirmação',
         message: `${numberOfFiles} arquivos do patch serão carregados, incluindo bandeiras, equipes e arquivos de configuração\n Continuar?`,
         backdropDismiss: false,
-        cssClass: 'alert-whitespace',
+        cssClass: 'win9x-alert alert-whitespace',
         buttons: [{
           text: 'Não',
           role: 'cancel'
@@ -646,7 +648,7 @@ export class GamePage implements OnInit, OnDestroy {
       header: 'Aviso',
       message: 'Tem certeza que deseja recarregar o jogo? \n\nO progresso que não foi salvo, será perdido.',
       backdropDismiss: false,
-      cssClass: 'alert-whitespace',
+      cssClass: 'win9x-alert alert-whitespace',
       buttons: [{
         text: 'Cancelar',
         role: 'cancel'
@@ -673,7 +675,7 @@ export class GamePage implements OnInit, OnDestroy {
       message: this.isStreaming
         ? 'O jogo será salvo e a sala será encerrada. Os espectadores serão desconectados.'
         : 'O jogo será salvo antes de sair.',
-      cssClass: 'alert-whitespace',
+      cssClass: 'win9x-alert alert-whitespace',
       buttons: [{
         text: 'Cancelar',
         role: 'cancel'
@@ -769,7 +771,7 @@ export class GamePage implements OnInit, OnDestroy {
       header: 'Input',
       message: 'Digite o texto que deseja enviar para o jogo',
       backdropDismiss: false,
-      cssClass: 'alert-whitespace wide-alert',
+      cssClass: 'win9x-alert alert-whitespace wide-alert',
       inputs: [{
         name: 'text',
         type: 'textarea',
@@ -897,7 +899,7 @@ export class GamePage implements OnInit, OnDestroy {
 
     const alert = await this.alertController.create({
       header: 'Código de sala já em uso',
-      cssClass: 'alert-whitespace',
+      cssClass: 'win9x-alert alert-whitespace',
       message: `Já existe uma sala em andamento com o código ${code}. Sua transmissão foi ` +
         'encerrada e quem estava assistindo foi desconectado, mas seu jogo continua aqui.',
       backdropDismiss: false,
@@ -1072,11 +1074,13 @@ export class GamePage implements OnInit, OnDestroy {
     this.isPopoverOpen = false;
   }
 
+  /** The shared funnel for generic errors — keep `win9x-alert` here so every caller inherits it. */
   private async showErrorAlert(errorMsg: Error) {
     const alert = await this.alertController.create({
       header: 'Erro',
       message: errorMsg.message,
       backdropDismiss: false,
+      cssClass: 'win9x-alert',
       buttons: ['OK']
     });
     await alert.present();
@@ -1096,6 +1100,7 @@ export class GamePage implements OnInit, OnDestroy {
         header: 'Patch Removido',
         message: 'O patch foi removido com sucesso. O jogo será reiniciado.',
         backdropDismiss: false,
+        cssClass: 'win9x-alert',
         buttons: [{
           text: 'Recarregar',
           handler: async () => {
@@ -1126,7 +1131,7 @@ export class GamePage implements OnInit, OnDestroy {
       const alert = await this.alertController.create({
         header: 'Jogo salvo aplicado',
         message: 'O jogo salvo foi aplicado com sucesso.\nO jogo será reiniciado.',
-        cssClass: 'alert-whitespace',
+        cssClass: 'win9x-alert alert-whitespace',
         backdropDismiss: false,
         buttons: [{
           text: 'Recarregar',

@@ -167,6 +167,7 @@ export class OmaticModalComponent {
   async showSavedCheats() {
     const alert = await this.alertController.create({
       header: 'Cheats Salvos',
+      cssClass: 'win9x-alert',
       buttons: [
         {
           text: 'Excluir',
@@ -207,7 +208,7 @@ export class OmaticModalComponent {
     const alert = await this.alertController.create({
       header: `Salvar Cheat (${this.foundMatchHex})`,
       message: 'Dê um nome para este cheat.\n\nObservação: O cheat não é salvo permanentemente entre sessões, pois o endereço de memória muda a cada vez que o jogo é iniciado.',
-      cssClass: 'alert-whitespace',
+      cssClass: 'win9x-alert alert-whitespace',
       inputs: [
       {
         name: 'cheatName',
@@ -233,6 +234,7 @@ export class OmaticModalComponent {
           const alert = await this.alertController.create({
           header: 'Erro',
           message: 'O nome do cheat não pode estar vazio.',
+          cssClass: 'win9x-alert',
           buttons: ['OK']
           });
           await alert.present();
@@ -265,6 +267,7 @@ export class OmaticModalComponent {
     }
     const alert = await this.alertController.create({
       message: `Cheat "${cheat.name}" excluído`,
+      cssClass: 'win9x-alert',
       buttons: ['OK']
     });
     await alert.present();

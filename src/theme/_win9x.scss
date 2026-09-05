@@ -347,3 +347,331 @@ ion-button.win9x-button.button-disabled::part(native) {
   flex: 0 0 auto;
   font-size: 11px;
 }
+
+/*
+ * Alert dialogs.
+ * ---------------------------------------------------------------------------
+ * Opt in per alert with `cssClass: 'win9x-alert'` on AlertController.create().
+ *
+ * ion-alert is Stencil *scoped*, not shadow DOM, so every internal node is reachable
+ * from here — no ::part(), and no reason to hand-roll an alert component. What makes this
+ * fiddly is specificity: Stencil appends the scope class to *every compound*, so a
+ * single-compound rule of Ionic's is `.alert-wrapper.sc-ion-alert-md` (0,2,0) but a
+ * two-compound one is `.alert-button-group.sc-ion-alert-md .alert-button-inner.sc-ion-alert-md`
+ * — (0,4,0), not (0,2,0). Stencil also injects that CSS at runtime, so source order
+ * proves nothing. Hence the two shapes below:
+ *
+ *   - against a single-compound rule, `ion-alert.win9x-alert .thing` (0,2,1) is enough;
+ *   - against a descendant rule, `.alert-wrapper` is threaded in to reach (0,4,1).
+ *
+ * The `.alert-wrapper` in those selectors is load-bearing, not decorative. Dropping it
+ * silently hands the rule back to Ionic — which is how the checked radio first rendered
+ * with an Elifoot-green ring.
+ *
+ * The app pins `mode: 'md'` globally (app.module.ts), so only alert.md.css is ever in
+ * play — none of this has to reconcile with the iOS alert layout.
+ *
+ * Hit targets are deliberately Ionic-sized rather than authentic, for the same reason
+ * .win9x-button--touch above exists.
+ */
+
+ion-alert.win9x-alert {
+  /* A Win9x dialog is a small fixed box. This also overrides the md `--max-width`,
+     which otherwise grows to 560px at >=768px. */
+  --background: var(--win9x-face);
+  --max-width: 400px;
+  --backdrop-opacity: 0.4;
+
+  color: var(--win9x-ink);
+  font-family: var(--win9x-font);
+  font-size: var(--win9x-font-size);
+}
+
+/* Pinning --max-width threw away the 280px default that used to keep the dialog inside a
+   small phone, so put a viewport-relative cap back. calc(), not min(): .browserslistrc
+   still admits Firefox 70, where min() does not parse — and an unparsable value here
+   resolves max-width to `none`, i.e. no cap at all, which is worse than the default. */
+@media screen and (max-width: 424px) {
+  ion-alert.win9x-alert {
+    --max-width: calc(100vw - 24px);
+  }
+}
+
+/* The window frame. Uses the same raised 2px edge as .win9x-element-border rather than
+   the 4-layer button bevel, so an alert and the room-setup dialog read as the same OS.
+   Win95 dialogs cast no drop shadow, so Ionic's material one goes. */
+ion-alert.win9x-alert .alert-wrapper {
+  padding: 3px;
+  border-width: 2px;
+  border-style: solid;
+  border-top-color: var(--win9x-light);
+  border-left-color: var(--win9x-light);
+  border-bottom-color: var(--win9x-shadow);
+  border-right-color: var(--win9x-shadow);
+  border-radius: 0;
+  box-sizing: border-box;
+  box-shadow: none;
+  background: var(--win9x-face);
+}
+
+/* Titlebar. `:empty` is safe here: Stencil emits no text node for an omitted header,
+   which is the same assumption Ionic's own `.alert-message:empty` rule makes. Needed
+   because the delete-cheat alert passes a message with no header, and a blue bar with
+   nothing in it reads as a rendering bug. */
+ion-alert.win9x-alert .alert-head {
+  padding: 3px 4px;
+  background: var(--win9x-titlebar-bg);
+  text-align: start;
+  user-select: none;
+}
+
+ion-alert.win9x-alert .alert-head:empty {
+  display: none;
+}
+
+/* No call site passes `subHeader` today; it is styled only so that adding one later
+   degrades into a second titlebar line instead of unstyled Material text. */
+ion-alert.win9x-alert .alert-title,
+ion-alert.win9x-alert .alert-sub-title {
+  color: var(--win9x-titlebar-ink);
+  font-family: var(--win9x-font);
+  font-size: var(--win9x-font-size);
+  font-weight: bold;
+}
+
+/* Body. The `.alert-wrapper .alert-head + .alert-message` variant is not redundant: Ionic
+   zeroes the top padding there at (0,4,0) — correct under a Material header, wrong under
+   a titlebar — and only a 4-class selector takes it back. */
+ion-alert.win9x-alert .alert-message,
+ion-alert.win9x-alert .alert-wrapper .alert-head + .alert-message,
+ion-alert.win9x-alert .alert-input-group {
+  padding: 12px;
+  color: var(--win9x-ink);
+  font-family: var(--win9x-font);
+  font-size: var(--win9x-font-size);
+}
+
+/* (0,4,1), and it must stay *after* the rule above, whose `.alert-head + .alert-message`
+   branch is also (0,4,1) — the tie is broken by source order. Ionic collapses an empty
+   message to zero padding and that has to survive: the saved-cheats alert passes inputs
+   and no message, so this div renders empty directly under the titlebar and would
+   otherwise open a dead 12px band above the list. */
+ion-alert.win9x-alert .alert-wrapper .alert-message:empty {
+  padding: 0;
+}
+
+/* Text and textarea inputs: a sunken field, like .win9x-input + .win9x-element-bevel. */
+ion-alert.win9x-alert .alert-input {
+  margin: 0;
+  padding: 4px 6px;
+  border-width: 2px;
+  border-style: solid;
+  border-top-color: var(--win9x-shadow);
+  border-left-color: var(--win9x-shadow);
+  border-bottom-color: var(--win9x-light);
+  border-right-color: var(--win9x-light);
+  border-radius: 0;
+  box-sizing: border-box;
+  background: var(--win9x-field);
+  color: var(--win9x-ink);
+  font-family: var(--win9x-font);
+  font-size: var(--win9x-font-size);
+}
+
+ion-alert.win9x-alert .alert-input::placeholder {
+  color: var(--win9x-ink-disabled);
+  opacity: 1;
+}
+
+/* (0,2,2) beats Ionic's `textarea.alert-input` (0,2,1). The free-text box that sends a
+   whole string into the emulator is a textarea for a reason; one line of room isn't it. */
+ion-alert.win9x-alert textarea.alert-input {
+  min-height: 88px;
+  resize: none;
+}
+
+/* Ionic's focus rule swaps to a 2px primary bottom border and shaves 1px off the margin,
+   which makes the field twitch. Hold the bevel; use the dotted ring that
+   .win9x-button:focus already establishes as this theme's focus idiom. */
+ion-alert.win9x-alert .alert-input:focus {
+  margin-bottom: 0;
+  border-bottom-width: 2px;
+  border-bottom-color: var(--win9x-light);
+  outline: 1px dotted var(--win9x-ink);
+  outline-offset: -4px;
+}
+
+/* Radio list as a sunken list box — the Cheat 'O Matic saved-cheats alert. The margin is
+   its own, not inherited: Ionic renders .alert-radio-group as a direct child of
+   .alert-wrapper, so unlike a text input it never sits inside .alert-input-group. */
+ion-alert.win9x-alert .alert-radio-group,
+ion-alert.win9x-alert .alert-checkbox-group {
+  margin: 12px;
+  border-width: 2px;
+  border-style: solid;
+  border-top-color: var(--win9x-shadow);
+  border-left-color: var(--win9x-shadow);
+  border-bottom-color: var(--win9x-light);
+  border-right-color: var(--win9x-light);
+  box-sizing: border-box;
+  background: var(--win9x-field);
+}
+
+ion-alert.win9x-alert .alert-radio-label,
+ion-alert.win9x-alert .alert-checkbox-label {
+  color: var(--win9x-ink);
+  font-family: var(--win9x-font);
+  font-size: var(--win9x-font-size);
+}
+
+/* Win9x radios really were circles, so the shape stays; only the shading and the black
+   dot change. The 1px box-shadow is the outer half of the authentic double ring, and it
+   is load-bearing rather than decorative: the sunken bevel puts --win9x-light on the
+   bottom-right, which is invisible against the white list box and leaves the ring
+   rendering as a broken "C". */
+ion-alert.win9x-alert .alert-radio-icon {
+  border-width: 2px;
+  border-top-color: var(--win9x-shadow);
+  border-left-color: var(--win9x-shadow);
+  border-bottom-color: var(--win9x-light);
+  border-right-color: var(--win9x-light);
+  box-shadow: 0 0 0 1px var(--win9x-shadow);
+  background: var(--win9x-field);
+}
+
+ion-alert.win9x-alert .alert-radio-inner {
+  background-color: var(--win9x-ink);
+}
+
+/* Checked state. All three are (0,4,1) because Ionic's `[aria-checked=true] .thing` rules
+   land at (0,4,0) and would otherwise repaint the control in the accent colour. */
+ion-alert.win9x-alert .alert-wrapper [aria-checked='true'] .alert-radio-icon {
+  border-top-color: var(--win9x-shadow);
+  border-left-color: var(--win9x-shadow);
+  border-bottom-color: var(--win9x-light);
+  border-right-color: var(--win9x-light);
+}
+
+ion-alert.win9x-alert .alert-wrapper [aria-checked='true'] .alert-checkbox-icon {
+  border-top-color: var(--win9x-shadow);
+  border-left-color: var(--win9x-shadow);
+  border-bottom-color: var(--win9x-light);
+  border-right-color: var(--win9x-light);
+  background-color: var(--win9x-field);
+}
+
+ion-alert.win9x-alert .alert-wrapper [aria-checked='true'] .alert-radio-label,
+ion-alert.win9x-alert .alert-wrapper [aria-checked='true'] .alert-checkbox-label {
+  color: var(--win9x-ink);
+}
+
+/* Ionic draws the tick in --ion-color-primary-contrast, i.e. white — invisible now that
+   the box is a white field rather than a filled accent square. */
+ion-alert.win9x-alert .alert-wrapper [aria-checked='true'] .alert-checkbox-inner {
+  border-color: var(--win9x-ink);
+}
+
+/* 0,3,1 — replaces Ionic's grey focus wash on a list row. */
+ion-alert.win9x-alert .alert-tappable.ion-focused {
+  background: var(--win9x-field);
+  outline: 1px dotted var(--win9x-ink);
+  outline-offset: -4px;
+}
+
+/*
+ * Buttons: centred, not right-aligned. `flex-wrap` goes from wrap-reverse to wrap so a
+ * wrapped pair keeps DOM order — Ionic's reverse makes sense against flex-end, not
+ * against center. Ionic 9 also has a ResizeObserver that promotes a wrapping 2-button
+ * group to .alert-button-group-vertical, so wrapping is mostly a transient state.
+ */
+ion-alert.win9x-alert .alert-button-group {
+  padding: 4px 12px 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+  background: var(--win9x-face);
+}
+
+/* Column direction turns justify-content into vertical centring, so horizontal centring
+   has to move to align-items. The wider min-width keeps a stacked group from reading as
+   ragged, since each button would otherwise size to its own label.
+
+   `nowrap` is restored because the `wrap` above is (0,2,1) on the same element and would
+   otherwise outrank Ionic's `.alert-button-group-vertical { flex-wrap: nowrap }` (0,2,0),
+   letting a height-squeezed column wrap into a second column. */
+ion-alert.win9x-alert .alert-button-group-vertical {
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+ion-alert.win9x-alert .alert-button-group-vertical .alert-button {
+  min-width: 170px;
+}
+
+ion-alert.win9x-alert .alert-button {
+  margin: 4px;
+  padding: 0 12px;
+  min-width: 88px;
+  min-height: 36px;
+  border: none;
+  border-radius: 0;
+  box-sizing: border-box;
+  background: var(--win9x-face);
+  color: var(--win9x-ink);
+  font-family: var(--win9x-font);
+  font-size: var(--win9x-font-size);
+  font-weight: bold;
+  text-align: center;
+  text-transform: none;
+  box-shadow:
+    inset -1px -1px var(--win9x-dark),
+    inset 1px 1px var(--win9x-light),
+    inset -2px -2px var(--win9x-shadow),
+    inset 2px 2px var(--win9x-bevel-light);
+}
+
+/* (0,4,1) — Ionic right-aligns the label at (0,4,0), which is a Material footer idiom. */
+ion-alert.win9x-alert .alert-wrapper .alert-button-group .alert-button-inner {
+  justify-content: center;
+}
+
+/* Pressed: the bevel inverts, matching .win9x-button:active.
+
+   `:active`, not `.ion-activated`. Ionic only attaches the gesture that adds that class
+   when the mode is ios — `if (!this.gesture && getIonMode(this) === 'ios' ...)` in
+   alert.js setupButtonActiveGesture — and this app pins md, so a rule keyed on it never
+   fires. md's own press feedback is the ripple, removed below, which leaves `:active` as
+   the only thing holding the pressed state. */
+ion-alert.win9x-alert .alert-button:active {
+  box-shadow:
+    inset -1px -1px var(--win9x-light),
+    inset 1px 1px var(--win9x-dark),
+    inset -2px -2px var(--win9x-bevel-light),
+    inset 2px 2px var(--win9x-shadow);
+}
+
+/* 0,3,1 — Ionic paints a grey wash on focus; Win9x used a dotted inset ring. */
+ion-alert.win9x-alert .alert-button.ion-focused {
+  background: var(--win9x-face);
+  outline: 1px dotted var(--win9x-ink);
+  outline-offset: -4px;
+}
+
+ion-alert.win9x-alert ion-ripple-effect {
+  display: none;
+}
+
+/*
+ * .alert-danger is a *button*-level cssClass (game.page.ts, omatic-modal.component.ts,
+ * multiplayer-ui.service.ts) and needs no help to keep working: its `!important` colour in
+ * global.scss already outranks the plain `color` above, so the destructive label stays red
+ * over the bevel.
+ *
+ * What it does need is contrast. That red was picked against a white Material card, where
+ * it lands at ~3.7:1; on the #c0c0c0 face it collapses to ~2.1:1. Win9x maroon restores it
+ * to ~6:1 and is a period-correct system colour. Scoped to .win9x-alert, so `alert-danger`
+ * anywhere else is untouched. Both declarations are !important, so specificity decides —
+ * (0,3,1) here against (0,1,0) there.
+ */
+ion-alert.win9x-alert .alert-button.alert-danger {
+  color: #800000 !important;
+}

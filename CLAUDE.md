@@ -273,12 +273,49 @@ below the Ionic imports.
 
 **The boundary: companion windows are Windows 95; the app shell stays Elifoot green.**
 Retro treatment applies to the multiplayer chat panel, the room-setup dialog, the
-multiplayer panel, the roster rows, the chat toggle, and the Cheat 'O Matic modal. It does
+multiplayer panel, the roster rows, the chat toggle, the Cheat 'O Matic modal, and every
+`AlertController` dialog. It does
 **not** apply to the page toolbars (`ion-toolbar color="tertiary"`), the landing cards, the
 FAB clusters or the options popover — the navy `#092469` in
 [variables.scss](src/theme/variables.scss) is close enough to `#000080` that shell and retro
 windows read as deliberately related. A retro treatment without an explicit boundary reads
 as a mistake rather than a choice.
+
+**Alerts are skinned in pure CSS, and opt in per call site.** `ion-alert` is Stencil
+**`scoped`**, not shadow DOM, so every internal node (`.alert-wrapper`, `.alert-head`,
+`.alert-input`, `.alert-button`, …) is reachable from the global sheet — no `::part()`, and
+no reason for a custom alert component that would have to re-implement the focus trap,
+backdrop, Esc handling and `onDidDismiss()`. The block lives at the end of
+[_win9x.scss](src/theme/_win9x.scss). Two things it depends on:
+
+- **Stencil suffixes every *compound* of its selectors**, not just the last one, so an
+  Ionic alert rule scores (0, 2 × compounds, 0). `.alert-wrapper.sc-ion-alert-md` is
+  (0,2,0), but `.alert-head.sc-ion-alert-md+.alert-message.sc-ion-alert-md` and
+  `[aria-checked=true].sc-ion-alert-md .alert-radio-icon.sc-ion-alert-md` are **(0,4,0)**.
+  Stencil injects that CSS at runtime, so source order proves nothing. Rules are prefixed
+  `ion-alert.win9x-alert` and then name **at least as many descendant classes as the Ionic
+  rule they fight** — threading in `.alert-wrapper` is how the (0,4,1) ones get there. A
+  rule that is one class short fails silently and reads as a paint bug: that is how the
+  checked radio first shipped with an Elifoot-green ring.
+- `mode: 'md'` is pinned globally in [app.module.ts](src/app/app.module.ts), so only
+  `alert.md.css` is ever in play. Unpinning it would drop every alert into the iOS layout,
+  which this block does not style — and would switch **on** the iOS-only button-active
+  gesture, which is why the pressed bevel is keyed to `:active` and not `.ion-activated`
+  (md never sets that class; see `setupButtonActiveGesture` in Ionic's `alert.js`).
+- Alerts carry no drop shadow, matching `.win9x-modal`. `contain: content` on
+  `.alert-wrapper` would not block one — paint containment clips descendants, not the
+  element's own shadow — so its absence is a choice, not a limitation.
+- `.alert-danger` is re-coloured to Win9x maroon *inside* `.win9x-alert` only. The Ionic
+  red was chosen against a white card (~3.7:1) and drops to ~2.1:1 on the `#c0c0c0` face.
+
+**A new alert must pass `cssClass: 'win9x-alert'` or it renders as a Material card.** Keep
+it first in the string, ahead of `alert-whitespace` / `wide-alert`. The two generic error
+funnels — `GamePage.showErrorAlert` and `MultiplayerUiService.showError` — already carry it,
+so route new error dialogs through those rather than hand-rolling another `create()`.
+`alert-danger` is a *button*-level class and is unaffected. Before opening a PR, check that
+`grep -rc 'alertController.create' src/` and `grep -rc "cssClass: 'win9x-alert" src/app`
+still agree (23 today) — a manual check, because `npm run lint` covers only `.ts`/`.html`
+and there is no stylelint setup to hang it on.
 
 The room status pill (`.mp-status-pill` in [global.scss](src/global.scss)) is on the shell
 side of that line and is deliberately flat, not Win9x: it renders inside the page toolbars,

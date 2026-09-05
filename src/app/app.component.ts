@@ -64,7 +64,7 @@ export class AppComponent {
   private async showUpdateAlert() {
     const alert = await this.alertController.create({
       header: 'Atualização disponível',
-      cssClass: 'alert-whitespace',
+      cssClass: 'win9x-alert alert-whitespace',
       backdropDismiss: false,
       message: 'Uma nova versão do aplicativo está disponível.\n\nVocê pode instalar agora ou optar por fazê-la na próxima inicialização.',
       buttons: [

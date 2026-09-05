@@ -70,6 +70,7 @@ export class MultiplayerUiService {
     const alert = await this.alertController.create({
       header: 'Sair da sala?',
       message,
+      cssClass: 'win9x-alert',
       buttons: [
         { text: 'Ficar', role: 'cancel' },
         { text: 'Sair', role: 'confirm', cssClass: 'alert-danger' },
@@ -82,8 +83,9 @@ export class MultiplayerUiService {
     return role === 'confirm';
   }
 
+  /** The shared funnel for multiplayer errors — keep `win9x-alert` here so every caller inherits it. */
   async showError(message: string, header = 'Erro'): Promise<void> {
-    const alert = await this.alertController.create({ header, message, buttons: ['OK'] });
+    const alert = await this.alertController.create({ header, message, cssClass: 'win9x-alert', buttons: ['OK'] });
     await alert.present();
     await alert.onDidDismiss();
   }
