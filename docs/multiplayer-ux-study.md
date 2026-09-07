@@ -558,6 +558,8 @@ There are zero `.spec.ts` files, so everything below is manual — though the tw
 - **Clamping a forged `hostingForMs` to the ceiling** (§8) — a clamped liar still beats every genuinely shorter host, which is the whole exploit. Over the ceiling is treated as `0`.
 - **A custom retro alert component** (§8) — `ion-alert` is Stencil *scoped*, not shadow DOM, so the global sheet already reaches every internal node. A component would have to re-implement the focus trap, backdrop, Esc handling and `onDidDismiss()` to buy nothing.
 - **A blanket `ion-alert` rule for the Win9x skin** (§8) — opt-in via `cssClass` matches how every other retro surface here works and keeps the boundary in decision (a) explicit at the call site. The cost is a `grep` parity check before each PR, which is written down in CLAUDE.md.
+- **A black cursor name on an opaque pill** (§8.6) — maximally legible at 21:1, but it strips the player colour from the only place both peers are looking. With eight palette entries and no uniqueness enforced, two similar cursors would then carry identical-looking names, making the roster the only way to tell them apart.
+- **Dropping the label's background for haloed text** (§8.6) — occludes the least, and was tempting for exactly that reason, but a `text-shadow` outline gives no guaranteed ratio: over the game's own small yellow-on-green text the halo competes with the backdrop instead of separating from it. The pill is a measured 4.5:1 floor; a halo is a hope.
 
 ---
 
@@ -741,7 +743,8 @@ pressed bevel keys off `:active` rather than `.ion-activated`.
   peer-id suffix disambiguates duplicate names — but the game surface is unchanged: colours are
   drawn at random from an 8-entry palette (`MultiplayerIdentityService.randomColor`) with nothing
   enforcing uniqueness, so two spectators can still put two indistinguishable pointers on the
-  canvas.
+  canvas. §8.6 made each pointer *legible*, which is a different problem: it puts the name on an
+  opaque pill in the player's colour, so two peers sharing a colour now have matching labels too.
 - **The `connection-failed` residual in 8.1.** Mitigated by the retry button, not fixed. It is
   the nostr signalling layer rather than anything in this feature, so the fix is a relay list,
   not a code path.
@@ -750,3 +753,47 @@ pressed bevel keys off `:active` rather than `.ion-activated`.
   CDP `offline` cuts HTTP and WebSocket traffic, so it breaks signalling but does not reliably
   stop media on an established WebRTC connection; testing "the host fell off the network" still
   means turning Wi-Fi off for 8 s (expect recovery) and 30 s (expect the room to end).
+
+### 8.6 Cursor legibility over the game
+
+Reported as "depending on the colour it is harsh to read the player name". Two independent
+contrast failures, both on the one surface where the picture is not ours to control.
+
+**The name label.** `.pointer-overlay-cursor-label` carried `opacity: 0.35` on the *whole*
+element, which faded the white pill and the black ink together, so the ratio that mattered —
+ink against pill — was decided by whatever the game happened to be drawing underneath:
+
+| backdrop | text vs pill |
+|---|---|
+| pitch green `rgb(0,128,0)` | 3.35 |
+| bright green `rgb(0,170,85)` | 3.04 |
+| Win 3.1 grey `#c0c0c0` | 2.84 |
+| navy title bar | 3.08 |
+| white game dialog | **2.44** |
+
+Under AA everywhere, and worst over a dialog box — precisely when a spectator is pointing at
+something that matters. The pill is now opaque, which makes the ratio fixed, and the ink is
+`ColorHelper.darkenForText(playerColor)`: the helper Phase 3 already built for the transcript,
+so the name is coloured like its sender line and lands 4.56–6.89 across the palette. The
+border reads `currentColor`, so one inline write covers ink and edge, and it exists because an
+opaque white pill on the game's own white dialogs would have no edge at all. Two alternatives
+were weighed and rejected — see §6.
+
+**The arrow.** `cursor2.png` is a black arrow drawn *with* a white outline, but
+`getCSSFilterFromColor` solves a chain that maps black to the target colour and transforms
+that outline along with the glyph, so the halo does not survive the tint. It was load-bearing:
+against the pitch green, five of the eight palette colours sit under 2:1 — `#4363d8` measures
+**1.02**, which is invisible, and `#e6194b` 1.13, `#aa00aa` 1.24, `#911eb4` 1.34, `#3cb44b`
+1.91. Two `drop-shadow()`s are appended after the recolour, where the shadow colour is literal,
+so one pair works for every tint rather than needing the solver to preserve two colours at once.
+
+**Verification.** Two peers under `npm run mp:launch`, guest on `#4363d8` — the worst case —
+with the label read back from computed style on the host and the arrow confirmed visible over
+the pitch. Then all eight colours rendered at once through the real `renderCursors`, over both
+the green and the About dialog, and the old style forced back on inline for a same-frame
+comparison. Not covered: a phone, and colours a future palette might add (the helper is
+general, but nothing tests it).
+
+**Unchanged, and adjacent:** `.cursor-click-ping` still uses `mix-blend-mode: screen`, which
+makes a dark ping nearly invisible on a light backdrop — the same class of problem, on a 4px
+decoration that lives for one second. Left alone deliberately rather than overlooked.

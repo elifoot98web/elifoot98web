@@ -84,15 +84,34 @@ canvas {
     -ms-user-select: none;
 }
 
+/*
+ * The name rides over live game pixels, so its legibility must not depend on them. This
+ * was `opacity: 0.35` on the whole element, which faded the pill and the ink together:
+ * measured text-against-pill contrast ran 3.35:1 over the pitch green, 3.04 over the
+ * brighter green, 2.84 over Win 3.1 grey and 2.44 over a white game dialog — under AA
+ * everywhere, and worst exactly where the game draws a dialog box.
+ *
+ * With the pill opaque, the only ratio that matters is ink-against-pill, which is fixed
+ * whatever is underneath. `color` is written per cursor from
+ * `ColorHelper.darkenForText(playerColor)` — the same helper the chat transcript uses,
+ * which holds the hue while clearing 4.5:1 against white (4.56–6.89 measured across the
+ * whole palette), so the name identifies its owner the way the sender lines do.
+ *
+ * The border reads from `currentColor`, so that one inline write colours both. It earns
+ * its keep on the game's own white dialogs, where an opaque white pill would otherwise
+ * have no edge at all. `color` below is only the fallback for a cursor rendered before
+ * the inline colour lands.
+ */
 .pointer-overlay-cursor-label {
     background: #fff;
-    padding: 2px;
+    padding: 1px 5px;
+    border: 1px solid currentColor;
     border-radius: 8px;
     margin: 4px 2px;
-    color: black;
+    color: #000;
     font-weight: bold;
     font-family: monospace;
-    opacity: 0.35;
+    white-space: nowrap;
 }
 
 .cursor-click-ping {

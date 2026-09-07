@@ -45,10 +45,21 @@ export class CursorRendererHelper {
           el.style.transition = `left ${MULTIPLAYER.CURSOR_SEND_THROTTLE_MS}ms linear, top ${MULTIPLAYER.CURSOR_SEND_THROTTLE_MS}ms linear`;
         }
         img.src = 'assets/cursor2.png';
-        const filter = ColorHelper.getCSSFilterFromColor(cursor.color)
-        img.style = filter;
+        // cursor2.png is a black arrow drawn with a white outline, but the filter chain is
+        // solved to map *black* to the player colour and transforms that outline along with
+        // the glyph, so the halo it shipped with does not survive the tint. It is needed:
+        // five of the eight palette colours sit under 2:1 against the game's pitch green
+        // (#4363d8 measures 1.02, i.e. invisible). Reinstated here rather than in the
+        // solver because drop-shadow runs *after* the recolour, so its colour is literal
+        // and the same two shadows work for every tint.
+        img.style.cssText = ColorHelper.getCSSFilterFromColor(cursor.color);
+        img.style.filter += ' drop-shadow(0 0 1px rgba(0, 0, 0, 0.9)) drop-shadow(0 0 2px rgba(0, 0, 0, 0.55))';
         txt.innerText = isSelf ? 'Você' : cursor.name || peerId.slice(0, 6);
         txt.className = 'pointer-overlay-cursor-label';
+        // One write colours the ink and, through `currentColor`, the pill's border. Safe
+        // here rather than in a template: `darkenForText` is a pure clamp, unlike
+        // `getCSSFilterFromColor` above, which runs an iterative solver.
+        txt.style.color = ColorHelper.darkenForText(cursor.color);
         el.appendChild(img);
         el.appendChild(txt);
         targetContainer.appendChild(el);
