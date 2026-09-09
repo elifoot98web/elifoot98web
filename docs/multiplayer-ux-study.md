@@ -745,6 +745,11 @@ pressed bevel keys off `:active` rather than `.ion-activated`.
   enforcing uniqueness, so two spectators can still put two indistinguishable pointers on the
   canvas. §8.6 made each pointer *legible*, which is a different problem: it puts the name on an
   opaque pill in the player's colour, so two peers sharing a colour now have matching labels too.
+- **No peer cap and no chat rate limit** (§8.6). The label mitigations bound how much of the game
+  a wall of cursors can cover, but the underlying cost of an unwanted spectator is a WebRTC
+  encode and upload on the host, and chat is unmetered. A cap or a kick is the real answer and is
+  moderation, which decision (e) put out of scope — so this is a standing decision to revisit,
+  not an oversight.
 - **The `connection-failed` residual in 8.1.** Mitigated by the retry button, not fixed. It is
   the nostr signalling layer rather than anything in this feature, so the fix is a relay list,
   not a code path.
@@ -797,3 +802,58 @@ general, but nothing tests it).
 **Unchanged, and adjacent:** `.cursor-click-ping` still uses `mix-blend-mode: screen`, which
 makes a dark ping nearly invisible on a light backdrop — the same class of problem, on a 4px
 decoration that lives for one second. Left alone deliberately rather than overlooked.
+
+#### Bounding what the label can cover
+
+Making the label opaque made it *occlusion*, and the question that follows is what a hostile
+spectator can do with it. Measured first, because the answer changed what was worth building.
+
+A name cannot exceed 20 characters: `maxlength="20"` binds the dialog and
+`WIRE_MAX_NAME_LENGTH` binds ingest (`multiplayer-cursor.service.ts:45`), so a forged payload
+gains nothing. The label is monospace, so `WWWW…` and `MMMM…` are identical widths. Measured
+worst case **169 × 24 px**, and positions are clamped to `[0,1]` by
+`WireGuardHelper.unitInterval`, so labels stay on the surface but can be spread across it:
+
+| surface | game area | one label | 10 devices |
+|---|---|---|---|
+| 900×673 desktop | 605,700 px² | 0.67% | ~7% |
+| 390×844 phone (game box 390×292) | 114,075 px² | **3.6%** | ~36% |
+
+So it is a phone problem, not a desktop one, and fully covering the game needs ~28 peers. The
+important finding is that **the label is not the strongest griefing vector**: there is no peer
+cap and no chat rate limit, and every spectator costs the host a WebRTC encode and upload of
+the canvas, so N trolls means N encoders degrading the host's own framerate. Covering pixels is
+the least of it. Recorded rather than fixed, because a peer cap is moderation and decision (e)
+put that out of scope.
+
+Three mitigations shipped, in the order they earn their keep:
+
+- **The name fades after `CURSOR_LABEL_IDLE_MS` (2 s) of stillness, leaving the arrow.** The
+  Figma/Docs behaviour, and the one that costs a real spectator nothing: a pointer in use moves,
+  so the name is there exactly while it is relevant. The anti-abuse property is in *what counts
+  as movement* — `renderCursors` compares against the `dataset.nx/ny` it already cached, so
+  replaying an identical position cannot hold a label on the canvas. `repositionAll`
+  deliberately does not touch the timer: a resize is not movement, and re-showing every name
+  because the window changed size is the behaviour being removed. The timer lives on the element
+  so it cannot outlive the node, and is cleared when a peer's cursor is removed.
+- **`max-width: 20ch` with ellipsis**, `box-sizing: content-box` so twenty means twenty
+  characters of *text* — under Ionic's global `border-box` the same number starts eliding at
+  about eighteen and clips legitimate names. Equal to the ingest cap, so it elides nothing a
+  peer can send today; it is the backstop that keeps one label bounded if that cap ever moves.
+- **A host-side `Ocultar cursores dos espectadores` toggle** in the popover's `isStreaming`
+  block, persisted under `STORAGE_KEY.HIDE_SPECTATOR_CURSORS`. Hides cursors, labels and click
+  pings. Local and silent — guests are not told, because there is nothing for them to do about
+  it. Hiding reuses the helper's existing "empty map removes what was drawn" path rather than a
+  second teardown; `GamePage.latestCursors` exists so un-hiding repaints immediately, since a
+  parked cursor sends nothing and rendering from the live feed alone would leave precisely the
+  cursors someone hid the overlay to escape missing until they moved.
+
+Under `prefers-reduced-motion` the crossfade goes but the hiding stays: it is decluttering and
+an occlusion bound, not decoration.
+
+**Verification.** Two peers, guest named `ESPECTADORTROLLXXXXX` (the full 20). Label measured
+169px wide with `max-width: 156.533px` and ellipsis; visible at `opacity: 1` one second after a
+move; `opacity: 0` with the arrow still at 1 four seconds later; twenty replays of the identical
+position left it idle; a genuinely new position brought it back to 1. Toggle: cursors went 1 → 0
+on hide, stayed 0 while the guest moved five times, and returned to 1 on un-hide without waiting
+for movement, with `true`/`false` landing in storage both ways.

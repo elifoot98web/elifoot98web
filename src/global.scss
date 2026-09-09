@@ -112,6 +112,30 @@ canvas {
     font-weight: bold;
     font-family: monospace;
     white-space: nowrap;
+    /*
+     * Bounded footprint. `content-box` overrides Ionic's global `border-box` on purpose so
+     * `20ch` means twenty characters of *text*, with the padding and border outside it —
+     * under border-box the same number would start eliding around eighteen characters and
+     * clip legitimate names. Twenty matches MULTIPLAYER.CURSOR_LABEL_MAX_CHARS and the
+     * ingest cap, so nothing a peer can send today is elided; this is what keeps one
+     * label's occlusion bounded if that cap ever moves.
+     */
+    box-sizing: content-box;
+    max-width: 20ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /*
+     * A pointer in use moves; a parked one is either forgotten or deliberately covering
+     * the game. The name is only needed while its owner is doing something, so it fades
+     * out on idle and the arrow — which carries the colour — stays. See
+     * CursorRendererHelper: only a *changed* position re-shows it, so re-sending the same
+     * coordinates cannot pin a name over the canvas.
+     */
+    transition: opacity 300ms ease;
+}
+
+.pointer-overlay-cursor-label--idle {
+    opacity: 0;
 }
 
 .cursor-click-ping {
@@ -533,6 +557,12 @@ canvas {
     }
 
     .pointer-overlay .cursor {
+        transition: none !important;
+    }
+
+    // The label still hides on idle — that is decluttering, not decoration, and it is what
+    // bounds how much of the game a wall of parked cursors can cover. Only the crossfade goes.
+    .pointer-overlay-cursor-label {
         transition: none !important;
     }
 

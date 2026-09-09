@@ -4,12 +4,22 @@ import { ColorHelper } from "./color.helper";
 import { MULTIPLAYER } from "../models/constants";
 
 /**
+ * A rendered cursor, carrying the pending timer that will hide its name label. Kept on the
+ * element rather than in a map beside it so it cannot outlive the node it belongs to.
+ */
+interface CursorElement extends HTMLElement {
+  _labelIdleTimer?: ReturnType<typeof setTimeout>;
+}
+
+/**
  * The overlay container owns the cursor elements it has already rendered, keyed by
  * peerId, so a later render can move them instead of rebuilding them.
  */
 interface CursorHost extends HTMLElement {
-  _cursorElements?: { [peerId: string]: HTMLElement };
+  _cursorElements?: { [peerId: string]: CursorElement };
 }
+
+const IDLE_LABEL_CLASS = 'pointer-overlay-cursor-label--idle';
 
 export class CursorRendererHelper {
   static renderCursors(targetContainer: HTMLElement, cursors: { [peerId: string]: CursorPositionMessage }): void {
@@ -18,6 +28,7 @@ export class CursorRendererHelper {
     // Remove elements for peers that no longer exist
     Object.keys(cursorElements).forEach(peerId => {
       if (!(peerId in cursors)) {
+        CursorRendererHelper.clearLabelTimer(cursorElements[peerId]);
         targetContainer.removeChild(cursorElements[peerId]);
         delete cursorElements[peerId];
       }
@@ -69,8 +80,16 @@ export class CursorRendererHelper {
       // has to re-derive the pixel position without a new message: a stationary cursor
       // would otherwise keep the pixels it was given before the surface changed size.
       // Bracket access is required — tsconfig sets noPropertyAccessFromIndexSignature.
+      //
+      // The comparison against the cached values is also what drives the label: a peer
+      // that actually moved gets its name shown again, and one re-sending an unchanged
+      // position does not, so a parked cursor cannot keep a label on the game.
+      const moved = el.dataset['nx'] !== String(cursor.x) || el.dataset['ny'] !== String(cursor.y);
       el.dataset['nx'] = String(cursor.x);
       el.dataset['ny'] = String(cursor.y);
+      if (moved) {
+        CursorRendererHelper.showLabelUntilIdle(el);
+      }
       CursorRendererHelper.positionElement(el, containerWidth, containerHeight);
     });
   }
@@ -127,7 +146,7 @@ export class CursorRendererHelper {
     });
   }
 
-  private static getCursorElements(targetContainer: HTMLElement): { [peerId: string]: HTMLElement } {
+  private static getCursorElements(targetContainer: HTMLElement): { [peerId: string]: CursorElement } {
     const host = targetContainer as CursorHost;
     if (!host._cursorElements) {
       host._cursorElements = {};
@@ -141,5 +160,38 @@ export class CursorRendererHelper {
     if (Number.isNaN(nx) || Number.isNaN(ny)) return;
     el.style.left = (nx * containerWidth) + 'px';
     el.style.top = (ny * containerHeight) + 'px';
+  }
+
+  /**
+   * Reveal a cursor's name and schedule it to fade back out once the cursor stops moving.
+   *
+   * Called only when a position actually changed, which is what makes this a bound on
+   * occlusion rather than mere polish: the name is on screen while its owner is pointing
+   * at something and gone shortly after, so cursors parked over the game — whether
+   * forgotten or deliberate — cost one arrow each instead of one arrow plus a 169px card.
+   * Re-sending an identical position does not re-arm it.
+   *
+   * The label element is looked up rather than passed in because `repositionAll` shares
+   * this element shape but must *not* touch the timer: a resize is not movement, and
+   * re-showing every name because the window changed size is the behaviour this replaces.
+   */
+  private static showLabelUntilIdle(el: CursorElement): void {
+    const label = el.querySelector('p');
+    if (!label) return;
+
+    CursorRendererHelper.clearLabelTimer(el);
+    label.classList.remove(IDLE_LABEL_CLASS);
+    el._labelIdleTimer = setTimeout(() => {
+      label.classList.add(IDLE_LABEL_CLASS);
+      el._labelIdleTimer = undefined;
+    }, MULTIPLAYER.CURSOR_LABEL_IDLE_MS);
+  }
+
+  /** Cancel a pending fade, so a removed cursor leaves no timer holding its node. */
+  private static clearLabelTimer(el: CursorElement): void {
+    if (el._labelIdleTimer !== undefined) {
+      clearTimeout(el._labelIdleTimer);
+      el._labelIdleTimer = undefined;
+    }
   }
 }

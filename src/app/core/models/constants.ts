@@ -9,6 +9,10 @@ export const STORAGE_KEY = {
   FAIL_COUNT: 'failCount',
   PLAYER_NAME: 'playerName',
   PLAYER_COLOR: 'playerColor',
+  // Host-side escape hatch: hides every spectator cursor, label and click ping on the
+  // game surface. Local and permanent, not a protocol change — nothing tells the
+  // spectators, because there is nothing they need to do about it.
+  HIDE_SPECTATOR_CURSORS: 'hideSpectatorCursors',
   // Room CODES only, never passwords. A share link deliberately omits the password
   // (room-code.helper.ts), and persisting one here would undo that.
   RECENT_ROOMS: 'recentRooms',
@@ -133,6 +137,16 @@ export const MULTIPLAYER = {
   STREAM_WAIT_TIMEOUT: 20000, // 20 seconds
   // Minimum interval between outgoing cursor position broadcasts (~20/s).
   CURSOR_SEND_THROTTLE_MS: 50,
+  // How long a cursor may sit still before its name label fades out, leaving the arrow.
+  // A pointer that is being used moves; one that is parked is either forgotten or
+  // deliberate cover over the game. Since only a *changed* position re-shows the label,
+  // re-sending the same coordinates cannot hold a name on screen.
+  CURSOR_LABEL_IDLE_MS: 2000,
+  // Hard ceiling on the rendered width of a cursor name, in characters. Equal to
+  // WIRE_MAX_NAME_LENGTH, so it elides nothing a peer can currently send — it is the
+  // backstop that keeps one label's footprint bounded if that cap ever moves, since the
+  // label sits on top of the game and every pixel of it is occlusion.
+  CURSOR_LABEL_MAX_CHARS: 20,
   // Room codes use an alphabet without easily confused characters (no O/0, I/1).
   ROOM_CODE_ALPHABET: 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789',
   ROOM_CODE_PREFIX: 'ELI-',

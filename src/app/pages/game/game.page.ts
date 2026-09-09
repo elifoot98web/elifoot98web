@@ -29,6 +29,8 @@ export class GamePage implements OnInit, OnDestroy {
   @ViewChild('popover') popover: any;
   // UI state properties
   smoothFilterDisabled = false;
+  spectatorCursorsHidden = false;
+  private latestCursors: { [peerId: string]: CursorPositionMessage } = {};
   autoSaveDisabled = false;
   periodicSave = false;
   isPopoverOpen = false;
@@ -240,6 +242,7 @@ export class GamePage implements OnInit, OnDestroy {
     this.setupSmoothFilter()
     this.setupAutoSave()
     this.setupPeriodicSave()
+    this.setupSpectatorCursors()
   }
 
   async handleShowTutorial() {
@@ -481,6 +484,28 @@ export class GamePage implements OnInit, OnDestroy {
   async setupSmoothFilter() {
     const disableSmoothFilter = await this.storageService.get<boolean>(STORAGE_KEY.DISABLE_SMOOTH_FILTER)
     this.toggleSmoothFilter({ detail: { checked: disableSmoothFilter } })
+  }
+
+  async setupSpectatorCursors() {
+    const hidden = await this.storageService.get<boolean>(STORAGE_KEY.HIDE_SPECTATOR_CURSORS)
+    this.spectatorCursorsHidden = !!hidden
+  }
+
+  /**
+   * Hide or restore every spectator cursor, name and click ping on the game surface.
+   *
+   * Purely local, and deliberately silent: the guests are not told, because there is
+   * nothing for them to do about it. It is the host's escape hatch for the case the
+   * password cannot cover — a code that got shared further than intended, and enough
+   * pointers parked on the game to be in the way. Idle labels already bound how much of
+   * the canvas that can cover; this covers the rest without needing a kick, which is a
+   * moderation feature the multiplayer study deliberately left out of scope.
+   */
+  async toggleSpectatorCursors(e: any) {
+    this.spectatorCursorsHidden = e.detail.checked
+    await this.storageService.set<boolean>(STORAGE_KEY.HIDE_SPECTATOR_CURSORS, this.spectatorCursorsHidden)
+    // Repaint from the last known positions rather than waiting for movement.
+    this.renderCursors(this.latestCursors)
   }
 
   async toggleSmoothFilter(e: any) {
@@ -1195,12 +1220,19 @@ export class GamePage implements OnInit, OnDestroy {
   }
 
   private renderCursors(cursors: { [peerId: string]: CursorPositionMessage }) {
+    // Held so the toggle can restore the overlay without waiting for the next message. A
+    // parked cursor sends nothing, so re-rendering from the live feed alone would leave
+    // exactly the cursors someone hid the overlay to get rid of missing until they moved.
+    this.latestCursors = cursors;
     const overlay = this.getOverlayElement();
     if (!overlay) return;
-    CursorRendererHelper.renderCursors(overlay, cursors);
+    // An empty map is how the helper is told to remove what it has already drawn, so
+    // hiding needs no separate teardown path.
+    CursorRendererHelper.renderCursors(overlay, this.spectatorCursorsHidden ? {} : cursors);
   }
 
   private renderClick(click: CursorClickMessage) {
+    if (this.spectatorCursorsHidden) return;
     const overlay = this.getOverlayElement();
     if (!overlay) return;
     CursorRendererHelper.renderClick(overlay, click);

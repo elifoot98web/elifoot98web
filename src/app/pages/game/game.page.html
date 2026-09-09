@@ -77,6 +77,16 @@
                 class="chat-menu-badge">{{ unread }}</ion-badge>
               <ion-icon slot="end" name="people-outline"></ion-icon>
             </ion-item>
+            <!--
+              The host's escape hatch for a code that travelled further than intended.
+              Local and silent — guests are not told, because there is nothing for them to
+              do about it — and it stays inside the isStreaming block because there are no
+              spectator cursors to hide without a room.
+            -->
+            <ion-item detail="false">
+              <ion-toggle [checked]="spectatorCursorsHidden" (ionChange)="toggleSpectatorCursors($event)">Ocultar
+                cursores dos espectadores</ion-toggle>
+            </ion-item>
           </ng-container>
           <ion-item detail="false">
             <ion-toggle [checked]="smoothFilterDisabled" (ionChange)="toggleSmoothFilter($event)">Desativar
