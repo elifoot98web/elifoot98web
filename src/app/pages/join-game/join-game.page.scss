@@ -1,0 +1,167 @@
+.page-background {
+  background-color: var(--ion-color-primary, #008000);
+}
+
+.full {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.centered {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.join-game-card {
+  width: 40%;
+  min-width: 200px;
+  max-width: 500px;
+  height: 30%;
+  min-height: 180px;
+  max-height: 200px;
+}
+
+/*
+ * The onboarding card carries an explainer, a field and a recent-rooms row, none of which
+ * fit the 200px cap the status cards use. It sizes to its content instead; the page enables
+ * scrollY while not spectating so a short viewport can reach the bottom of it. Scrolling is
+ * only forbidden once there is a video, which must not move.
+ */
+.join-game-card--onboarding {
+  width: 100%;
+  max-width: 420px;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+}
+
+.onboarding-icon {
+  font-size: 56px;
+  color: var(--ion-color-primary);
+}
+
+.onboarding-title {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.onboarding-text {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  text-align: start;
+}
+
+.onboarding-form ion-input {
+  text-transform: uppercase;
+}
+
+.recent-rooms {
+  margin-top: 0.75rem;
+}
+
+.recent-rooms-label {
+  margin: 0 0 0.25rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+
+.info-card-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+// Layout for .game-stream-flex-container / .game-stream-container /
+// .chat-overlay-panel / .chat-toggle-btn is shared with the host page and lives in
+// src/global.scss. The chat is an overlay there, so nothing on this page may size itself
+// against whether the chat is open.
+
+// The stream is letterboxed from the frame's RATIO by syncStreamContainer(), which writes
+// explicit width/height in px. It used to be pure CSS, deriving the used size from the
+// video's intrinsic width clamped by the max-* pair — but that conflates a DOS video-mode
+// change (ratio changes, must re-fit) with WebRTC ramping its encoder up from a low starting
+// resolution (same ratio, must not re-fit). The second happens on every join and made the
+// picture grow from a small box to full size over the first seconds.
+//
+// The element's border box is still EXACTLY the visible picture, centred. That equality is
+// the contract: OverlaySyncHelper.align() positions #cursors-overlay from
+// offsetLeft/offsetTop/offsetWidth/offsetHeight and processCursorEvent() normalises with
+// offsetX / clientWidth, so the moment the box is bigger than the picture every remote cursor
+// is offset by the letterbox bars.
+//
+// The max-* pair below is now a safety net, not the mechanism: Math.min in the fit function
+// already guarantees the box never exceeds the container.
+//
+// Deliberately NOT `width/height: 100% + object-fit: contain`: that letterboxes the content
+// INSIDE a container-sized box, breaking exactly that contract.
+// Deliberately NOT a flex item: a flex item's cross-axis max clamp does not feed back
+// into its resolved main size, so `max-height: 100%` in the row direction can leave a
+// too-wide box with the picture letterboxed inside it.
+// Deliberately NOT `aspect-ratio`: it needs Safari 15 and .browserslistrc allows Safari 14 —
+// which is also why the ratio fit is done in TypeScript rather than declaratively.
+//
+// Do NOT add `border`, `padding` or `object-fit`. Ionic sets `* { box-sizing:
+// border-box }`, so a border or padding shrinks the content box inside the border box the
+// overlay is aligned to, and the UA default `object-fit: contain` then letterboxes the
+// picture inside the element itself. Never centre with `transform: translate(-50%, -50%)`
+// either — transforms do not move offsetLeft/offsetTop.
+#stream-target {
+  position: absolute;
+  // Longhands, not `inset: 0`: `inset` is Safari 14.1+ and the floor is 14.0.
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  margin: auto;
+  max-width: 100%;
+  max-height: 100%;
+  display: block;
+  // Only visible in the gap before `loadedmetadata`, where a <video> has the HTML default
+  // 300x150 intrinsic size.
+  background: #224422;
+  // The rendered div cursor from CursorRendererHelper is the only pointer a guest sees.
+  cursor: none;
+  // Stops pull-to-refresh and the long-press callout over the stream. The page is already
+  // [scrollY]="false", so nothing is lost.
+  touch-action: none;
+  -webkit-touch-callout: none;
+}
+
+// Held over the last received frame while the host is inside its grace period.
+//
+// `position: absolute` is not cosmetic: .game-stream-container is a centring flex
+// container, so an in-flow sibling would become a flex item and shift the video, breaking
+// the #stream-target border-box contract above that cursor alignment depends on.
+// z-index sits above #cursors-overlay (2) and below .chat-toggle-btn (20), and
+// pointer-events stay off so a reconnect changes what the guest sees, not what it can do.
+.stream-scrim {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  text-align: center;
+  pointer-events: none;
+
+  p {
+    margin: 0;
+    font-weight: 600;
+  }
+}
+

@@ -1,6 +1,6 @@
 {
   "name": "elifoot98_web",
-  "version": "2.2.1",
+  "version": "3.1.0",
   "author": "Leonardo Pereira <jlcvp>",
   "homepage": "https://www.elifoot98.com.br",
   "repository": {
@@ -20,6 +20,7 @@
     "watch:prod": "ng build --watch --configuration production",
     "test": "ng test",
     "lint": "ng lint",
+    "mp:launch": "node ./scripts/multiplayer-harness/launch.mjs",
     "version:config": "node ./scripts/version-config.js"
   },
   "private": true,
@@ -38,6 +39,7 @@
     "jszip": "^3.10.1",
     "rxjs": "~7.8.0",
     "tesseract.js": "^6.0.1",
+    "trystero": "^0.25.3",
     "tslib": "^2.3.0",
     "zone.js": "~0.15.0"
   },

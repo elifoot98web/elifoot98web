@@ -1,0 +1,126 @@
+import { Component, Input, OnInit } from '@angular/core';
+import { ModalController } from '@ionic/angular/lazy';
+import { MULTIPLAYER } from 'src/app/core/models/constants';
+import { RoomCodeHelper } from 'src/app/core/helpers/room-code.helper';
+import { MultiplayerIdentityService } from 'src/app/core/services/multiplayer';
+
+export interface RoomSetupResult {
+  playerName: string;
+  roomCode: string;
+  password: string;
+  playerColor: string;
+}
+
+/**
+ * Single form used both to create a room (host) and to enter one (guest). Replaces the
+ * two bare alert dialogs so the colour picker and the generated room code have somewhere
+ * to live, and so the name/colour can be remembered between sessions.
+ */
+@Component({
+  selector: 'app-room-setup-modal',
+  templateUrl: './room-setup-modal.component.html',
+  styleUrls: ['./room-setup-modal.component.scss'],
+  standalone: false
+})
+export class RoomSetupModalComponent implements OnInit {
+  @Input() mode: 'host' | 'guest' = 'guest';
+  /** Room code prefilled from a share link, when the guest arrived via one. */
+  @Input() presetRoomCode = '';
+
+  colors = MULTIPLAYER.PLAYER_COLORS;
+
+  playerName = '';
+  roomCode = '';
+  password = '';
+  playerColor = MULTIPLAYER.DEFAULT_CURSOR_COLOR;
+
+  constructor(
+    private modalController: ModalController,
+    private identityService: MultiplayerIdentityService
+  ) { }
+
+  /**
+   * Rooms this device has joined before, offered as one-tap fills.
+   *
+   * They live here rather than on the join page so that a single surface owns joining: the
+   * guest used to meet an inline code field on the card AND this dialog, which read as two
+   * different apps disagreeing about where you type a room code. Guest-only — a host is
+   * creating a room, not returning to one.
+   */
+  recentRooms: string[] = [];
+
+  async ngOnInit() {
+    this.playerName = await this.identityService.getPlayerName();
+    this.playerColor = await this.identityService.getPlayerColor();
+    // A host gets a fresh code to hand out; a guest gets whatever the share link carried.
+    this.roomCode = this.presetRoomCode
+      ? RoomCodeHelper.sanitize(this.presetRoomCode)
+      : (this.mode === 'host' ? RoomCodeHelper.generate() : '');
+
+    if (!this.isHost) {
+      this.recentRooms = await this.identityService.getRecentRooms();
+    }
+  }
+
+  get isHost(): boolean {
+    return this.mode === 'host';
+  }
+
+  get title(): string {
+    return this.isHost ? 'Criar Sala Multiplayer' : 'Entrar em Sala Multiplayer';
+  }
+
+  get isValid(): boolean {
+    return this.playerName.trim().length > 0 && RoomCodeHelper.isValid(this.roomCode);
+  }
+
+  /**
+   * A malformed code is only worth pointing out to a guest, who typed or pasted it.
+   * A host's code comes from the generator and is corrected on blur.
+   */
+  get showCodeError(): boolean {
+    return !this.isHost && this.roomCode.trim().length > 0 && !RoomCodeHelper.isValid(this.roomCode);
+  }
+
+  /**
+   * Sanitizing on blur rather than on every keystroke: rewriting the value through
+   * ngModel while typing fights ion-input's internal value and jumps the caret to the
+   * end, which is worst on mobile. A pasted share link is reduced to its code here.
+   */
+  onCodeBlur() {
+    const sanitized = RoomCodeHelper.sanitize(this.roomCode);
+    if (sanitized) this.roomCode = sanitized;
+  }
+
+  /** Fill the field from history rather than making them retype a code they already used. */
+  useRecentRoom(code: string) {
+    this.roomCode = RoomCodeHelper.sanitize(code);
+  }
+
+  regenerateCode() {
+    this.roomCode = RoomCodeHelper.generate();
+  }
+
+  selectColor(color: string) {
+    this.playerColor = color;
+  }
+
+  async confirm() {
+    this.onCodeBlur(); // covers submitting straight from the field without blurring
+    if (!this.isValid) return;
+
+    await this.identityService.save(this.playerName.trim(), this.playerColor);
+
+    const result: RoomSetupResult = {
+      playerName: this.playerName.trim(),
+      roomCode: RoomCodeHelper.normalize(this.roomCode),
+      password: this.password,
+      playerColor: this.playerColor,
+    };
+    await this.modalController.dismiss(result, 'confirm');
+  }
+
+  async cancel() {
+    await this.modalController.dismiss(null, 'cancel');
+  }
+}
