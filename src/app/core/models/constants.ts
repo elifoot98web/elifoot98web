@@ -190,6 +190,12 @@ export const MULTIPLAYER = {
   // before believing it. The refusal arrives as a claim from an unverified peer, so a
   // stream that shows up inside this window wins — see MultiplayerService.onRoomFullClaim.
   ROOM_FULL_GRACE_MS: 5000,
+  // How long after the first peer connection is built, with no relay candidate seen, before the
+  // relay is called unavailable. A working relay hands out its first candidate within a second or
+  // two, so this is generous; it exists because the other signal, a connection finishing its
+  // gathering, takes ~40s when some servers simply do not answer, and a spectator gives up on a
+  // join after 20s — a verdict that arrives later than that can never reach the message it is for.
+  RELAY_VERDICT_MS: 10000,
   // How long a refusing host listens for the other side's answer before tearing the
   // handshake down. Only a rival host answers; a spectator never does, so for the common
   // case this is simply how long the refusal takes to complete.

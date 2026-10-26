@@ -15,6 +15,7 @@ import {
   MultiplayerCursorService,
   MultiplayerIdentityService,
   MultiplayerPlayerInfoService,
+  MultiplayerRelayHealthService,
   MultiplayerService,
   MultiplayerStreamService,
   MultiplayerUiService
@@ -99,6 +100,7 @@ export class JoinGamePage implements OnInit, OnDestroy {
     private multiplayerUiService: MultiplayerUiService,
     private identityService: MultiplayerIdentityService,
     private storageService: LocalStorageService,
+    private relayHealthService: MultiplayerRelayHealthService,
     playerInfoService: MultiplayerPlayerInfoService,
     chatService: MultiplayerChatService
   ) {
@@ -401,7 +403,8 @@ export class JoinGamePage implements OnInit, OnDestroy {
           return `Senha incorreta para a sala ${this.roomId}. Confirme a senha com o anfitrião.`;
         case 'connection-failed':
           return 'Não foi possível estabelecer a conexão direta com o anfitrião. ' +
-            'Tente outra rede (Wi-Fi em vez de dados móveis) ou desative a VPN.';
+            'Tente outra rede (Wi-Fi em vez de dados móveis) ou desative a VPN.' +
+            this.relayNote();
         case 'room-full':
           // Not "tente outra sala": the room is fine, it is just at the limit its host chose.
           // The retry button reloads and re-enters, which is what to do once someone leaves.
@@ -411,11 +414,27 @@ export class JoinGamePage implements OnInit, OnDestroy {
     }
     // rxjs `timeout` throws a TimeoutError. Silence is all we ever get for a room code
     // nobody is hosting, so this stays the catch-all.
+    //
+    // Not "check the code and password" alone. The 20 s wait runs out before trystero reports a
+    // failed connection (about 23 s after the offer), so a guest who did find the host but could
+    // not connect lands here too, and was being sent off to re-check a code that was never wrong.
     if (err?.name === 'TimeoutError') {
-      return 'Não recebemos a transmissão. Verifique o código da sala e a senha, ' +
-        'e confirme que o anfitrião já começou a hospedar.';
+      return 'Não recebemos a transmissão. Confira o código da sala, a senha e se o anfitrião ' +
+        'já começou a hospedar. Se tudo estiver certo, tente outra rede (Wi-Fi em vez de dados ' +
+        'móveis) ou sem VPN: a rede de um dos dois lados pode estar impedindo a conexão.' +
+        this.relayNote();
     }
     return err?.message || 'Erro ao entrar na sala.';
+  }
+
+  /**
+   * A trailing sentence for connection failures, only when the relay is known to be down. It
+   * explains why the networks the advice above names are the ones that fail.
+   */
+  private relayNote(): string {
+    return this.relayHealthService.health === 'unavailable'
+      ? ' O servidor de relay está inacessível no momento, o que dificulta conexões nessas redes.'
+      : '';
   }
 
   private resetRoomState(nextState: GameState = GameState.NOT_IN_ROOM) {

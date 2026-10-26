@@ -224,6 +224,15 @@ Load-bearing invariants — each of these was a bug once:
   (which runs off `onPeerJoin`) is replaced on that path by exchanging hosting ages through the same
   channel. A spectator announces itself (ident) only once it has a host, because the room is a full
   mesh and a refused guest still connects to every other spectator for a few seconds.
+- **A dead TURN relay degrades the app; it must never break it, and it must be said out loud.**
+  trystero adds `turnConfig` to its default STUN list, so most pairs still connect directly and
+  only symmetric-NAT/mobile/strict-firewall guests fail. **Never pass `rtcConfig.iceServers`**: it
+  is spread last and replaces STUN too. `MultiplayerRelayHealthService` sees every connection via
+  `rtcPolyfill` (the only hook that sees the ones that never come up) and calls the relay
+  unavailable if no relay candidate arrives `RELAY_VERDICT_MS` after the first connection is
+  built, or a connection finishes gathering without one. The clock is load-bearing: gathering alone
+  takes ~40s when a server is silent, and a spectator's join times out at 20s. It outlives rooms and
+  has no `clear()` on purpose. The credential and `environment*.ts` are deliberately untouched.
 - **The game's sound is one audio track in the same wrapped stream as the picture, made
   before the first publish and never added or removed afterwards.** js-dos keeps its
   `AudioContext` private, so `game.js` captures the one `ScriptProcessorNode` it creates

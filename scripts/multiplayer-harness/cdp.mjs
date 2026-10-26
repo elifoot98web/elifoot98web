@@ -16,6 +16,8 @@
  *   offline  <port> <true|false>   Network.emulateNetworkConditions
  *   nav      <port> <url>          navigate
  *   reload   <port>                reload
+ *   inject   <port> <js|@file>     run a script before every page load in this tab; stays
+                                  running (background it), kill the process to remove it
  *
  * Read the README before using it: several of these commands exist because of a trap that
  * silently invalidates results, and `state` is where the pass/fail conditions live.
@@ -309,6 +311,26 @@ switch (command) {
     await send('Page.enable')
     await send('Page.navigate', { url: argument })
     console.log(`navigating to ${argument}`)
+    break
+  }
+  /**
+   * For anything that has to exist BEFORE the app does, such as a patched `RTCPeerConnection`.
+   * `eval` cannot do this and is lost on every reload, which a spectator performs on each retry.
+   *
+   * It has to stay running, like `watch`: CDP drops a script registered this way the moment the
+   * session that registered it disconnects, and every `cdp.mjs` call is its own session. So it
+   * registers the script, reloads the tab inside that same session so the script is already in
+   * place, and then holds the connection open. Run it in the background and kill the process to
+   * take the script out again. The script may be given inline or as `@path/to/file.js`.
+   */
+  case 'inject': {
+    const { readFile } = await import('node:fs/promises')
+    const source = argument?.startsWith('@') ? await readFile(argument.slice(1), 'utf8') : argument
+    await send('Page.enable')
+    await send('Page.addScriptToEvaluateOnNewDocument', { source })
+    await send('Page.reload', {})
+    console.log(`# injected on ${port} and reloaded; holding the session open — kill this process to remove it`)
+    await new Promise(() => {})
     break
   }
   case 'reload': {

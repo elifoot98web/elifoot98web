@@ -227,6 +227,65 @@ That exercises the actual refusal, reply and tie-break code, not the transport:
   tests the grace logic and not the handshake path. A claim forged before any connection to the
   host existed *did* eject the guest when the window ran out, as documented in §8.8.
 
+### A dead TURN relay
+
+`inject <port> <js|@file>` runs a script before every page load in a tab, which is the only way to
+patch `RTCPeerConnection` before the app builds its connections (`eval` is lost on each reload, and a
+spectator reloads on every retry). **It must stay running**: CDP drops a script registered this way
+when the session that registered it disconnects, and every `cdp.mjs` call is its own session. So it
+registers the script, reloads the tab in that same session and holds the connection open. Run it in
+the background and kill the process to remove the script.
+
+```bash
+$HARNESS inject 9222 @break-turn.js &     # one per tab; the host and the spectator both need it
+$HARNESS inject 9223 @break-turn.js &
+```
+
+`break-turn.js` wraps the global, rewrites the credential on any `metered` URL so every allocation is
+rejected (what an exhausted quota or a revoked credential does) and leaves STUN and the ICE policy
+alone; set `window.__relayOnly = true` in the same script to also force `iceTransportPolicy: 'relay'`
+and make connecting impossible:
+
+```js
+(() => {
+  const Native = window.RTCPeerConnection;
+  window.RTCPeerConnection = class extends Native {
+    constructor(configuration = {}) {
+      const iceServers = (configuration.iceServers || []).map(server =>
+        [].concat(server.urls).some(url => /metered/.test(url)) ? { ...server, credential: 'wrong' } : server);
+      super({ ...configuration, iceServers, ...(window.__relayOnly ? { iceTransportPolicy: 'relay' } : {}) });
+    }
+  };
+})();
+```
+
+`Network.setBlockedURLs` and the `offline` command do not touch WebRTC sockets, so they cannot stand
+in for this. Read the verdict from `ng.getComponent(...).relayHealthService.health`.
+
+**Observed 2026-10-26** (Chromium, host and one spectator):
+
+| Scenario | Observed |
+| --- | --- |
+| Healthy relay (real credential, no patch) | `unknown` then `ok` 0.7 s after hosting started; no warning; one `[RELAY] … 701` line, which is this machine's flaky DNS for one Metered URL, harmless |
+| Rejected credential, ICE policy `all` | the pair still connected directly (`host`/`host` candidates), live picture; health `unavailable` on both; the host got the relay warning toast |
+| Rejected credential, relay only | no connection possible; the spectator gave up at 21 s with the new message, ending `O servidor de relay está inacessível no momento…`, because its verdict landed at ~10 s |
+| Verdict timing | first ICE errors (`400 TURN allocate error`, `701`) to `unavailable` in 10 s, down from ~40 s when only the gathering-finished signal existed |
+
+The relay sentence was **missing** from the spectator's message on the first run, and that is why
+`RELAY_VERDICT_MS` exists: the gathering signal took ~40 s and the join times out at 20 s.
+
+**Not run:**
+
+- An unreachable address (a black-holed `turn:` host) instead of a rejected credential; the clock
+  covers it by construction, but it was not exercised.
+- What the real provider does when the quota is gone (a 401, a refusal, or allocating and then
+  dropping traffic). The credential was never exhausted, and the last case would read as `ok`.
+- A relayed connection cut off in the middle of a match.
+- The warning toast arriving *mid-session* when the verdict first lands, captured live. It was seen
+  on the next hosting session, where the stored verdict is replayed through the same subscription.
+- The `connection-failed` message with the relay sentence (only the timeout path ran: the 20 s wait
+  wins), Firefox (no `icecandidateerror`; the verdict does not depend on it) and Safari.
+
 ### Forging a host claim
 
 The regression this guards against is a spectator with devtools taking the host badge and

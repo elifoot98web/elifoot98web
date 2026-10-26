@@ -990,3 +990,62 @@ six ingest sites and four sends, any missed one becoming a ghost chatter.
   handshake timeout.
 - No slot is held for a spectator dropped and re-joined after the slot was taken, and the limit is
   fixed at room creation (the handler reads it lazily, so a live control is a small addition).
+
+
+### 8.9 A dead relay
+
+The TURN credential is the free tier of a third party, shipped in the bundle, and when its quota
+runs out the provider cuts it off. The credential and the environment files are untouched, and the
+four URLs are not trimmed: whether the quota counts allocations or bytes is unknown, and dropping an
+entry could cut off exactly the restrictive networks the relay exists for. What changed is that the
+app now degrades honestly.
+
+**What a dead relay does, and does not do.** It cannot crash or hang anything. trystero adds
+`turnConfig` to its default STUN list rather than replacing it, trickle ICE is on so a bad server
+cannot delay signalling, and nothing assumes a relay candidate exists. Two peers on ordinary home
+networks connect directly and never touch the relay; only symmetric NATs, mobile carriers and strict
+firewalls need it, and for them a join fails. Never pass `rtcConfig.iceServers`: it is spread last
+and would replace the whole list, STUN included, which is the fallback all of this rests on.
+
+**The two real gaps.** Nobody was told, because trystero's public API cannot show it: a connection
+enters `getPeers()` only once it is up, so the ones that never come up are invisible. And the
+guest's message was wrong: the 20 s stream wait runs out before trystero reports a failed connection
+(about 23 s after the offer), so a guest who *did* find the host but could not connect was sent off
+to recheck a code and password that were never wrong.
+
+**The observer.** `rtcPolyfill` is the one early hook: a `RTCPeerConnection` subclass sees every
+connection trystero makes, including the pool of 20 it opens before anyone has joined.
+`MultiplayerRelayHealthService` reads `icecandidate` for a `relay` candidate. A separate probe was
+rejected as redundant, since it would spend more relay allocations to learn what the pool already
+shows for free. The service outlives rooms and has no `clear()`, unlike the others: reachability is a
+property of the browser, and the pooled connections that carry the evidence are built once.
+
+**The verdict needed a clock, which the first version lacked.** Waiting for a connection to finish
+gathering is the certain signal, but a server that never answers keeps gathering running for about 40
+seconds, and a spectator builds its connections only on joining and gives up after 20. Run against a
+rejected credential, the first version reached its verdict long after the failure message it was
+meant to inform, so the guest's copy never mentioned the relay. A relay now counts as unavailable if
+no connection has been handed a relay candidate `RELAY_VERDICT_MS` (10 s) after the first was built.
+A working relay answers within a second or two (0.7 s measured), and a merely slow one is not lost:
+the first relay candidate to arrive puts the state back to `ok`. The gathering-finished signal stays
+as the fast path.
+
+**What the user sees.** The host gets one warning toast per hosting session, worded as "from here"
+because it is equally true when the host's own network blocks the relay: `Conexão por relay
+indisponível. Espectadores em redes restritivas (dados móveis, VPN, redes corporativas) podem não
+conseguir entrar.` A spectator's timeout message no longer says only to check the code and password:
+it adds that the network on either side may be the cause, and, when the relay is known to be down, a
+sentence saying so.
+
+**Not built.** A pre-join probe (above). A cap on the bitrate of relayed senders: relayed video at an
+unmeasured 0.5 to 1.5 Mbps per spectator is the likelier quota burner than allocations, so it is the
+follow-up to reach for if the quota actually runs out, and the spectator limit of §8.8 already bounds
+how many there can be.
+
+**Known and not changeable here.** trystero opens 20 connections per page load, each trying all four
+TURN URLs, and every spectator retry reloads the page and does it again.
+
+**Residuals.** "Unavailable" is a verdict about gathering, not about data flowing: a provider that
+allocates and then drops relayed traffic would still read as `ok`. Firefox has no
+`icecandidateerror`, so the verdict never depends on it. And the host's own network blocking the
+relay is indistinguishable from the provider cutting it off, by design.

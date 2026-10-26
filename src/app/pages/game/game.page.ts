@@ -7,12 +7,12 @@ import { GAME_INPUT_FN_BTNS, GAME_INPUT_FN_BTNS_REVERSED, MULTIPLAYER, STORAGE_K
 import { UserGuideComponent } from './components/user-guide/user-guide.component';
 import { AboutComponent } from './components/about/about.component';
 import { OmaticModalComponent } from './components/omatic-modal/omatic-modal.component';
-import { map, Observable, Subscription } from 'rxjs';
+import { filter, map, Observable, Subscription, take } from 'rxjs';
 import { EmulatorKeyCode } from '../../core/models/game';
 import { CursorClickMessage, CursorPositionMessage, MultiplayerJoinErrorKind, PlayerInfo } from '../../core/models/multiplayer';
 import { AutoSaverService, EmulatorControlService, PatchService, SaveGameService } from '../../core/services/game';
 import { LayoutHelperService, LocalStorageService } from '../../core/services/shared';
-import { MultiplayerAudioService, MultiplayerChatService, MultiplayerCursorService, MultiplayerPlayerInfoService, MultiplayerService, MultiplayerUiService } from '../../core/services/multiplayer';
+import { MultiplayerAudioService, MultiplayerChatService, MultiplayerCursorService, MultiplayerPlayerInfoService, MultiplayerRelayHealthService, MultiplayerService, MultiplayerUiService } from '../../core/services/multiplayer';
 import { CursorRendererHelper } from 'src/app/core/helpers/cursor-renderer.helper';
 import { OverlaySyncHelper } from 'src/app/core/helpers/overlay-sync.helper';
 import { ChatPanelHelper } from 'src/app/core/helpers/chat-panel.helper';
@@ -86,6 +86,7 @@ export class GamePage implements OnInit, OnDestroy {
     private multiplayerUiService: MultiplayerUiService,
     private playerInfoService: MultiplayerPlayerInfoService,
     private multiplayerAudioService: MultiplayerAudioService,
+    private relayHealthService: MultiplayerRelayHealthService,
     chatService: MultiplayerChatService
   ) {
     this.unreadCount$ = chatService.unreadCount$;
@@ -908,6 +909,13 @@ export class GamePage implements OnInit, OnDestroy {
       this.multiplayerSubscriptions.add(
         this.multiplayerService.intrusion$.subscribe(kind => this.onIntrusion(kind))
       );
+      // Once per hosting session, whenever it becomes known — immediately if an earlier room in
+      // this page already found the relay down. `take(1)` so a flapping relay is one toast.
+      this.multiplayerSubscriptions.add(
+        this.relayHealthService.health$
+          .pipe(filter(health => health === 'unavailable'), take(1))
+          .subscribe(() => this.onRelayUnavailable())
+      );
       // Host-only on purpose: a spectator can do nothing about another spectator's link,
       // and the roster already tells anyone who opens it. Edge-triggered and rate-limited
       // upstream, so this cannot become a toast storm.
@@ -993,6 +1001,22 @@ export class GamePage implements OnInit, OnDestroy {
         : 'Alguém tentou entrar, mas a conexão não foi estabelecida.';
     // 'warning', not the default green: a failed entry attempt is not good news.
     await this.multiplayerUiService.showToast(message, 'warning');
+  }
+
+  /**
+   * The relay (TURN) is not answering. Spectators on ordinary networks are unaffected — most
+   * connect directly — but those on mobile data, a VPN or a corporate network may fail to join,
+   * and they would otherwise look exactly like a wrong code. Worded as "from here" because it is
+   * equally true when this host's own network is what blocks the relay, and a long duration
+   * because there is something to read and nothing to dismiss.
+   */
+  private async onRelayUnavailable() {
+    await this.multiplayerUiService.showToast(
+      'Conexão por relay indisponível. Espectadores em redes restritivas ' +
+      '(dados móveis, VPN, redes corporativas) podem não conseguir entrar.',
+      'warning',
+      8000
+    );
   }
 
   /**

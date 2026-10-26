@@ -19,6 +19,7 @@ import { BehaviorSubject, filter, Subject, Subscription } from 'rxjs';
 import { MultiplayerStreamService } from './multiplayer-stream.service';
 import { MultiplayerAudioService } from './multiplayer-audio.service';
 import { MultiplayerAdmissionService } from './multiplayer-admission.service';
+import { MultiplayerRelayHealthService } from './multiplayer-relay-health.service';
 import { WireGuardHelper } from '../../helpers/wire-guard.helper';
 import { environment } from 'src/environments/environment';
 
@@ -98,7 +99,8 @@ export class MultiplayerService {
     private chatService: MultiplayerChatService,
     private streamService: MultiplayerStreamService,
     private audioService: MultiplayerAudioService,
-    private admissionService: MultiplayerAdmissionService
+    private admissionService: MultiplayerAdmissionService,
+    private relayHealthService: MultiplayerRelayHealthService
   ) { }
 
   get isInRoom(): boolean {
@@ -320,10 +322,16 @@ export class MultiplayerService {
     this.playerRole = role;
     this.playerColor = color || MULTIPLAYER.DEFAULT_CURSOR_COLOR;
 
+    const turnConfig = environment.multiplayerConfig.turnConfig;
     const config: JoinRoomConfig = {
       appId: MULTIPLAYER.APP_ID,
       password: this.password,
-      turnConfig: environment.multiplayerConfig.turnConfig
+      turnConfig,
+      // Lets the relay-health service see every connection trystero makes, including the ones
+      // that never come up. Do NOT add `rtcConfig.iceServers` next to this: it would replace
+      // trystero's default STUN list, which is what keeps most pairs connecting when the relay
+      // is down.
+      ...(turnConfig.length > 0 ? { rtcPolyfill: this.relayHealthService.peerConnectionClass(true) } : {})
     }
     const room = joinRoom(config, this.roomName.toUpperCase(), {
       onJoinError: details => this.handleJoinError(details),
