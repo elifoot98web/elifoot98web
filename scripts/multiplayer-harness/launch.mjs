@@ -3,7 +3,7 @@
  * Launch the browsers for a multiplayer test session.
  *
  *   node scripts/multiplayer-harness/launch.mjs [--peers 2] [--url http://localhost:4200]
- *                                              [--first-port 9222] [--keep] [--headless]
+ *                                              [--first-port 9222] [--keep] [--headless] [--mute-audio]
  *
  * Peer 0 is the host and opens `#/game?host=1`; the rest are spectators and open
  * `#/join-game`. Each gets its own Chrome profile and its own CDP port, and both of those
@@ -57,7 +57,7 @@ const REALTIME_FLAGS = [
 ]
 
 const parseArgs = argv => {
-  const args = { ...DEFAULTS, keep: false, headless: false }
+  const args = { ...DEFAULTS, keep: false, headless: false, muteAudio: false }
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i]
     const value = argv[i + 1]
@@ -68,6 +68,10 @@ const parseArgs = argv => {
       case '--keep': args.keep = true; break
       // Off by default: the point of this harness is watching the picture while it is driven.
       case '--headless': args.headless = true; break
+      // Silences the speakers only; WebAudio and WebRTC still run, so `cdp.mjs audio` still
+      // measures real traffic. Deliberately NOT --autoplay-policy=no-user-gesture-required,
+      // which would hide the autoplay behaviour a spectator actually gets.
+      case '--mute-audio': args.muteAudio = true; break
       case '--help': case '-h': args.help = true; break
       default:
         throw new Error(`unknown argument: ${flag}`)
@@ -84,6 +88,7 @@ const usage = `Usage: node scripts/multiplayer-harness/launch.mjs [options]
   --first-port N   CDP port for peer 0, incrementing (default ${DEFAULTS.firstPort})
   --keep           reuse existing profiles instead of wiping them
   --headless       run without windows; overlay animations then need 'cdp.mjs front'
+  --mute-audio     keep every browser off the speakers (the game's sound is now streamed)
   --help
 `
 
@@ -143,6 +148,7 @@ const launchPeer = (peer, chrome, args) => {
     `--window-size=${args.windowSize.width},${args.windowSize.height}`,
     `--window-position=${peer.position.x},${peer.position.y}`,
     ...(args.headless ? ['--headless=new'] : []),
+    ...(args.muteAudio ? ['--mute-audio'] : []),
     peer.url,
   ]
 

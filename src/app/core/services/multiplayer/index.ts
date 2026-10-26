@@ -1,4 +1,5 @@
 export * from './multiplayer.service';
+export * from './multiplayer-audio.service';
 export * from './multiplayer-chat.service';
 export * from './multiplayer-cursor.service';
 export * from './multiplayer-identity.service';

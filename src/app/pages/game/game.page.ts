@@ -12,7 +12,7 @@ import { EmulatorKeyCode } from '../../core/models/game';
 import { CursorClickMessage, CursorPositionMessage, MultiplayerJoinErrorKind, PlayerInfo } from '../../core/models/multiplayer';
 import { AutoSaverService, EmulatorControlService, PatchService, SaveGameService } from '../../core/services/game';
 import { LayoutHelperService, LocalStorageService } from '../../core/services/shared';
-import { MultiplayerChatService, MultiplayerCursorService, MultiplayerPlayerInfoService, MultiplayerService, MultiplayerUiService } from '../../core/services/multiplayer';
+import { MultiplayerAudioService, MultiplayerChatService, MultiplayerCursorService, MultiplayerPlayerInfoService, MultiplayerService, MultiplayerUiService } from '../../core/services/multiplayer';
 import { CursorRendererHelper } from 'src/app/core/helpers/cursor-renderer.helper';
 import { OverlaySyncHelper } from 'src/app/core/helpers/overlay-sync.helper';
 import { ChatPanelHelper } from 'src/app/core/helpers/chat-panel.helper';
@@ -30,6 +30,7 @@ export class GamePage implements OnInit, OnDestroy {
   // UI state properties
   smoothFilterDisabled = false;
   spectatorCursorsHidden = false;
+  spectatorAudioDisabled = false;
   private latestCursors: { [peerId: string]: CursorPositionMessage } = {};
   autoSaveDisabled = false;
   periodicSave = false;
@@ -82,6 +83,7 @@ export class GamePage implements OnInit, OnDestroy {
     private multiplayerCursorService: MultiplayerCursorService,
     private multiplayerUiService: MultiplayerUiService,
     private playerInfoService: MultiplayerPlayerInfoService,
+    private multiplayerAudioService: MultiplayerAudioService,
     chatService: MultiplayerChatService
   ) {
     this.unreadCount$ = chatService.unreadCount$;
@@ -243,6 +245,7 @@ export class GamePage implements OnInit, OnDestroy {
     this.setupAutoSave()
     this.setupPeriodicSave()
     this.setupSpectatorCursors()
+    this.setupSpectatorAudio()
   }
 
   async handleShowTutorial() {
@@ -489,6 +492,26 @@ export class GamePage implements OnInit, OnDestroy {
   async setupSpectatorCursors() {
     const hidden = await this.storageService.get<boolean>(STORAGE_KEY.HIDE_SPECTATOR_CURSORS)
     this.spectatorCursorsHidden = !!hidden
+  }
+
+  async setupSpectatorAudio() {
+    const disabled = await this.storageService.get<boolean>(STORAGE_KEY.DISABLE_SPECTATOR_AUDIO)
+    this.spectatorAudioDisabled = !!disabled
+  }
+
+  /**
+   * Stop or resume sending the game's sound to spectators, live.
+   *
+   * Only flips the track's `enabled`, so the room is not renegotiated and a spectator who
+   * joins later gets the same track as one who was there from the start. The spectators are
+   * not told: they hear silence, exactly as they would from a quiet game.
+   */
+  async toggleSpectatorAudio(e: any) {
+    // The toggle reads "send the sound"; the stored flag is its negation, so that an absent
+    // key (every existing install) means the default, which is to send it.
+    this.spectatorAudioDisabled = !e.detail.checked
+    this.multiplayerAudioService.setEnabled(!this.spectatorAudioDisabled)
+    await this.storageService.set<boolean>(STORAGE_KEY.DISABLE_SPECTATOR_AUDIO, this.spectatorAudioDisabled)
   }
 
   /**
@@ -839,6 +862,11 @@ export class GamePage implements OnInit, OnDestroy {
     let hostingError: Error | undefined;
     try {
       const stream = await this.captureGameCanvasStream();
+      // Added before the first publish and never again: a track added to a live room would
+      // need a renegotiation trystero does not perform. Null when the game has no audio,
+      // which leaves the picture going out on its own.
+      const audioTrack = this.multiplayerAudioService.capture(!this.spectatorAudioDisabled);
+      if (audioTrack) stream.addTrack(audioTrack);
       await this.multiplayerService.hostGameRoom(
         this.hostName,
         this.hostRoomId,

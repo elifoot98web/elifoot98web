@@ -151,6 +151,22 @@
           <ion-badge *ngIf="!isChatOpen && chat.unread" color="danger" aria-hidden="true">{{ chat.unread }}</ion-badge>
         </ion-button>
       </ng-container>
+      <!--
+        Sound toggle. On the game surface rather than in the toolbar for the chat toggle's
+        reason: short landscape has no header. Only offered when the host's stream actually
+        carries sound, and it is a sibling of the video, so the border-box contract holds.
+        When the browser would not start the sound unprompted it says so, and the tap that
+        answers it is the gesture the browser was waiting for.
+      -->
+      <ion-button *ngIf="isSpectating && hasAudio" fill="clear" class="sound-toggle-btn"
+        [class.sound-toggle-btn--blocked]="audioBlocked"
+        (click)="toggleAudio()"
+        [attr.aria-label]="soundToggleLabel()"
+        [attr.aria-pressed]="!isSoundOff">
+        <ion-icon [attr.slot]="audioBlocked ? 'start' : 'icon-only'"
+          [name]="isSoundOff ? 'volume-mute-outline' : 'volume-high-outline'"></ion-icon>
+        <span *ngIf="audioBlocked" class="sound-toggle-label">Ativar som</span>
+      </ion-button>
     </div>
     <!-- Chat docked beside (landscape) or below (portrait) the stream. -->
     <div id="chat-panel" class="chat-docked-panel" [class.chat-open]="isChatOpen"

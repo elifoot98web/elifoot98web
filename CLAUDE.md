@@ -213,6 +213,18 @@ Load-bearing invariants — each of these was a bug once:
   rejoin can start a new room before an old timer fires.
 - **`GameState` is a numeric enum with no explicit values.** Append members; inserting one
   silently renumbers every later member.
+- **The game's sound is one audio track in the same wrapped stream as the picture, made
+  before the first publish and never added or removed afterwards.** js-dos keeps its
+  `AudioContext` private, so `game.js` captures the one `ScriptProcessorNode` it creates
+  (`getDosAudioNode`, installed before `elifootMain` runs) and `MultiplayerAudioService`
+  fans it out to a `MediaStreamAudioDestinationNode` that is never connected to the host's
+  speakers. The host's "send the sound" switch only flips `track.enabled`: a track added to a
+  live room needs a renegotiation trystero does not perform (the same failure as the spectator
+  rejoin above), so toggling by add/remove would silently reach nobody. Audio is best-effort
+  — no node means video only, never a failed host. Host identity is still read from the
+  *video* track, so audio can never confer it. A spectator attaches with `video.muted` set as a
+  property before `srcObject`, and falls back to muted plus an `Ativar som` button when the
+  browser refuses to autoplay with sound; their mute persists because every rejoin reloads.
 - **`#stream-target`'s border box must equal the visible picture exactly.** `OverlaySyncHelper`
   positions the cursor overlay from the video's `offset*`, and cursor coords normalise against
   `clientWidth`, so any letterbox bar *inside* the element offsets every remote cursor. The fit

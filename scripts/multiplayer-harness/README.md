@@ -107,6 +107,67 @@ Verified on 2026-08-27; the "pass" column is what was actually observed.
 | Host grace period | 13.0 s from peer-leave to expiry, reconnect copy throughout |
 | Forged host claim | see below — the badge must not move, and that peer leaving must not end the room |
 
+### Game audio
+
+Launch with `--mute-audio` so two browsers are not both playing the game through the speakers,
+and do **not** add `--autoplay-policy=no-user-gesture-required`: how a spectator is treated by
+autoplay policy is one of the things under test.
+
+`state` reports `video.trackKinds`, `video.audioTracks`, `video.muted` and a `sound` block;
+`audio <port> [ms]` reads RTP stats over a window (default 1 s) and prints the deltas. Use a
+window of several seconds: each `cdp.mjs` call has its own start-up delay, so a short beep
+triggered from another call can land outside a 1 s window and read as a failure.
+
+**The game is usually silent**, so `energyDelta` stays 0 unless you make it speak. Real game
+sounds were not reproducible on demand (see below), so feed a tone through js-dos's own sound
+queue, which exercises everything after the emulator: its script node, the tap, WebRTC and the
+spectator.
+
+```bash
+$HARNESS eval 9222 "(async () => {
+  const ci = window.ng.getComponent(document.querySelector('app-game')).dosCI;
+  const ev = ci.events(), rate = ci.soundFrequency(), chunk = 2048; let phase = 0;
+  const t0 = performance.now();
+  while (performance.now() - t0 < 3000) {
+    const s = new Float32Array(chunk);
+    for (let i = 0; i < chunk; i++) { s[i] = 0.3 * Math.sin(phase); phase += 2 * Math.PI * 440 / rate }
+    ev.fireSoundPush(s);
+    await new Promise(r => setTimeout(r, chunk / rate * 1000));
+  }
+})()" &
+$HARNESS audio 9223 5000      # in the same breath: bytes jump and energy rises
+```
+
+Be careful what else you drive in the game. Sending `Tab`, `Esc` and clicks at the emulator
+while probing for a beep navigated Windows 3.1 out of Elifoot into Program Manager. Harmless in
+a throwaway profile, but easy to leave the game somewhere you did not intend.
+
+**Observed 2026-10-26.** Chromium only, host and one spectator, tone injected as above.
+
+| Scenario | Observed |
+| --- | --- |
+| Guest receives sound | `trackKinds` `["audio","video"]` (audio first) and the stream was still accepted, so the first-`ontrack` ordering did not bite; no `Ignoring stream` line in either log |
+| Audio is moving | ~50 packets/s both ends. Silence is 3 B/packet (~150 B/s); with the tone ~19 KB per 5 s window, energy 0.56 sender / 0.61 receiver |
+| Host switch off / on | off: guest energy 0 at silence bytes, remote track still present and `live`; on: energy back (0.31). Nothing renegotiated |
+| Rejoin as a late joiner, host switch off | the reloaded guest got the track (`hasAudio: true`) and a live picture (`300x225`) |
+| Autoplay (Chromium) | after the join click: `muted: false`, `audioBlocked: false` |
+| Guest mute persists | muted, reloaded via `retryAfterFailure`: `video.muted: true` on attach, stored `true`; unmuting stores `false` |
+| Sound button | bottom-left, bevelled, icon flips mute/high, `aria-label` names the action, `aria-pressed` follows |
+| No audio node | with `getDosAudioNode()` returning `null`: hosting reaches `streaming`, one `[AUDIO]` warning, the spectator gets `["video"]`, `hasAudio: false`, no button |
+| Console | no exceptions, no `NotAllowedError`, no guard warnings; only the dead nostr relays |
+
+**Not run. Do not treat these as passing:**
+
+- **Real game sound.** A genuine beep or `.WAV` over the wire. Tab/Esc/click produced peaks at
+  the source early on but could not be repeated on demand, and Sound Recorder's Play produced none.
+- The `Ativar som` fallback: Chromium allowed sound on the join click, so a refusal never
+  happened. It needs Safari/iOS, or a spectator page with no prior gesture.
+- Hearing the host's own speakers unchanged (the session ran `--mute-audio`).
+- A host network blip re-attaching with the spectator's mute intact; an audio-only stream from
+  an impostor being ignored; a second spectator joining mid-match (the rejoin above is the
+  closest thing run).
+- Firefox, Safari, phones, the button's landscape layout, and audio/video drift.
+
 ### Forging a host claim
 
 The regression this guards against is a spectator with devtools taking the host badge and

@@ -754,6 +754,10 @@ pressed bevel keys off `:active` rather than `.ion-activated`.
   the nostr signalling layer rather than anything in this feature, so the fix is a relay list,
   not a code path.
 - **Hostile payloads have not been through the harness** (8.3).
+- **Game audio is verified for the transport, not for real game sound** (8.7). Two Chromium
+  peers carried an injected tone end to end and the host switch, rejoin, mute persistence and
+  no-audio-node paths behaved. Still unobserved: a genuine in-game sound, the `Ativar som`
+  fallback (Chromium never refused), Firefox, Safari/iOS, phones, and A/V drift.
 - **A real network drop, phones, and every visual judgement** — the harness README's own list.
   CDP `offline` cuts HTTP and WebSocket traffic, so it breaks signalling but does not reliably
   stop media on an established WebRTC connection; testing "the host fell off the network" still
@@ -857,3 +861,60 @@ move; `opacity: 0` with the arrow still at 1 four seconds later; twenty replays 
 position left it idle; a genuinely new position brought it back to 1. Toggle: cursors went 1 → 0
 on hide, stayed 0 while the guest moved five times, and returned to 1 on un-hide without waiting
 for movement, with `true`/`false` landing in storage both ways.
+
+### 8.7 Game audio
+
+The last unchecked feature on the PR: spectators watched a silent game, because
+`captureGameCanvasStream()` returns `canvas.captureStream(30)` and nothing else. **Status: built
+and exercised with two Chromium peers on 2026-10-26 (harness README, "Game audio") — with a tone
+injected into js-dos's sound queue, not a real game sound, which could not be made to play on
+demand.** What was and was not observed is listed there; the claims below that depend on other
+browsers are marked as such.
+
+**Getting the sound out.** js-dos (0.73.9) builds its `AudioContext` inside `dosInstance.run()`
+and exposes none of it: `ScriptProcessor(2048, 0, 1) → Gain → destination`, mono, 44.1 kHz.
+Three taps were weighed.
+
+- *`dosCI.events().onSoundPush` into a second `AudioContext`* — the public API, and rejected for
+  it: a second clock means a jitter buffer, drift handling and about 100 ms of extra latency, for
+  roughly 80 lines, to re-do what js-dos already does correctly.
+- *Replacing `emulatorsUi.sound.audioNode`* — reimplements ~100 lines of vendored code to gain a
+  reference to something already reachable more cheaply.
+- *Capturing the node js-dos creates* — chosen. `game.js` wraps `createScriptProcessor` and keeps
+  the node whose arguments are `(_, 0, 1)`; the wrapper is installed before `elifootMain` runs
+  and js-dos touches `AudioContext` only inside `run()`. It reuses js-dos's own clock and its
+  drop/underrun handling, and fanning out from a node leaves the existing `gain → destination`
+  path, and so the host's own sound, untouched. The cost is a wrapped prototype method, kept
+  narrow by the argument match; js-dos is vendored and pinned, so its internals do not move.
+
+**Toggling without renegotiating.** The track is added to the stream before the first
+`addStream` and then only ever switched with `enabled`. A late `addTrack` would need a
+renegotiation onto a live connection, which is the failure §8.2 measured for rejoining
+spectators, and `removeStream(this.stream)` is already a no-op because `publishStream` wraps the
+tracks in a fresh `MediaStream` per add. The cost is that a spectator cannot tell a host who
+switched the sound off from a quiet game. There is deliberately no wire flag: it would be a
+claim, cosmetic at best, and §8.3 says what a new claim costs.
+
+**Host identity is unaffected.** `hostPeerId` is set after the `getVideoTracks()` guard, so an
+audio-only stream is ignored there exactly as before. trystero's `onPeerStream` fires once per
+stream, at the first `ontrack`; the WebRTC spec populates a description's tracks before firing
+those events and trystero adds both in one tick, so one offer should carry both. **Measured in
+Chromium**: the guest's tracks arrived as `["audio","video"]` — audio first — and the stream was
+accepted, with no guard warning. Firefox and Safari are unmeasured; if one ever delivers an
+audio-first stream with no video track yet, defer that guard to the stream's `addtrack` event,
+because trystero will not fire again.
+
+**Autoplay.** `#stream-target` was `autoplay` and unmuted but silent, so autoplay policy never
+applied. With sound it does, and a guest who joined from a share link has a fresh page whose only
+gesture is the join click. Chromium and Firefox are expected to allow sound on that sticky
+activation; Safari's is transient, so the picture would stall. The page therefore sets `muted`
+as a property before `srcObject`, calls `play()` itself, and on `NotAllowedError` falls back to
+muted with an `Ativar som` button — the tap being the gesture the browser wanted. Ruled out:
+native `controls` (a border or padding on `#stream-target` breaks the cursor math, and it
+swallows the clicks that drive the shared cursor) and a toolbar button (short landscape has no
+header, the reason the chat toggle is a floating control). The mute persists, because every
+rejoin is a fresh page load.
+
+**Not done, on purpose.** No volume slider (iOS ignores `video.volume`, and the device has one).
+No audio in the room-setup dialog; the switch lives in the host popover beside the cursor
+toggle, so the first seconds of a first-ever room are sent with sound on.

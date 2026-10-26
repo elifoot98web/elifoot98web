@@ -351,7 +351,8 @@ canvas {
  * panel, so a closed (zero-sized, overflow:hidden) panel can never clip it — the bug that
  * made the host chat unreachable.
  */
-.chat-toggle-btn {
+.chat-toggle-btn,
+.sound-toggle-btn {
     position: absolute;
     z-index: 20;
     margin: 0;
@@ -382,19 +383,47 @@ canvas {
         inset 1px 1px var(--win9x-light),
         inset -2px -2px var(--win9x-shadow),
         inset 2px 2px var(--win9x-bevel-light);
+}
 
+.chat-toggle-btn {
     // Portrait: bottom-centre of the game box, just above the chat's top edge.
     left: 50%;
     bottom: 8px;
     transform: translateX(-50%);
 }
 
-.chat-toggle-btn:active {
+/*
+ * The spectator's sound toggle. Bottom-left of the game box in every layout, because that
+ * corner is free in both: portrait puts the chat handle bottom-centre, landscape welds it to
+ * the right edge. It rides the game surface for the same reason the chat toggle does, and
+ * for the same reason it is not a toolbar button: short landscape has no header to hold it.
+ */
+.sound-toggle-btn {
+    left: 8px;
+    bottom: 8px;
+    min-width: 44px;
+}
+
+.sound-toggle-btn .sound-toggle-label {
+    margin-inline-start: 6px;
+}
+
+.chat-toggle-btn:active,
+.sound-toggle-btn:active {
     box-shadow:
         inset -1px -1px var(--win9x-light),
         inset 1px 1px var(--win9x-dark),
         inset -2px -2px var(--win9x-bevel-light),
         inset 2px 2px var(--win9x-shadow);
+}
+
+/*
+ * The browser refused to start the sound on its own, so the button carries the words
+ * "Ativar som" and flashes like a taskbar entry asking for attention — finite, for the
+ * reason the unread flash is.
+ */
+.sound-toggle-btn.sound-toggle-btn--blocked {
+    animation: win9x-taskbar-flash 1s steps(1, end) 6;
 }
 
 /*

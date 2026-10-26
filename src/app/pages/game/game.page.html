@@ -87,6 +87,14 @@
               <ion-toggle [checked]="spectatorCursorsHidden" (ionChange)="toggleSpectatorCursors($event)">Ocultar
                 cursores dos espectadores</ion-toggle>
             </ion-item>
+            <!--
+              The game's sound goes to spectators by default. Local and silent like the toggle
+              above: it flips the outgoing track, so nobody is told and nothing renegotiates.
+            -->
+            <ion-item detail="false">
+              <ion-toggle [checked]="!spectatorAudioDisabled" (ionChange)="toggleSpectatorAudio($event)">Enviar o som
+                do jogo aos espectadores</ion-toggle>
+            </ion-item>
           </ng-container>
           <ion-item detail="false">
             <ion-toggle [checked]="smoothFilterDisabled" (ionChange)="toggleSmoothFilter($event)">Desativar

@@ -16,6 +16,7 @@ import { MultiplayerCursorService } from './multiplayer-cursor.service';
 import { MultiplayerPlayerInfoService } from './multiplayer-player-info.service';
 import { BehaviorSubject, Subject, Subscription } from 'rxjs';
 import { MultiplayerStreamService } from './multiplayer-stream.service';
+import { MultiplayerAudioService } from './multiplayer-audio.service';
 import { WireGuardHelper } from '../../helpers/wire-guard.helper';
 import { environment } from 'src/environments/environment';
 
@@ -87,7 +88,8 @@ export class MultiplayerService {
     private multiplayerCursorService: MultiplayerCursorService,
     private playerInfoService: MultiplayerPlayerInfoService,
     private chatService: MultiplayerChatService,
-    private streamService: MultiplayerStreamService
+    private streamService: MultiplayerStreamService,
+    private audioService: MultiplayerAudioService
   ) { }
 
   get isInRoom(): boolean {
@@ -155,6 +157,7 @@ export class MultiplayerService {
       this.multiplayerCursorService.clear();
       this.chatService.clear();
       this.streamService.clear(); // Clear stream service state
+      this.audioService.clear(); // Release the tap on the game's audio
 
       this.setState(nextState);
       console.log('Left the multiplayer room and reset service state.');

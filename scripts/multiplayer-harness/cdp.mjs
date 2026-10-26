@@ -8,6 +8,7 @@
  *
  *   state    <port>                what this peer sees: room, roster, transcript, video
  *   eval     <port> '<js>'         evaluate an expression (awaited, JSON out)
+ *   audio    <port> [ms]           RTP audio deltas over a window (default 1000 ms): bytes, packets, energy
  *   click    <port> '<selector>'   real mouse events at the element's centre
  *   front    <port>                raise the window, then report visibilityState
  *   watch    <port>                stream console + exceptions until killed
@@ -154,7 +155,19 @@ const STATE_EXPRESSION = `(() => {
       box: video.offsetWidth + 'x' + video.offsetHeight,
       currentTime: Number(video.currentTime.toFixed(2)),
       paused: video.paused,
+      muted: video.muted,
+      volume: video.volume,
+      // Order is not asserted anywhere: the guard in MultiplayerStreamService reads
+      // getVideoTracks(), so what matters is that video is present whichever comes first.
+      trackKinds: video.srcObject?.getTracks?.().map(track => track.kind) ?? [],
+      audioTracks: video.srcObject?.getAudioTracks?.().map(track => ({
+        enabled: track.enabled, muted: track.muted, readyState: track.readyState,
+      })) ?? [],
     } : null,
+    // Guest: what the sound toggle believes. Host: whether the popover switch is off.
+    sound: isGuest
+      ? { hasAudio: component?.hasAudio, audioMuted: component?.audioMuted, audioBlocked: component?.audioBlocked }
+      : { spectatorAudioDisabled: component?.spectatorAudioDisabled },
     overlays: Array.from(document.querySelectorAll('ion-alert, ion-modal, ion-toast'))
       .filter(el => !el.classList.contains('overlay-hidden'))
       .map(el => el.tagName + ': ' + (text(el) ?? '').slice(0, 70)),
@@ -168,6 +181,52 @@ switch (command) {
   }
   case 'eval': {
     console.log(JSON.stringify(await evaluate(argument), null, 1))
+    break
+  }
+  /**
+   * Is audio actually moving? Reads the RTP stats off every peer connection trystero holds
+   * (the private `room` exists at runtime) twice, a second apart, and reports the deltas.
+   * Bytes alone prove nothing — a silent game still sends Opus frames — so `energyDelta` is
+   * the number to watch: trigger a sound in the game and it rises, and with the host's
+   * switch off it stays at zero while `bytes` keeps moving.
+   *
+   * Receiver: inbound-rtp totalAudioEnergy. Sender: outbound-rtp has no energy figure, so it
+   * is read from the media-source stat instead.
+   */
+  case 'audio': {
+    console.log(JSON.stringify(await evaluate(`(async () => {
+      const page = document.querySelector('app-join-game') ?? document.querySelector('app-game');
+      const component = window.ng?.getComponent?.(page);
+      const peers = component?.multiplayerService?.room?.getPeers?.() ?? {};
+      const read = async () => {
+        const out = {};
+        for (const [peerId, pc] of Object.entries(peers)) {
+          const sample = { bytes: 0, packets: 0, energy: 0, seen: false };
+          (await pc.getStats()).forEach(stat => {
+            if (stat.kind !== 'audio') return;
+            if (stat.type === 'inbound-rtp') {
+              sample.seen = true; sample.bytes = stat.bytesReceived; sample.packets = stat.packetsReceived;
+              sample.energy = stat.totalAudioEnergy ?? 0;
+            } else if (stat.type === 'outbound-rtp') {
+              sample.seen = true; sample.bytes = stat.bytesSent; sample.packets = stat.packetsSent;
+            } else if (stat.type === 'media-source') {
+              sample.energy = stat.totalAudioEnergy ?? 0;
+            }
+          });
+          out[peerId.slice(0, 6)] = sample;
+        }
+        return out;
+      };
+      const before = await read();
+      await new Promise(resolve => setTimeout(resolve, ${Number(argument) || 1000}));
+      const after = await read();
+      return Object.fromEntries(Object.keys(after).map(id => [id, {
+        audioStats: after[id].seen,
+        bytesDelta: after[id].bytes - (before[id]?.bytes ?? 0),
+        packetsDelta: after[id].packets - (before[id]?.packets ?? 0),
+        energyDelta: Number((after[id].energy - (before[id]?.energy ?? 0)).toFixed(6)),
+      }]));
+    })()`), null, 1))
     break
   }
   /**

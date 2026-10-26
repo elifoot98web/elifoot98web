@@ -13,6 +13,13 @@ export const STORAGE_KEY = {
   // game surface. Local and permanent, not a protocol change — nothing tells the
   // spectators, because there is nothing they need to do about it.
   HIDE_SPECTATOR_CURSORS: 'hideSpectatorCursors',
+  // Host side: stop sending the game's sound to spectators. Absent means "send it". The track
+  // stays in the stream either way and is only switched, never removed (see
+  // MultiplayerAudioService), so this changes nothing about what is negotiated.
+  DISABLE_SPECTATOR_AUDIO: 'disableSpectatorAudio',
+  // Guest side: the spectator muted the game. Persisted because every rejoin is a fresh page
+  // load (JoinGamePage.reloadSpectator), which would otherwise un-mute them on each retry.
+  SPECTATOR_MUTED: 'spectatorMuted',
   // Room CODES only, never passwords. A share link deliberately omits the password
   // (room-code.helper.ts), and persisting one here would undo that.
   RECENT_ROOMS: 'recentRooms',

@@ -22,7 +22,8 @@ import {
 import { CursorRendererHelper } from 'src/app/core/helpers/cursor-renderer.helper';
 import { OverlaySyncHelper } from 'src/app/core/helpers/overlay-sync.helper';
 import { ChatPanelHelper } from 'src/app/core/helpers/chat-panel.helper';
-import { MULTIPLAYER } from 'src/app/core/models/constants';
+import { MULTIPLAYER, STORAGE_KEY } from 'src/app/core/models/constants';
+import { LocalStorageService } from '../../core/services/shared';
 
 @Component({
   selector: 'app-join-game',
@@ -46,6 +47,26 @@ export class JoinGamePage implements OnInit, OnDestroy {
   /** True only inside the host grace period, while the last frame is still on screen. */
   isReconnecting = false;
 
+  /**
+   * Whether the host's stream carries a sound track at all. Track presence is the whole
+   * signal: a host that has switched its sound off still sends the track, silent, so the
+   * button is there either way and a spectator cannot tell a muted host from a quiet game.
+   */
+  hasAudio = false;
+
+  /** The spectator's own choice, and the only half of the sound state that is persisted. */
+  audioMuted = false;
+
+  /**
+   * The browser refused to start the sound without a gesture, so the picture is playing
+   * muted. Not a choice and not persisted: the next tap on the toggle clears it.
+   */
+  audioBlocked = false;
+
+  /** True whenever the spectator is hearing nothing, for either reason. */
+  get isSoundOff(): boolean {
+    return this.audioMuted || this.audioBlocked;
+  }
   /**
    * Whether the video surface should be on screen. A reconnect keeps it there: the whole
    * point of the grace period is that the last frame survives the blip.
@@ -77,6 +98,7 @@ export class JoinGamePage implements OnInit, OnDestroy {
     private multiplayerStreamService: MultiplayerStreamService,
     private multiplayerUiService: MultiplayerUiService,
     private identityService: MultiplayerIdentityService,
+    private storageService: LocalStorageService,
     playerInfoService: MultiplayerPlayerInfoService,
     chatService: MultiplayerChatService
   ) {
@@ -93,6 +115,13 @@ export class JoinGamePage implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
+    // Read well before any stream can arrive (a join needs a dialog and a round trip), so
+    // `attachStream` finds the answer already here and never plays a blip of sound at
+    // someone who muted the game last time.
+    this.storageService.get<boolean>(STORAGE_KEY.SPECTATOR_MUTED)
+      .then(muted => { this.audioMuted = !!muted; })
+      .catch(err => console.warn('Could not read the saved sound preference', err));
+
     this.pageSubscriptions.add(
       this.multiplayerService.gameStateSubject.subscribe(state => this.onGameStateChange(state))
     );
@@ -407,6 +436,58 @@ export class JoinGamePage implements OnInit, OnDestroy {
     video.srcObject = null;
   }
 
+  /**
+   * Start the picture, and the sound if the browser allows it.
+   *
+   * Sound is the spectator's call and the browser's: the property is set BEFORE `srcObject`
+   * so a muted spectator never hears a blip, and set on the element rather than as the
+   * template attribute, which Angular does not reflect into `muted`. When autoplay policy
+   * says no (a Safari page whose gesture has gone stale), the picture is more important
+   * than the sound, so it falls back to muted and `audioBlocked` asks for a tap. Every
+   * attach runs this, so the picture recovered after a host blip gets the same treatment.
+   */
+  private async startPlayback(video: HTMLVideoElement, stream: MediaStream) {
+    try {
+      await video.play();
+    } catch (err: any) {
+      // Anything but a policy refusal is not ours to fix: AbortError is a newer attach
+      // replacing this one, and that attach will make its own attempt.
+      if (err?.name !== 'NotAllowedError' || video.srcObject !== stream) return;
+      if (video.muted) {
+        console.warn('The browser refused to play even muted.', err);
+        return;
+      }
+      video.muted = true;
+      this.audioBlocked = this.hasAudio;
+      try {
+        await video.play();
+      } catch (retryErr) {
+        console.warn('The browser refused to play the stream.', retryErr);
+      }
+    }
+  }
+
+  /**
+   * The sound toggle. Also the way out of `audioBlocked`: the tap is the gesture the
+   * browser was waiting for, so unmuting here is allowed where autoplay was not.
+   */
+  async toggleAudio() {
+    const video = this.getVideoElement();
+    if (!video) return;
+
+    this.audioMuted = !this.isSoundOff;
+    this.audioBlocked = false;
+    video.muted = this.audioMuted;
+    if (video.paused) video.play().catch(err => console.warn('Could not resume the stream', err));
+
+    await this.storageService.set<boolean>(STORAGE_KEY.SPECTATOR_MUTED, this.audioMuted);
+  }
+
+  /** Sound-toggle label, naming the action the tap will perform. */
+  soundToggleLabel(): string {
+    return this.isSoundOff ? 'Ativar o som do jogo' : 'Silenciar o som do jogo';
+  }
+
   private attachStream(stream: MediaStream) {
     const video = this.getVideoElement();
     // Reported rather than thrown: this now runs from the stream subscription, where a
@@ -417,7 +498,11 @@ export class JoinGamePage implements OnInit, OnDestroy {
       return;
     }
 
+    this.hasAudio = stream.getAudioTracks().length > 0;
+    this.audioBlocked = false;
+    video.muted = this.audioMuted;
     video.srcObject = stream;
+    void this.startPlayback(video, stream);
     this.multiplayerService.setState(GameState.IN_ROOM);
 
     // `loadedmetadata` delivers the first real intrinsic size; `resize` fires whenever the
