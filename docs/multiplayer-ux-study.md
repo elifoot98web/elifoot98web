@@ -754,10 +754,10 @@ pressed bevel keys off `:active` rather than `.ion-activated`.
   the nostr signalling layer rather than anything in this feature, so the fix is a relay list,
   not a code path.
 - **Hostile payloads have not been through the harness** (8.3).
-- **Game audio is verified for the transport, not for real game sound** (8.7). Two Chromium
-  peers carried an injected tone end to end and the host switch, rejoin, mute persistence and
-  no-audio-node paths behaved. Still unobserved: a genuine in-game sound, the `Ativar som`
-  fallback (Chromium never refused), Firefox, Safari/iOS, phones, and A/V drift.
+- **Game audio** (8.7). Two Chromium peers carried an injected tone end to end and the host
+  switch, rejoin, mute persistence and no-audio-node paths behaved; the maintainer confirmed real
+  in-game sound with a Chrome host and a Firefox guest. Still unobserved: the `Ativar som`
+  fallback (Chromium never refused autoplay), Safari/iOS, phones, a Firefox host, and A/V drift.
 - **A real network drop, phones, and every visual judgement** — the harness README's own list.
   CDP `offline` cuts HTTP and WebSocket traffic, so it breaks signalling but does not reliably
   stop media on an established WebRTC connection; testing "the host fell off the network" still
@@ -866,10 +866,11 @@ for movement, with `true`/`false` landing in storage both ways.
 
 The last unchecked feature on the PR: spectators watched a silent game, because
 `captureGameCanvasStream()` returns `canvas.captureStream(30)` and nothing else. **Status: built
-and exercised with two Chromium peers on 2026-10-26 (harness README, "Game audio") — with a tone
-injected into js-dos's sound queue, not a real game sound, which could not be made to play on
-demand.** What was and was not observed is listed there; the claims below that depend on other
-browsers are marked as such.
+and exercised with two Chromium peers on 2026-10-26 (harness README, "Game audio") using a tone
+injected into js-dos's sound queue, since a real game sound could not be made to play on demand.
+The maintainer then confirmed real in-game sound with a Chrome host and a Firefox guest.** What
+was and was not observed is listed in the README; the claims below that depend on other browsers
+are marked as such.
 
 **Getting the sound out.** js-dos (0.73.9) builds its `AudioContext` inside `dosInstance.run()`
 and exposes none of it: `ScriptProcessor(2048, 0, 1) → Gain → destination`, mono, 44.1 kHz.
@@ -900,9 +901,10 @@ audio-only stream is ignored there exactly as before. trystero's `onPeerStream` 
 stream, at the first `ontrack`; the WebRTC spec populates a description's tracks before firing
 those events and trystero adds both in one tick, so one offer should carry both. **Measured in
 Chromium**: the guest's tracks arrived as `["audio","video"]` — audio first — and the stream was
-accepted, with no guard warning. Firefox and Safari are unmeasured; if one ever delivers an
-audio-first stream with no video track yet, defer that guard to the stream's `addtrack` event,
-because trystero will not fire again.
+accepted, with no guard warning. A Firefox guest also played the stream (reported, track order not
+recorded); Safari is unmeasured. If a browser ever delivers an audio-first stream with no video
+track yet, defer that guard to the stream's `addtrack` event, because trystero will not fire
+again.
 
 **Autoplay.** `#stream-target` was `autoplay` and unmuted but silent, so autoplay policy never
 applied. With sound it does, and a guest who joined from a share link has a fresh page whose only

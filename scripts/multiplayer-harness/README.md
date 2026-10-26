@@ -156,17 +156,19 @@ a throwaway profile, but easy to leave the game somewhere you did not intend.
 | No audio node | with `getDosAudioNode()` returning `null`: hosting reaches `streaming`, one `[AUDIO]` warning, the spectator gets `["video"]`, `hasAudio: false`, no button |
 | Console | no exceptions, no `NotAllowedError`, no guard warnings; only the dead nostr relays |
 
+**Reported by the maintainer, 2026-10-26** (not observed through this harness): a Chrome host and a
+Firefox guest, with real in-game sound audible on the guest. That settles real game sound and a
+Firefox spectator receiving the stream; the order of the tracks Firefox saw was not recorded.
+
 **Not run. Do not treat these as passing:**
 
-- **Real game sound.** A genuine beep or `.WAV` over the wire. Tab/Esc/click produced peaks at
-  the source early on but could not be repeated on demand, and Sound Recorder's Play produced none.
 - The `Ativar som` fallback: Chromium allowed sound on the join click, so a refusal never
   happened. It needs Safari/iOS, or a spectator page with no prior gesture.
 - Hearing the host's own speakers unchanged (the session ran `--mute-audio`).
 - A host network blip re-attaching with the spectator's mute intact; an audio-only stream from
   an impostor being ignored; a second spectator joining mid-match (the rejoin above is the
   closest thing run).
-- Firefox, Safari, phones, the button's landscape layout, and audio/video drift.
+- Safari, phones, a Firefox *host*, the button's landscape layout, and audio/video drift.
 
 ### Forging a host claim
 
