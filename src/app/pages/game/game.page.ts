@@ -49,6 +49,8 @@ export class GamePage implements OnInit, OnDestroy {
   hostPassword = '';
   hostName = '';
   hostColor = MULTIPLAYER.DEFAULT_CURSOR_COLOR;
+  /** How many spectators this room accepts; the host is not counted. */
+  hostMaxSpectators = MULTIPLAYER.DEFAULT_MAX_SPECTATORS;
 
   /** Drives the badge on the chat toggle, which sits outside the chat component. */
   unreadCount$: Observable<number>;
@@ -850,6 +852,7 @@ export class GamePage implements OnInit, OnDestroy {
     this.hostRoomId = setup.roomCode;
     this.hostPassword = setup.password;
     this.hostColor = setup.playerColor;
+    this.hostMaxSpectators = setup.maxSpectators ?? MULTIPLAYER.DEFAULT_MAX_SPECTATORS;
 
     await this.startHosting();
   }
@@ -872,7 +875,8 @@ export class GamePage implements OnInit, OnDestroy {
         this.hostRoomId,
         this.hostPassword,
         stream,
-        this.hostColor
+        this.hostColor,
+        this.hostMaxSpectators
       );
 
       this.isStreaming = true;
@@ -984,7 +988,9 @@ export class GamePage implements OnInit, OnDestroy {
     // broadcast, so this is a toast and never touches the room.
     const message = kind === 'wrong-password'
       ? 'Alguém tentou entrar com a senha errada.'
-      : 'Alguém tentou entrar, mas a conexão não foi estabelecida.';
+      : kind === 'room-full'
+        ? `Alguém tentou entrar, mas a sala está cheia (limite de ${this.hostMaxSpectators} ${this.hostMaxSpectators === 1 ? 'espectador' : 'espectadores'}).`
+        : 'Alguém tentou entrar, mas a conexão não foi estabelecida.';
     // 'warning', not the default green: a failed entry attempt is not good news.
     await this.multiplayerUiService.showToast(message, 'warning');
   }
@@ -1033,7 +1039,7 @@ export class GamePage implements OnInit, OnDestroy {
   async openMultiplayerPanel() {
     this.hidePopover();
     const action = await this.multiplayerUiService.showMultiplayerPanel(
-      'host', this.hostRoomId, !!this.hostPassword
+      'host', this.hostRoomId, !!this.hostPassword, this.hostMaxSpectators
     );
 
     switch (action) {

@@ -53,11 +53,12 @@ export class MultiplayerUiService {
   async showMultiplayerPanel(
     mode: 'host' | 'guest',
     roomCode: string,
-    locked: boolean
+    locked: boolean,
+    maxSpectators?: number
   ): Promise<MultiplayerPanelAction> {
     const modal = await this.modalController.create({
       component: MultiplayerPanelComponent,
-      componentProps: { mode, roomCode, locked },
+      componentProps: { mode, roomCode, locked, maxSpectators },
       cssClass: 'win9x-modal',
     });
     await modal.present();

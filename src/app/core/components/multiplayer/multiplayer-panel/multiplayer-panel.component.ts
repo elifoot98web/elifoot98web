@@ -26,6 +26,8 @@ export class MultiplayerPanelComponent {
   @Input() mode: 'host' | 'guest' = 'host';
   @Input() roomCode = '';
   @Input() locked = false;
+  /** Host only: the room's spectator limit, shown beside the headcount it bounds. */
+  @Input() maxSpectators?: number;
 
   count$: Observable<number>;
 

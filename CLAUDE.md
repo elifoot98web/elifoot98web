@@ -213,6 +213,17 @@ Load-bearing invariants — each of these was a bug once:
   rejoin can start a new room before an old timer fires.
 - **`GameState` is a numeric enum with no explicit values.** Append members; inserting one
   silently renumbers every later member.
+- **The spectator limit is an admission gate, not a kick, and what it tells a refused guest is a
+  claim.** trystero has no way to remove a peer, but `onPeerHandshake` runs after the password
+  challenge and before a peer is active, so a host at its limit (`MultiplayerAdmissionService`,
+  counted from `getPeers()` plus admitted-but-pending, in one synchronous step) refuses by throwing
+  after sending `{ __eli: 'room-full' }` — the only channel that reaches a pending peer. A guest
+  cannot tell the host from an impostor until video arrives, so it waits `ROOM_FULL_GRACE_MS` and a
+  stream arriving first wins; that bounds a forged refusal to guests whose stream is slower than
+  the window, no better. A refused peer is invisible to the host, so the rival-host collision check
+  (which runs off `onPeerJoin`) is replaced on that path by exchanging hosting ages through the same
+  channel. A spectator announces itself (ident) only once it has a host, because the room is a full
+  mesh and a refused guest still connects to every other spectator for a few seconds.
 - **The game's sound is one audio track in the same wrapped stream as the picture, made
   before the first publish and never added or removed afterwards.** js-dos keeps its
   `AudioContext` private, so `game.js` captures the one `ScriptProcessorNode` it creates

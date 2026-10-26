@@ -112,6 +112,13 @@ input.win9x-input:focus {
     inset 2px 2px var(--win9x-shadow);
 }
 
+/* A numbered button in the swatch group: same bevel and pressed state, a face instead of a colour. */
+.limit-option {
+  background: var(--win9x-face);
+  color: var(--win9x-ink);
+  font: bold 14px var(--win9x-font);
+}
+
 .color-swatch:focus-visible {
   outline: 2px dotted var(--win9x-ink);
   outline-offset: -6px;

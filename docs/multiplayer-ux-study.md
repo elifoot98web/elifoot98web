@@ -745,11 +745,10 @@ pressed bevel keys off `:active` rather than `.ion-activated`.
   enforcing uniqueness, so two spectators can still put two indistinguishable pointers on the
   canvas. §8.6 made each pointer *legible*, which is a different problem: it puts the name on an
   opaque pill in the player's colour, so two peers sharing a colour now have matching labels too.
-- **No peer cap and no chat rate limit** (§8.6). The label mitigations bound how much of the game
-  a wall of cursors can cover, but the underlying cost of an unwanted spectator is a WebRTC
-  encode and upload on the host, and chat is unmetered. A cap or a kick is the real answer and is
-  moderation, which decision (e) put out of scope — so this is a standing decision to revisit,
-  not an oversight.
+- **Chat is still unmetered** (§8.6). The peer cap is done (§8.8: the host picks 1 to 6
+  spectators), which bounds the cost of an unwanted spectator to a few encodes. What it does not
+  do is stop an admitted one from flooding the chat, and a kick remains moderation, which decision
+  (e) put out of scope — a standing decision to revisit, not an oversight.
 - **The `connection-failed` residual in 8.1.** Mitigated by the retry button, not fixed. It is
   the nostr signalling layer rather than anything in this feature, so the fix is a relay list,
   not a code path.
@@ -920,3 +919,74 @@ rejoin is a fresh page load.
 **Not done, on purpose.** No volume slider (iOS ignores `video.volume`, and the device has one).
 No audio in the room-setup dialog; the switch lives in the host popover beside the cursor
 toggle, so the first seconds of a first-ever room are sent with sound on.
+
+
+### 8.8 Spectator limit
+
+The last unchecked feature on the PR. Each spectator costs the host a WebRTC encode and upload of
+the canvas and nothing stopped a room filling. The host now picks **1 to 6 spectators, the host not
+counted** (six is Elifoot's own player limit), default 6 so existing hosts see no change, and a
+spectator beyond it is turned away with a message instead of timing out.
+
+**Why it is a gate and not a kick.** trystero 0.25.4 has no kick, ban or max-peers, and
+`getPeers()[id].close()` is not a substitute: it sends the guest nothing and trystero re-admits the
+peer on its next signal. What it does have is `onPeerHandshake`, an admission gate in the same
+callbacks as `onJoinError`. It runs *after* the password challenge, so a stranger with the wrong
+password never reaches it or takes a slot, and a peer held in it is invisible — no `onPeerJoin`, no
+actions, no stream, inbound dropped, outbound skipped. Refusing is a throw, with nothing to undo.
+
+**The count** is taken from the transport, never the roster: `getPeers()` plus the peers admitted
+but not yet active (`MultiplayerAdmissionService`, which expires them after `ADMISSION_HOLD_MS`
+because a peer that dies mid-handshake fires no event). `playerList$` only learns a peer when its
+ident arrives and includes the host, so it is both late and off by one. The compare and the record
+are one synchronous step, so two simultaneous joiners cannot share the last slot. A peer that is
+already active is let through without a second slot, which is what stops a spectator whose link
+blipped from being locked out of a room it never left.
+
+**Telling the guest why.** `send` is the only channel that reaches a pending peer, so the host
+sends `{ __eli: 'room-full', hostingForMs }` before it throws. Without it a refused guest could
+only wait out the 20 s stream timeout and be told to check the code and password, the same class
+of dishonest copy §8.2 recorded. It now learns in about 7 seconds.
+
+**A refusal is a claim, and the guard against a forged one is weaker than first written.** A guest
+cannot yet tell the host from an impostor, since host identity comes from the stream and there is
+none yet, so a spectator could otherwise eject every newcomer by claiming the room is full. The
+claim therefore only arms a `ROOM_FULL_GRACE_MS` (5 s) timer, and a stream arriving first cancels
+its effect. **That protects a guest whose stream arrives within that window of the claim, and no
+more**: one whose link to the host is slower than 5 s *can* be ejected by a forged claim, and a
+modified client can imitate a genuine refuser exactly, so nothing a guest could check would help.
+The cost is a "sala cheia" card with a retry button. Verified both ways (harness README, "Spectator limit"): a claim forged just
+after the guest connected to the host left it `IN_ROOM` with a live picture, and one forged before
+any connection existed ejected it when the window ran out.
+
+**A rival host on a full room.** The collision check runs off `onPeerJoin`, which a refused peer
+never produces, so a second host picking the code of a *full* room would have gone unnoticed and
+two hosts would have shared it. Both sides therefore exchange how long they have been hosting
+(`room-full` carries the refuser's, `host-reply` the other's) and each runs the existing
+`resolveHostCollision`: the younger yields. The rule is symmetric and each side needs only the
+other's duration, so both reach the same answer. The refusing host waits up to `HOST_REPLY_WAIT_MS`
+for a reply; a spectator never answers, so for the common case that is just how long the refusal
+takes. The durations go through `WireGuardHelper.hostingDuration`, so the exposure to a forged one
+is the one a forged `hostAnnounce` already had.
+
+**Found by running it: a refused spectator was visible to the others.** The room is a full mesh, so
+a refused guest still connects to every other spectator, announces itself, and lingers for the grace
+window — longer than the 1.5 s join-line delay — so each of them wrote "entrou" and then "saiu" for
+someone who was never let in. A spectator now holds its ident back until it has a host
+(`hostPeerId`), so a refused one is never seen at all. Presence now means *watching*, which a guest
+that never got a picture is not. A host announces at once.
+
+**Rejected.** Closing the connection from the host (above). Gating after activation in `onPeerJoin`,
+which would leave the refused peer active — receiving host chat and cursors, and needing a guard at
+six ingest sites and four sends, any missed one becoming a ghost chatter.
+
+**Residuals.**
+
+- A refused guest's transport connection lingers about two minutes and trystero re-announces about
+  once a minute, so it acts as an accidental waiting list. It is never active on the host meanwhile.
+- Guest-to-guest traffic cannot be policed by the host; a modified client that stays can still talk
+  to the spectators it meshes with.
+- An older guest build has no handler, so a refusal reaches it as `connection-failed` after the 10 s
+  handshake timeout.
+- No slot is held for a spectator dropped and re-joined after the slot was taken, and the limit is
+  fixed at room creation (the handler reads it lazily, so a live control is a small addition).

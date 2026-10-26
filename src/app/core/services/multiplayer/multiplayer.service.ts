@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
-import { JoinError, joinRoom, JoinRoomConfig, RequestAction, Room, selfId } from 'trystero';
+import { HandshakeReceiver, HandshakeSender, JoinError, joinRoom, JoinRoomConfig, RequestAction, Room, selfId } from 'trystero';
 import {
+  AdmissionPayload,
   GameState,
   HostAnnounceMessage,
   MultiplayerJoinErrorKind,
@@ -14,9 +15,10 @@ import { MULTIPLAYER } from '../../models/constants';
 import { MultiplayerChatService } from './multiplayer-chat.service';
 import { MultiplayerCursorService } from './multiplayer-cursor.service';
 import { MultiplayerPlayerInfoService } from './multiplayer-player-info.service';
-import { BehaviorSubject, Subject, Subscription } from 'rxjs';
+import { BehaviorSubject, filter, Subject, Subscription } from 'rxjs';
 import { MultiplayerStreamService } from './multiplayer-stream.service';
 import { MultiplayerAudioService } from './multiplayer-audio.service';
+import { MultiplayerAdmissionService } from './multiplayer-admission.service';
 import { WireGuardHelper } from '../../helpers/wire-guard.helper';
 import { environment } from 'src/environments/environment';
 
@@ -50,6 +52,12 @@ export class MultiplayerService {
 
   /** Pending "wait for the host to come back" timer; see startHostGrace(). */
   private hostGraceTimer?: ReturnType<typeof setTimeout>;
+
+  /** Pending "believe the refusal?" timer on a guest; see onRoomFullClaim(). */
+  private roomFullTimer?: ReturnType<typeof setTimeout>;
+
+  /** The error a refusing host throws from the admission gate; see classifyJoinError(). */
+  private static readonly ROOM_FULL_ERROR = 'room-full';
 
   /** Join lines still serving out their delay, by peer; see scheduleJoinLine(). */
   private pendingJoinLines = new Map<string, ReturnType<typeof setTimeout>>();
@@ -89,7 +97,8 @@ export class MultiplayerService {
     private playerInfoService: MultiplayerPlayerInfoService,
     private chatService: MultiplayerChatService,
     private streamService: MultiplayerStreamService,
-    private audioService: MultiplayerAudioService
+    private audioService: MultiplayerAudioService,
+    private admissionService: MultiplayerAdmissionService
   ) { }
 
   get isInRoom(): boolean {
@@ -101,7 +110,16 @@ export class MultiplayerService {
     return this.leavingPromise !== undefined;
   }
 
-  async hostGameRoom(hostName: string, roomName: string, password: string, stream: MediaStream, color?: string) {
+  async hostGameRoom(
+    hostName: string,
+    roomName: string,
+    password: string,
+    stream: MediaStream,
+    color?: string,
+    maxSpectators?: number
+  ) {
+    // Before the room exists, so no peer can be judged against a stale limit.
+    this.admissionService.setLimit(maxSpectators);
     await this.joinRoom(hostName, roomName, password, MultiplayerUserRole.HOST, color);
     this.setupHost(stream);
   }
@@ -128,6 +146,7 @@ export class MultiplayerService {
     try {
       this.roomEpoch += 1; // Invalidates anything deferred by the room we are leaving
       this.clearHostGrace();
+      this.clearRoomFullTimer();
       this.clearPendingJoinLines();
 
       // Captured BEFORE clearing this.room. room.leave() is async and trystero only
@@ -158,6 +177,7 @@ export class MultiplayerService {
       this.chatService.clear();
       this.streamService.clear(); // Clear stream service state
       this.audioService.clear(); // Release the tap on the game's audio
+      this.admissionService.clear(); // Forget held slots and put the limit back to its default
 
       this.setState(nextState);
       console.log('Left the multiplayer room and reset service state.');
@@ -208,6 +228,11 @@ export class MultiplayerService {
   private clearHostGrace() {
     clearTimeout(this.hostGraceTimer);
     this.hostGraceTimer = undefined;
+  }
+
+  private clearRoomFullTimer() {
+    clearTimeout(this.roomFullTimer);
+    this.roomFullTimer = undefined;
   }
 
   /**
@@ -302,6 +327,7 @@ export class MultiplayerService {
     }
     const room = joinRoom(config, this.roomName.toUpperCase(), {
       onJoinError: details => this.handleJoinError(details),
+      onPeerHandshake: (peerId, send, receive) => this.onPeerHandshake(peerId, send, receive),
     });
     this.room = room;
 
@@ -487,6 +513,132 @@ export class MultiplayerService {
   }
 
   /**
+   * trystero's admission gate, called once per peer after the password challenge and before
+   * the peer is active. A peer held here is invisible to everything else — no `onPeerJoin`,
+   * no actions, no stream, and trystero drops what it sends — which is what makes refusing
+   * one clean, and why a stranger with the wrong password never gets as far as taking a slot.
+   *
+   * It runs for every pair in the room, so on a guest it is only ever a listener: a guest
+   * does not know who the host is until video arrives, and refuses nobody.
+   */
+  private async onPeerHandshake(peerId: string, send: HandshakeSender, receive: HandshakeReceiver): Promise<void> {
+    if (this.playerRole === MultiplayerUserRole.HOST) {
+      const activePeerIds = Object.keys(this.room?.getPeers() ?? {});
+      if (!this.admissionService.admit(peerId, activePeerIds)) {
+        return this.refuseNewcomer(peerId, send, receive);
+      }
+    }
+
+    // Admitted, or a guest: listen without blocking. Resolving at once is what lets the
+    // handshake finish, so a peer that never says anything must not hold this up.
+    this.listenForAdmissionPayload(peerId, send, receive);
+  }
+
+  /**
+   * Turn a peer away, having first told it why.
+   *
+   * `send` is the only channel that reaches a peer that is still pending — an ordinary
+   * action would just log "no peer with id" — so the reason has to go out before the throw.
+   * Without it the refused guest could only wait out its stream timeout, and be told to go
+   * and check the room code.
+   *
+   * The refused peer might be another host that picked this code. That would otherwise go
+   * unnoticed, because the host-collision check runs off `onPeerJoin`, which a refused peer
+   * never produces. So both sides exchange how long they have been hosting here, and each
+   * runs the same tie-break the announce path uses: the younger yields. Only a host answers;
+   * for a spectator this is just the second a refusal takes.
+   */
+  private async refuseNewcomer(peerId: string, send: HandshakeSender, receive: HandshakeReceiver): Promise<never> {
+    console.warn(`Room is full (${this.admissionService.maxSpectators}); refusing ${peerId}.`);
+
+    const refusal: AdmissionPayload = { __eli: 'room-full', hostingForMs: this.hostingForMs() };
+    try {
+      await send(refusal);
+    } catch (err) {
+      console.warn(`Could not tell ${peerId} the room is full`, err);
+    }
+
+    const answer = await this.waitForAdmissionPayload(receive, MULTIPLAYER.HOST_REPLY_WAIT_MS);
+    if (answer) this.resolveHostCollision(peerId, answer.hostingForMs);
+
+    throw new Error(MultiplayerService.ROOM_FULL_ERROR);
+  }
+
+  /**
+   * One admission payload from a peer, or null if none arrives in time. Never rejects: the
+   * handshake being torn down under us (`clearPeer` rejects its waiters) is not an error here.
+   */
+  private async waitForAdmissionPayload(receive: HandshakeReceiver, timeoutMs: number): Promise<AdmissionPayload | null> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        // The catch matters beyond tidiness: when the timer wins, this promise is still
+        // pending and is rejected later by clearPeer, which would otherwise surface as an
+        // unhandled rejection.
+        receive().then(({ data }) => WireGuardHelper.admissionPayload(data)).catch(() => null),
+        new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), timeoutMs); }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
+   * Wait, in the background, for the other side of a handshake to say something. Silence is
+   * the normal case — an admitted peer sends nothing — and the waiter is rejected when the
+   * peer goes away, which is why the rejection is swallowed.
+   */
+  private listenForAdmissionPayload(peerId: string, send: HandshakeSender, receive: HandshakeReceiver) {
+    receive()
+      .then(({ data }) => {
+        const payload = WireGuardHelper.admissionPayload(data);
+        if (payload) this.onAdmissionPayload(peerId, payload, send);
+      })
+      .catch(() => { /* the peer left before saying anything */ });
+  }
+
+  private onAdmissionPayload(peerId: string, payload: AdmissionPayload, send: HandshakeSender) {
+    // A reply is only ever expected by the refusing side's own wait; arriving here it is noise.
+    if (payload.__eli !== 'room-full') return;
+
+    if (this.playerRole === MultiplayerUserRole.HOST) {
+      // Only a host can refuse, so this is a rival on our room code that is full. Answer
+      // first so it can tie-break too — it has no other way to learn our age — then do so
+      // ourselves. If we are the one yielding the reply is wasted, which is harmless.
+      send({ __eli: 'host-reply', hostingForMs: this.hostingForMs() } satisfies AdmissionPayload)
+        .catch(err => console.warn(`Could not answer the host refusal from ${peerId}`, err));
+      this.resolveHostCollision(peerId, payload.hostingForMs);
+      return;
+    }
+
+    this.onRoomFullClaim(peerId);
+  }
+
+  /**
+   * A guest is told the room is full. Believed only if no stream turns up.
+   *
+   * This arrives from a peer the guest cannot yet tell from an impostor: the host is
+   * identified by the video it sends, and there is none yet. Trusting it outright would let
+   * any spectator eject every newcomer by claiming the room is full. So it only starts a
+   * short wait, and a stream arriving inside it wins — a forged refusal costs a guest who
+   * was really admitted nothing, and one who really was refused learns in seconds instead of
+   * waiting out the twenty-second stream timeout.
+   */
+  private onRoomFullClaim(peerId: string) {
+    if (this.playerRole !== MultiplayerUserRole.GUEST || this.isLeaving) return;
+    if (this.streamService.hostPeerId !== null) return;
+    if (this.roomFullTimer !== undefined) return;
+
+    console.warn(`${peerId} says the room is full; waiting for a stream before believing it.`);
+    const epoch = this.roomEpoch;
+    this.roomFullTimer = setTimeout(() => {
+      this.roomFullTimer = undefined;
+      if (epoch !== this.roomEpoch || this.streamService.hostPeerId !== null) return;
+      this.joinErrorSubject.next('room-full');
+    }, MULTIPLAYER.ROOM_FULL_GRACE_MS);
+  }
+
+  /**
    * trystero reports what it can: a password that fails to decrypt an offer, a
    * handshake that never completes, a relay that cannot be reached. Anything it
    * cannot name still falls through to the guest's stream-wait timeout.
@@ -519,6 +671,10 @@ export class MultiplayerService {
     // details.error is a plain English string, so substring matching is the only
     // option. Unrecognised text deliberately returns undefined rather than guessing.
     const text = error.toLowerCase();
+    // First, because the substring tests below would otherwise claim it: trystero wraps what
+    // a handshake throws as "handshake failed: …", which `includes('handshake')` reads as a
+    // connection failure.
+    if (text.includes(MultiplayerService.ROOM_FULL_ERROR)) return 'room-full';
     if (text.includes('decrypt') || text.includes('password')) return 'wrong-password';
     if (text.includes('handshake') || text.includes('ice') || text.includes('connect')) return 'connection-failed';
     return undefined;
@@ -578,8 +734,7 @@ export class MultiplayerService {
     });
 
     const playerIdent = room.makeAction<PlayerIdentMessage>(MULTIPLAYER.EVENTS.PLAYER_IDENT);
-    this.addOnPeerJoinHandler((peerId: string) => {
-      // When a new peer joins, send them the current player ident
+    const sendIdent = (peerId: string) => {
       const ident: PlayerIdentMessage = {
         name: this.playerName,
         color: this.playerColor,
@@ -590,7 +745,30 @@ export class MultiplayerService {
         host: (this.playerRole === MultiplayerUserRole.HOST)
       };
       playerIdent.send(ident, { target: peerId });
+    };
+
+    // A spectator does not announce itself until it has a host and a picture. Presence means
+    // "watching", and one that has not received the stream is not — which matters now that a
+    // full room turns spectators away: a refused one lingers for a few seconds (it has to wait
+    // out the refusal being a claim) and is, to every other spectator, just another peer. If
+    // it announced itself at once, each of them would write "entrou" and then "saiu" into the
+    // transcript for someone who was never let in. Held back until `hostPeerId` is set, a
+    // refused spectator is never seen at all. A host announces at once: it has nothing to wait for.
+    const awaitingHost = new Set<string>();
+    this.addOnPeerJoinHandler((peerId: string) => {
+      if (this.playerRole === MultiplayerUserRole.GUEST && this.streamService.hostPeerId === null) {
+        awaitingHost.add(peerId);
+        return;
+      }
+      sendIdent(peerId);
     });
+    this.playerInfoSubscription?.add(
+      this.streamService.hostPeerId$.pipe(filter(hostPeerId => hostPeerId !== null)).subscribe(() => {
+        awaitingHost.forEach(sendIdent);
+        awaitingHost.clear();
+      })
+    );
+    this.addOnPeerLeaveHandler((peerId: string) => awaitingHost.delete(peerId));
   }
 
   private setupStreamService(stream?: MediaStream) {
@@ -615,6 +793,10 @@ export class MultiplayerService {
   }
 
   private onPeerJoin(peerId: string) {
+    // trystero counts the peer itself now that it is active, so the slot held for it is free
+    // to be released. Done before the handlers: one of them can tear the room down.
+    this.admissionService.release(peerId);
+
     // Guarded per iteration: a handler can tear the room down (a host yielding a
     // collided code), and the remaining handlers must not run against cleared state.
     for (const handler of this.onPeerJoinHandlers) {

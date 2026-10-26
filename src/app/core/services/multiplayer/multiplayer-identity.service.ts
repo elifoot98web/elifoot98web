@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { MULTIPLAYER, STORAGE_KEY } from '../../models/constants';
 import { LocalStorageService } from '../shared';
+import { WireGuardHelper } from '../../helpers/wire-guard.helper';
 
 /** Enough to cover "the room I was in yesterday" without becoming a list to scroll. */
 const MAX_RECENT_ROOMS = 4;
@@ -28,6 +29,18 @@ export class MultiplayerIdentityService {
   async save(playerName: string, playerColor: string): Promise<void> {
     await this.storageService.set(STORAGE_KEY.PLAYER_NAME, playerName);
     await this.storageService.set(STORAGE_KEY.PLAYER_COLOR, playerColor);
+  }
+
+  /**
+   * The spectator limit the host used last time, so the dialog opens on their usual choice.
+   * Anything out of range — storage is an input like any other — reads as the default.
+   */
+  async getMaxSpectators(): Promise<number> {
+    return WireGuardHelper.spectatorLimit(await this.storageService.get<number>(STORAGE_KEY.MAX_SPECTATORS));
+  }
+
+  async saveMaxSpectators(maxSpectators: number): Promise<void> {
+    await this.storageService.set(STORAGE_KEY.MAX_SPECTATORS, maxSpectators);
   }
 
   /**

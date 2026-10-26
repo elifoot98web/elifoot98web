@@ -20,6 +20,9 @@ export const STORAGE_KEY = {
   // Guest side: the spectator muted the game. Persisted because every rejoin is a fresh page
   // load (JoinGamePage.reloadSpectator), which would otherwise un-mute them on each retry.
   SPECTATOR_MUTED: 'spectatorMuted',
+  // Host side: how many spectators the last room allowed. Remembered so the dialog opens on
+  // the host's usual choice; clamped on read, because storage is just another input.
+  MAX_SPECTATORS: 'maxSpectators',
   // Room CODES only, never passwords. A share link deliberately omits the password
   // (room-code.helper.ts), and persisting one here would undo that.
   RECENT_ROOMS: 'recentRooms',
@@ -176,4 +179,23 @@ export const MULTIPLAYER = {
   // disbelieving a marathon session would be a worse failure than the forgery it guards
   // against.
   WIRE_MAX_HOSTING_MS: 86400000,
+  // How many spectators a room may hold, the host not counted. The ceiling is Elifoot's own
+  // limit of six players; the host picks anything from 1 up to it, and the default leaves
+  // existing hosts' behaviour unchanged. Each spectator costs the host a WebRTC encode and
+  // upload of the canvas, so this is the one lever against a room filling up.
+  MIN_SPECTATORS: 1,
+  MAX_SPECTATORS: 6,
+  DEFAULT_MAX_SPECTATORS: 6,
+  // How long a spectator keeps waiting for a stream after being told the room is full,
+  // before believing it. The refusal arrives as a claim from an unverified peer, so a
+  // stream that shows up inside this window wins — see MultiplayerService.onRoomFullClaim.
+  ROOM_FULL_GRACE_MS: 5000,
+  // How long a refusing host listens for the other side's answer before tearing the
+  // handshake down. Only a rival host answers; a spectator never does, so for the common
+  // case this is simply how long the refusal takes to complete.
+  HOST_REPLY_WAIT_MS: 1000,
+  // How long an admitted-but-not-yet-active peer keeps holding a slot. trystero abandons a
+  // handshake after 10s (`handshakeTimeoutMs`), and a peer that dies mid-handshake fires
+  // no event of its own, so the slot has to expire by itself.
+  ADMISSION_HOLD_MS: 11000,
 }

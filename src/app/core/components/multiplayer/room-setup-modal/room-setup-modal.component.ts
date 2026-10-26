@@ -9,6 +9,8 @@ export interface RoomSetupResult {
   roomCode: string;
   password: string;
   playerColor: string;
+  /** Host only: how many spectators the room accepts. Absent for a guest. */
+  maxSpectators?: number;
 }
 
 /**
@@ -28,6 +30,13 @@ export class RoomSetupModalComponent implements OnInit {
   @Input() presetRoomCode = '';
 
   colors = MULTIPLAYER.PLAYER_COLORS;
+
+  /** 1 to the ceiling, offered as buttons: six choices do not need a stepper or a select. */
+  spectatorLimits = Array.from(
+    { length: MULTIPLAYER.MAX_SPECTATORS - MULTIPLAYER.MIN_SPECTATORS + 1 },
+    (_, i) => MULTIPLAYER.MIN_SPECTATORS + i
+  );
+  maxSpectators = MULTIPLAYER.DEFAULT_MAX_SPECTATORS;
 
   playerName = '';
   roomCode = '';
@@ -57,7 +66,9 @@ export class RoomSetupModalComponent implements OnInit {
       ? RoomCodeHelper.sanitize(this.presetRoomCode)
       : (this.mode === 'host' ? RoomCodeHelper.generate() : '');
 
-    if (!this.isHost) {
+    if (this.isHost) {
+      this.maxSpectators = await this.identityService.getMaxSpectators();
+    } else {
       this.recentRooms = await this.identityService.getRecentRooms();
     }
   }
@@ -105,17 +116,23 @@ export class RoomSetupModalComponent implements OnInit {
     this.playerColor = color;
   }
 
+  selectSpectatorLimit(limit: number) {
+    this.maxSpectators = limit;
+  }
+
   async confirm() {
     this.onCodeBlur(); // covers submitting straight from the field without blurring
     if (!this.isValid) return;
 
     await this.identityService.save(this.playerName.trim(), this.playerColor);
+    if (this.isHost) await this.identityService.saveMaxSpectators(this.maxSpectators);
 
     const result: RoomSetupResult = {
       playerName: this.playerName.trim(),
       roomCode: RoomCodeHelper.normalize(this.roomCode),
       password: this.password,
       playerColor: this.playerColor,
+      ...(this.isHost ? { maxSpectators: this.maxSpectators } : {}),
     };
     await this.modalController.dismiss(result, 'confirm');
   }

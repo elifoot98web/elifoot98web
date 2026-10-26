@@ -402,6 +402,11 @@ export class JoinGamePage implements OnInit, OnDestroy {
         case 'connection-failed':
           return 'Não foi possível estabelecer a conexão direta com o anfitrião. ' +
             'Tente outra rede (Wi-Fi em vez de dados móveis) ou desative a VPN.';
+        case 'room-full':
+          // Not "tente outra sala": the room is fine, it is just at the limit its host chose.
+          // The retry button reloads and re-enters, which is what to do once someone leaves.
+          return 'A sala está cheia. O anfitrião definiu um limite de espectadores e ele ' +
+            'já foi atingido. Tente novamente quando alguém sair.';
       }
     }
     // rxjs `timeout` throws a TimeoutError. Silence is all we ever get for a room code

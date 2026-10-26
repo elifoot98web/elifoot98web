@@ -38,6 +38,9 @@
 
       <p class="panel-section-label">
         Participantes ({{ count$ | async }})
+        <ng-container *ngIf="isHost && maxSpectators">
+          · limite de {{ maxSpectators }} {{ maxSpectators === 1 ? 'espectador' : 'espectadores' }}
+        </ng-container>
       </p>
       <app-participant-list></app-participant-list>
 

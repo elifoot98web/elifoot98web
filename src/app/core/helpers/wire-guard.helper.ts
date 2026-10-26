@@ -1,4 +1,5 @@
 import { MULTIPLAYER } from '../models/constants';
+import { AdmissionPayload } from '../models/multiplayer/multiplayer.models';
 
 /**
  * Sanitisers for values that arrive over the trystero data channel.
@@ -119,5 +120,35 @@ export class WireGuardHelper {
     static hostingDuration(value: unknown, maxMs = MULTIPLAYER.WIRE_MAX_HOSTING_MS): number {
         const n = Number(value);
         return Number.isFinite(n) && n >= 0 && n <= maxMs ? n : 0;
+    }
+
+    /**
+     * A spectator limit from anywhere that is not this function's caller — storage, a dialog
+     * result — as an integer inside the allowed range, falling back to the default.
+     *
+     * Out of range is replaced with the default rather than clamped to the nearest edge: a
+     * stored `0` or `99` is a corrupted value, not a preference, and the default is the safe
+     * reading of "no usable preference".
+     */
+    static spectatorLimit(value: unknown): number {
+        const n = Number(value);
+        return Number.isInteger(n) && n >= MULTIPLAYER.MIN_SPECTATORS && n <= MULTIPLAYER.MAX_SPECTATORS
+            ? n
+            : MULTIPLAYER.DEFAULT_MAX_SPECTATORS;
+    }
+
+    /**
+     * Read a handshake-channel payload as an admission message, or `null` if it is anything
+     * else — including trystero's own password exchange, which uses the same channel.
+     *
+     * Only the declared kind is trusted to select behaviour, and the duration is bounded by
+     * `hostingDuration`, so a hostile value can at worst lose or win a tie-break it could
+     * already win by forging a `hostAnnounce`. Total, like every function here.
+     */
+    static admissionPayload(value: unknown): AdmissionPayload | null {
+        if (typeof value !== 'object' || value === null) return null;
+        const { __eli, hostingForMs } = value as Record<string, unknown>;
+        if (__eli !== 'room-full' && __eli !== 'host-reply') return null;
+        return { __eli, hostingForMs: WireGuardHelper.hostingDuration(hostingForMs) };
     }
 }

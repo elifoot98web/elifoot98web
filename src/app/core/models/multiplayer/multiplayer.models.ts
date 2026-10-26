@@ -44,7 +44,24 @@ export interface PlayerInfo {
  * Failures trystero can actually report through `onJoinError`, as opposed to the
  * silence of a room nobody is hosting.
  */
-export type MultiplayerJoinErrorKind = 'wrong-password' | 'connection-failed';
+export type MultiplayerJoinErrorKind = 'wrong-password' | 'connection-failed' | 'room-full';
+
+/**
+ * Payloads exchanged on the handshake channel, before a peer is admitted. They are namespaced
+ * so they can never be mistaken for trystero's own `__trystero_pw` password exchange, which
+ * shares the channel.
+ *
+ * Both are claims from an unverified peer, like everything on the wire. `hostingForMs` feeds
+ * the existing host-collision tie-break and is bounded the same way (`WireGuardHelper`).
+ */
+export type AdmissionPayloadKind = 'room-full' | 'host-reply';
+
+// A type alias, not an interface: trystero's `send` takes a JSON-shaped payload, and only a
+// type alias is assignable to the index-signature type that implies.
+export type AdmissionPayload = {
+    __eli: AdmissionPayloadKind;
+    hostingForMs: number;
+};
 
 /** Thrown when a join fails for a reason trystero was able to name. */
 export class MultiplayerJoinFailure extends Error {

@@ -534,7 +534,9 @@ canvas {
     }
 
     .multiplayer-room-setup-modal {
-        --height: 48vh;
+        // Tall enough for the host form (name, code, password, limit, colour, buttons) without
+        // scrolling on an ordinary window; shorter screens scroll inside it instead.
+        --height: min(88vh, 600px);
     }
 
     // Same treatment for the multiplayer dialogs: a Win9x dialog is a small fixed box,

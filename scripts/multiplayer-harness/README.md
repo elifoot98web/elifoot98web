@@ -170,6 +170,63 @@ Firefox spectator receiving the stream; the order of the tracks Firefox saw was 
   closest thing run).
 - Safari, phones, a Firefox *host*, the button's landscape layout, and audio/video drift.
 
+### Spectator limit
+
+Launch with `--peers 3` (host plus two spectators). The host picks the limit in the room dialog
+(**Limite de espectadores**, 1 to 6, default 6).
+
+Two traps cost time here:
+
+- **The dialog overwrites a code typed too early.** Its `ngOnInit` generates a room code after its
+  async storage reads, so on a fresh browser a code filled in at once is replaced. The host log
+  (`Setting up chat service for room: ELI-XXXX`) tells you which code was really used. Wait ~5 s,
+  or skip the dialog: `c.hostRoomId='ELI-TSTA'; c.hostMaxSpectators=N; c.startHosting()` on
+  `window.ng.getComponent(document.querySelector('app-game'))`.
+- **Editing any file under `src/` live-reloads every browser** through `ng serve` and throws away
+  the host's room and each spectator's page. Finish editing before starting a scenario.
+
+**Observed 2026-10-26** (Chromium, three browsers, limit 1 unless stated):
+
+| Scenario | Observed |
+| --- | --- |
+| Limit reaches the gate | dialog 1 to 6 with 6 pressed by default; host log `limit` and `admissionService.maxSpectators` both 1 (and 2 on a second room) |
+| Spectator within the limit | admitted, `IN_ROOM`, 1 active peer on the host, join line on the host |
+| Spectator beyond the limit | host logs `Room is full (1); refusing …`; the refused spectator is told in about 7 s from submitting (not 20) and shows `A sala está cheia. O anfitrião definiu um limite…` with the retry button |
+| Refused peer leaves no trace | absent from the host's `getPeers()`, roster and transcript; **and absent from the other spectator's transcript** (it was not, before ident was held back until a host exists) |
+| Others unaffected | the admitted spectator kept `IN_ROOM` and a live picture throughout |
+| Host-side classification | `classifyJoinError('handshake failed: room-full')` is `room-full`; the toast reads `Alguém tentou entrar, mas a sala está cheia (limite de 1 espectador).` The live toast expired before it could be captured, so its pieces were checked rather than the event |
+| Freed slot | the admitted spectator leaves: host back to 0 peers |
+| Forged refusal, stream wins | a `room-full` claim injected ~2 s after a spectator connected to the host and before its stream arrived: the timer armed, and 8 s later it was `IN_ROOM` with a live picture and no error |
+| Host panel | `Participantes (2) · limite de 2 espectadores` |
+
+**Rival host, through a fake transport.** A second host over a real link could not be set up (see
+below), so the real handler on each page was driven with a fake `send`/`receive`
+(`svc.onPeerHandshake(id, send, receive)`, reached through `ng.getComponent(...).multiplayerService`).
+That exercises the actual refusal, reply and tie-break code, not the transport:
+
+| Scenario | Observed |
+| --- | --- |
+| Full host, rival **younger** | sent `room-full` first (carrying its age), threw `room-full`, kept its room |
+| Full host, rival **older** (replies 80 000 000 ms) | sent `room-full`, threw `room-full`, then yielded: `hostCollision$` emitted, `ROOM_CODE_TAKEN`; the spectator went to `HOST_RECONNECTING` |
+| Non-full host, refuser **younger** | admitted, replied `host-reply` with its own age, kept its room |
+| Non-full host, refuser **older** | replied, then yielded: `ROOM_CODE_TAKEN`, no longer streaming |
+| Age over the ceiling (99 999 999 ms) | treated as 0 by `hostingDuration`: the receiving host kept its room, as intended for a forgery |
+
+**Not run, and why:**
+
+- **A rival host over a real WebRTC link, and a third real spectator.** From about 22:39 the third
+  browser could not connect to the host at all: the host logged trystero's `connection-failed`
+  (SDP exchanged, ICE never came up) before the gate was ever called, while the second browser
+  joined instantly every time. Earlier in the session the third browser worked. Environmental,
+  not the gate, but it means the two-host case rests on the fake-transport run above.
+- A spectator whose link blips re-handshaking as an existing id and being exempt (checked by reading
+  `admit`, not by cutting a link), and two spectators racing for the last slot (single-threaded by
+  construction, not measured).
+- An older cached guest build meeting a refusal (it should see `connection-failed` after 10 s).
+- The forged refusal over the real wire. The claim was injected by calling `onRoomFullClaim`, which
+  tests the grace logic and not the handshake path. A claim forged before any connection to the
+  host existed *did* eject the guest when the window ran out, as documented in §8.8.
+
 ### Forging a host claim
 
 The regression this guards against is a spectator with devtools taking the host badge and
