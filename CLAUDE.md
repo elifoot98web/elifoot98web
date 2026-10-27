@@ -113,7 +113,7 @@ loaded by plain `<script>` tags in [index.html](src/index.html), which also load
 the bundle name `angular.json` gives [src/scripts/game.js](src/scripts/game.js) (`inject: false`, so
 the tag is hand-written).
 
-`game.js` exposes four browser globals, typed for TypeScript in
+`game.js` exposes five browser globals, typed for TypeScript in
 [src/scripts/game.d.ts](src/scripts/game.d.ts) and called directly from Angular services:
 
 - `elifootMain(pathPrefix, gameBundleURL)` — creates the DOS instance in `#game-container`, runs the
@@ -121,6 +121,11 @@ the tag is hand-written).
 - `saveGameFileSystem()` — `dosInstance.layers.save()`, i.e. flush changed FS to IndexedDB.
 - `toggleSoftKeyboard()` — shows/hides the js-dos `.emulator-keyboard` div.
 - `dosInstance` — the raw js-dos instance, needed by `PatchService` for `emulatorsUi.persist`.
+- `getDosAudioNode()` — js-dos's own `ScriptProcessorNode`, or `null`. js-dos builds its
+  `AudioContext` privately inside `run()`, so `game.js` wraps `AudioContext.prototype
+  .createScriptProcessor` at load (before `elifootMain` can run) and keeps the one node created
+  with no inputs and one output. That wrapper is the only patch to a global in the app; it
+  exists for `MultiplayerAudioService` (see the audio invariant below).
 
 [src/app/core/typings/jsdos.d.ts](src/app/core/typings/jsdos.d.ts) is a hand-maintained typing of the js-dos
 command interface (`DosCI`) — screenshot, key/mouse injection, `persist()`, `readMemory`,
@@ -195,8 +200,13 @@ here; several obvious-looking "improvements" are things it explicitly rejected, 
 
 Services in `src/app/core/services/multiplayer/`, all `providedIn: 'root'`:
 `multiplayer.service.ts` orchestrates the room lifecycle and owns `gameStateSubject`; the rest
-(`-stream`, `-chat`, `-cursor`, `-player-info`, `-identity`, `-ui`) are set up and cleared by it.
-Every one exposes `clear()`, and `leaveRoom()` calls all of them.
+(`-stream`, `-chat`, `-cursor`, `-player-info`, `-audio`, `-admission`, `-identity`, `-ui`,
+`-relay-health`) support it. The ones that hold per-room state — stream, chat, cursor, player-info,
+audio and admission — expose `clear()`, and `leaveRoom()` calls all six. Two have none and need
+none: identity (remembers the player's name and colour) and ui (dialogs and toasts). The third,
+relay-health, has none **on purpose**: whether this browser can reach the relay belongs to the
+browser, not to a room, so it outlives rooms (see its invariant below). A new service that holds
+per-room state must expose `clear()` and be added to `leaveRoom()`.
 
 Load-bearing invariants — each of these was a bug once:
 
@@ -305,7 +315,8 @@ below the Ionic imports.
 
 **The boundary: companion windows are Windows 95; the app shell stays Elifoot green.**
 Retro treatment applies to the multiplayer chat panel, the room-setup dialog, the
-multiplayer panel, the roster rows, the chat toggle, the Cheat 'O Matic modal, and every
+multiplayer panel, the roster rows, the chat toggle, the spectator's sound toggle (which shares
+the chat toggle's rules in `global.scss`), the Cheat 'O Matic modal, and every
 `AlertController` dialog. It does
 **not** apply to the page toolbars (`ion-toolbar color="tertiary"`), the landing cards, the
 FAB clusters or the options popover — the navy `#092469` in

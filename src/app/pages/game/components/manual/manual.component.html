@@ -208,7 +208,8 @@
         <p>
           O multiplayer do Elifoot 98 Online é um modo <strong>de assistir junto</strong>, não de
           jogar junto. Quem joga é sempre o anfitrião: ele transmite a tela do próprio jogo, e os
-          convidados acompanham ao vivo, conversam pelo chat e podem apontar na tela com o cursor.
+          convidados acompanham ao vivo, ouvem o som do jogo, conversam pelo chat e podem apontar na
+          tela com o cursor.
         </p>
         <p>
           A transmissão é direta entre os navegadores (P2P). O jogo não passa por nenhum servidor
@@ -225,6 +226,12 @@
           Escolha um apelido, uma cor para o seu cursor e, se quiser, uma senha. O código da sala é
           gerado automaticamente no formato <strong>ELI-XXXX</strong> — você pode gerar outro se
           preferir.
+        </p>
+        <p>
+          Defina também o <strong>limite de espectadores</strong>, de 1 a 6 (o Elifoot 98 comporta
+          até 6 jogadores; você não entra na conta). Cada espectador a mais exige mais do seu
+          computador e da sua internet, então escolha só o que precisar. A sua escolha fica salva
+          para a próxima sala.
         </p>
         <p>
           <strong>Nota:</strong> o link compartilhado <em>não</em> inclui a senha. Se a sala tiver
@@ -246,8 +253,20 @@
         </p>
         <p>
           O menu de opções passa a mostrar <strong>Sala multiplayer</strong>, que reúne o código,
-          a lista de participantes com a qualidade da conexão de cada um, os botões de copiar e
-          compartilhar o link, e a opção de encerrar a sala.
+          a lista de participantes com a qualidade da conexão de cada um, o limite de espectadores
+          que você escolheu, os botões de copiar e compartilhar o link, e a opção de encerrar a
+          sala.
+        </p>
+
+        <h4>Sala cheia <ion-icon name="lock-closed-outline"></ion-icon></h4>
+        <p>
+          Quando a sala atinge o limite, quem tenta entrar vê <strong>A sala está cheia</strong>,
+          com o botão <strong>Tentar novamente</strong> para quando alguém sair. Isso leva alguns
+          segundos. Quem já estava assistindo não é afetado em nada.
+        </p>
+        <p>
+          Você, anfitrião, recebe um aviso na tela de que alguém tentou entrar e a sala estava
+          cheia. Quem foi recusado não aparece na lista de participantes nem no chat.
         </p>
 
         <h4>Chat <ion-icon name="chatbubble-ellipses-outline"></ion-icon></h4>
@@ -259,6 +278,26 @@
         <p>
           Emoticons clássicos funcionam: <strong>:)</strong>, <strong>:D</strong>,
           <strong>;)</strong> e companhia viram carinhas.
+        </p>
+
+        <h4>Som do jogo <ion-icon name="volume-high-outline"></ion-icon></h4>
+        <p>
+          O som do jogo é transmitido junto com a imagem. Quem hospeda continua ouvindo
+          normalmente. Para parar de enviar o som aos espectadores, abra o menu de opções
+          <ion-icon name="ellipsis-vertical-outline"></ion-icon> > <strong>Enviar o som do jogo aos
+          espectadores</strong>, que aparece enquanto a sala está no ar. A escolha fica salva, e os
+          espectadores não são avisados: eles simplesmente deixam de ouvir.
+        </p>
+        <p>
+          Quem assiste ouve o som por padrão. O botão de som fica no canto inferior esquerdo da tela
+          do jogo e serve para silenciar e reativar — o navegador lembra a sua escolha. Se o
+          navegador não deixar o som tocar sozinho (é comum no Safari e no iPhone), a imagem começa
+          sem som e o botão passa a mostrar <strong>Ativar som</strong>: um toque resolve.
+        </p>
+        <p>
+          <strong>Nota:</strong> do lado de quem assiste, não dá para saber se o anfitrião desligou o
+          som ou se o jogo apenas está em silêncio. Se o botão de som não aparecer, a transmissão
+          não está enviando som.
         </p>
 
         <h4>Se a conexão cair</h4>
@@ -275,6 +314,21 @@
         <p>
           <strong>Dica:</strong> se a conexão não se estabelecer, tente outra rede (Wi-Fi em vez de
           dados móveis) ou desative a VPN — a conexão direta entre navegadores é sensível a isso.
+        </p>
+
+        <h4>Servidor de relay <ion-icon name="swap-horizontal-outline"></ion-icon></h4>
+        <p>
+          Na maioria das redes, os navegadores se conectam diretamente. Algumas (dados móveis, VPNs
+          e redes de empresa) só conseguem se conectar passando por um <strong>servidor de
+          relay</strong>, um serviço gratuito de terceiros. A transmissão continua criptografada
+          nesse caminho.
+        </p>
+        <p>
+          Esse serviço pode ficar indisponível. Quando o aplicativo percebe, o anfitrião vê o aviso
+          <strong>Conexão por relay indisponível</strong>, e quem não consegue entrar vê, junto da
+          mensagem de erro, que o relay está inacessível. Quem está em uma rede comum continua
+          entrando normalmente; para os demais, trocar de rede (por exemplo, Wi-Fi em vez de dados
+          móveis) costuma resolver.
         </p>
       </div>
     </ion-accordion>

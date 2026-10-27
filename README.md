@@ -30,15 +30,25 @@ O Elifoot 98 foi originalmente distribuído como software shareware, permitindo 
 
 ### Multiplayer (assistir junto, não jogar junto)
 Quem hospeda transmite a própria tela por WebRTC; quem entra **assiste**. O espectador não tem
-emulador e não controla o jogo — mas conversa no chat, aponta com um cursor compartilhado e vê
-quem mais está na sala.
+emulador e não controla o jogo — mas ouve o som do jogo, conversa no chat, aponta com um cursor
+compartilhado e vê quem mais está na sala.
 
 - Hospedar: `Jogar e transmitir para amigos` na tela inicial, ou `Hospedar Jogo Multiplayer`
   no menu de dentro do jogo. A sala ganha um código no formato `ELI-XXXX` e uma senha opcional.
 - Assistir: `Assistir a uma Partida` na tela inicial, com o código ou o link compartilhado.
+- Limite de espectadores: o anfitrião escolhe de 1 a 6 ao criar a sala (6 é o limite de jogadores
+  do próprio Elifoot; o anfitrião não conta). Quem tenta entrar numa sala cheia é avisado em poucos
+  segundos.
+- Som: vai junto com a imagem. O anfitrião pode parar de enviá-lo pelo menu; quem assiste tem um
+  botão de som e, onde o navegador não deixa tocar sozinho (Safari, iPhone), começa sem som e
+  pede um toque em `Ativar som`.
 - A conexão é ponto a ponto via [trystero](https://github.com/dmotz/trystero): nenhum tráfego
   do jogo passa por um servidor nosso. **A senha é o único controle de acesso** — o link de
   convite não a inclui, de propósito.
+- Redes restritivas (dados móveis, VPN, empresas) precisam de um servidor de relay TURN, que é um
+  serviço gratuito de terceiros e pode sair do ar quando a cota acaba. Se isso acontecer o
+  anfitrião é avisado e a maioria das conexões continua funcionando; só quem depende do relay
+  fica de fora.
 
 
 ## Desenvolvimento

@@ -37,6 +37,8 @@ $HARNESS front 9223                       # raise the window before touching any
 $HARNESS state 9223                        # room, roster, transcript, video, overlays
 $HARNESS click 9223 'app-room-setup-modal button[type=submit]'
 $HARNESS shot  9223 /tmp/guest.png
+$HARNESS audio 9223 5000                  # RTP audio deltas over a window; see "Game audio"
+$HARNESS inject 9223 @patch.js &          # a script before every page load; see "A dead TURN relay"
 ```
 
 `state` is the one to reach for: it reports the game state by name, the pill, the headcount,

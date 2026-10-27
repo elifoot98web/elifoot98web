@@ -1,13 +1,16 @@
 # Estudo de UI/UX do Multiplayer + Plano de Melhorias
 
-> **Status:** All five phases shipped, plus a review round (§7) and a two-peer round (§8).
+> **Status:** All five phases shipped, plus a review round (§7) and a two-peer round (§8), which also
+> carries the later additions: game audio (§8.7), a spectator limit (§8.8) and relay-failure
+> handling (§8.9).
 > The single-context surface is verified in a headless browser. The two-peer surface — stream
 > delivery, host identity, presence, the collision tie-break, the grace period and the join
 > failure paths — is verified with the CDP harness in
 > [scripts/multiplayer-harness/](../scripts/multiplayer-harness/README.md); earlier drafts of
 > this header said none of it had been verified at all, which was true until that harness
-> existed. What remains unverified is narrower and named at the end of §8: a real network
-> drop, phones, and anything visual.
+> existed. What remains unverified is narrower and named in §8.5 and in the harness README: a
+> real network drop, phones and Safari/iOS, a rival host over a real link, and what the relay
+> provider actually does once its quota is gone.
 > As-built deviations are recorded under each phase in §4; where they conflict with the
 > prose above them, the as-built notes win.
 >
