@@ -1,0 +1,38 @@
+<!--
+  Sunken list pane, the Win9x idiom for a scrollable listing. One async subscription feeds
+  both the rows and the empty note.
+-->
+<div class="win9x-element-bevel win9x-roster" [class.win9x-roster--compact]="compact">
+  <ng-container *ngIf="players$ | async as rows">
+    <!--
+      Row layout reserved for a future "may inject keys/clicks" control, per decision (c) of
+      the multiplayer UX study: a guest gaining input authority does not become the host, so
+      the capability gets its own per-row slot here rather than reusing the host tag. Space
+      reserved deliberately; nothing designed yet.
+    -->
+    <div *ngFor="let row of rows; trackBy: trackByPeerId" class="win9x-roster-row"
+      [class.win9x-roster-row--self]="row.isSelf">
+      <span class="win9x-roster-swatch" [style.background-color]="row.player.playerColor" aria-hidden="true"></span>
+      <span class="win9x-roster-name">
+        {{ row.name }}
+        <!-- Only present when another row shows the same name; two identical rows are unusable. -->
+        <span *ngIf="row.disambiguator" class="win9x-roster-suffix">{{ row.disambiguator }}</span>
+        <!-- Bold "você" rather than relying on the latency cell, which the compact strip drops. -->
+        <span *ngIf="row.isSelf" class="win9x-roster-self">(você)</span>
+        <span *ngIf="row.player.role === MultiplayerUserRole.HOST" class="win9x-roster-tag">anfitrião</span>
+      </span>
+      <!--
+        Compact rows have no room for a figure, so they show a status dot and move the link
+        state into the accessible name — colour is never the only carrier.
+      -->
+      <span class="win9x-roster-meta" [attr.data-quality]="latencyColor(row.player)"
+        [attr.aria-label]="qualityLabel(row.player)" [attr.title]="qualityLabel(row.player)">
+        {{ compact ? '●' : latencyLabel(row.player) }}
+      </span>
+    </div>
+
+    <p *ngIf="rows.length === 0" class="win9x-roster-empty">
+      Ninguém na sala ainda.
+    </p>
+  </ng-container>
+</div>

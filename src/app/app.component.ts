@@ -1,9 +1,8 @@
-import { Component, HostListener } from '@angular/core';
+import { Component } from '@angular/core';
 import { SwUpdate } from '@angular/service-worker';
 import { AlertController, Platform } from '@ionic/angular/lazy';
-import { LocalStorageService } from './services/local-storage.service';
-import { STORAGE_KEY } from './models/constants';
-import { LayoutHelperService } from './services/layout-helper.service';
+import { STORAGE_KEY } from './core/models/constants';
+import { LayoutHelperService, LocalStorageService } from './core/services/shared';
 
 @Component({
     selector: 'app-root',
@@ -65,7 +64,7 @@ export class AppComponent {
   private async showUpdateAlert() {
     const alert = await this.alertController.create({
       header: 'Atualização disponível',
-      cssClass: 'alert-whitespace',
+      cssClass: 'win9x-alert alert-whitespace',
       backdropDismiss: false,
       message: 'Uma nova versão do aplicativo está disponível.\n\nVocê pode instalar agora ou optar por fazê-la na próxima inicialização.',
       buttons: [
