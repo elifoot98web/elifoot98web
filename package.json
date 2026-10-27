@@ -19,6 +19,7 @@
     "watch": "ng build --watch --configuration development",
     "watch:prod": "ng build --watch --configuration production",
     "test": "ng test",
+    "test:ci": "ng test --watch=false --browsers=ChromeHeadlessCI",
     "lint": "ng lint",
     "mp:launch": "node ./scripts/multiplayer-harness/launch.mjs",
     "version:config": "node ./scripts/version-config.js"

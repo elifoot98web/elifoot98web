@@ -83,7 +83,8 @@ npm start                  # ng serve → http://localhost:4200
 npm run build              # build de produção → www/
 npm run build:githubpages  # o que o CI publica
 npm run lint               # ESLint (src/**/*.ts e src/**/*.html)
-npm test                   # karma + jasmine (configurado, mas o projeto ainda não tem specs)
+npm test                   # karma + jasmine (Chrome visível, modo watch)
+npm run test:ci            # uma execução headless; sai com erro se algum spec falhar
 npm run mp:launch          # abre dois navegadores para testar uma sala multiplayer
 ```
 

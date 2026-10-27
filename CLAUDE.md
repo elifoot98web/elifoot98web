@@ -19,13 +19,24 @@ npm start                # ng serve → http://localhost:4200
 npm run build            # production build (default configuration) → www/
 npm run build:githubpages # what CI deploys
 npm run lint             # ng lint (eslint, src/**/*.ts + src/**/*.html)
-npm test                 # ng test (karma + jasmine, Chrome, watch mode)
-npx ng test --include='**/my.spec.ts' --watch=false   # single spec
+npm test                 # ng test (karma + jasmine, visible Chrome, watch mode)
+npm run test:ci          # ng test --watch=false --browsers=ChromeHeadlessCI: one headless run, exits non-zero on failure
+npx ng test --include='**/my.spec.ts' --watch=false --browsers=ChromeHeadlessCI   # single spec
 npm run mp:launch        # two browsers for a multiplayer session (see the harness README)
 ```
 
-There are currently **zero `.spec.ts` files** in the repo; the karma/jasmine harness is configured
-but unused.
+Specs are karma + jasmine. The builder globs `**/*.spec.ts` (its `include` option, which is also
+what `--include` overrides); [src/test.ts](src/test.ts) only initialises the TestBed and
+`tsconfig.spec.json` type-checks `src/**/*.spec.ts`, so a spec needs no registration but must live
+under `src/` to be type-checked. Nothing in a spec reaches the bundle. There is **one spec file so far**,
+[room-code.helper.spec.ts](src/app/core/helpers/room-code.helper.spec.ts), and it is there as
+much to prove the harness as to cover `RoomCodeHelper`: `ng test` with **zero** specs
+prints `Executed 0 of 0 SUCCESS` and still exits 1, so a `test:ci` could never pass before the
+first spec existed. Write specs for pure logic (helpers, planners, parsers, queues driven by a
+fake clock); the emulator, the screen-scrapers and the WebRTC paths have no karma coverage and
+are checked in a real browser (see the harness above). `ChromeHeadlessCI` in
+[karma.conf.js](karma.conf.js) is `ChromeHeadless --no-sandbox`, which a CI runner or container
+needs; plain `npm test` keeps the visible Chrome and the file watcher.
 
 Multiplayer needs two or more peers to test at all, so that part is covered by a CDP-driven
 browser harness in [scripts/multiplayer-harness/](scripts/multiplayer-harness/README.md) —
@@ -54,6 +65,8 @@ placeholders (`git checkout src/environments`) before committing. The commit has
 - Push to `main` → build `githubpages` config, deploy to GitHub Pages, push a `v<version>` tag.
 - Push to the `firebase` branch → Firebase Hosting (project `elifoot-98`); PRs also get preview channels.
 - `lockfile-hygiene.yml` fails any PR whose `package-lock.json` resolves from a non-public registry.
+- No workflow runs `npm run lint` or `npm run test:ci` (the Firebase PR workflow only builds), so specs
+  and lint gate nothing on a PR until a job is added; run both locally before opening one.
 
 ### Dependency traps
 

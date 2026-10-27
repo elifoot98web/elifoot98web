@@ -52,6 +52,17 @@ module.exports = function (config) {
     logLevel: config.LOG_INFO,
     autoWatch: true,
     browsers: ['Chrome'],
+    // For `npm run test:ci` only; `npm test` still opens a visible Chrome and watches.
+    // --no-sandbox is what lets headless Chrome start where its own sandbox cannot: as
+    // root, or inside an unprivileged container, which is how CI runners and most Docker
+    // setups run it. It is not on the default launcher because switching the sandbox off
+    // for the browser on a developer's own machine buys nothing.
+    customLaunchers: {
+      ChromeHeadlessCI: {
+        base: 'ChromeHeadless',
+        flags: ['--no-sandbox']
+      }
+    },
     singleRun: false,
     restartOnFileChange: true
   });

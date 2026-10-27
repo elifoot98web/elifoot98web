@@ -146,9 +146,10 @@ build, and a CLAUDE.md update.
     P14 (wake lock, fullscreen, audio health, install), P15 (desktop mouse, gamepad).
 
 Also add early: a **debug-only diagnostics flag** (pointer/touch/key/IME events plus frame timing,
-exportable from a phone) to feed the device pass, and decide whether specs are real: CI runs no
-tests or lint, and `karma.conf.js` is non-headless, so "first specs" never gate a PR unless a
-ChromeHeadless job is added.
+exportable from a phone) to feed the device pass, and decide whether specs are real. **T0 made
+them runnable** (`npm run test:ci`, a `ChromeHeadlessCI` launcher, and the first spec for
+`RoomCodeHelper`), but CI still runs no tests or lint, so specs gate a PR only once a
+ChromeHeadless job is added to the workflows (the owner's call).
 
 ## Rejected, with reasons
 
