@@ -2,7 +2,8 @@
 
 Investigation record for the mobile/touch UX refactor. Written 2026-10-27 from seven
 parallel investigations (baseline capture, resolution, touch, text entry, layout, shell audit,
-platform), a synthesis and a completeness critique. **Nothing in this document is implemented.**
+platform), a synthesis and a completeness critique. **Only the roadmap items marked "As built"
+below are implemented.**
 The raw reports (about 100 findings, with ids such as `BASE-3`, `TOUCH-8`, `RES-3`) are in
 `ux-research-2026-10-27/investigation-result.json`, next to the repo, together with the working
 prototypes and the CDP harness scripts. They are not in git.
@@ -111,6 +112,11 @@ build, and a CLAUDE.md update.
 1. **P0 — update flow saves first** (new, zero-risk). `installUpdate()` awaits
    `saveGameFileSystem()` and defers while a room is live. Every later release triggers this
    prompt, and today it reloads without saving.
+   **As built:** `AppComponent.installUpdate()` awaits `saveGameFileSystem()` raced against 5 s
+   (`TimeoutHelper.withTimeout`, reused by P3/P6) and reloads whatever happens. "Instalar agora"
+   asks first when `MultiplayerService.isHosting`; "Atualizar depois" leaves `PENDING_UPDATE`
+   set. Deliberately left to P5: the `isGameSaving` guard (a flush that lands during the game's
+   own write can persist a truncated `.e98`), the `Recarregar` menu item and navigation guards.
 2. **P1 — reliable typing core.** One FIFO `GuestKeyQueue` using only `sendKeyEvent` down/up at
    ~10 ms; delete `simulateKeyPress` use; accents via Alt+0nnn (U+00A0-U+00FF + euro), visible
    `?` for the rest, code-point counting via `Array.from`; hardened prompt (autocorrect off,

@@ -65,6 +65,15 @@ export const AUTO_SAVER = {
   MAX_WAITING_TIME_FOR_GAME_SAVE_DETECTED: 2 * 60 * 1000, // 2 minutes
 }
 
+export const APP_UPDATE = {
+  // How long installing an update waits for the emulator's changes layer to reach IndexedDB
+  // before reloading anyway: about a second on a desktop (a 5.4 MB zip), so this is a ceiling
+  // for a persist that hangs, which must not be able to hold an update hostage. A persist cut
+  // short loses what it was still writing and nothing else, because the write is one
+  // IndexedDB put and the previous snapshot stays in place until it commits.
+  SAVE_TIMEOUT_MS: 5000,
+}
+
 export const EMULATOR_CONTROL_CONFIG = {
   DEFAULT_AREA_OF_INTEREST: {
     top: 275,

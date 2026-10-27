@@ -28,11 +28,15 @@ npm run mp:launch        # two browsers for a multiplayer session (see the harne
 Specs are karma + jasmine. The builder globs `**/*.spec.ts` (its `include` option, which is also
 what `--include` overrides); [src/test.ts](src/test.ts) only initialises the TestBed and
 `tsconfig.spec.json` type-checks `src/**/*.spec.ts`, so a spec needs no registration but must live
-under `src/` to be type-checked. Nothing in a spec reaches the bundle. There is **one spec file so far**,
-[room-code.helper.spec.ts](src/app/core/helpers/room-code.helper.spec.ts), and it is there as
+under `src/` to be type-checked. Nothing in a spec reaches the bundle. There are **two spec files so
+far**. [room-code.helper.spec.ts](src/app/core/helpers/room-code.helper.spec.ts) is there as
 much to prove the harness as to cover `RoomCodeHelper`: `ng test` with **zero** specs
 prints `Executed 0 of 0 SUCCESS` and still exits 1, so a `test:ci` could never pass before the
-first spec existed. Write specs for pure logic (helpers, planners, parsers, queues driven by a
+first spec existed. [timeout.helper.spec.ts](src/app/core/helpers/timeout.helper.spec.ts) is the
+first to use a fake clock, and shows the one trap in doing so: Angular's `fakeAsync` drains
+whatever timers are left when the body ends (`flush: true` is its default), which hides a timer
+that was never cleared, so pass `{ flush: false }` whenever "nothing is left scheduled" is part
+of what a spec asserts. Write specs for pure logic (helpers, planners, parsers, queues driven by a
 fake clock); the emulator, the screen-scrapers and the WebRTC paths have no karma coverage and
 are checked in a real browser (see the harness above). `ChromeHeadlessCI` in
 [karma.conf.js](karma.conf.js) is `ChromeHeadless --no-sandbox`, which a CI runner or container
@@ -370,7 +374,7 @@ funnels — `GamePage.showErrorAlert` and `MultiplayerUiService.showError` — a
 so route new error dialogs through those rather than hand-rolling another `create()`.
 `alert-danger` is a *button*-level class and is unaffected. Before opening a PR, check that
 `grep -rc 'alertController.create' src/` and `grep -rc "cssClass: 'win9x-alert" src/app`
-still agree (23 today) — a manual check, because `npm run lint` covers only `.ts`/`.html`
+still agree (24 today) — a manual check, because `npm run lint` covers only `.ts`/`.html`
 and there is no stylelint setup to hang it on.
 
 The room status pill (`.mp-status-pill` in [global.scss](src/global.scss)) is on the shell
@@ -396,6 +400,22 @@ omatic modal.
 `@angular/service-worker` with [ngsw-config.json](ngsw-config.json) prefetching the game bundle and
 lazily caching js-dos wasm. `AppComponent` watches `SwUpdate.versionUpdates`, records
 `STORAGE_KEY.PENDING_UPDATE`, and applies updates by reloading (immediately or on next launch).
+
+**An update reload saves first, and a hosting browser is asked before it reloads.** The
+auto-saver persists only after it sees the game's own save, so everything since then lives in
+memory and a bare `location.reload()` threw it away, on every release's update prompt.
+`installUpdate()` therefore awaits the global `saveGameFileSystem()` (a no-op without an
+emulator, so the landing page and the launch-time install share the path) through
+`TimeoutHelper.withTimeout` and `APP_UPDATE.SAVE_TIMEOUT_MS`, logs a failure or a timeout, and
+reloads regardless: a persist that hangs must not be able to hold an update hostage. Cutting a
+persist short loses only what it was writing, because the write is one IndexedDB put. "Instalar
+agora" first asks `MultiplayerService.isHosting` and, for a host, shows a confirm because a
+reload ends the room for every spectator; "Atualizar depois" leaves `PENDING_UPDATE` set, so the
+next launch installs it before any room exists. A spectator is not asked: it has nothing to lose.
+`AppComponent` reaches `MultiplayerService` through a dynamic `import()` plus `Injector`, not a
+constructor dependency: a static import drags trystero out of the lazy game chunk into the main
+bundle every visitor downloads. The import is free for a host, because `/game` and `/join-game`
+already load that chunk. Do not "simplify" it into an injected service.
 
 ### Leftover scaffolding
 

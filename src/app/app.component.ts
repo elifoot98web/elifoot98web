@@ -1,7 +1,8 @@
-import { Component } from '@angular/core';
+import { Component, Injector } from '@angular/core';
 import { SwUpdate } from '@angular/service-worker';
-import { AlertController, Platform } from '@ionic/angular/lazy';
-import { STORAGE_KEY } from './core/models/constants';
+import { AlertController, LoadingController, Platform } from '@ionic/angular/lazy';
+import { TimeoutError, TimeoutHelper } from './core/helpers/timeout.helper';
+import { APP_UPDATE, STORAGE_KEY } from './core/models/constants';
 import { LayoutHelperService, LocalStorageService } from './core/services/shared';
 
 @Component({
@@ -14,6 +15,8 @@ export class AppComponent {
 
   constructor(platform: Platform, 
     private alertController: AlertController, 
+    private loadingController: LoadingController,
+    private injector: Injector,
     private updates: SwUpdate, 
     private localStorage: LocalStorageService, 
     private layoutHelperService: LayoutHelperService) {
@@ -71,7 +74,7 @@ export class AppComponent {
         {
           text: 'Instalar agora',
           handler: () => {
-            this.installUpdate()
+            this.installUpdateFromPrompt()
           }
         },
         {
@@ -83,13 +86,92 @@ export class AppComponent {
     await alert.present();
   }
 
+  /**
+   * "Instalar agora": the user asked for it, possibly with a room open. Hosting is the one
+   * state a reload takes from other people, so it needs a second yes. "Atualizar depois"
+   * leaves PENDING_UPDATE set, which makes the next launch install it, before any room exists.
+   */
+  private async installUpdateFromPrompt() {
+    if (await this.isHostingRoom() && !(await this.confirmCloseRoom())) return;
+    await this.installUpdate();
+  }
+
   private async installUpdate() {
+    await this.localStorage.set(STORAGE_KEY.PENDING_UPDATE, false);
+    await this.saveGameBeforeReload();
     // Reload the window to force the browser to load the latest version of the app
     // This is necessary because the service worker may not be able to update the app
     // if the app is already open
-    await this.localStorage.set(STORAGE_KEY.PENDING_UPDATE, false);
     window.location.reload();
   }
+
+  /**
+   * Get the emulator's changed files into IndexedDB before the page goes away. The auto-saver
+   * only persists when it sees the game's own save, so everything since then (a season played
+   * through without saving, a freshly imported patch) lives only in memory and a bare reload
+   * would throw it away.
+   *
+   * Never throws and never waits past APP_UPDATE.SAVE_TIMEOUT_MS: a persist that fails or
+   * hangs costs the player what it would have saved, but an update that can never install
+   * costs every later release. `saveGameFileSystem` does nothing when there is no emulator
+   * (the landing page, or the launch-time install), so the same path serves both.
+   */
+  private async saveGameBeforeReload() {
+    // `dosInstance` is undefined until the game page has started js-dos.
+    const hasEmulator = typeof dosInstance !== 'undefined' && dosInstance != null;
+    if (hasEmulator) {
+      // Never dismissed, because the page is about to be replaced. Not awaited either: the
+      // save must not queue behind an overlay animation, which a backgrounded tab stalls.
+      this.loadingController
+        .create({ message: 'Salvando o jogo antes de atualizar...', backdropDismiss: false })
+        .then(loading => loading.present())
+        .catch(() => undefined);
+    }
+
+    try {
+      await TimeoutHelper.withTimeout(() => saveGameFileSystem(), APP_UPDATE.SAVE_TIMEOUT_MS);
+    } catch (err) {
+      if (err instanceof TimeoutError) {
+        console.warn(`Saving the game took over ${err.timeoutMs} ms; updating without waiting for it.`);
+      } else {
+        console.error('Could not save the game before updating; updating anyway.', err);
+      }
+    }
+  }
+
+  /**
+   * Whether this browser is broadcasting a room right now.
+   *
+   * The service is imported on demand, not injected: a static import would move trystero and
+   * every multiplayer service out of the lazy game chunk and into the main bundle every
+   * visitor downloads, to answer a question asked once per release. The import cannot fail
+   * for a host, whose page already loaded that chunk. If it fails, nobody has been a host
+   * in this page, so "no" is the right answer rather than a guess.
+   */
+  private async isHostingRoom(): Promise<boolean> {
+    try {
+      const { MultiplayerService } = await import('./core/services/multiplayer/multiplayer.service');
+      return this.injector.get(MultiplayerService).isHosting;
+    } catch (err) {
+      console.warn('Could not tell whether a room is open; assuming none.', err);
+      return false;
+    }
+  }
+
+  private async confirmCloseRoom(): Promise<boolean> {
+    const alert = await this.alertController.create({
+      header: 'Fechar a sala?',
+      cssClass: 'win9x-alert alert-whitespace',
+      message: 'Você está hospedando uma sala. Atualizar agora vai fechar a sala e desconectar quem está assistindo.\n\nO jogo será salvo antes. Se preferir, atualize depois: a atualização será instalada na próxima inicialização.',
+      buttons: [
+        { text: 'Atualizar depois', role: 'cancel' },
+        { text: 'Fechar sala e atualizar', role: 'confirm', cssClass: 'alert-danger' },
+      ],
+    });
+    await alert.present();
+
+    // Backdrop and Esc report neither role, which correctly reads as "not now".
+    const { role } = await alert.onDidDismiss();
+    return role === 'confirm';
+  }
 }
-
-
