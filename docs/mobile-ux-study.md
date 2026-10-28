@@ -59,8 +59,8 @@ buttons, English error strings, an eager YouTube iframe that overflows phones.
 - At 640x480 the Elifoot window fills the frame and hides the green backdrop, so the four
   load-detection pixels read UI during normal play. They still pass at boot only because the
   splash sits on the backdrop. "Green lost" becomes the normal state at 640x480.
-- The OCR rectangle is 800x600-anchored; make it centre-relative (`left = W/2-68`,
-  `top = H/2-25`, 132x20) which is bit-identical at 800x600 and `(252,215)` at 640x480.
+- The OCR rectangle was 800x600-anchored; it is now centre-relative (`left = W/2-68`,
+  `top = H/2-25`, 132x20), bit-identical at 800x600 and `(252,215)` at 640x480 (P3).
 
 ## Decisions for the owner
 
@@ -152,6 +152,46 @@ build, and a CLAUDE.md update.
 3. **P3 — auto-save reliability and a centre-relative OCR rectangle.** Lazy memoised tesseract
    worker raced against a 20 s timeout with backoff; `tick()` reschedules in `finally`; ROI hash
    gate; skip ticks while hidden. Prerequisite for the resolution change.
+   **As built:** `OcrWorkerHost` (one memoised start, 20 s deadline through `TimeoutHelper`, retries
+   after 5/15/60 s, then gives up), `OcrRegionHelper` (centre-relative strip + FNV-1a hash),
+   `RegionVerdictCache`, `BackoffHelper`, and a rewritten `AutoSaverService` (300 ms sampling,
+   `finally` reschedule, per-step 10 s heartbeat, owed persist, forced periodic save plus one toast
+   when OCR is unavailable, hidden pages skipped unless hosting, loop outside the zone). Measured on
+   the real bundle in headless Chrome, 800x600:
+   - **A real save was captured** (first kickoff of a new game; `p3-real-save-800x600-*` and the
+     earlier `baseline-800x600-*`, in the research folder's `captures/`, outside the repo). The dialog was up for 1.70 s and its strip hash was
+     identical to the baseline run's, OCR read `À gravar o jogo...` in 26 ms 171 ms after it
+     appeared, and the persist started 0.7 s after it closed (one `saveGameFileSystem`, 1.18 s,
+     one loader). Over the whole first round (235 s): exactly one persist, ten OCR passes.
+   - **The dialog is not shown on every kickoff.** A loaded game's two kickoffs and the end of its
+     round showed none (checked frame by frame with a 30 ms recorder), so a test that needs a save
+     has to start a new game.
+   - **No false positives** over the half-time window and the end-of-round screens, or on frames of
+     "A iniciar o jogo…" and "A carregar o jogo…", which sit where the dialog does.
+   - **640x480 is proven only synthetically:** the real dialog pasted centred into a 640x480 frame
+     reads as saving through the real service, the old absolute strip (332, 275) sees 0 navy pixels
+     of it and the centre-relative one (252, 215) sees 1892 (the figure RES-6 measured). The game
+     itself was not run at 640x480.
+   - **Failure paths, with a stand-in CDN (the sandbox blocks jsDelivr):** a core that answers 503
+     fails at once, retries at 5 s, 20 s and 80 s after the start (four requests) and gives up; one
+     toast; the forced periodic save fell due 300.0 s after the first failure; the loop kept
+     sampling at 3.3 Hz throughout. A CDN that never answers failed at exactly 20.006 s. A worker
+     that finished after its deadline was adopted (`OCR is back`) and ended the forced save.
+     Switching auto-save off and on after giving up restarted OCR, with no second toast.
+   - **Ticks do not drive change detection** any more: 1 `onMicrotaskEmpty` in 10 s against ~33
+     ticks. Hidden pages are skipped (0 samples in 3 s) unless hosting (10); `document.hidden` was
+     overridden for that, not a real background tab.
+   Where it differs from the plan: the toast lives in `AutoSaverService` (not `EmulatorControlService`)
+   because only it knows the periodic fallback is on; "terminate the partial worker" is only
+   possible for a start that eventually resolves, since tesseract.js exposes the `Worker` after
+   initialisation, so the retries are bounded instead; the heartbeat is per step, not around the
+   whole tick, which legitimately lasts as long as a save; a failed persist is owed and retried;
+   `GamePage.ngOnDestroy` now stops the auto-saver; `isGameSaving` answers `true`/`false`/`null`
+   and the wait for the dialog to close treats `null` (OCR could not read) like a throwing look,
+   as "still saving" (found in review: the old loop and the first cut folded it into `false`,
+   which would have persisted mid-write); a tick left over from a stopped run no longer touches the failure count
+   of the run that replaced it. `game.page.html` had no 800x600 comment to fix
+   (its note at ~243 says only "4:3"); the one in `global.scss` is corrected.
 4. **P7 — accessibility / contrast / hit-target / copy sweep** on elements that survive the
    redesign.
 5. **Fix `game.js` first, then P6 — boot honesty and offline.** `elifootMain`'s async Promise
@@ -207,7 +247,8 @@ ChromeHeadless job is added to the workflows (the owner's call).
 - Emulator speed on phones is unknown: CDP CPU throttling does not slow Workers, so the 4x/6x
   boot-time numbers measure the network and main thread only. This bounds the 45 s detection
   window (P6) and the "duty-cycle is cheap" claim (P9).
-- No real in-game save frame was captured, so OCR at 640x480 is unproven.
+- A real save frame exists now (800x600, P3); OCR at 640x480 is proven only on that frame moved
+  to the centre of a 640x480 one, not in the running game.
 - Offline start was inferred from ngsw semantics and never run.
 - Alt codes were not tried in the 8-letter filename field, the team editor, password dialogs or
   numeric price fields.

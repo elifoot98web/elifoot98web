@@ -154,8 +154,9 @@ canvas {
  * Shared by the host (game) and guest (join-game) pages.
  *
  * The requirement was never "don't dock", it was "don't resize the canvas". A 4:3 frame
- * (800x600, machine=svga_s3) fitted into a non-4:3 box always leaves slack on one axis,
- * and spending that slack on the chat costs the game nothing:
+ * (800x600 or 640x480, machine=svga_s3: only the ratio matters here, and the sizes below are
+ * CSS pixels) fitted into a non-4:3 box always leaves slack on one axis, and spending that
+ * slack on the chat costs the game nothing:
  *
  *   390x844 portrait phone   content 390x788, canvas 390x292  -> 496px of height free
  *   360x640 portrait phone   content 360x584, canvas 360x270  -> 314px free
@@ -182,7 +183,9 @@ canvas {
  * STORE, which js-dos pins to the DOS frame size, so displayed size never changes the
  * captured track resolution. Both screen-scrapers read dosCI.screenshot() (the fixed
  * render buffer) for the same reason, so nothing here can break green-pixel load
- * detection or the tesseract auto-save OCR.
+ * detection or the tesseract auto-save OCR. (The frame's own size does matter to them: the
+ * OCR strip is found from the frame's centre, see OcrRegionHelper, and the green pixels hold
+ * at 800x600 and at 640x480.)
  *
  * Nothing overlays the game any more, so the old z-index ladder is gone; the toggle only
  * needs to sit above the game surface.

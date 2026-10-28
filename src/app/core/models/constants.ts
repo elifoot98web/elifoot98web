@@ -59,10 +59,31 @@ export const GAME_INPUT_FN_BTNS_REVERSED = [
 ];
 
 export const AUTO_SAVER = {
-  DEFAULT_TICK_INTERVAL_MS: 1500,
+  // How often the framebuffer is sampled. A sample is a screenshot() plus a hash of a 132x20
+  // region (about 1 ms together, measured), and OCR runs only when that hash changed, so it can
+  // be fast. It has to be: the game's "A gravar o jogo..." dialog stays up for only about 1.7 s
+  // (measured on a real save, 800x600). The old 1.5 s tick could land inside that window only
+  // because 1.5 < 1.7, with nothing to spare for a phone whose OCR pass takes longer than 0.2 s.
+  DEFAULT_TICK_INTERVAL_MS: 300,
   DEFAULT_PERIODIC_SAVE_INTERVAL_MS: 5 * 60 * 1000, // 5 minutes
+  // Gap between two looks at the dialog while waiting for it to go away.
   DEFAULT_GAME_SAVING_DETECTED_TIMEOUT_MS: 1000, // 1 second
   MAX_WAITING_TIME_FOR_GAME_SAVE_DETECTED: 2 * 60 * 1000, // 2 minutes
+  // The longest any single step of a tick may take: one screenshot, one OCR pass. It is not a
+  // deadline for the tick, which lasts as long as the game takes to save. A step that overruns
+  // is a hung one (an emulator that stopped answering), and the tick fails instead of waiting.
+  HEARTBEAT_MS: 10 * 1000,
+  // Ceiling on one persist of the emulator's disk, which has no deadline of its own. The loader
+  // over the screen cannot be dismissed by the user, so a persist that never answered would
+  // otherwise pin it there for good. A desktop takes about a second.
+  PERSIST_TIMEOUT_MS: 30 * 1000,
+  // How long to wait for Ionic to finish presenting or dismissing the loader before carrying on
+  // without it. A page Chrome considers hidden runs no animation frames, so those promises never
+  // settle there, and a hosting browser keeps ticking while hidden.
+  OVERLAY_TIMEOUT_MS: 2000,
+  // Wait before the next tick after the 1st, 2nd, 3rd... consecutive tick that threw; the last
+  // entry repeats. A tick that worked puts it back to DEFAULT_TICK_INTERVAL_MS.
+  RETRY_BACKOFF_MS: [5 * 1000, 15 * 1000, 60 * 1000],
 }
 
 export const APP_UPDATE = {
@@ -75,13 +96,29 @@ export const APP_UPDATE = {
 }
 
 export const EMULATOR_CONTROL_CONFIG = {
-  DEFAULT_AREA_OF_INTEREST: {
-    top: 275,
-    left: 332,
-    width: 132,
-    height: 20
+  // Where the title of the game's "A gravar o jogo..." dialog is, as an offset from the CENTRE of
+  // the frame: the dialog is centred and its size does not depend on the video mode (cropped at
+  // 800x600 and at 640x480 the two are byte-identical, 0 of 10560 bytes differ). Anchored to the
+  // centre the same four numbers give left=332, top=275 at 800x600 and left=252, top=215 at
+  // 640x480; the old absolute (332, 275) silently matched nothing at 640x480. See
+  // OcrRegionHelper.savingDialogRegion, which applies them.
+  SAVING_DIALOG_REGION: {
+    OFFSET_X: -68,
+    OFFSET_Y: -25,
+    WIDTH: 132,
+    HEIGHT: 20,
   },
   DEFAULT_TOLERANCE_GAME_SAVING_DETECTION: 4,
+  // How long the tesseract worker may take to come up. Its start is three downloads (the worker
+  // script, the 3.9 MB core, the 1.4 MB Portuguese model) from a CDN and createWorker() has no
+  // deadline of its own: with the model unreachable it stays pending forever (measured), so
+  // without this the auto-save would wait on it for good.
+  OCR_WORKER_TIMEOUT_MS: 20 * 1000,
+  // Wait before another attempt after the 1st, 2nd and 3rd failed start. Past the last the host
+  // stops trying until auto-save is switched off and on again: tesseract.js hands out the Worker
+  // only once it is fully initialised, so a start that stalls or fails leaves a worker behind
+  // that cannot be reached to terminate, and an endless retry would leak one per minute.
+  OCR_RETRY_BACKOFF_MS: [5 * 1000, 15 * 1000, 60 * 1000],
   // Gap between two groups of raw key events sent to the guest: keys down, gap, keys up, gap.
   // It is a lower bound (a timer can only be late), and it exists because dosCI.simulateKeyPress
   // stamps its release 16 ms in the future, so two calls closer than that wedge the guest

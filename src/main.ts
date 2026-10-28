@@ -16,8 +16,9 @@ if (environment.production) {
  * `NgZone` to `NoopNgZone`. Nothing warns about this — the build succeeds, lint passes, the
  * app boots, and change detection simply stops firing for everything Zone.js used to catch.
  * That is most of this app: the load detector polls `dosCI.screenshot()` on an interval,
- * the auto-saver ticks every 1.5s, and every multiplayer update arrives on a WebRTC data
- * channel callback. None of those would repaint.
+ * and every multiplayer update arrives on a WebRTC data channel callback. Neither would
+ * repaint. (The auto-saver's loop is deliberately not one of them: it runs outside the zone
+ * and touches no template state.)
  *
  * It has to be passed as `applicationProviders` rather than in `AppModule.providers` —
  * Angular rejects it inside an NgModule's provider array. Because `applicationProviders`

@@ -1,20 +1,39 @@
-import { Injectable } from '@angular/core';
+import { Injectable, NgZone } from '@angular/core';
+import { Observable } from 'rxjs';
 import { DosCI } from '../../typings/jsdos';
-import { createWorker, Rectangle, Worker } from 'tesseract.js';
+import { createWorker } from 'tesseract.js';
 import { EMULATOR_CONTROL_CONFIG } from '../../models/constants';
 import { EmulatorKeyCode } from '../../models/game';
+import { OcrRegionHelper, PixelRegion } from '../../helpers/ocr-region.helper';
+import { RegionVerdictCache } from '../../helpers/region-verdict-cache.helper';
 import { GuestKeyQueueService, KeySendResult, TextSendResult } from './guest-key-queue.service';
+import { OcrWorkerHost } from './ocr-worker-host';
 
 @Injectable({
   providedIn: 'root'
 })
 export class EmulatorControlService {
-  private _worker: Worker | null = null;
-  private areaOfInterest: Rectangle = EMULATOR_CONTROL_CONFIG.DEFAULT_AREA_OF_INTEREST
+  /**
+   * The OCR worker. Nothing is downloaded until `startOcr()` (or the first read that needs it)
+   * asks. The constructor used to start it, which began a 5.4 MB download from a CDN the moment
+   * the game page opened, in parallel with the emulator's own 7 MB bundle.
+   */
+  private readonly ocr = new OcrWorkerHost(() => createWorker('por', undefined, {
+    // Without a handler tesseract.js rethrows a worker's error from its own onmessage, which
+    // nothing can catch: every failed start would also be an uncaught exception. The failure
+    // still reaches us, as the rejection of createWorker() or of the recognize() that caused it.
+    errorHandler: () => undefined,
+  }), {
+    timeoutMs: EMULATOR_CONTROL_CONFIG.OCR_WORKER_TIMEOUT_MS,
+    retryBackoffMs: EMULATOR_CONTROL_CONFIG.OCR_RETRY_BACKOFF_MS,
+  });
+  private readonly savingVerdicts = new RegionVerdictCache();
+  private regionCanvas: HTMLCanvasElement | null = null;
 
-  constructor(private keyQueue: GuestKeyQueueService) {
-    this.getWorker()
-  }
+  /** True once OCR has failed to start and until it works. See {@link OcrWorkerHost.unavailable$}. */
+  readonly ocrUnavailable$: Observable<boolean> = this.ocr.unavailable$;
+
+  constructor(private keyQueue: GuestKeyQueueService, private zone: NgZone) { }
 
   /**
    * Press one key, or several together (modifiers first), through the guest key queue — the
@@ -35,87 +54,121 @@ export class EmulatorControlService {
     return this.keyQueue.cancel();
   }
 
-  public async isGameSaving(dosCI: DosCI): Promise<boolean> {
-    return this.findTextOnGameScreen(dosCI, 
-      'a gravar o jogo...', 
-      this.areaOfInterest, 
-      EMULATOR_CONTROL_CONFIG.DEFAULT_TOLERANCE_GAME_SAVING_DETECTION)
+  /**
+   * Begin starting the OCR worker, so it is ready before the first save needs it. The
+   * auto-saver calls this when it starts, which the game page does once the game has booted.
+   * Idempotent, and it never waits: see {@link OcrWorkerHost}.
+   */
+  public startOcr(): void {
+    this.zone.runOutsideAngular(() => this.ocr.warmUp());
   }
 
-  public async findTextOnGameScreen(dosCI: DosCI, searchString: string, areaOfInterest?: Rectangle, editDistanceTolerance: number = 0): Promise<boolean> {
-    // use tesseract.js to detect text on the screen
-    // and return the result if the text is found
-    let found = false;
+  /** Terminate the worker and forget what it last read; a later `startOcr()` starts afresh. */
+  public stopOcr(): void {
+    this.ocr.stop();
+    this.savingVerdicts.forget();
+  }
+
+  /**
+   * Is the game's "A gravar o jogo..." dialog on screen right now?
+   *
+   * Cheap on purpose, because the auto-saver asks several times a second: a screenshot and a
+   * fingerprint of the one strip that holds the dialog's title. OCR runs only for a strip it has
+   * not read yet, and a strip that has not changed gets the answer it got last time. While the
+   * dialog is up the strip is static, so that answer, not "nothing happened", is what the
+   * caller needs (see {@link RegionVerdictCache}).
+   *
+   * Resolves `null`, not `false`, whenever the look could not be read: no frame, no worker yet
+   * or at all, or a failed read. "Could not tell" and "the dialog is not there" must stay apart,
+   * because the auto-saver persists the moment the dialog is gone, and a reading that fails while
+   * the game is still writing its `.e98` would otherwise look like the all-clear. A non-answer is
+   * not remembered, so the next look at the same strip tries again. A failing `screenshot()` is
+   * not swallowed either, since the caller has to know the emulator stopped answering.
+   */
+  public async isGameSaving(dosCI: DosCI): Promise<boolean | null> {
+    const frame = await dosCI.screenshot();
+    if (!frame) {
+      console.warn('No image data found');
+      return null;
+    }
+
+    const region = OcrRegionHelper.savingDialogRegion(frame.width, frame.height);
+    const hash = OcrRegionHelper.hash(frame, region);
+    const remembered = this.savingVerdicts.recall(hash);
+    if (remembered !== null) return remembered;
+
+    const found = await this.findTextInRegion(
+      frame,
+      region,
+      'a gravar o jogo...',
+      EMULATOR_CONTROL_CONFIG.DEFAULT_TOLERANCE_GAME_SAVING_DETECTION
+    );
+    if (found === null) return null;
+
+    this.savingVerdicts.remember(hash, found);
+    return found;
+  }
+
+  /**
+   * Read `region` of `frame` with OCR and say whether it holds `searchString`, within
+   * `editDistanceTolerance` edits. `null` means OCR could not run, which is different from
+   * "the text is not there".
+   */
+  private async findTextInRegion(frame: ImageData, region: PixelRegion, searchString: string, editDistanceTolerance: number): Promise<boolean | null> {
+    // Asked before the strip is encoded, so a worker that is still downloading costs a lookup
+    // per tick and not a PNG. warmUp() is a no-op when a start is already in flight.
+    const worker = this.ocr.ready;
+    if (!worker) {
+      this.startOcr();
+      return null;
+    }
+
     try {
-      const imageData = await dosCI.screenshot()
-      if (!imageData) {
-        console.warn('No image data found');
-        return false;
-      }
-      const worker = await this.getWorker();
-
-      // convert imagedata to base64
-      const base64 = this.imageDataToImage(imageData);
-      if (!base64) {
+      const image = this.regionToImage(frame, region);
+      if (!image) {
         console.warn('No base64 image data found');
+        return null;
+      }
+
+      const result = await worker.recognize(image);
+      const foundText = this.stringWithoutAccents(result.data.text.toLowerCase().trim());
+      const searchText = this.stringWithoutAccents(searchString.toLowerCase());
+
+      // if text is too short, it is not there
+      if (foundText.length == 0 || foundText.length < searchText.length / 2) {
         return false;
       }
-      const recognizeOptions: Partial<Tesseract.RecognizeOptions> = {}
 
-      if (areaOfInterest) {
-        recognizeOptions.rectangle = areaOfInterest;
-      }
-
-      const result = await worker.recognize(base64, recognizeOptions)
-      const foundText = this.stringWithoutAccents(result.data.text.toLowerCase().trim())
-      const searchText = this.stringWithoutAccents(searchString.toLowerCase())
-      
-      // if text is too short, return false
-      if (foundText.length == 0 || foundText.length < searchText.length / 2) {
-        return false
-      }
-
-      const distance = this.minimumDistanceWithSlidingWindow(foundText, searchText)
-      const includes = foundText.includes(searchText)
-      // console.log('Recognizer:', {foundText, searchText, distance, includes})
-      
+      const distance = this.minimumDistanceWithSlidingWindow(foundText, searchText);
+      const includes = foundText.includes(searchText);
 
       if (includes || distance <= editDistanceTolerance) {
-        console.log('Text found on game screen:', foundText, searchString)
-        found = true  
+        console.log('Text found on game screen:', foundText, searchString);
+        return true;
       }
+      return false;
     } catch (error) {
-      console.error('Error finding text on game screen:', error)
+      console.error('Error finding text on game screen:', error);
+      return null;
     }
-    return found
   }
 
-  private async getWorker(): Promise<Worker> {
-    if (this._worker == null) {
-      this._worker = await createWorker('por')
-    }
-    return this._worker;
-  }
-
-  private imageDataToImage(imageData: ImageData): string {
-    const canvas = document.createElement('canvas');
-
-    const scale = 1
-    
-    // use double the size of the image to improve recognition
-    canvas.width = imageData.width * scale;
-    canvas.height = imageData.height * scale;
+  /**
+   * Just `region` of `frame` as a PNG data URL. The crop happens before the encode: encoding
+   * the whole 800x600 frame to read 132x20 of it cost 6.2 ms and 38 KB a look, against 4.1 ms and
+   * 6 KB for the strip (measured), and the worker then no longer needs a rectangle to confine
+   * itself to. Not upscaled: the real dialog's title was read correctly at 1:1.
+   */
+  private regionToImage(frame: ImageData, region: PixelRegion): string {
+    const canvas = this.regionCanvas ?? (this.regionCanvas = document.createElement('canvas'));
+    canvas.width = region.width;
+    canvas.height = region.height;
     const ctx = canvas.getContext('2d');
-    if (ctx) {
-      // draw the image on the full
-      ctx.putImageData(imageData, 0, 0);
-      if(scale > 1) {
-        ctx.scale(scale, scale);
-        ctx.drawImage(canvas, 0, 0, imageData.width, imageData.height, 0, 0, imageData.width, imageData.height);
-      }
-      return canvas.toDataURL('image/png');
-    }
-    return '';
+    if (!ctx) return '';
+    // The dirty rectangle is painted at (dx + dirtyX, dy + dirtyY): shifting by -left/-top puts
+    // the strip at the canvas origin.
+    ctx.putImageData(frame, -region.left, -region.top, region.left, region.top, region.width, region.height);
+    return canvas.toDataURL('image/png');
   }
 
   private minimumDistanceWithSlidingWindow(str1: string, str2: string): number {

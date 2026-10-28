@@ -161,6 +161,10 @@ export class GamePage implements OnInit, OnDestroy {
     // The queue is a root service and outlives this page; whatever it still holds is typing
     // meant for this page's emulator.
     this.emulatorControlService.cancelKeys();
+    // Both are root services too. Left running they would keep sampling a dead emulator (the loop
+    // now survives errors by design) and keep the OCR worker's memory for the rest of the visit.
+    this.autoSaverService.stop();
+    this.autoSaverService.stopPeriodicSave();
     this.stopObservingOverlay?.();
     this.multiplayerSubscriptions.unsubscribe();
     // Without this the room, its ping interval and the canvas capture outlive the page.
@@ -472,7 +476,10 @@ export class GamePage implements OnInit, OnDestroy {
     if (autoSaveDisabled) {
       this.autoSaverService.stop()
     } else {
-      this.autoSaverService.start(this.dosCI)
+      // A hosting browser keeps playing, and streaming, from a hidden tab, so its ticks go on.
+      this.autoSaverService.start(this.dosCI, {
+        keepRunningWhileHidden: () => this.multiplayerService.isHosting,
+      })
     }
   }
 
@@ -762,8 +769,8 @@ export class GamePage implements OnInit, OnDestroy {
   /**
    * Full teardown, in an order that matters.
    *
-   * The tickers stop first: the auto-saver OCRs the framebuffer every 1.5s and would
-   * otherwise fire a persist into a VM that is already exiting. The room is left explicitly
+   * The tickers stop first: the auto-saver samples the framebuffer several times a second and
+   * would otherwise fire a persist into a VM that is already exiting. The room is left explicitly
    * so spectators get a clean departure instead of waiting out a grace period on a host that
    * simply vanished. Only then is the disk flushed and the emulator told to exit.
    */

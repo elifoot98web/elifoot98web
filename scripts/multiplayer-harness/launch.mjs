@@ -39,8 +39,8 @@ const CHROME_CANDIDATES = [
  * The flags that matter, and why. Chrome treats a window covered by another one as
  * occluded, which makes `document.visibilityState` 'hidden'; a hidden page has its timers
  * throttled and its animation frames suspended, and *both* wreck a multiplayer session.
- * Throttling stretches the 13 s host grace, the 20 s stream wait and the 1.5 s auto-saver
- * tick into nonsense (a game boot once took 112 s), and suspended frames leave Ionic's
+ * Throttling stretches the 13 s host grace, the 20 s stream wait and the auto-saver's
+ * 0.3 s tick into nonsense (a game boot once took 112 s), and suspended frames leave Ionic's
  * enter/leave animations unfinished, so an awaited `modalController.dismiss()` never
  * settles and the join dialog hangs with the room never joined.
  *

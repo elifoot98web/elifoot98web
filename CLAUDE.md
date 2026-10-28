@@ -28,7 +28,7 @@ npm run mp:launch        # two browsers for a multiplayer session (see the harne
 Specs are karma + jasmine. The builder globs `**/*.spec.ts` (its `include` option, which is also
 what `--include` overrides); [src/test.ts](src/test.ts) only initialises the TestBed and
 `tsconfig.spec.json` type-checks `src/**/*.spec.ts`, so a spec needs no registration but must live
-under `src/` to be type-checked. Nothing in a spec reaches the bundle. There are **four spec files so
+under `src/` to be type-checked. Nothing in a spec reaches the bundle. There are **nine spec files so
 far**. [room-code.helper.spec.ts](src/app/core/helpers/room-code.helper.spec.ts) is there as
 much to prove the harness as to cover `RoomCodeHelper`: `ng test` with **zero** specs
 prints `Executed 0 of 0 SUCCESS` and still exits 1, so a `test:ci` could never pass before the
@@ -40,7 +40,12 @@ of what a spec asserts. [emulator-keycode.helper.spec.ts](src/app/core/models/ga
 (the text planner) and [guest-key-queue.service.spec.ts](src/app/core/services/game/guest-key-queue.service.spec.ts)
 (the key queue, against a fake emulator that records every raw key event with the fake clock)
 are the model for "a service that talks to the emulator": hand it a stub `DosCI`, never the real
-one. Write specs for pure logic (helpers, planners, parsers, queues driven by a
+one. [auto-saver.service.spec.ts](src/app/core/services/game/auto-saver.service.spec.ts) is the model
+for "a loop that must survive its own failures": the collaborators are plain fakes cast to the
+constructor's types, the clock is `fakeAsync`, and every spec ends with `stop()` so
+`{ flush: false }` can prove nothing is left scheduled. One trap there: build a rejected promise
+*inside* the fake (`outcomes()`), never up front, or it has no handler yet and fails the spec as
+unhandled. Write specs for pure logic (helpers, planners, parsers, queues driven by a
 fake clock); the emulator, the screen-scrapers and the WebRTC paths have no karma coverage and
 are checked in a real browser (see the harness above). `ChromeHeadlessCI` in
 [karma.conf.js](karma.conf.js) is `ChromeHeadless --no-sandbox`, which a CI runner or container
@@ -255,15 +260,76 @@ Windows app, so there is nothing to hook):
   hardcoded pixels for the game's green background (tolerance 25). Note this waits for the *game's*
   screen, i.e. it also covers the DOS + Windows 3.1 boot time. Failures increment
   `STORAGE_KEY.FAIL_COUNT`; after 3 the user is offered a reload or full data wipe.
-- **Auto-save** — [auto-saver.service.ts](src/app/core/services/game/auto-saver.service.ts) ticks every 1.5 s
-  and [emulator-control.service.ts](src/app/core/services/game/emulator-control.service.ts) OCRs a fixed
-  rectangle (`EMULATOR_CONTROL_CONFIG.DEFAULT_AREA_OF_INTEREST`) with tesseract.js (`por` model)
-  looking for "a gravar o jogo…" via sliding-window Levenshtein distance. When the game finishes its
-  own save, the VM is persisted so progress survives a browser reload.
+- **Auto-save** — [auto-saver.service.ts](src/app/core/services/game/auto-saver.service.ts) samples
+  the framebuffer every 300 ms and [emulator-control.service.ts](src/app/core/services/game/emulator-control.service.ts)
+  OCRs one 132x20 strip with tesseract.js (`por` model) looking for "a gravar o jogo…" via
+  sliding-window Levenshtein distance. When the game finishes its own save, the VM is persisted so
+  progress survives a browser reload.
 
 Both are coordinate- and color-sensitive: changing the emulator canvas size, the Windows 3.1 video
 mode/resolution, or the game's language will silently break them. Constants live in
-[constants.ts](src/app/core/models/constants.ts).
+[constants.ts](src/app/core/models/constants.ts). The load-detection pixels are absolute and happen to
+pass at 800x600 and 640x480; the OCR strip is **centre-relative** (`OcrRegionHelper.savingDialogRegion`:
+left = round(W/2 − 68), top = round(H/2 − 25), 132x20, so (332, 275) at 800x600 and (252, 215) at
+640x480), because the dialog is centred and its crop is byte-identical in both modes.
+
+Load-bearing invariants of the auto-save — each of these was a bug, or a measured trap:
+
+- **The game's save dialog is up for about 1.7 s, and only a real save shows it.** Measured on a real
+  save at 800x600 (the ROI frames are in the research captures): "A gravar o jogo…" appeared at the
+  first kickoff of a *new* game, stayed 1.70 s, and was byte-identical to the baseline capture. A
+  loaded game's next two kickoffs and the end of its round showed no dialog at all, so do not assume
+  every "Jogar" saves. The progress dialogs "A iniciar o jogo…" and "A carregar o jogo…" sit in the same place
+  and are read as `false` (edit distance above the tolerance of 4), and so were the half-time window
+  and the end-of-round screens over a whole round.
+- **Persist only AFTER the dialog is gone.** The dialog is up while the game writes the `.e98`; a
+  persist that lands mid-write stores a truncated save over a good one. `monitor()` therefore waits for
+  the dialog to disappear (up to 2 min, polling once a second), then persists. A look has three
+  answers: `isGameSaving` resolves `true`, `false` or `null` ("OCR could not read the strip": no frame,
+  no worker, a `recognize()` that rejected, a canvas that would not encode). Once the dialog has been
+  seen, a `null`, a `screenshot()` that throws and a look that overruns the heartbeat all count as
+  "still saving", never as the all-clear. Before it has been seen, `null` is "not saving". **Why:** OCR
+  failures used to be folded into `false`, so a worker dying under the memory spike of the save would
+  have persisted mid-write. A persist that fails is *owed* and retried by the next tick that
+  finds no dialog, a few times and then dropped.
+- **OCR is a cache keyed by a hash of the strip, never a gate in front of it.** Each look is
+  `screenshot()` plus a 32-bit FNV-1a of the 10,560 bytes (~0.1 ms); OCR runs only for a strip it has
+  not read, and an unchanged strip gets the verdict it got last time (`RegionVerdictCache`). The
+  verdict is remembered, not just "unchanged", because while the dialog is up the strip is static and
+  the caller is asking whether it is *still* up. A moving guest cursor over the strip changes the hash
+  and costs one more OCR pass; it cannot suppress one. **A future pixel-signature matcher must mask the
+  cursor sprite**, which is drawn into the framebuffer. Measured over one whole round (235 s): ten OCR
+  passes, where the old loop ran one per 1.5 s tick.
+- **No caller ever waits for the OCR worker.** `createWorker()` has no deadline (with the language file
+  unreachable it stays pending for ever, measured), so the old `await getWorker()` froze the loop.
+  `OcrWorkerHost` hands out the worker or `null` immediately; a start is one memoised attempt raced
+  against 20 s (`TimeoutHelper`), then retried after 5 s, 15 s and 60 s, then abandoned until
+  auto-save is switched off and on. tesseract.js returns the `Worker` only once fully initialised, so a
+  start that stalls leaves a thread that cannot be reached to terminate: one that lands late is adopted
+  if nothing is ready and terminated if something is, and the bounded retry count is what bounds the
+  leak. Do not "fix" this into an unbounded retry. The worker is created when the auto-saver starts
+  (after the game has loaded), not in a constructor, and terminated by `stop()`; `createWorker` gets
+  an `errorHandler` because without one a failed start is also an uncaught exception.
+- **The loop never dies, and a failure is never silent.** `tick()` reschedules in `finally`; a tick that
+  throws is retried after 5 s, 15 s, 60 s and then every 60 s (it used to set `ERROR`, which ended
+  auto-save for the session while the menu still showed it on). Each look is guarded by a 10 s
+  heartbeat (`isGameSaving` has no deadline of its own), the tick as a whole is not, because it lasts
+  as long as the save. The "Salvando máquina virtual…" loader is dismissed in `finally`, and its
+  present/dismiss are bounded to 2 s because a page Chrome counts as hidden never finishes those
+  animations. `persist()` is serialised and bounded to 30 s. The periodic save is awaited and caught.
+- **When OCR is unavailable the 5-minute periodic save is forced and the user is told once** (a toast,
+  from `AutoSaverService`, because only it knows the fallback is on). It is a separate flag from the
+  user's own periodic save, so OCR coming back, or `stop()`, ends the forced one without touching
+  theirs.
+- **Hidden pages are skipped unless hosting.** A hosting browser keeps streaming and playing from a
+  tab behind another, so `start()` takes `keepRunningWhileHidden` (the game page passes
+  `MultiplayerService.isHosting`). The loop runs outside the Angular zone: at several ticks a second it
+  would otherwise cost the whole app a change-detection pass each time. `GamePage.ngOnDestroy` stops
+  it, since the services are root singletons and now survive errors by design.
+- **Still true and not fixed here:** the tesseract worker, 3.9 MB core and 1.4 MB model come from
+  jsDelivr at runtime (decision D5: self-host later). Offline, or with the CDN blocked, OCR is
+  unavailable and the fallback above is all that saves the game. The fixed 20 s deadline can be shorter
+  than a slow mobile link needs for 5.4 MB; the retries and late adoption mostly absorb that.
 
 ### Multiplayer (watch-together, not play-together)
 
