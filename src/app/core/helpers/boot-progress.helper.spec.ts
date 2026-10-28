@@ -46,4 +46,40 @@ describe('BootProgressHelper.describe', () => {
   it('clamps a percentage that arrives out of range', () => {
     expect(BootProgressHelper.describe('Downloading bundle 250%')).toBe('Baixando o jogo… 100%');
   });
+
+  describe('logStep', () => {
+
+    it('puts every percentage of a ten-percent band on the same step', () => {
+      expect(BootProgressHelper.logStep('Downloading bundle 40.0%')).toBe('Downloading bundle 40%');
+      expect(BootProgressHelper.logStep('Downloading bundle 43.2%')).toBe('Downloading bundle 40%');
+      expect(BootProgressHelper.logStep('Downloading bundle 49.99%')).toBe('Downloading bundle 40%');
+    });
+
+    it('moves to the next step at the next ten', () => {
+      expect(BootProgressHelper.logStep('Downloading bundle 50.0%')).toBe('Downloading bundle 50%');
+      expect(BootProgressHelper.logStep('Extracting 100% (ELIFOOT.BAT)')).toBe('Extracting 100%');
+    });
+
+    it('drops the file name js-dos appends while unpacking, which changes on every event', () => {
+      expect(BootProgressHelper.logStep('Extracting 91% (EGA80WOA.FON)')).toBe(BootProgressHelper.logStep('Extracting 93% (VGAOEM.FON)'));
+      expect(BootProgressHelper.logStep('Extracting 61% (hdd.img)')).toBe('Extracting 60%');
+      expect(BootProgressHelper.logStep('Extracting 99% ()')).toBe('Extracting 90%');
+    });
+
+    it('keeps the phases apart', () => {
+      expect(BootProgressHelper.logStep('Extracting 45% (hdd.img)')).not.toBe(BootProgressHelper.logStep('Downloading bundle 45%'));
+    });
+
+    it('passes text without a percentage through, trimmed', () => {
+      expect(BootProgressHelper.logStep('  Starting...\n')).toBe('Starting...');
+      expect(BootProgressHelper.logStep(null)).toBe('');
+    });
+
+    it('turns a thousand download events into about ten lines', () => {
+      const steps = new Set<string>();
+      for (let n = 0; n <= 1000; n++) steps.add(BootProgressHelper.logStep(`Downloading bundle ${(n / 10).toFixed(1)}%`));
+
+      expect(steps.size).toBe(11);
+    });
+  });
 });

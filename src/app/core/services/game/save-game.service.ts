@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BASE_SAVEGAME_DIR } from '../../models/constants';
 import JSZip from 'jszip';
+import { DiagnosticsService } from '../shared/diagnostics.service';
 
 /** Where emulators-ui keeps the changed part of the virtual disk (see readStoredChanges). */
 const JS_DOS_SAVES_DATABASE = 'js-dos-cache (emulators-ui-saves)';
@@ -9,10 +10,17 @@ const JS_DOS_SAVES_DATABASE = 'js-dos-cache (emulators-ui-saves)';
   providedIn: 'root'
 })
 export class SaveGameService {
-  constructor() { }
+  constructor(private diagnostics: DiagnosticsService) { }
 
   async saveGame(): Promise<void> {
-    await saveGameFileSystem()
+    const began = performance.now()
+    try {
+      await saveGameFileSystem()
+      this.diagnostics.log('save', 'layers.save ok', () => ({ ms: Math.round(performance.now() - began) }))
+    } catch (error) {
+      this.diagnostics.log('save', 'layers.save failed', () => ({ ms: Math.round(performance.now() - began), error }))
+      throw error
+    }
   }
 
   async downloadGameSaves(dosCI: any): Promise<boolean> {

@@ -3,7 +3,7 @@ import { SwUpdate } from '@angular/service-worker';
 import { AlertController, LoadingController, Platform } from '@ionic/angular/lazy';
 import { TimeoutError, TimeoutHelper } from './core/helpers/timeout.helper';
 import { APP_UPDATE, STORAGE_KEY } from './core/models/constants';
-import { LayoutHelperService, LocalStorageService } from './core/services/shared';
+import { DiagnosticsService, LayoutHelperService, LocalStorageService } from './core/services/shared';
 
 @Component({
     selector: 'app-root',
@@ -19,7 +19,11 @@ export class AppComponent {
     private injector: Injector,
     private updates: SwUpdate, 
     private localStorage: LocalStorageService, 
-    private layoutHelperService: LayoutHelperService) {
+    private layoutHelperService: LayoutHelperService,
+    // Injected here, and not left for the first page that logs, so the service exists from the
+    // first moment of the visit: it reads `?diag=1` and the stored choice in its constructor, and
+    // the window listeners that explain a tab eviction must be on before the game page is.
+    private diagnostics: DiagnosticsService) {
 
     platform.ready().then(async () => {
       console.log('Platform ready', { 
@@ -30,6 +34,7 @@ export class AppComponent {
       });
       // Check if a refresh is needed
       const pendingUpdate = await this.localStorage.get<boolean>(STORAGE_KEY.PENDING_UPDATE);
+      this.diagnostics.log('update', 'launch', () => ({ pendingUpdate: !!pendingUpdate, serviceWorkerEnabled: this.updates.isEnabled }));
       if(pendingUpdate) {
         console.log('Pending update detected');
         this.installUpdate()
@@ -44,9 +49,11 @@ export class AppComponent {
       this.updates.versionUpdates.subscribe(async (evt) => {
         switch(evt.type) {
           case 'VERSION_DETECTED':
+            this.diagnostics.log('update', 'version detected', () => ({ hash: evt.version.hash }));
             console.info(`Downloading new app version: ${evt.version.hash}`);
             break;
           case 'VERSION_READY':
+            this.diagnostics.log('update', 'version ready', () => ({ current: evt.currentVersion.hash, latest: evt.latestVersion.hash }));
             console.info(`Current app version is now available: ${evt.currentVersion.hash}`);
             this.localStorage.set(STORAGE_KEY.PENDING_UPDATE, true);
             // Show an alert to the user to inform them that a new version is available
@@ -54,6 +61,7 @@ export class AppComponent {
             await this.showUpdateAlert()
             break;
           case 'VERSION_INSTALLATION_FAILED':
+            this.diagnostics.log('update', 'installation failed', () => ({ version: evt.version.hash, error: evt.error }));
             console.error(`Failed to install app version: ${evt.error}`);
             break;
           case 'NO_NEW_VERSION_DETECTED':
@@ -65,6 +73,7 @@ export class AppComponent {
   }
 
   private async showUpdateAlert() {
+    this.diagnostics.log('update', 'prompt shown');
     const alert = await this.alertController.create({
       header: 'Atualização disponível',
       cssClass: 'win9x-alert alert-whitespace',
@@ -74,12 +83,16 @@ export class AppComponent {
         {
           text: 'Instalar agora',
           handler: () => {
+            this.diagnostics.log('update', 'prompt answered: install now');
             this.installUpdateFromPrompt()
           }
         },
         {
           text: 'Atualizar depois',
           role: 'cancel',
+          handler: () => {
+            this.diagnostics.log('update', 'prompt answered: later');
+          }
         }
       ]
     });
@@ -92,16 +105,23 @@ export class AppComponent {
    * leaves PENDING_UPDATE set, which makes the next launch install it, before any room exists.
    */
   private async installUpdateFromPrompt() {
-    if (await this.isHostingRoom() && !(await this.confirmCloseRoom())) return;
+    const hosting = await this.isHostingRoom();
+    this.diagnostics.log('update', 'hosting check', () => ({ hosting }));
+    if (hosting && !(await this.confirmCloseRoom())) {
+      this.diagnostics.log('update', 'host kept the room; update postponed');
+      return;
+    }
     await this.installUpdate();
   }
 
   private async installUpdate() {
+    this.diagnostics.log('update', 'install');
     await this.localStorage.set(STORAGE_KEY.PENDING_UPDATE, false);
     await this.saveGameBeforeReload();
     // Reload the window to force the browser to load the latest version of the app
     // This is necessary because the service worker may not be able to update the app
     // if the app is already open
+    this.diagnostics.log('update', 'reloading');
     window.location.reload();
   }
 
@@ -128,9 +148,12 @@ export class AppComponent {
         .catch(() => undefined);
     }
 
+    const began = performance.now();
     try {
       await TimeoutHelper.withTimeout(() => saveGameFileSystem(), APP_UPDATE.SAVE_TIMEOUT_MS);
+      this.diagnostics.log('update', 'save before reload ok', () => ({ hasEmulator, ms: Math.round(performance.now() - began) }));
     } catch (err) {
+      this.diagnostics.log('update', 'save before reload failed', () => ({ hasEmulator, ms: Math.round(performance.now() - began), timedOut: err instanceof TimeoutError, error: err }));
       if (err instanceof TimeoutError) {
         console.warn(`Saving the game took over ${err.timeoutMs} ms; updating without waiting for it.`);
       } else {

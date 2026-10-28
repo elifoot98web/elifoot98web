@@ -4,6 +4,7 @@ import { EMULATOR_CONTROL_CONFIG } from '../../models/constants';
 import { EmulatorKeyCode } from '../../models/game';
 import { DosCI } from '../../typings/jsdos';
 import { GuestKeyQueueService, KeyQueueError, KeySendResult } from './guest-key-queue.service';
+import { silentDiagnostics } from '../shared/diagnostics.testing';
 
 const K = EmulatorKeyCode;
 const GAP = EMULATOR_CONTROL_CONFIG.KEY_PACING_MS;
@@ -65,7 +66,7 @@ function fakeEmulator(start: number, options: FakeEmulatorOptions = {}): FakeEmu
   return { dosCI, events, readMemory, held, flags };
 }
 
-const newQueue = () => new GuestKeyQueueService(new NgZone({ enableLongStackTrace: false }));
+const newQueue = () => new GuestKeyQueueService(new NgZone({ enableLongStackTrace: false }), silentDiagnostics());
 
 /** Capture how a promise ended without letting the assertion depend on microtask order. */
 function outcome<T>(promise: Promise<T>) {
@@ -612,6 +613,106 @@ describe('GuestKeyQueueService', () => {
 
       expect(result.value).toEqual({ completed: 0, total: 3, cancelled: true, substituted: 0 });
       expect(emulator.events).toEqual([]);
+    }));
+  });
+  describe('the diagnostics log', () => {
+    type Logged = [category: string, message: string, data: Record<string, number | boolean | string> | undefined];
+
+    /**
+     * A log that is on. Like the real one it reads a data thunk at the call, so a value that
+     * changes later (the task in flight) is seen as it was; the thunks as they came are kept in
+     * `raw` for the spec that checks they are thunks.
+     */
+    function recorder() {
+      const calls: Logged[] = [];
+      const raw: unknown[] = [];
+      const diagnostics = {
+        enabled: true,
+        log: (cat: string, msg: string, data?: unknown) => {
+          raw.push(data);
+          calls.push([cat, msg, (typeof data === 'function' ? (data as () => unknown)() : data) as Logged[2]]);
+        },
+      };
+      const queue = new GuestKeyQueueService(new NgZone({ enableLongStackTrace: false }), diagnostics as never);
+      const messages = () => calls.map(([, msg]) => msg);
+      const dataOf = (msg: string) => calls.find(([, m]) => m === msg)?.[2];
+      return { queue, calls, raw, messages, dataOf };
+    }
+
+    it('notes a key being queued, started and flushed, all under "key"', strict(() => {
+      const emulator = fakeEmulator(Date.now());
+      const { queue, calls, messages, dataOf } = recorder();
+
+      queue.chord(emulator.dosCI, [K.KBD_f5]);
+      tick(60 * 1000);
+
+      expect(messages()).toEqual(['enqueue', 'start', 'flush']);
+      expect(calls.every(([cat]) => cat === 'key')).toBeTrue();
+      expect(dataOf('enqueue')).toEqual({ job: 1, tasks: 1, altCodes: 0, depth: 1 });
+      expect(dataOf('flush')).toEqual(jasmine.objectContaining({ job: 1, completed: 1, total: 1, cancelled: false }));
+    }));
+
+    it('says how long the pacing says the keys should take, so a phone\'s stretch can be read off', strict(() => {
+      const emulator = fakeEmulator(Date.now());
+      const { queue, calls } = recorder();
+
+      // A chord is two gaps, an Alt code ten.
+      queue.chord(emulator.dosCI, [K.KBD_a]);
+      queue.altCode(emulator.dosCI, 233);
+      tick(60 * 1000);
+
+      const expectedMs = calls.filter(([, msg]) => msg === 'flush').map(([, , data]) => data?.['expectedMs']);
+      expect(expectedMs).toEqual([2 * GAP, 10 * GAP]);
+    }));
+
+    it('notes a cancel with how much it dropped, and the flush that follows as cancelled', strict(() => {
+      const emulator = fakeEmulator(Date.now());
+      const { queue, messages, calls } = recorder();
+      queue.text(emulator.dosCI, 'abcde');
+      tick(0);
+
+      const dropped = queue.cancel();
+      tick(60 * 1000);
+
+      expect(dropped).toBeGreaterThan(0);
+      expect(calls.find(([, msg]) => msg === 'cancel')?.[2]).toEqual({ dropped, jobs: 1, taskInFlight: true });
+      expect(messages()).toContain('flush');
+      expect(calls.find(([, msg]) => msg === 'flush')?.[2]?.['cancelled']).toBeTrue();
+    }));
+
+    it('notes a send that was refused', strict(() => {
+      spyOn(console, 'error');
+      const { queue, dataOf } = recorder();
+
+      const refused = outcome(queue.chord(null, [K.KBD_a]));
+      tick(0);
+
+      expect(refused.state).toBe('rejected');
+      expect(dataOf('refused')).toEqual({ reason: 'no-emulator', tasks: 1 });
+    }));
+
+    it('notes a send that failed', strict(() => {
+      spyOn(console, 'error');
+      const emulator = fakeEmulator(Date.now(), { failOnCall: 1 });
+      const { queue, messages } = recorder();
+
+      const result = outcome(queue.chord(emulator.dosCI, [K.KBD_a]));
+      tick(60 * 1000);
+
+      expect(result.state).toBe('rejected');
+      expect(messages()).toContain('fail');
+    }));
+
+    it('hands over data as a function, so a log that is off never builds it', strict(() => {
+      const emulator = fakeEmulator(Date.now());
+      const { queue, raw } = recorder();
+
+      queue.text(emulator.dosCI, 'ab');
+      tick(60 * 1000);
+
+      const withData = raw.filter(data => data !== undefined);
+      expect(withData.length).toBeGreaterThan(0);
+      expect(withData.every(data => typeof data === 'function')).toBeTrue();
     }));
   });
 });

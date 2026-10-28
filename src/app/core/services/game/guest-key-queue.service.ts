@@ -3,6 +3,7 @@ import { TimeoutHelper } from '../../helpers/timeout.helper';
 import { EMULATOR_CONTROL_CONFIG } from '../../models/constants';
 import { EmulatorKeyCode, EmulatorKeyCodeHelper, KeyTask } from '../../models/game';
 import { DosCI } from '../../typings/jsdos';
+import { DiagnosticsService } from '../shared/diagnostics.service';
 
 /** How a submission ended when it did not fail. Cancelling is an outcome, not an error. */
 export interface KeySendResult {
@@ -42,6 +43,9 @@ export class KeyQueueError extends Error {
   }
 }
 
+/** Milliseconds to a tenth, for the diagnostics log. */
+const round1 = (ms: number) => Math.round(ms * 10) / 10;
+
 /** The keypad digit keys, indexed by digit. */
 const KEYPAD_DIGITS = [
   EmulatorKeyCode.KBD_kp0, EmulatorKeyCode.KBD_kp1, EmulatorKeyCode.KBD_kp2, EmulatorKeyCode.KBD_kp3,
@@ -51,6 +55,8 @@ const KEYPAD_DIGITS = [
 
 /** A caller's request: one or more tasks that succeed, fail or get cancelled together. */
 interface Job {
+  /** Only to tell one submission from another in the diagnostics log. */
+  id: number;
   dosCI: DosCI;
   total: number;
   completed: number;
@@ -64,6 +70,14 @@ interface Job {
   onProgress?: (completed: number, total: number) => void;
   resolve: (result: KeySendResult) => void;
   reject: (error: KeyQueueError) => void;
+  // Timings for the diagnostics log (`performance.now()`, ms): when it was queued and when its
+  // first task began (0 until then), and how long its tasks took against how long the pacing
+  // says they should. The ratio is how much a device stretches the 10 ms gap.
+  queuedAt: number;
+  startedAt: number;
+  sendMs: number;
+  expectedMs: number;
+  slowestMs: number;
 }
 
 interface Entry {
@@ -95,6 +109,10 @@ interface Entry {
  * A hidden page's timers are throttled (to about one a second on a desktop, usually frozen on
  * a phone), so a send that is backgrounded crawls or pauses and finishes on return. A late
  * timer only ever widens the gap, which is the safe direction.
+ *
+ * With diagnostics on, each submission is noted in the log (`key`): queued, started, flushed or
+ * cancelled or failed. The flush line carries how long the tasks took against how long the
+ * pacing says they should, which is the one number the pacing has never had from a phone.
  */
 @Injectable({
   providedIn: 'root'
@@ -103,8 +121,9 @@ export class GuestKeyQueueService {
   private entries: Entry[] = [];
   private inFlight: Entry | null = null;
   private running = false;
+  private lastJobId = 0;
 
-  constructor(private zone: NgZone) { }
+  constructor(private zone: NgZone, private diagnostics: DiagnosticsService) { }
 
   /** Tasks waiting to go out, the one being sent included. */
   get pending(): number {
@@ -148,6 +167,7 @@ export class GuestKeyQueueService {
       job.cancelled = true;
       touched.add(job);
     }
+    this.diagnostics.log('key', 'cancel', () => ({ dropped: dropped.length, jobs: touched.size, taskInFlight: this.inFlight !== null }));
     // A job whose task is in flight keeps `remaining` above zero, so it settles when that task
     // ends, with the true count of what was sent.
     touched.forEach(job => this.settleIfDone(job));
@@ -168,18 +188,21 @@ export class GuestKeyQueueService {
       // Fails where the caller can see it. Swallowing this would mean a tap on a button that
       // does nothing and says nothing.
       console.error('Key send refused: there is no emulator to send to.');
+      this.diagnostics.log('key', 'refused', () => ({ reason: 'no-emulator', tasks: tasks.length }));
       return Promise.reject(new KeyQueueError('no-emulator', 'O jogo ainda não está pronto para receber teclas.'));
     }
 
     for (const task of tasks) {
       const problem = this.describeInvalidTask(task);
       if (problem) {
+        this.diagnostics.log('key', 'refused', () => ({ reason: 'invalid-task', problem }));
         return Promise.reject(new KeyQueueError('invalid-task', `Tecla inválida: ${problem}.`));
       }
     }
 
     return new Promise<KeySendResult>((resolve, reject) => {
       const job: Job = {
+        id: ++this.lastJobId,
         dosCI,
         total: tasks.length,
         completed: 0,
@@ -190,8 +213,19 @@ export class GuestKeyQueueService {
         onProgress: options.onProgress,
         resolve,
         reject,
+        queuedAt: performance.now(),
+        startedAt: 0,
+        sendMs: 0,
+        expectedMs: 0,
+        slowestMs: 0,
       };
       for (const task of tasks) this.entries.push({ job, task });
+      this.diagnostics.log('key', 'enqueue', () => ({
+        job: job.id,
+        tasks: tasks.length,
+        altCodes: tasks.filter(task => task.kind === 'altCode').length,
+        depth: this.pending,
+      }));
       this.start();
     });
   }
@@ -235,12 +269,21 @@ export class GuestKeyQueueService {
     const { job, task } = entry;
     this.inFlight = entry;
     try {
+      if (job.startedAt === 0) {
+        job.startedAt = performance.now();
+        this.diagnostics.log('key', 'start', () => ({ job: job.id, waitedMs: round1(job.startedAt - job.queuedAt) }));
+      }
       if (job.guardCapsLock && job.completed === 0) {
         await this.ensureCapsLockOff(job.dosCI);
       }
       // A cancel that landed while the guard was reading skips the first task as well.
       if (!job.cancelled) {
+        const began = performance.now();
         await this.perform(job.dosCI, task);
+        const took = performance.now() - began;
+        job.sendMs += took;
+        job.expectedMs += GuestKeyQueueService.pausesIn(task) * EMULATOR_CONTROL_CONFIG.KEY_PACING_MS;
+        job.slowestMs = Math.max(job.slowestMs, took);
         job.completed++;
         this.reportProgress(job);
       }
@@ -306,7 +349,10 @@ export class GuestKeyQueueService {
     if (typeof dosCI.readMemory !== 'function') return;
 
     try {
-      if (!(await this.isCapsLockOn(dosCI))) return;
+      const began = performance.now();
+      const isOn = await this.isCapsLockOn(dosCI);
+      this.diagnostics.log('key', 'capslock read', () => ({ on: isOn, ms: round1(performance.now() - began) }));
+      if (!isOn) return;
 
       console.warn('The guest has CapsLock on; switching it off before typing.');
       await this.perform(dosCI, { kind: 'chord', keys: [EmulatorKeyCode.KBD_capslock] });
@@ -314,6 +360,7 @@ export class GuestKeyQueueService {
         console.warn('The guest still has CapsLock on; letters will come out inverted.');
       }
     } catch (error) {
+      this.diagnostics.log('key', 'capslock read failed', () => ({ error }));
       console.warn('Could not check the guest\'s CapsLock; typing anyway.', error);
     }
   }
@@ -324,6 +371,12 @@ export class GuestKeyQueueService {
       EMULATOR_CONTROL_CONFIG.KEYBOARD_STATE_TIMEOUT_MS
     );
     return (flags[0] & EMULATOR_CONTROL_CONFIG.BIOS_CAPS_LOCK_FLAG) !== 0;
+  }
+
+  /** How many `pause()`s `perform` makes for a task: the gaps the pacing is multiplied by. */
+  private static pausesIn(task: KeyTask): number {
+    // A chord: down, gap, up, gap. An Alt code: Alt down, four digits of (down, gap, up, gap), Alt up.
+    return task.kind === 'chord' ? 2 : 10;
   }
 
   private pause(): Promise<void> {
@@ -342,12 +395,23 @@ export class GuestKeyQueueService {
   private settleIfDone(job: Job): void {
     if (job.remaining > 0 || job.settled) return;
     job.settled = true;
+    this.diagnostics.log('key', 'flush', () => ({
+      job: job.id,
+      completed: job.completed,
+      total: job.total,
+      cancelled: job.cancelled,
+      totalMs: round1(performance.now() - job.queuedAt),
+      sendMs: round1(job.sendMs),
+      expectedMs: round1(job.expectedMs),
+      slowestTaskMs: round1(job.slowestMs),
+    }));
     job.resolve({ completed: job.completed, total: job.total, cancelled: job.cancelled });
   }
 
   /** Rejects the job and drops its queued tasks. Other jobs are untouched. */
   private fail(job: Job, error: unknown): void {
     console.error('Sending keys to the guest failed', error);
+    this.diagnostics.log('key', 'fail', () => ({ job: job.id, completed: job.completed, total: job.total, error }));
     this.entries = this.entries.filter(entry => entry.job !== job);
     if (job.settled) return;
     job.settled = true;

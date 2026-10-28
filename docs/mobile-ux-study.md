@@ -436,6 +436,54 @@ them runnable** (`npm run test:ci`, a `ChromeHeadlessCI` launcher, and the first
 `RoomCodeHelper`), but CI still runs no tests or lint, so specs gate a PR only once a
 ChromeHeadless job is added to the workflows (the owner's call).
 
+**DIAG (the diagnostics flag) — as built.** `DiagnosticsService` plus a Win9x "Diagnóstico" window
+reachable from the options menu; `?diag=1` turns it on for a tab's session. Off, a `log()` is one
+boolean check; on, a 5000-entry ring buffer of `{t, w, cat, msg, data?}`. Hooked: the key queue
+(enqueue, start, flush with timings, cancel, fail), the boot stages, the OCR worker lifecycle and each
+saving verdict, every persist with its duration, and the update flow. Pointer, touch and IME are not
+hooked: P2, P8, P9 and P11 log into it. CLAUDE.md has the design and its invariants; what was measured,
+headless Chrome 143 with touch emulation at 390x844, 844x390 and 1280x800, against the dev server:
+- **Zero cost off.** After a fresh load of `/#/game` no `error`, `unhandledrejection`, `pagehide`,
+  `pageshow`, `orientationchange` or `freeze` listener exists on the page; switching on adds all of them
+  (and one `visualViewport` resize), switching off removes every one. Counted through zone.js's task
+  lists: DevTools shows one native listener per type under zone.js, so it cannot see these.
+- **The window events do not see Angular's errors.** An error thrown in the Angular zone, and three
+  of four unhandled rejections (everything but a native `async` function's), never reached a window
+  listener. `DiagnosticsErrorHandler` (provided in `AppModule`) logs them; the window listeners still
+  catch an error from outside the zone and a native rejection.
+- **`?diag=1` is stripped from the address** by the router's first `replaceState` (the `<base href="/">`
+  resolves `#/game` against the base), so a reload would have come back with the log off. It is kept
+  in `sessionStorage`: a real reload kept it, `?diag=0` kept it off across a reload, and turning the
+  log on in the window clears the override and persists the choice. A `?diag=1` visit stores no choice
+  but does write the log's tail, which stays until "Limpar", switching off or "Apagar todos os dados"
+  (the first docblock said a link "leaves no trace"; review caught that it was false, and the text, not
+  the behaviour, was changed, because the tail is the evidence of an eviction of that same tab).
+- **A reload lost the tail when only IndexedDB held it:** the previous page ended at its last interval
+  write, `pagehide` never landed. With the extra synchronous `localStorage` copy the next page's
+  "página anterior" ended `…ocr:recognize, page:pagehide, page:visibilitychange`. Chrome's own
+  `Page.setWebLifecycleState` frozen/active produced `visibilitychange hidden`, `freeze`, `resume`.
+- **A bug the measurement found:** the first version logged every js-dos loading line while unpacking
+  (the file name in "Extracting 91% (EGA80WOA.FON)" changes each time): hundreds of entries for one
+  boot from the cache. It is now one line per phase and ten percent (15 for a boot).
+- **What the log showed on a desktop, as a baseline for the phone:** a chord took 22.4 ms against 20
+  expected from the 10 ms pacing, a `Zé` text 133 ms against 120; the OCR worker was ready 68-72 ms
+  after its start (stand-in CDN), a recognition pass took 9-51 ms; the game screen was detected 3.5-4.0
+  s after the emulator was ready at 640x480.
+- **The window:** every button is 44px under `(pointer: coarse)` (and, being `.win9x-button--touch`,
+  on a mouse), the close button 48x48, the category select and the switch 44px, the checkbox 24px;
+  at 390x844 the window fills the screen with no page scroll and the buttons sit in the bottom 120px.
+  Copy wrote the whole report to the clipboard (8.3 KB at that point: header, previous page, this
+  page), download produced the same text as a file, share was exercised against a stand-in
+  `navigator.share` and received one `.txt` file and a title; "Limpar" asks first (a `win9x-alert`),
+  "Apagar todos os dados" leaves neither the stored flag nor either copy of the tail.
+Deviations: the category `page` was added to the plan's list; the report carries a `w` (wall-clock)
+field on every entry because `performance.now()` does not advance while a page is suspended; the
+`ErrorHandler`, the tab-session switch, the second copy of the tail and a bottom "Fechar" button were
+not in the spec and exist for the reasons above. **Not verified:** any phone, a real share sheet or
+`navigator.clipboard` on iOS, whether an iOS eviction leaves a `visibilitychange` line, the window with
+a real soft keyboard, and the 5 s write cost on a low-end CPU (the write is a `JSON.stringify` of up to
+1000 entries, about 100 KB, on the main thread).
+
 ## Rejected, with reasons
 
 - Absolute pointer mode for tap-to-click (measured wrong, see above).

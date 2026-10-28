@@ -7,6 +7,7 @@ import { LoadingController, ToastController } from '@ionic/angular/lazy';
 import { AUTO_SAVER } from '../../models/constants';
 import { BackoffHelper } from '../../helpers/backoff.helper';
 import { TimeoutHelper } from '../../helpers/timeout.helper';
+import { DiagnosticsService } from '../shared/diagnostics.service';
 
 export interface AutoSaverOptions {
   tickIntervalMs?: number;
@@ -55,13 +56,16 @@ export class AutoSaverService {
   private periodicSaveInterval: ReturnType<typeof setInterval> | undefined
 
   private persistInFlight: Promise<void> | null = null
+  /** The last tick was skipped because the page is hidden; only for the diagnostics log. */
+  private skippingHiddenTicks = false
 
   constructor(
     private saveGameService: SaveGameService,
     private emulatorControlService: EmulatorControlService,
     private loadingController: LoadingController,
     private toastController: ToastController,
-    private zone: NgZone) {
+    private zone: NgZone,
+    private diagnostics: DiagnosticsService) {
   }
 
 
@@ -80,7 +84,9 @@ export class AutoSaverService {
     this.failures = 0
     this.persistOwed = false
     this.ocrFallbackAnnounced = false
+    this.skippingHiddenTicks = false
     const run = ++this.runId
+    this.diagnostics.log('save', 'auto-save start', () => ({ tickMs: tickIntervalMs, keepRunningWhileHidden: this.keepRunningWhileHidden() }))
 
     // Outside the zone: the loop touches no template state, and at several ticks a second it
     // would otherwise cost the whole app a change-detection pass each time.
@@ -98,6 +104,7 @@ export class AutoSaverService {
 
   public stop() {
     console.log('AutoSaverService stopped')
+    this.diagnostics.log('save', 'auto-save stop')
     this.state = AutoSaverState.IDLE
     this.runId++
     clearTimeout(this.tickTimer)
@@ -113,6 +120,7 @@ export class AutoSaverService {
 
   public startPeriodicSave(periodInMs: number = AUTO_SAVER.DEFAULT_PERIODIC_SAVE_INTERVAL_MS) {
     console.log('Periodic save started with interval:', periodInMs)
+    this.diagnostics.log('save', 'periodic save on', () => ({ everyMs: periodInMs }))
     this.periodicRequested = true
     this.periodicIntervalMs = periodInMs
     this.syncPeriodicSave()
@@ -120,6 +128,7 @@ export class AutoSaverService {
 
   public stopPeriodicSave() {
     console.log('Periodic save stopped')
+    this.diagnostics.log('save', 'periodic save off')
     this.periodicRequested = false
     this.syncPeriodicSave()
   }
@@ -143,7 +152,7 @@ export class AutoSaverService {
   private async runPeriodicSave() {
     console.log('Periodic save triggered')
     try {
-      await this.persist()
+      await this.persist(this.periodicRequested ? 'periodic' : 'periodic (forced, no OCR)')
     } catch (error) {
       console.error('Periodic save failed:', error)
     }
@@ -160,6 +169,7 @@ export class AutoSaverService {
     if (!unavailable) {
       if (this.periodicForced) {
         console.log('OCR is back; the forced periodic save is no longer needed')
+        this.diagnostics.log('save', 'ocr is back; forced periodic save off')
         this.periodicForced = false
         this.syncPeriodicSave()
       }
@@ -167,6 +177,7 @@ export class AutoSaverService {
     }
 
     console.warn('OCR is unavailable; forcing the periodic save')
+    this.diagnostics.log('save', 'ocr unavailable; periodic save forced', () => ({ everyMs: this.periodicIntervalMs, announced: this.ocrFallbackAnnounced }))
     this.periodicForced = true
     this.syncPeriodicSave()
     if (this.ocrFallbackAnnounced) return
@@ -215,7 +226,12 @@ export class AutoSaverService {
 
     let delayMs = this.tickIntervalMs
     try {
-      if (!this.shouldSkipTick()) {
+      const skipping = this.shouldSkipTick()
+      if (skipping !== this.skippingHiddenTicks) {
+        this.skippingHiddenTicks = skipping
+        this.diagnostics.log('save', skipping ? 'ticks paused: page hidden' : 'ticks resumed: page visible')
+      }
+      if (!skipping) {
         await this.monitor(run)
         // Only the run that is current may touch the shared state: a tick that outlived a
         // stop()/start() (the wait for the dialog lasts up to 2 min) would otherwise reset, or
@@ -231,6 +247,7 @@ export class AutoSaverService {
         this.state = AutoSaverState.ERROR
       }
       delayMs = BackoffHelper.delayRepeating(AUTO_SAVER.RETRY_BACKOFF_MS, this.failures)
+      this.diagnostics.log('save', 'tick failed', () => ({ failures: this.failures, retryInMs: delayMs, error }))
       console.error(`Error in AutoSaver monitor (failure ${this.failures}); retrying in ${delayMs / 1000} s:`, error)
     } finally {
       if (run === this.runId) {
@@ -271,6 +288,8 @@ export class AutoSaverService {
     }
 
     console.log('Game is saving...')
+    this.diagnostics.log('save', 'save dialog seen')
+    const dialogSeenAt = performance.now()
     this.persistOwed = true
     const waitUntil = Date.now() + AUTO_SAVER.MAX_WAITING_TIME_FOR_GAME_SAVE_DETECTED
     while (isGameSaving && waitUntil > Date.now()) {
@@ -292,11 +311,12 @@ export class AutoSaverService {
     if (run !== this.runId) {
       return
     }
-    await this.persistSave()
+    this.diagnostics.log('save', 'save dialog gone', () => ({ afterMs: Math.round(performance.now() - dialogSeenAt), gaveUpWaiting: isGameSaving }))
+    await this.persistSave('after the game saved')
   }
 
-  private async persistSave() {
-    await this.persistWithLoader()
+  private async persistSave(reason: string) {
+    await this.persistWithLoader(reason)
     this.persistOwed = false
   }
 
@@ -311,10 +331,11 @@ export class AutoSaverService {
     }
     if (this.failures > AUTO_SAVER.RETRY_BACKOFF_MS.length) {
       console.error('Giving up on persisting the last save after repeated failures')
+      this.diagnostics.log('save', 'owed persist dropped', () => ({ failures: this.failures }))
       this.persistOwed = false
       return
     }
-    await this.persistSave()
+    await this.persistSave('owed from a failed one')
   }
 
   /**
@@ -326,14 +347,14 @@ export class AutoSaverService {
    * page Chrome counts as hidden runs no animation frames, so there they never settle; a
    * hosting browser reaches this while hidden.
    */
-  private async persistWithLoader() {
+  private async persistWithLoader(reason: string) {
     const loading = await this.loadingController.create({
       message: 'Salvando máquina virtual...',
       backdropDismiss: false,
     })
     try {
       await this.boundedOverlay(() => loading.present())
-      await this.persist()
+      await this.persist(reason)
       console.log('Emulator data saved')
     } finally {
       await this.boundedOverlay(() => loading.dismiss())
@@ -344,6 +365,7 @@ export class AutoSaverService {
     try {
       await TimeoutHelper.withTimeout(work, AUTO_SAVER.OVERLAY_TIMEOUT_MS)
     } catch (error) {
+      this.diagnostics.log('save', 'loader did not finish animating', () => ({ error }))
       console.warn('The save loader did not finish animating; carrying on:', error)
     }
   }
@@ -357,20 +379,27 @@ export class AutoSaverService {
    * The deadline stops *waiting*, not the flush. The flush stays tracked until it settles, so
    * the next one queues behind it instead of landing on top of it.
    */
-  private persist(): Promise<void> {
-    return TimeoutHelper.withTimeout(async () => {
-      while (this.persistInFlight) {
-        await this.persistInFlight
-      }
-      const work = this.saveGameService.saveGame()
-      const tracked: Promise<void> = work.then(() => undefined, () => undefined).then(() => {
-        if (this.persistInFlight === tracked) {
-          this.persistInFlight = null
+  private async persist(reason: string): Promise<void> {
+    const began = performance.now()
+    try {
+      await TimeoutHelper.withTimeout(async () => {
+        while (this.persistInFlight) {
+          await this.persistInFlight
         }
-      })
-      this.persistInFlight = tracked
-      await work
-    }, AUTO_SAVER.PERSIST_TIMEOUT_MS)
+        const work = this.saveGameService.saveGame()
+        const tracked: Promise<void> = work.then(() => undefined, () => undefined).then(() => {
+          if (this.persistInFlight === tracked) {
+            this.persistInFlight = null
+          }
+        })
+        this.persistInFlight = tracked
+        await work
+      }, AUTO_SAVER.PERSIST_TIMEOUT_MS)
+      this.diagnostics.log('save', 'persist ok', () => ({ reason, ms: Math.round(performance.now() - began) }))
+    } catch (error) {
+      this.diagnostics.log('save', 'persist failed', () => ({ reason, ms: Math.round(performance.now() - began), error }))
+      throw error
+    }
   }
 }
 

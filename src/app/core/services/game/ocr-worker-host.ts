@@ -17,6 +17,12 @@ export interface OcrWorkerHostOptions {
   timeoutMs: number;
   /** Wait before the 2nd, 3rd... attempt; once it has run out the host gives up. */
   retryBackoffMs: readonly number[];
+  /**
+   * Told about each step of the worker's life, for the diagnostics log. `data` may be a function
+   * that builds the value, to be called only if someone is listening. Optional, so the host stays
+   * free of Angular and of the log itself.
+   */
+  log?: (message: string, data?: unknown) => void;
 }
 
 /**
@@ -86,6 +92,7 @@ export class OcrWorkerHost {
     this.generation++;
     this.clearRetry();
     const worker = this.worker;
+    this.options.log?.('stop', () => ({ hadWorker: worker !== null, starting: this.attempting }));
     this.worker = null;
     this.attempting = false;
     this.failures = 0;
@@ -96,26 +103,31 @@ export class OcrWorkerHost {
   private attempt(): void {
     const generation = this.generation;
     this.attempting = true;
+    const began = performance.now();
+    this.options.log?.('start', () => ({ attempt: this.failures + 1, deadlineMs: this.options.timeoutMs }));
     // Through a promise so that a factory that throws on the spot fails the attempt like one
     // that rejects, instead of throwing out of warmUp() into the caller.
     const creation = Promise.resolve().then(() => this.factory());
 
     TimeoutHelper.withTimeout(() => creation, this.options.timeoutMs).then(
-      worker => this.adopt(worker, generation),
+      worker => this.adopt(worker, generation, began, false),
       error => {
         this.fail(error, generation);
         // A start that merely overran may still land; adopt() decides what becomes of it.
-        creation.then(worker => this.adopt(worker, generation), () => undefined);
+        creation.then(worker => this.adopt(worker, generation, began, true), () => undefined);
       }
     );
   }
 
-  private adopt(worker: OcrWorker, generation: number): void {
+  /** `began` is when the start that produced `worker` was begun, `late` whether it overran its deadline. */
+  private adopt(worker: OcrWorker, generation: number, began: number, late: boolean): void {
     if (generation !== this.generation || this.worker) {
       // Stopped meanwhile, or an earlier start that overran its deadline already got there.
+      this.options.log?.('late worker discarded', () => ({ stopped: generation !== this.generation }));
       this.discard(worker);
       return;
     }
+    this.options.log?.('ready', () => ({ afterMs: Math.round(performance.now() - began), pastDeadline: late }));
     this.worker = worker;
     this.attempting = false;
     this.failures = 0;
@@ -133,6 +145,7 @@ export class OcrWorkerHost {
     this.unavailableSubject.next(true);
 
     const delay = BackoffHelper.delayAfter(this.options.retryBackoffMs, this.failures);
+    this.options.log?.('start failed', () => ({ attempt: this.failures, error, retryInMs: delay }));
     if (delay === null) {
       console.warn('OCR worker could not be started; giving up until auto-save is switched off and on again', error);
       return;

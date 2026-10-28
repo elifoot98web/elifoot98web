@@ -8,11 +8,13 @@ import { DISPLAY_MODE, EMULATOR_CONTROL_CONFIG, GAME_BOOT, GAME_INPUT_FN_BTNS, G
 import { UserGuideComponent } from './components/user-guide/user-guide.component';
 import { AboutComponent } from './components/about/about.component';
 import { OmaticModalComponent } from './components/omatic-modal/omatic-modal.component';
+import { DiagnosticsModalComponent } from './components/diagnostics-modal/diagnostics-modal.component';
+import { DiagnosticsReportHelper } from 'src/app/core/helpers/diagnostics-report.helper';
 import { filter, map, Observable, Subscription, take } from 'rxjs';
 import { EmulatorKeyCode, EmulatorKeyCodeHelper } from '../../core/models/game';
 import { CursorClickMessage, CursorPositionMessage, MultiplayerJoinErrorKind, PlayerInfo } from '../../core/models/multiplayer';
 import { AutoSaverService, EmulatorControlService, PatchService, SaveGameService } from '../../core/services/game';
-import { LayoutHelperService, LocalStorageService } from '../../core/services/shared';
+import { DiagnosticsService, LayoutHelperService, LocalStorageService } from '../../core/services/shared';
 import { MultiplayerAudioService, MultiplayerChatService, MultiplayerCursorService, MultiplayerPlayerInfoService, MultiplayerRelayHealthService, MultiplayerService, MultiplayerUiService } from '../../core/services/multiplayer';
 import { CursorRendererHelper } from 'src/app/core/helpers/cursor-renderer.helper';
 import { OverlaySyncHelper } from 'src/app/core/helpers/overlay-sync.helper';
@@ -43,7 +45,6 @@ export class GamePage implements OnInit, OnDestroy {
   isPopoverOpen = false;
   isVirtualKeyboardShowing = false;
   isHidden = true;
-  debugMode = false
   dosCI: any = null;
   versionConfig = environment.versionConfig;
 
@@ -87,6 +88,8 @@ export class GamePage implements OnInit, OnDestroy {
    */
   private bootAlert?: Awaited<ReturnType<AlertController['create']>>;
   private destroyed = false;
+  /** The js-dos loading text last written to the diagnostics log, at ten-percent resolution. */
+  private lastLoaderStep = '';
 
   constructor(
     private loadingController: LoadingController,
@@ -107,12 +110,29 @@ export class GamePage implements OnInit, OnDestroy {
     private playerInfoService: MultiplayerPlayerInfoService,
     private multiplayerAudioService: MultiplayerAudioService,
     private relayHealthService: MultiplayerRelayHealthService,
+    private diagnostics: DiagnosticsService,
     chatService: MultiplayerChatService
   ) {
     this.unreadCount$ = chatService.unreadCount$;
     this.participantCount$ = this.playerInfoService.playerList$.pipe(map(players => players.length));
     this.isMobile$ = this.layoutHelperService.isMobile$;
     this.isLandscape$ = this.layoutHelperService.isLandscape$;
+  }
+
+  /**
+   * The one "debug" switch: the diagnostics log. This used to be a field that was always
+   * `false` and that nothing could set; it gates the menu's "Baixar Disco Virtual" item, which
+   * is a developer's tool, and turning the diagnostics on is the same kind of decision.
+   */
+  get debugMode(): boolean {
+    return this.diagnostics.enabled
+  }
+
+  /** The subtitle of the "Diagnóstico" menu entry. */
+  get diagnosticsSummary(): string {
+    if (!this.diagnostics.enabled) return 'Desligado'
+    const events = DiagnosticsReportHelper.events(this.diagnostics.entryCount)
+    return this.diagnostics.sessionOnly ? `Ligado nesta visita · ${events}` : `Ligado · ${events}`
   }
 
   async ngOnInit() {
@@ -137,6 +157,7 @@ export class GamePage implements OnInit, OnDestroy {
     });
     this.bootLoading = loading;
     await loading.present();
+    this.diagnostics.log('boot', 'boot start')
 
     let detected: boolean;
     try {
@@ -206,6 +227,7 @@ export class GamePage implements OnInit, OnDestroy {
     if (this.destroyed) return;
 
     const kind = BootFailureHelper.kindOf(error)
+    this.diagnostics.log('boot', 'failed', () => ({ kind, error }))
     if (kind === 'timeout') {
       await this.offerToKeepWaiting(error)
       return
@@ -235,6 +257,7 @@ export class GamePage implements OnInit, OnDestroy {
     this.bootAlert = alert;
     await alert.present();
     const { role } = await alert.onDidDismiss();
+    this.diagnostics.log('boot', 'timeout dialog answered', () => ({ role: role ?? 'reload' }))
     if (this.bootAlert === alert) this.bootAlert = undefined;
     // Not once the page is gone: bootGame() would put a loader nothing dismisses over whatever
     // page is showing now, for as long as the boot stays pending.
@@ -326,10 +349,17 @@ export class GamePage implements OnInit, OnDestroy {
    * end of one wait (see bootGame).
    */
   async loadGame(onStatus?: (message: string) => void): Promise<{ detected: boolean }> {
+    const began = performance.now()
     this.dosCI = await elifootMain(environment.prefixPath, environment.gameBundleURL, loaderText => {
+      const step = BootProgressHelper.logStep(loaderText)
+      if (step !== this.lastLoaderStep) {
+        this.lastLoaderStep = step
+        this.diagnostics.log('boot', 'js-dos says', () => ({ text: loaderText }))
+      }
       const message = BootProgressHelper.describe(loaderText)
       if (message) onStatus?.(message)
     })
+    this.diagnostics.log('boot', 'emulator ready', () => ({ ms: Math.round(performance.now() - began) }))
 
     return { detected: await this.waitForGameScreen(onStatus) }
   }
@@ -342,6 +372,7 @@ export class GamePage implements OnInit, OnDestroy {
    */
   private async waitForGameScreen(onStatus?: (message: string) => void): Promise<boolean> {
     const deadline = Date.now() + GAME_BOOT.DETECTION_TIMEOUT_MS
+    const began = performance.now()
     const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
     let stage: BootStage = 'dos'
@@ -357,12 +388,15 @@ export class GamePage implements OnInit, OnDestroy {
         if (seen === 'game') {
           console.log("Green check passed")
           console.log("jogo carregado")
+          this.diagnostics.log('boot', 'game screen detected', () => ({ afterMs: Math.round(performance.now() - began) }))
+          this.diagnostics.log('frame', 'guest framebuffer', () => ({ size: `${frame.width}x${frame.height}`, mode: DisplayModeHelper.fromFrameSize(frame.width, frame.height) }))
           return true
         }
 
         const next = BootStageHelper.advance(stage, seen)
         if (next !== stage) {
           stage = next
+          this.diagnostics.log('boot', 'stage', () => ({ stage, size: `${frame.width}x${frame.height}`, afterMs: Math.round(performance.now() - began) }))
           onStatus?.(BootStageHelper.message(stage))
         }
       } catch (e) {
@@ -372,6 +406,7 @@ export class GamePage implements OnInit, OnDestroy {
       await pause(GAME_BOOT.DETECTION_POLL_MS)
     }
 
+    this.diagnostics.log('boot', 'game screen not detected', () => ({ stage, destroyed: this.destroyed, afterMs: Math.round(performance.now() - began) }))
     return false
   }
 
@@ -466,6 +501,20 @@ export class GamePage implements OnInit, OnDestroy {
     await modal.present()
   }
 
+  /** The diagnostics window: switch, last lines, and the ways to get the report off the device. */
+  async showDiagnosticsModal() {
+    this.hidePopover()
+    const modal = await this.modalController.create({
+      component: DiagnosticsModalComponent,
+      // The command interface is threaded through, as to every service: the report reads the
+      // guest's framebuffer size off it.
+      componentProps: { dosCI: this.dosCI },
+      cssClass: 'win9x-modal diagnostics-modal',
+      backdropDismiss: false
+    })
+    await modal.present()
+  }
+
   async showOmaticModal() {
     this.hidePopover()
     const modal = await this.modalController.create({
@@ -552,6 +601,9 @@ export class GamePage implements OnInit, OnDestroy {
 
           // clear all data
           await this.saveGameService.clearAllData(this.dosCI)
+          // Before the storage is emptied, not after: with the log still on, the reload below
+          // fires pagehide, which writes the log's tail back into the storage that was just wiped.
+          await this.diagnostics.disable({ persist: false })
           await this.storageService.clearAllData()
           await loading.dismiss()
           window.location.reload()

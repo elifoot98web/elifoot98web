@@ -552,6 +552,13 @@ canvas {
         --width: 470px;
         --max-height: 90vh;
     }
+
+    // The diagnostics window is mostly a log: wider than the dialogs so a line wraps less, and
+    // tall enough for the pane. After .win9x-modal, whose width it overrides at equal weight.
+    .diagnostics-modal {
+        --width: 640px;
+        --height: min(88vh, 680px);
+    }
 }
 
 // A touch tablet is a 768px+ viewport too, so it gets the 480px desktop box, with the 44px

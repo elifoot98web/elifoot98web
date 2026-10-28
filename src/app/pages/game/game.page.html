@@ -185,6 +185,17 @@
               </ion-content>
             </ng-template>
           </ion-popover>
+          <!--
+            The diagnostics log for a real-device pass: off until switched on in the window this
+            opens. The subtitle says which, so the menu answers it without opening anything.
+          -->
+          <ion-item button detail="false" (click)="showDiagnosticsModal()">
+            <ion-label>
+              Diagnóstico
+              <p>{{ diagnosticsSummary }}</p>
+            </ion-label>
+            <ion-icon slot="end" name="bug-outline"></ion-icon>
+          </ion-item>
           <ion-item button detail="false" (click)="showFAQAndManualModal()">
             <ion-label>FAQ e Manual</ion-label>
             <ion-icon slot="end" name="help-circle-outline"></ion-icon>

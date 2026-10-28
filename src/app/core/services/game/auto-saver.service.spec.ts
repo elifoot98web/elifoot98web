@@ -4,6 +4,7 @@ import { BehaviorSubject } from 'rxjs';
 import { AUTO_SAVER } from '../../models/constants';
 import { DosCI } from '../../typings/jsdos';
 import { AutoSaverOptions, AutoSaverService } from './auto-saver.service';
+import { silentDiagnostics } from '../shared/diagnostics.testing';
 
 const TICK = AUTO_SAVER.DEFAULT_TICK_INTERVAL_MS;
 const POLL = AUTO_SAVER.DEFAULT_GAME_SAVING_DETECTED_TIMEOUT_MS;
@@ -57,7 +58,7 @@ interface Fixture {
   events: string[];
 }
 
-function fixture(): Fixture {
+function fixture(diagnostics: unknown = silentDiagnostics()): Fixture {
   const events: string[] = [];
   const looks: Fixture['looks'] = [false];
   let lookIndex = 0;
@@ -91,7 +92,8 @@ function fixture(): Fixture {
     { isGameSaving, startOcr, stopOcr, ocrUnavailable$: ocrUnavailable.asObservable() } as never,
     { create: createLoader } as never,
     { create: createToast } as never,
-    new NgZone({ enableLongStackTrace: false })
+    new NgZone({ enableLongStackTrace: false }),
+    diagnostics as never
   );
 
   return {
@@ -624,6 +626,76 @@ describe('AutoSaverService', () => {
       flushMicrotasks();
 
       expect(f.createToast).toHaveBeenCalledTimes(2);
+      f.service.stop();
+    }));
+  });
+  describe('the diagnostics log', () => {
+    /** A log that is on; thunks are read at the call, as the real one does. */
+    function recorder() {
+      const calls: Array<[string, string, Record<string, unknown> | undefined]> = [];
+      const diagnostics = {
+        enabled: true,
+        log: (cat: string, msg: string, data?: unknown) =>
+          calls.push([cat, msg, (typeof data === 'function' ? (data as () => unknown)() : data) as Record<string, unknown> | undefined]),
+      };
+      return { diagnostics, calls, messages: () => calls.map(([, msg]) => msg) };
+    }
+
+    it('notes the dialog, the wait for it to go, and the persist that follows, under "save"', strict(() => {
+      const { diagnostics, calls, messages } = recorder();
+      const f = fixture(diagnostics);
+      f.looks.length = 0;
+      f.looks.push(true, true, false);
+
+      start(f);
+      tick(2 * POLL);
+
+      expect(messages()).toEqual(['auto-save start', 'save dialog seen', 'save dialog gone', 'persist ok']);
+      expect(calls.every(([cat]) => cat === 'save')).toBeTrue();
+      expect(calls.find(([, msg]) => msg === 'persist ok')?.[2]).toEqual(jasmine.objectContaining({ reason: 'after the game saved' }));
+      f.service.stop();
+    }));
+
+    it('notes a persist that failed, with why it was asked for', strict(() => {
+      const { diagnostics, calls } = recorder();
+      const f = fixture(diagnostics);
+      f.looks.length = 0;
+      f.looks.push(true, false);
+      f.saveGame.and.callFake(outcomes('fail', 'ok'));
+
+      start(f);
+      tick(POLL);
+      tick(BACKOFF_1);
+
+      const persists = calls.filter(([, msg]) => msg.startsWith('persist'));
+      expect(persists.map(([, msg]) => msg)).toEqual(['persist failed', 'persist ok']);
+      expect(persists[1][2]?.['reason']).toBe('owed from a failed one');
+      f.service.stop();
+    }));
+
+    it('notes a tick that threw, with the wait before the next', strict(() => {
+      const { diagnostics, calls } = recorder();
+      const f = fixture(diagnostics);
+      f.looks.length = 0;
+      f.looks.push('throw', false);
+
+      start(f);
+
+      expect(calls.find(([, msg]) => msg === 'tick failed')?.[2]).toEqual(jasmine.objectContaining({ failures: 1, retryInMs: BACKOFF_1 }));
+      f.service.stop();
+    }));
+
+    it('notes a hidden page pausing the ticks once, and again when they resume', strict(() => {
+      const { diagnostics, messages } = recorder();
+      const f = fixture(diagnostics);
+      const hidden = spyOnProperty(document, 'hidden', 'get').and.returnValue(true);
+
+      start(f);
+      tick(5 * TICK);
+      hidden.and.returnValue(false);
+      tick(TICK);
+
+      expect(messages().filter(msg => msg.startsWith('ticks '))).toEqual(['ticks paused: page hidden', 'ticks resumed: page visible']);
       f.service.stop();
     }));
   });

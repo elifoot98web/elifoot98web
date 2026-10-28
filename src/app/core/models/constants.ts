@@ -26,6 +26,43 @@ export const STORAGE_KEY = {
   // Room CODES only, never passwords. A share link deliberately omits the password
   // (room-code.helper.ts), and persisting one here would undo that.
   RECENT_ROOMS: 'recentRooms',
+  // Diagnostics (DiagnosticsService): whether the log is on, and the tail of the last page's log.
+  // Both live in Ionic Storage like every other setting, so "Apagar todos os dados" clears them
+  // with it. The tail is what survives a tab the OS evicted; see DiagnosticsService.
+  DIAGNOSTICS: 'diagnostics',
+  DIAGNOSTICS_LOG: 'diagnosticsLog',
+}
+
+// The opt-in diagnostics log (DiagnosticsService). Off by default; every limit below exists to keep
+// it from becoming the thing that slows down or fills the device it was turned on to examine.
+export const DIAGNOSTICS = {
+  // Entries kept in memory. The oldest are overwritten, never the newest: what matters is what
+  // happened just before the report was taken.
+  CAPACITY: 5000,
+  // Ceilings on what one entry may hold, in characters. An entry is a note about an event, not a
+  // dump of it, and 5000 of them have to stay a few MB at most.
+  MESSAGE_MAX_CHARS: 120,
+  DATA_MAX_CHARS: 400,
+  // The URL parameter that switches the log on (or, with 0, off) for the tab's session.
+  URL_PARAM: 'diag',
+  // Where the tab's session remembers what the address asked: the address itself does not last
+  // (the router rewrites it on the first navigation).
+  SESSION_KEY: 'diagnosticsSession',
+  // How many lines the panel renders at once. The export always carries the whole log.
+  PANEL_LINES: 300,
+  // The tail written to storage so that a page the OS evicted can still be explained by the one
+  // that replaces it. Bounded in entries and in characters, whichever bites first.
+  PERSIST_ENTRIES: 1000,
+  PERSIST_MAX_CHARS: 200 * 1000,
+  // Written at this pace while the log is on and has something new. A page that is killed in the
+  // foreground (memory pressure) gets no pagehide, so waiting for one would lose exactly the
+  // case this exists for; hiding and pagehide also write, as a best effort.
+  PERSIST_INTERVAL_MS: 5000,
+  // A burst of resize and orientation events becomes one entry after this quiet time.
+  VIEWPORT_COALESCE_MS: 250,
+  // Each asynchronous probe of the report header (storage estimate, service worker) gets this
+  // long; a probe that hangs is reported as unavailable instead of holding the export back.
+  HEADER_PROBE_TIMEOUT_MS: 1500,
 }
 
 export const GAME_INPUT_FN_BTNS = [

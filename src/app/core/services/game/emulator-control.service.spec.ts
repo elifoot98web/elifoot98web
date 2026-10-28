@@ -2,6 +2,7 @@ import { NgZone } from '@angular/core';
 import { DosCI } from '../../typings/jsdos';
 import { EmulatorControlService } from './emulator-control.service';
 import { OcrWorker, OcrWorkerHost } from './ocr-worker-host';
+import { silentDiagnostics } from '../shared/diagnostics.testing';
 
 /**
  * What `isGameSaving` answers is a contract with the auto-saver, which persists the moment the
@@ -33,7 +34,7 @@ describe('EmulatorControlService.isGameSaving', () => {
     spyOn(console, 'warn');
     spyOn(console, 'error');
 
-    service = new EmulatorControlService({} as never, new NgZone({ enableLongStackTrace: false }));
+    service = new EmulatorControlService({} as never, new NgZone({ enableLongStackTrace: false }), silentDiagnostics());
     recognize = jasmine.createSpy('recognize');
     const worker: OcrWorker = { recognize: recognize as never, terminate: () => Promise.resolve() };
     const host = (service as unknown as { ocr: OcrWorkerHost }).ocr;

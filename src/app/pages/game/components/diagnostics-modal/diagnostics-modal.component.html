@@ -1,0 +1,60 @@
+<div class="win9x-element-border win9x-outer-window">
+  <div class="win9x-modal-container">
+    <ion-header class="ion-no-border">
+      <ion-toolbar class="win9x-titlebar">
+        <ion-title><ion-icon name="bug-outline" aria-hidden="true"></ion-icon> Diagnóstico</ion-title>
+        <ion-buttons slot="end" class="buttons-padding-end">
+          <ion-button fill="clear" class="win9x-button win9x-titlebar-close" (click)="close()" aria-label="Fechar">
+            <ion-icon name="close" slot="icon-only"></ion-icon>
+          </ion-button>
+        </ion-buttons>
+      </ion-toolbar>
+    </ion-header>
+
+    <ion-content class="win9x-modal-content ion-padding">
+      <div class="diag-body">
+        <!--
+          Said before anything is switched on, and again in the report itself. The log stays on
+          the device; the only way out is one of the three buttons below.
+        -->
+        <p class="diag-note">
+          O diagnóstico anota o que acontece neste aparelho (toques, teclas, carregamento, salvamento e erros)
+          para ajudar a achar problemas. O registro fica só aqui e só sai se você copiar, compartilhar ou baixar.
+          O texto que você digitar pode aparecer nele: revise antes de enviar.
+        </p>
+
+        <label class="diag-switch">
+          <input type="checkbox" [checked]="enabled" (change)="onToggle($any($event.target).checked)">
+          <span>Registrar eventos neste aparelho</span>
+        </label>
+        <p class="diag-state" role="status">{{ stateText }}</p>
+
+        <div class="diag-filter">
+          <label for="diag-category">Categoria</label>
+          <select id="diag-category" #category class="win9x-select win9x-element-bevel diag-select"
+            (change)="onFilter(category.value)">
+            <option *ngFor="let f of filters" [value]="f.value" [selected]="f.value === filter">{{ f.label }}</option>
+          </select>
+        </div>
+        <p class="diag-count">{{ countText }}</p>
+
+        <pre #logPane class="diag-log win9x-element-bevel" tabindex="0"
+          aria-label="Últimas linhas do registro">{{ logText }}</pre>
+
+        <p class="diag-status" [class.diag-status--error]="statusIsError" role="status" aria-live="polite">{{ status }}</p>
+
+        <p class="diag-hint">Copiar, Compartilhar e Baixar levam o registro inteiro, não só a categoria escolhida.</p>
+        <div class="diag-actions">
+          <button type="button" class="win9x-button win9x-button--touch" (click)="update()">Atualizar</button>
+          <button type="button" class="win9x-button win9x-button--touch" [disabled]="!header" (click)="copy()">Copiar</button>
+          <button *ngIf="canShare" type="button" class="win9x-button win9x-button--touch" [disabled]="!header"
+            (click)="share()">Compartilhar</button>
+          <button type="button" class="win9x-button win9x-button--touch" [disabled]="!header" (click)="download()">Baixar</button>
+          <button type="button" class="win9x-button win9x-button--touch diag-danger" (click)="clear()">Limpar</button>
+          <!-- Also in the titlebar, but that is the far corner of a large phone held in one hand. -->
+          <button type="button" class="win9x-button win9x-button--touch" (click)="close()">Fechar</button>
+        </div>
+      </div>
+    </ion-content>
+  </div>
+</div>

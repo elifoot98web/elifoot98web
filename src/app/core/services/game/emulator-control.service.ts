@@ -8,6 +8,7 @@ import { OcrRegionHelper, PixelRegion } from '../../helpers/ocr-region.helper';
 import { RegionVerdictCache } from '../../helpers/region-verdict-cache.helper';
 import { GuestKeyQueueService, KeySendResult, TextSendResult } from './guest-key-queue.service';
 import { OcrWorkerHost } from './ocr-worker-host';
+import { DiagnosticsService } from '../shared/diagnostics.service';
 
 @Injectable({
   providedIn: 'root'
@@ -26,14 +27,19 @@ export class EmulatorControlService {
   }), {
     timeoutMs: EMULATOR_CONTROL_CONFIG.OCR_WORKER_TIMEOUT_MS,
     retryBackoffMs: EMULATOR_CONTROL_CONFIG.OCR_RETRY_BACKOFF_MS,
+    log: (message, data) => this.diagnostics.log('ocr', message, data),
   });
   private readonly savingVerdicts = new RegionVerdictCache();
   private regionCanvas: HTMLCanvasElement | null = null;
+  /** The last answer written to the diagnostics log, so a steady answer is one line and not three a second. */
+  private lastLoggedVerdict: string | null = null;
+  /** Why the last look came back `null`; it names the verdict in the log. */
+  private unreadableBecause = '';
 
   /** True once OCR has failed to start and until it works. See {@link OcrWorkerHost.unavailable$}. */
   readonly ocrUnavailable$: Observable<boolean> = this.ocr.unavailable$;
 
-  constructor(private keyQueue: GuestKeyQueueService, private zone: NgZone) { }
+  constructor(private keyQueue: GuestKeyQueueService, private zone: NgZone, private diagnostics: DiagnosticsService) { }
 
   /**
    * Press one key, or several together (modifiers first), through the guest key queue — the
@@ -67,6 +73,7 @@ export class EmulatorControlService {
   public stopOcr(): void {
     this.ocr.stop();
     this.savingVerdicts.forget();
+    this.lastLoggedVerdict = null;
   }
 
   /**
@@ -89,13 +96,17 @@ export class EmulatorControlService {
     const frame = await dosCI.screenshot();
     if (!frame) {
       console.warn('No image data found');
+      this.noteVerdict(null, 'no frame');
       return null;
     }
 
     const region = OcrRegionHelper.savingDialogRegion(frame.width, frame.height);
     const hash = OcrRegionHelper.hash(frame, region);
     const remembered = this.savingVerdicts.recall(hash);
-    if (remembered !== null) return remembered;
+    if (remembered !== null) {
+      this.noteVerdict(remembered, 'cache');
+      return remembered;
+    }
 
     const found = await this.findTextInRegion(
       frame,
@@ -103,10 +114,28 @@ export class EmulatorControlService {
       'a gravar o jogo...',
       EMULATOR_CONTROL_CONFIG.DEFAULT_TOLERANCE_GAME_SAVING_DETECTION
     );
-    if (found === null) return null;
+    if (found === null) {
+      this.noteVerdict(null, this.unreadableBecause);
+      return null;
+    }
 
     this.savingVerdicts.remember(hash, found);
+    this.noteVerdict(found, 'ocr');
     return found;
+  }
+
+  /**
+   * Write the verdict to the diagnostics log when it CHANGES. The auto-saver asks about three
+   * times a second and the answer is the same almost always, so logging every look would bury
+   * the few that matter (the dialog appearing and going away) under thousands of repeats. While
+   * the log is off nothing is tracked, so the first look after it is switched on is written.
+   */
+  private noteVerdict(verdict: boolean | null, via: string): void {
+    if (!this.diagnostics.enabled) return;
+    const key = verdict === null ? `null: ${via}` : String(verdict);
+    if (key === this.lastLoggedVerdict) return;
+    this.lastLoggedVerdict = key;
+    this.diagnostics.log('ocr', 'saving verdict', () => ({ verdict, via }));
   }
 
   /**
@@ -119,6 +148,7 @@ export class EmulatorControlService {
     // per tick and not a PNG. warmUp() is a no-op when a start is already in flight.
     const worker = this.ocr.ready;
     if (!worker) {
+      this.unreadableBecause = 'no worker';
       this.startOcr();
       return null;
     }
@@ -127,20 +157,25 @@ export class EmulatorControlService {
       const image = this.regionToImage(frame, region);
       if (!image) {
         console.warn('No base64 image data found');
+        this.unreadableBecause = 'no image';
         return null;
       }
 
+      const began = performance.now();
       const result = await worker.recognize(image);
+      const ms = Math.round(performance.now() - began);
       const foundText = this.stringWithoutAccents(result.data.text.toLowerCase().trim());
       const searchText = this.stringWithoutAccents(searchString.toLowerCase());
 
       // if text is too short, it is not there
       if (foundText.length == 0 || foundText.length < searchText.length / 2) {
+        this.diagnostics.log('ocr', 'recognize', () => ({ ms, read: foundText, verdict: false }));
         return false;
       }
 
       const distance = this.minimumDistanceWithSlidingWindow(foundText, searchText);
       const includes = foundText.includes(searchText);
+      this.diagnostics.log('ocr', 'recognize', () => ({ ms, read: foundText, distance, verdict: includes || distance <= editDistanceTolerance }));
 
       if (includes || distance <= editDistanceTolerance) {
         console.log('Text found on game screen:', foundText, searchString);
@@ -149,6 +184,7 @@ export class EmulatorControlService {
       return false;
     } catch (error) {
       console.error('Error finding text on game screen:', error);
+      this.unreadableBecause = `read failed: ${error instanceof Error ? error.message : String(error)}`;
       return null;
     }
   }

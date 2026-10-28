@@ -1,4 +1,5 @@
 import { SaveGameService } from './save-game.service';
+import { silentDiagnostics } from '../shared/diagnostics.testing';
 
 /** Every database this spec makes starts with this, and every one is removed afterwards. */
 const SPEC_DB = (suffix: string) => `js-dos-cache (spec ${suffix})`;
@@ -43,7 +44,7 @@ describe('SaveGameService stored changes', () => {
   let service: SaveGameService;
 
   beforeEach(async () => {
-    service = new SaveGameService();
+    service = new SaveGameService(silentDiagnostics());
     await deleteAllJsDosDatabases();
   });
 

@@ -29,7 +29,7 @@ python3 scripts/resolution/build_bundle.py verify src/assets/elifoot/elifoot98.j
 Specs are karma + jasmine. The builder globs `**/*.spec.ts` (its `include` option, which is also
 what `--include` overrides); [src/test.ts](src/test.ts) only initialises the TestBed and
 `tsconfig.spec.json` type-checks `src/**/*.spec.ts`, so a spec needs no registration but must live
-under `src/` to be type-checked. Nothing in a spec reaches the bundle. There are **seventeen spec files so
+under `src/` to be type-checked. Nothing in a spec reaches the bundle. There are **twenty-six spec files so
 far**. [room-code.helper.spec.ts](src/app/core/helpers/room-code.helper.spec.ts) is there as
 much to prove the harness as to cover `RoomCodeHelper`: `ng test` with **zero** specs
 prints `Executed 0 of 0 SUCCESS` and still exits 1, so a `test:ci` could never pass before the
@@ -51,6 +51,14 @@ unhandled. [patch.service.spec.ts](src/app/core/services/game/patch.service.spec
 the Portuguese wording and fails on the English that JSZip and HttpClient reject with; it also
 pins `setDisplayMode` against a stand-in `dosInstance`, reading back the layer the fake CI would
 write.
+[diagnostics.service.spec.ts](src/app/core/services/shared/diagnostics.service.spec.ts) is the model for
+"code that must cost nothing while it is off": the thunk spy that is never called, no listeners on the
+real `window` (spied before the service exists), nothing on the fake clock, and a `finish()` that switches
+the service off so a failing case cannot leave listeners on the karma page. Its doubles
+([diagnostics.testing.ts](src/app/core/services/shared/diagnostics.testing.ts): `silentDiagnostics()`,
+`recordingDiagnostics()`, `memoryStorage()`) are what every other spec passes where a service now takes
+a `DiagnosticsService`; for "did it log this" the specs of the key queue and the auto-saver hand in a
+two-line recorder that reads each data thunk at the call, as the real one does.
 [win9x-palette.spec.ts](src/theme/win9x-palette.spec.ts) is the model for asserting CSS: karma loads
 `src/global.scss`, so it probes the real `.win9x-roster-*` rules and `:root` tokens for contrast
 instead of keeping a second copy of the hex values. [save-game.service.spec.ts](src/app/core/services/game/save-game.service.spec.ts)
@@ -337,7 +345,8 @@ js-dos keeps the *changed* portion of the virtual disk as a zip inside IndexedDB
 `js-dos-cache*`. `dosCI.persist()` dumps that zip; `saveGameFileSystem()` writes it back. Everything
 the app reads or writes lives under the mounted `d/` tree: game in `d/eli98/`, save games in
 `d/eli98/jogos/*.e98` (`BASE_SAVEGAME_DIR`). Clearing data means deleting those IndexedDB databases
-([save-game.service.ts](src/app/core/services/game/save-game.service.ts)) plus the Ionic Storage keys.
+([save-game.service.ts](src/app/core/services/game/save-game.service.ts)) plus the Ionic Storage keys,
+and the one `localStorage` key the diagnostics log keeps its tail in (see *Diagnostics log*).
 
 ### Patching (the central trick)
 
@@ -510,6 +519,83 @@ Load-bearing invariants of the auto-save — each of these was a bug, or a measu
   unavailable and the fallback above is all that saves the game. The fixed 20 s deadline can be shorter
   than a slow mobile link needs for 5.4 MB; the retries and late adoption mostly absorb that.
 
+### Diagnostics log (opt-in, for real-device passes)
+
+[diagnostics.service.ts](src/app/core/services/shared/diagnostics.service.ts) is a bounded record of
+what the app did on THIS device, built so a phone can hand evidence back: pointer, touch, key, ime,
+frame, boot, ocr, save, update, error, and `page` (lifecycle and viewport; the one category added to
+the plan's list, because it is the evidence an iOS tab eviction leaves). **Off by default.**
+
+**How to turn it on:** the options menu's "Diagnóstico" entry opens the window
+([diagnostics-modal](src/app/pages/game/components/diagnostics-modal/diagnostics-modal.component.ts));
+its switch persists the choice in `STORAGE_KEY.DIAGNOSTICS`. Or put `?diag=1` on the address (before
+or after the `#`), which turns it on for that **tab's session** (`?diag=0` forces it off for one).
+`GamePage.debugMode`, the old hard-coded `false` that gated "Baixar Disco Virtual", now reads
+`DiagnosticsService.enabled`: one switch, no second mechanism.
+
+**Log through `DiagnosticsService.log(cat, msg, data?)`; never `console.log` in a hot path.** A console
+line costs a string and a write whether anyone looks, and cannot be exported from a phone. `data` is a
+value or a thunk, and a thunk is not called while the log is off: `log()` is one boolean check and a
+return, so a call may sit on a hot path (the pointer/touch/type-bar/camera phases are expected to log
+there). When on, `data` is turned into bounded text at the call (`DiagnosticsSerializer`: depth, key and
+length limits, cycles marked, `NaN`/`Infinity` named, never throws), and the ring buffer holds 5000
+entries and overwrites the OLDEST. Call sites log counts, kinds and timings, not what a player typed; the
+panel still warns that typed text may appear, because later phases will log input.
+
+Load-bearing, each measured or a decision that looks wrong without its reason:
+
+- **Off means no listeners and no timers.** `DiagnosticsCapture.install` (window `error`,
+  `unhandledrejection`, `visibilitychange`, `pagehide`/`pageshow`, `freeze`/`resume` where the document has
+  them, and `resize`/`orientationchange`/`visualViewport` resize coalesced into one `viewport` entry) and
+  the persistence interval exist only between `enable()` and `disable()`. Checked in a browser through
+  zone.js's own task lists, because DevTools counts one native listener per type under zone.js and so
+  cannot see an added one.
+- **The window listeners alone miss almost every app error.** Angular catches template and zone errors,
+  and zone.js's `Promise` never raises the native `unhandledrejection` (of four rejections only the
+  native `async` one reached a listener).
+  [`DiagnosticsErrorHandler`](src/app/core/services/shared/diagnostics-error-handler.ts) is provided in
+  `AppModule`, logs `error` / `ErrorHandler`, and then calls the default handler.
+- **`?diag=1` does not survive in the address.** The document has `<base href="/">`, so the router's
+  first `history.replaceState('#/game')` resolves against the base and drops the query. The request is
+  therefore kept in `sessionStorage` (`DIAGNOSTICS.SESSION_KEY`), which a reload and a restored tab keep;
+  a person's own choice in the window clears it. `?diag=` after the `#` is the form that stays in the URL.
+- **The tail of the log outlives the page, in two copies.** An evicted tab leaves no memory behind and the
+  events that explain it are in the page that dies, so while on, the last 1000 entries (at most 200K
+  characters) go to Ionic Storage every 5 s when there is something new, and ALSO to `localStorage` when
+  the page is hidden, frozen or going away: with only IndexedDB a reload lost everything after the last
+  interval write, because a transaction started in `pagehide` does not finish. The next page that has the
+  log on reads both, keeps the newer, and shows it as "página anterior". That includes a `?diag=1`
+  visit: it stores no *choice*, but it writes a tail like any other, and the tail stays until "Limpar",
+  switching the log off or "Apagar todos os dados" (the copy is what explains an eviction of that same
+  tab, so it is kept while the visit is alive and not guessed at afterwards). Not verified: that an
+  iPhone's eviction leaves its `visibilitychange` line (it is on the device checklist).
+- **"Apagar todos os dados" must be final.** `LocalStorageService.clearAllData` also removes the
+  `localStorage` copy (Ionic Storage does not know it), and `GamePage.clearAllData` switches the log off
+  FIRST: with it on, the reload fires `pagehide`, which wrote the tail straight back (measured).
+- **Copy and share read a report built BEFORE the tap.** Safari honours `clipboard.writeText()` and
+  `navigator.share()` only while the tap is the current user gesture, and the header (storage estimate,
+  service-worker lookup) is asynchronous, so the window collects it on open and on "Atualizar" and a tap
+  only appends the live log, synchronously. Share hands over a `.txt` file where the browser takes files
+  and the text otherwise; a dismissed sheet is not an error. The report is always the whole log: the
+  window's category filter changes only what is shown.
+- **The state lives in the main bundle, the presentation in the lazy game chunk.** The service, ring
+  buffer, serializer, capture and tail are in `main` (`AppComponent` injects the service so it exists
+  before any page); the header, report and export helpers and the window are not. Do not import the
+  report or header helpers into the service.
+- **The header never carries the query** (a share link holds a room code): the route only. It names
+  js-dos's own detection (`dom.pointers.bind.mobile`, `canLock`, `autolock`, and its user-agent regex
+  tested against this device), the guest framebuffer, the viewports, pointer capabilities, the service
+  worker and the storage estimate, each asynchronous probe with its own deadline.
+
+Hooked today (one-line calls, no behaviour change): `GuestKeyQueueService` (`key`: enqueue, start, flush
+with how far the device stretched the 10 ms pacing, cancel, fail, refused, the CapsLock read), the boot
+(`boot`: js-dos's loading text once per phase and ten percent, the stage changes, detection, failures;
+`frame`: the guest's size), `OcrWorkerHost` and `EmulatorControlService` (`ocr`: the worker's life, each
+recognition pass, the saving verdict when it changes), `AutoSaverService` and `SaveGameService` (`save`:
+the dialog seen and gone, each persist with its reason and duration, tick failures, hidden-page pauses,
+`layers.save()` time) and `AppComponent` (`update`: the prompt, the choice, the save before the reload).
+Pointer, touch and IME are NOT hooked: the phases that add them log into this.
+
 ### Multiplayer (watch-together, not play-together)
 
 A host streams its own canvas to spectators over WebRTC; guests watch, chat and move a shared
@@ -642,8 +728,8 @@ below the Ionic imports.
 **The boundary: companion windows are Windows 95; the app shell stays Elifoot green.**
 Retro treatment applies to the multiplayer chat panel, the room-setup dialog, the
 multiplayer panel, the roster rows, the chat toggle, the spectator's sound toggle (which shares
-the chat toggle's rules in `global.scss`), the Cheat 'O Matic modal, and every
-`AlertController` dialog. It does
+the chat toggle's rules in `global.scss`), the Cheat 'O Matic modal, the diagnostics window, and
+every `AlertController` dialog. It does
 **not** apply to the page toolbars (`ion-toolbar color="tertiary"`), the landing cards, the
 FAB clusters or the options popover — the navy `#092469` in
 [variables.scss](src/theme/variables.scss) is close enough to `#000080` that shell and retro
@@ -683,7 +769,7 @@ funnels — `GamePage.showErrorAlert` and `MultiplayerUiService.showError` — a
 so route new error dialogs through those rather than hand-rolling another `create()`.
 `alert-danger` is a *button*-level class and is unaffected. Before opening a PR, check that
 `grep -rc 'alertController.create' src/` and `grep -rc "cssClass: 'win9x-alert" src/app`
-still agree (27 today) — a manual check, because `npm run lint` covers only `.ts`/`.html`
+still agree (28 today) — a manual check, because `npm run lint` covers only `.ts`/`.html`
 and there is no stylelint setup to hang it on.
 
 The room status pill (`.mp-status-pill` in [global.scss](src/global.scss)) is on the shell

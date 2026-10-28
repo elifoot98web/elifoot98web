@@ -9,6 +9,7 @@ import { FaqComponent } from './components/faq/faq.component';
 import { ManualComponent } from './components/manual/manual.component';
 import { AboutComponent } from './components/about/about.component';
 import { OmaticModalComponent } from './components/omatic-modal/omatic-modal.component';
+import { DiagnosticsModalComponent } from './components/diagnostics-modal/diagnostics-modal.component';
 import { CoreComponentsModule } from 'src/app/core/components/core-components.module';
 
 @NgModule({
@@ -25,7 +26,8 @@ import { CoreComponentsModule } from 'src/app/core/components/core-components.mo
     FaqComponent,
     ManualComponent,
     AboutComponent,
-    OmaticModalComponent
+    OmaticModalComponent,
+    DiagnosticsModalComponent
   ]
 })
 export class GamePageModule {}
