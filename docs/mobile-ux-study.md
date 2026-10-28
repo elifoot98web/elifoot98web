@@ -58,7 +58,8 @@ buttons, English error strings, an eager YouTube iframe that overflows phones.
   632x453, so no static form exceeds 640x480. Runtime-created windows were not checked.
 - At 640x480 the Elifoot window fills the frame and hides the green backdrop, so the four
   load-detection pixels read UI during normal play. They still pass at boot only because the
-  splash sits on the backdrop. "Green lost" becomes the normal state at 640x480.
+  splash sits on the backdrop. "Green lost" becomes the normal state at 640x480. (Measured in P4:
+  4 of 4 points on the splash and the new-game dialog, 1 of the 3 needed in play.)
 - The OCR rectangle was 800x600-anchored; it is now centre-relative (`left = W/2-68`,
   `top = H/2-25`, 132x20), bit-identical at 800x600 and `(252,215)` at 640x480 (P3).
 
@@ -73,7 +74,8 @@ buttons, English error strings, an eager YouTube iframe that overflows phones.
   rejected: the guest needs the mode set *before* it boots, so it costs either a one-time reload on
   first visit or a patch between `Dos()` and `run()` in `game.js`. The `dosbox.conf [autoexec]`
   route (not an `hdd.img` edit) is the one that reaches users with an old persisted layer; the
-  upgrade path (old layer, then the new bundle) must be re-tested before the bundle is committed.
+  upgrade path (old layer, then the new bundle) must be re-tested before the bundle is committed
+  (done, see P4 as built).
 - **D3 — Win9x look** for the dock and the type bar; flat shell for toolbar, save chip, menu
   sheet and install banner.
 - **D8 —** `*` opens the player search for the "craque/estrela" attribute; `-` is used to enter
@@ -336,6 +338,89 @@ build, and a CLAUDE.md update.
 7. **P4 — 640x480 via `dosbox.conf [autoexec]` + `d/SETRES.BAT`** (LFS bundle; needs the owner).
    Manual QA of the unvisited screens (Finanças, Estádio, Calendário, live match, loan and
    auction dialogs), re-run the pointer gain harness.
+   **As built:** the bundle gains `call d:\setres.bat` in `[autoexec]`, `d/SETRES.BAT`,
+   `d/res/s640.ini` and `d/res/s800.ini` (`scripts/resolution/build_bundle.py`, documented in its
+   README); `PatchService.setDisplayMode` adds or removes `d/res/use800.flg`; the options popover
+   has "Resolução do jogo" (radio dialog, then a confirm that says it reloads; disabled in a room).
+   The mode shown is read off the framebuffer (`DisplayModeHelper`), no storage key. FAQ and manual
+   entries say plainly that on a desktop the picture is magnified 1.25x more (larger, softer).
+   Measured, in headless Chrome 143 against js-dos as vendored, bundle URL unchanged throughout:
+   - **Upgrade path (the mandatory test; screenshots in `p4-upgrade/`).** Old bundle, new game, first
+     kickoff, layer persisted (`P4TEST.E98` plus the 26 MB `hdd.img`, `.jsdos/` as an empty folder
+     entry): the new bundle at the same URL, same profile, reloaded to **640x480**, the green probe
+     passed (4 of 4), "Jogos gravados" listed the old save and it loaded. A layer patched through
+     `PatchService` (identity patch of the bundle's own 281 teams; `ELIFOOT.BAT` 59 B, `PATCH.BAT`
+     770 B and `d/eli98/PATCH/` in the layer): 640x480 as well, `PATCH.BAT` still ran (the 281 team
+     files show as rewritten in the next persist), the save loaded. `use800.flg` written through the real menu: the next boot
+     was 800x600, with the patch files and the save intact; chosen back, the flag was gone and the
+     boot was 640x480. A browser restart on the same profile kept 640x480; a brand new profile
+     booted 640x480. The persisted `hdd.img` of a session that has not saved since the switch still
+     holds the previous mode's `SYSTEM.INI`, which is harmless: `SETRES.BAT` rewrites it at every boot.
+     All of this was run again on the final bundle after the review below changed `SETRES.BAT`
+     (it is the only entry that differs from the first build): fresh profile 640x480, the old
+     long-time layer 640x480 with its save loading, the `PatchService`-patched layer 640x480 with
+     `PATCH.BAT` still running and its save loading, the menu round trip 640x480 -> 800x600 (flag in
+     the live persist, patch files and save intact) -> 640x480 (flag gone), in the real app.
+   - **Review finding, confirmed and fixed: older disk images.** The first build overwrote
+     `SYSTEM.INI` on any disk, but the repo has shipped other `hdd.img` files and a layer keeps the
+     one it first got. Diffed against the current image: `e6084fe` (VGA) lacks all seven files the
+     new `SYSTEM.INI` names (`s3vsnd.drv`, `vdds3vsn.386`, `s3911grb.3gr`, `vsbd.386`,
+     `vadlibd.386`, `sndblst2.drv`, `msadlib.drv`), `ce6eb4a` (256 colours, on `main` from PR #15 to
+     PR #22, about a day) lacks the four sound ones, `af63c64` and everything since is one image.
+     Reproduced on a real `ce6eb4a` layer (booted in a fresh profile and persisted; the save was put
+     into `jogos/` from another layer, because that bundle's mouse sensitivity defeats the scripted
+     navigation): the first bundle at the same URL left the guest at the DOS prompt with "Cannot find
+     a device file that may be needed to run Windows in 386 enhanced mode ... vsbd.386". Fix:
+     `SETRES.BAT` first tests the seven files and does nothing if one is missing; the same layer then
+     boots Windows 3.1 and Elifoot at 800x600, as it did before the update, and the save loads. Such a
+     player cannot be moved to 640x480 (the menu only writes the flag); "Apagar todos os dados"
+     does it. `verify` now checks the seven files are on the bundle's own image and named in both
+     INIs. A `SYSTEM.INI` per known old image was left out: each would need its own drivers and its
+     own test, for a group of players that is probably empty by now.
+   - **The bundle.** +9.2 KB (6,759,047 against 6,749,854 bytes; the three new files and the conf
+     are stored, not deflated, so the output does not depend on the zlib build). The other 570
+     entries are byte-identical, `hdd.img` included; `build` on its own output is a no-op, and on
+     the first build it gives the final one; DOSBox's COPY takes `/y` (it ignores it).
+   - **Load detection in the real app at 640x480.** `Green check passed`, the game shown 4.2 s after
+     the reload (P6 measured the green at 4.1 s at 800x600). Loader text: "Iniciando o DOS…" (frame 640x400), "Carregando o
+     Elifoot…" at 2.2 s, loader gone at 4.4 s; "Abrindo o Windows 3.1…" fell between two 500 ms looks,
+     as P6 predicted. The probe: 4 of 4 on Registo, Acerca and the new-game dialog, **1 of 3 needed
+     in play** (only `x = 0` stays green): the critic was right that green is lost once the game is
+     running, and it is harmless because the probe runs only at boot.
+   - **OCR rectangle and auto-save at 640x480, real game, real tesseract (through P3's stand-in
+     CDN).** The region resolved to (252, 215); the strip held 1892 navy and 352 white pixels, as at
+     800x600; `isGameSaving` was `true` for the dialog and the app's own auto-saver persisted
+     `QA640.E98`. Dialog length, 10 ms recorder, same machine: **0.61 s at 800x600, 0.62 s at 640x480**
+     (P3's 1.7 s was a slower run), so the resolution is not what shortens it.
+   - **QA walk at 640x480** (`qa-640/`): Registo, Acerca, new/continue, Selecção de Países, currency,
+     Jogadores and the draw, the main window and its five tabs, the six menus, Opções, Estádio,
+     Historial, Calendário, Classificação, Melhores marcadores, Ranking de Treinadores, História, Vender,
+     the live round, the half-time and injury dialogs, the round's standings, "Venda de jogador por
+     leilão", "Actualização de Salário", Program Manager (restored from its icon), Run and EDITEQ with
+     its Abrir dialog and a squad. **Nothing is clipped.** The tightest are Ranking de Treinadores
+     (about 576x475, top at y = 3, bottom border at y = 478) and Classificação (590x400).
+     **Not reached:** a bank-loan prompt, "Últimas transferências", "Últimos vencedores", "Melhores
+     marcadores de sempre", "Perfil", the cup draw, and any flag editor.
+   - **Multiplayer.** The two-peer harness could not run: it needs Chrome's own debug port and the
+     public nostr relays, and the build sandbox blocks both (the relays answer 403 from its proxy).
+     What was checked instead: `canvas.width/height` and the `captureStream` track are 640x480, and
+     a same-page `RTCPeerConnection` loopback of that stream delivered a `<video>` that began at
+     320x240 (the encoder ramp-up the join page's ratio-based fit exists for) with the 4:3 ratio, so
+     `fitVideoToContainer` gives the same box at either mode (389x292 in a 390x292 container).
+     The cursor overlay normalises against that box, so it is unaffected. A host cannot change mode
+     in a room, so a spectator never sees the size change mid-stream.
+   - **Phones (emulation only).** 390x844 and 844x390 with touch emulation: the menu entry, its
+     subtitle and the radio dialog render. The first dialog text was too long for a landscape
+     phone (the second radio fell below the fold); it was cut to two sentences.
+   Deviations and leftovers: no `npm version` (the stack already carries 3.2.0); the pointer-gain
+   harness is P2's; a player still on a `ce6eb4a`/`e6084fe` disk is left at 800x600 and the menu
+   entry does nothing for them without saying so (the mode shown is the frame's, so it keeps
+   reading 800x600), which a later check after the reload could name; `layers.save()` swallows its own errors (P0), so a failed write of the flag would
+   reload into the old mode without saying so. **Found on the way:** `sendMouseRelativeMotion(NaN, …)`
+   poisons the guest's mouse until the page reloads (probably DOSBox's pointer position, a float,
+   which NaN sticks to): after one the sprite stayed at (0, 0) and later motion changed nothing. P2's
+   pointer engine has to refuse non-finite deltas. A second boot of the same layer shows the Registo
+   (nag) screen before Acerca, which is the game's own behaviour and nothing to do with the mode.
 8. **P5 — save safety nets** (backup round trip, navigation guards, "Salvo às HH:mm" chip).
    **Re-specify the recovery banner against 640x480** (detect the Program Manager blue ~(0,64,128)
    plus icon; green is boot-only).
@@ -376,8 +461,8 @@ ChromeHeadless job is added to the workflows (the owner's call).
 - Emulator speed on phones is unknown: CDP CPU throttling does not slow Workers, so the 4x/6x
   boot-time numbers measure the network and main thread only. This bounds the 45 s detection
   window (P6) and the "duty-cycle is cheap" claim (P9).
-- A real save frame exists now (800x600, P3); OCR at 640x480 is proven only on that frame moved
-  to the centre of a 640x480 one, not in the running game.
+- ~~OCR at 640x480 is proven only on a pasted frame~~ Closed by P4: measured on real saves in the
+  running game, see item 7.
 - Offline start was inferred from ngsw semantics and never run.
 - Alt codes were not tried in the 8-letter filename field, the team editor, password dialogs or
   numeric price fields.

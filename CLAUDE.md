@@ -23,12 +23,13 @@ npm test                 # ng test (karma + jasmine, visible Chrome, watch mode)
 npm run test:ci          # ng test --watch=false --browsers=ChromeHeadlessCI: one headless run, exits non-zero on failure
 npx ng test --include='**/my.spec.ts' --watch=false --browsers=ChromeHeadlessCI   # single spec
 npm run mp:launch        # two browsers for a multiplayer session (see the harness README)
+python3 scripts/resolution/build_bundle.py verify src/assets/elifoot/elifoot98.jsdos   # the resolution switch is in the bundle
 ```
 
 Specs are karma + jasmine. The builder globs `**/*.spec.ts` (its `include` option, which is also
 what `--include` overrides); [src/test.ts](src/test.ts) only initialises the TestBed and
 `tsconfig.spec.json` type-checks `src/**/*.spec.ts`, so a spec needs no registration but must live
-under `src/` to be type-checked. Nothing in a spec reaches the bundle. There are **sixteen spec files so
+under `src/` to be type-checked. Nothing in a spec reaches the bundle. There are **seventeen spec files so
 far**. [room-code.helper.spec.ts](src/app/core/helpers/room-code.helper.spec.ts) is there as
 much to prove the harness as to cover `RoomCodeHelper`: `ng test` with **zero** specs
 prints `Executed 0 of 0 SUCCESS` and still exits 1, so a `test:ci` could never pass before the
@@ -47,7 +48,9 @@ constructor's types, the clock is `fakeAsync`, and every spec ends with `stop()`
 *inside* the fake (`outcomes()`), never up front, or it has no handler yet and fails the spec as
 unhandled. [patch.service.spec.ts](src/app/core/services/game/patch.service.spec.ts) is the model for
 "a service whose `Error` messages are the UI": the game page shows them verbatim, so the spec pins
-the Portuguese wording and fails on the English that JSZip and HttpClient reject with.
+the Portuguese wording and fails on the English that JSZip and HttpClient reject with; it also
+pins `setDisplayMode` against a stand-in `dosInstance`, reading back the layer the fake CI would
+write.
 [win9x-palette.spec.ts](src/theme/win9x-palette.spec.ts) is the model for asserting CSS: karma loads
 `src/global.scss`, so it probes the real `.win9x-roster-*` rules and `:root` tokens for contrast
 instead of keeping a second copy of the hex values. [save-game.service.spec.ts](src/app/core/services/game/save-game.service.spec.ts)
@@ -180,13 +183,73 @@ cancels whatever is still queued.
 a `d/` directory tree (the game in `d/eli98/`, plus `d/ELIFOOT.BAT`), and `.jsdos/dosbox.conf`. Boot
 sequence, all automatic:
 
-1. `dosbox.conf` `[autoexec]`: `mount d ./d`, `imgmount c ./hdd.img`, `c:`, `autoexec.bat`.
-2. `C:\AUTOEXEC.BAT` (inside the image) calls `D:\ELIFOOT.BAT`.
-3. `D:\ELIFOOT.BAT` runs `CALL D:\PATCH.BAT`, then `win D:\ELI98\ELIFOOT.EXE` — Windows 3.1 starts
+1. `dosbox.conf` `[autoexec]`: `mount d ./d`, `imgmount c ./hdd.img`, `call d:\setres.bat`, `c:`,
+   `autoexec.bat`.
+2. `D:\SETRES.BAT` copies `d:\res\s640.ini` (or `s800.ini` when `d:\res\use800.flg` exists) over
+   `C:\WINDOWS\SYSTEM.INI`, if the disk has the drivers those files name. That one file is the
+   video mode, see *The guest's resolution*.
+3. `C:\AUTOEXEC.BAT` (inside the image) calls `D:\ELIFOOT.BAT`.
+4. `D:\ELIFOOT.BAT` runs `CALL D:\PATCH.BAT`, then `win D:\ELI98\ELIFOOT.EXE` — Windows 3.1 starts
    with the game as its only program.
 
-So DOS-level work (the patch file copies) happens *before* Windows loads, and everything the user
-sees is Windows 3.1 rendering the 16-bit app.
+So DOS-level work (the video mode, the patch file copies) happens *before* Windows loads, and
+everything the user sees is Windows 3.1 rendering the 16-bit app.
+
+### The guest's resolution
+
+The guest boots at **640x480** (`screen-size=640` in `SYSTEM.INI`), the size Elifoot (a Delphi 1 app)
+was designed for: its window is ~634x474, so it used to float on a green 800x600 desktop and now
+fills the frame, which is a free 1.25x on every glyph. `use800.flg` returns a player to the old
+800x600. Load-bearing:
+
+- **The mode is set from `dosbox.conf`, never from `hdd.img`.** Every persisted layer carries its
+  OWN full copy of `hdd.img` (a session always dirties it), and that copy shadows the bundle's, so
+  a `SYSTEM.INI` edited inside the bundle's image reached new visitors only: measured, an edited
+  bundle plus an old layer still booted 800x600. `dosbox.conf` and the files under `d/` are read
+  from the bundle at every boot, which is why `SETRES.BAT` reaches everyone, including a layer
+  holding `PatchService`'s overwritten `ELIFOOT.BAT`/`PATCH.BAT`. **The bundle URL must still never
+  change** (the layer key is `<url>.changes`).
+- **The bundle is rebuilt by [scripts/resolution/build_bundle.py](scripts/resolution/README.md)**
+  (standard library only, deterministic, idempotent), which adds `call d:\setres.bat`,
+  `d/SETRES.BAT`, `d/res/s640.ini` and `d/res/s800.ini` and copies every other zip entry byte for
+  byte; `hdd.img` is never rewritten. Check a bundle with
+  `python3 scripts/resolution/build_bundle.py verify <bundle> --base <the bundle it was built from>`.
+  `s800.ini` is the image's own `SYSTEM.INI`, so the script refuses an image that is not the
+  800x600 one. Nothing under `scripts/` reaches the bundle.
+- **`SETRES.BAT` only touches a disk that has the drivers its `SYSTEM.INI` files name.** It tests
+  seven files in `C:\WINDOWS\SYSTEM` (`SYSTEM_FILES` in the script) and does nothing if any is
+  missing. *Why:* a layer keeps the `hdd.img` it first got, and the repo has shipped others: the
+  256-colour image of `ce6eb4a` was on `main` for about a day (2025-04-19 to 04-20) and lacks
+  `vsbd.386`, `vadlibd.386`, `sndblst2.drv` and `msadlib.drv`. The first version of the script
+  copied unconditionally, and on such a layer Windows stopped at "Cannot find a device file that may
+  be needed to run Windows in 386 enhanced mode ... vsbd.386", leaving the guest at the DOS prompt
+  (reproduced on a bare js-dos page; the app would never see the green and count a failed boot).
+  Guarded, the same layer boots at 800x600 as it always did and its save loads. Such a player keeps
+  their mode, and the menu cannot change it (it only writes the flag); "Apagar todos os dados" gives
+  them the current image. `verify` checks the seven files exist on the bundle's image and are named
+  in both INIs, so the guard cannot silently pin everyone to 800x600.
+- **The first boot after this update rewrites `SYSTEM.INI` on the `C:` of every player whose disk is
+  the current image** (a 1.8 KB file; `hdd.img` was already dirty). A session that is open when the
+  new bundle is served keeps 800x600 until it reloads. Tested on a real layer: a long-time user's
+  save (made on the old bundle) loads at 640x480 after the bundle is replaced at the same URL, and
+  so does a layer patched through `PatchService`. **It is a one-way door for the LFS file:**
+  reverting `dosbox.conf` leaves every player's last persisted `SYSTEM.INI` (640x480) in their disk
+  with nothing to switch it.
+- **The mode in force is the framebuffer's size, never a stored flag.** `GamePage.currentDisplayMode`
+  asks `DisplayModeHelper.fromFrameSize(dosCI.width(), dosCI.height())`; `null` is anything that is
+  neither size (DOS text mode). The only persisted fact is `d/res/use800.flg` in the changes layer,
+  which says what the NEXT boot does, written by `PatchService.setDisplayMode` with the same
+  fake-CI trick as a patch (and so with the same rule: stop the auto-saver, do not play on, reload).
+  The flag survives patches and their removal (their filters match by name); "Apagar todos os
+  dados" deletes it, which restores the default. There is deliberately no `STORAGE_KEY` for it.
+- **The menu entry is disabled while a room is live** (`isStreaming || isHosting`): the change is a
+  reload, and a host's reload ends the room for everyone. A spectator is unaffected (it has no
+  emulator) and the stream stays 4:3 in either mode, so every ratio-based fit holds; a
+  same-page loopback of the host's canvas stream at 640x480 arrived as 320x240 (WebRTC ramping up)
+  with the ratio intact. The two-peer harness has not been run against a 640x480 host (it needs
+  the public nostr relays, which the sandbox that built this blocks).
+- **At 640x480 the Elifoot window hides the green backdrop that load detection samples.** See
+  *Screen-scraping*.
 
 ### Booting the emulator
 
@@ -284,6 +347,8 @@ interface** whose `persist()` returns that zip, and calls
 `dosInstance.emulatorsUi.persist.save(bundleName, dosInstance.layers, fakeCI)` — overwriting the
 IndexedDB cache. The caller then forces `window.location.reload()` so the VM boots from the patched disk.
 
+`setDisplayMode` is the same trick with a smaller payload (see *The guest's resolution*).
+
 Team/flag patches also install two batch files from `src/assets/elifoot/`: the overridden
 `d/ELIFOOT.BAT` calls `d/PATCH.BAT` before launching Windows, and `PATCH.BAT` copies
 `d/eli98/PATCH/{EQUIPAS,FLAGS,CTRGROUP,COUNTRY.TXE}` over the originals at the DOS prompt. Uploaded
@@ -365,18 +430,35 @@ Windows app, so there is nothing to hook):
 
 Both are coordinate- and color-sensitive: changing the emulator canvas size, the Windows 3.1 video
 mode/resolution, or the game's language will silently break them. Constants live in
-[constants.ts](src/app/core/models/constants.ts). The load-detection pixels are absolute and happen to
-pass at 800x600 and 640x480; the OCR strip is **centre-relative** (`OcrRegionHelper.savingDialogRegion`:
+[constants.ts](src/app/core/models/constants.ts). The load-detection pixels are absolute and pass at
+800x600 and 640x480, **for different reasons.** They sample Elifoot's green BACKDROP form, not the
+game window: at 800x600 the window is centred with a margin all round, so the backdrop shows for as
+long as the game runs; at 640x480 the window fills the frame, and in play the four points read the
+menu bar and the squad list (measured in play: 1 match of the 3 needed, only the `x = 0` point
+stays green; on the splash, the new-game dialog and the Registo screen it is 4 of 4). The probe
+passes at boot only because the splash (Acerca, or Registo on a later visit) is smaller than the
+frame and sits on the backdrop, and "green lost" is the normal state afterwards. That is fine for
+`waitForGameScreen`, which runs only at boot; anything built on "the green went away" (the planned
+recovery banner) must use Windows' desktop blue `(0, 64, 128)` and the Program Manager icon instead.
+Confirmed on a real boot at 640x480 in the app: `Green check passed`, and the loader reads "Iniciando
+o DOS…" then "Carregando o Elifoot…" ("Abrindo o Windows 3.1…" is shorter than the 500 ms between
+looks, as in P6). The OCR strip is **centre-relative** (`OcrRegionHelper.savingDialogRegion`:
 left = round(W/2 − 68), top = round(H/2 − 25), 132x20, so (332, 275) at 800x600 and (252, 215) at
-640x480), because the dialog is centred and its crop is byte-identical in both modes.
+640x480), because the dialog is centred and its crop is byte-identical in both modes. Confirmed on
+a real save at 640x480 through the app's own service and tesseract: the region resolved to
+(252, 215), the strip held the 1892 navy and 352 white pixels it holds at 800x600, `isGameSaving`
+answered `true` for the length of the dialog, and the auto-saver persisted `QA640.E98`.
 
 Load-bearing invariants of the auto-save — each of these was a bug, or a measured trap:
 
 - **The game's save dialog is up for about 1.7 s, and only a real save shows it.** Measured on a real
   save at 800x600 (the ROI frames are in the research captures): "A gravar o jogo…" appeared at the
-  first kickoff of a *new* game, stayed 1.70 s, and was byte-identical to the baseline capture. A
-  loaded game's next two kickoffs and the end of its round showed no dialog at all, so do not assume
-  every "Jogar" saves. The progress dialogs "A iniciar o jogo…" and "A carregar o jogo…" sit in the same place
+  first kickoff of a *new* game, stayed 1.70 s, and was byte-identical to the baseline capture.
+  Timed again for the 640x480 change, with a 10 ms recorder on a new game each, same machine and
+  minute: **0.61 s at 800x600 and 0.62 s at 640x480.** The video mode does not change it; the
+  machine does, and a quicker one has well under 1.7 s, which is what the 300 ms tick has to catch
+  on a phone whose OCR pass is slow. A loaded game's next two kickoffs and the end of its round
+  showed no dialog at all, so do not assume every "Jogar" saves. The progress dialogs "A iniciar o jogo…" and "A carregar o jogo…" sit in the same place
   and are read as `false` (edit distance above the tolerance of 4), and so were the half-time window
   and the end-of-round screens over a whole round.
 - **Persist only AFTER the dialog is gone.** The dialog is up while the game writes the `.e98`; a
@@ -601,7 +683,7 @@ funnels — `GamePage.showErrorAlert` and `MultiplayerUiService.showError` — a
 so route new error dialogs through those rather than hand-rolling another `create()`.
 `alert-danger` is a *button*-level class and is unaffected. Before opening a PR, check that
 `grep -rc 'alertController.create' src/` and `grep -rc "cssClass: 'win9x-alert" src/app`
-still agree (25 today) — a manual check, because `npm run lint` covers only `.ts`/`.html`
+still agree (27 today) — a manual check, because `npm run lint` covers only `.ts`/`.html`
 and there is no stylelint setup to hang it on.
 
 The room status pill (`.mp-status-pill` in [global.scss](src/global.scss)) is on the shell

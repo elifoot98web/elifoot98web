@@ -4,7 +4,7 @@ import { AlertController, LoadingController, ModalController, ToastController } 
 import { AlertButton } from '@ionic/core';
 import JSZip from 'jszip';
 import { environment } from 'src/environments/environment';
-import { EMULATOR_CONTROL_CONFIG, GAME_BOOT, GAME_INPUT_FN_BTNS, GAME_INPUT_FN_BTNS_REVERSED, MULTIPLAYER, STORAGE_KEY } from '../../core/models/constants';
+import { DISPLAY_MODE, EMULATOR_CONTROL_CONFIG, GAME_BOOT, GAME_INPUT_FN_BTNS, GAME_INPUT_FN_BTNS_REVERSED, MULTIPLAYER, STORAGE_KEY } from '../../core/models/constants';
 import { UserGuideComponent } from './components/user-guide/user-guide.component';
 import { AboutComponent } from './components/about/about.component';
 import { OmaticModalComponent } from './components/omatic-modal/omatic-modal.component';
@@ -21,6 +21,7 @@ import { BootFailureHelper, BootFailureKind } from 'src/app/core/helpers/boot-fa
 import { BootProgressHelper } from 'src/app/core/helpers/boot-progress.helper';
 import { BootStage, BootStageHelper } from 'src/app/core/helpers/boot-stage.helper';
 import { TimeoutHelper } from 'src/app/core/helpers/timeout.helper';
+import { DisplayMode, DisplayModeHelper } from 'src/app/core/helpers/display-mode.helper';
 
 
 @Component({
@@ -680,6 +681,125 @@ export class GamePage implements OnInit, OnDestroy {
       canvas.classList.add('smooth-canvas')
     }
     await this.storageService.set<boolean>(STORAGE_KEY.DISABLE_SMOOTH_FILTER, disableSmoothFilter)
+  }
+
+  /**
+   * The video mode the guest is drawing now, read off its framebuffer on every call and never kept:
+   * the flag in the saved disk only says what the next boot will do. `null` when the frame is
+   * neither size (the guest is at the DOS prompt after Windows exited).
+   */
+  get currentDisplayMode(): DisplayMode | null {
+    if (!this.dosCI) return null
+    return DisplayModeHelper.fromFrameSize(this.dosCI.width(), this.dosCI.height())
+  }
+
+  /** The subtitle of the "Resolução do jogo" entry. */
+  get displayModeSummary(): string {
+    // The entry is disabled in a room, and a disabled entry should say why.
+    if (this.isStreaming) return 'Encerre a sala para trocar'
+    const mode = this.currentDisplayMode
+    return mode ? DisplayModeHelper.label(mode) : 'Toque para escolher'
+  }
+
+  /**
+   * Pick the guest's resolution: 640x480 (the default) or 800x600. The mode is fixed when the
+   * guest boots, so a change is a reload, which ends a room for every spectator; the menu entry is
+   * disabled while one is live and this refuses on its own for any other way in.
+   */
+  async promptDisplayMode() {
+    this.hidePopover()
+    if (this.isStreaming || this.isHosting) return
+
+    const current = this.currentDisplayMode
+    let chosen: DisplayMode | undefined
+    const alert = await this.alertController.create({
+      header: 'Resolução do jogo',
+      cssClass: 'win9x-alert alert-whitespace wide-alert',
+      // Honest about the trade (the canvas box does not change, so on a desktop the same picture
+      // is magnified more at 640x480: larger and softer, not larger and as sharp) and one short
+      // paragraph: on a landscape phone (~390px tall) anything longer pushes the radios and the
+      // buttons out of view, and the FAQ carries the full explanation.
+      message:
+        'Trocar a resolução reinicia o jogo. ' +
+        'No computador, 640x480 deixa o texto maior, porém mais suave.',
+      inputs: DisplayModeHelper.modes().map(mode => ({
+        type: 'radio' as const,
+        label: DisplayModeHelper.label(mode),
+        value: mode,
+        checked: mode === current,
+      })),
+      buttons: [{
+        text: 'Cancelar',
+        role: 'cancel'
+      }, {
+        text: 'Continuar',
+        handler: (value: DisplayMode | undefined) => {
+          chosen = value
+        }
+      }]
+    })
+    await alert.present()
+    await alert.onDidDismiss()
+
+    // Nothing to do for the mode it is already in, or for no choice at all.
+    if (!chosen || chosen === current) return
+    await this.confirmDisplayMode(chosen)
+  }
+
+  private async confirmDisplayMode(mode: DisplayMode) {
+    const alert = await this.alertController.create({
+      header: 'Reiniciar o jogo?',
+      message: `O jogo será reiniciado em ${DisplayModeHelper.label(mode)}.\n\nOs jogos já gravados são mantidos, mas o que você não salvou dentro do próprio jogo será perdido.`,
+      cssClass: 'win9x-alert alert-whitespace',
+      backdropDismiss: false,
+      buttons: [{
+        text: 'Cancelar',
+        role: 'cancel'
+      }, {
+        text: 'Reiniciar',
+        handler: async () => {
+          await this.applyDisplayMode(mode)
+        }
+      }]
+    })
+    await alert.present()
+  }
+
+  /**
+   * Write the choice into the saved disk and reload into it. Like a patch, this replaces what
+   * `layers.save()` persists with the edited layer, so the auto-saver is stopped first and the
+   * emulator is not played on afterwards.
+   */
+  private async applyDisplayMode(mode: DisplayMode) {
+    if (this.isStreaming || this.isHosting) return
+
+    this.autoSaverService.stop()
+    this.autoSaverService.stopPeriodicSave()
+
+    const loading = await this.loadingController.create({
+      message: 'Trocando a resolução…',
+      backdropDismiss: false
+    })
+    await loading.present()
+    try {
+      await this.patchService.setDisplayMode(this.dosCI, mode)
+    } catch (e: any) {
+      console.error(e)
+      await loading.dismiss()
+      // Nothing was written, so the game goes on as it was, with its saving back on.
+      await this.setupAutoSave()
+      await this.setupPeriodicSave()
+      await this.showErrorAlert(e instanceof Error ? e : new Error(String(e)))
+      return
+    }
+
+    try {
+      await TimeoutHelper.withTimeout(() => this.dosCI.exit(), DISPLAY_MODE.EXIT_TIMEOUT_MS)
+    } catch (e) {
+      // The layer is written; a guest that will not stop must not hold the reload back.
+      console.warn('The emulator did not exit cleanly before the reload', e)
+    }
+    window.location.reload()
   }
 
   showPopover(e: Event) {

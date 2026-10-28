@@ -96,6 +96,18 @@
                 do jogo aos espectadores</ion-toggle>
             </ion-item>
           </ng-container>
+          <!--
+            A dialog, not a toggle: the answer takes a reload. Disabled in a room, because the
+            reload would end it for everyone watching. The subtitle is the size of the frame the
+            guest is drawing now, not a stored setting.
+          -->
+          <ion-item button detail="false" [disabled]="isStreaming || isHosting" (click)="promptDisplayMode()">
+            <ion-label>
+              Resolução do jogo
+              <p>{{ displayModeSummary }}</p>
+            </ion-label>
+            <ion-icon slot="end" name="resize-outline"></ion-icon>
+          </ion-item>
           <ion-item detail="false">
             <ion-toggle [checked]="smoothFilterDisabled" (ionChange)="toggleSmoothFilter($event)">Desativar
               Suavização</ion-toggle>

@@ -22,10 +22,12 @@ type Color = { r: number; g: number; b: number; a: number };
  * Classifies a framebuffer into a stage of the boot, by looking at the same four pixels load
  * detection always looked at. js-dos exposes no guest-level state, so this is all there is.
  *
- * Measured on the real bundle (800x600): DOS is a 640x400 text frame, black with grey text;
- * Windows 3.1 then switches to graphics (800x600, black for a moment); its desktop is a flat
- * (0, 64, 128) with an hourglass while ELIFOOT.EXE loads; the game's splash is (0, 128, 0) with
- * a navy title bar. Kept free of Angular and of the DOM so it can be tested on plain arrays.
+ * Measured on the real bundle (800x600, and again at 640x480 once that became the default; the
+ * frame size is the only difference): DOS is a 640x400 text frame, black with grey text; Windows
+ * 3.1 then switches to graphics (640x480, or 800x600 with the display mode flag; black for a
+ * moment); its desktop is a flat (0, 64, 128) with an hourglass while ELIFOOT.EXE loads; the
+ * game's splash is (0, 128, 0) with a navy title bar. Kept free of Angular and of the DOM so it
+ * can be tested on plain arrays.
  */
 export class BootStageHelper {
 

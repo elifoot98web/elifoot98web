@@ -103,3 +103,120 @@ describe('PatchService error messages', () => {
     });
   });
 });
+
+/**
+ * The display mode is one file in the changes layer, so what matters is what the layer holds after
+ * the call and where it was written. The emulator side is stood in for: a `persist()` that returns
+ * a layer shaped like js-dos's (hdd.img, a save game, directory entries) and a `dosInstance` whose
+ * `emulatorsUi.persist.save` records the fake CI it was handed, which is how the real thing is
+ * overwritten (see overwriteEmulatorsUICache).
+ */
+describe('PatchService.setDisplayMode', () => {
+  const noHttp = { get: () => of(new Blob()) } as unknown as HttpClient;
+  const globals = window as unknown as Record<string, unknown>;
+  const FLAG = 'd/res/use800.flg';
+  const HDD = new Uint8Array([1, 2, 3, 4, 5]);
+  const SAVE = new Uint8Array([9, 8, 7]);
+
+  let calls: string[];
+  let written: { key: string; ci: { persist(): Promise<Uint8Array> } } | undefined;
+
+  async function layer(extra: (zip: JSZip) => void = () => undefined): Promise<Uint8Array> {
+    const zip = new JSZip();
+    zip.file('hdd.img', HDD);
+    zip.file(`${BASE_SAVEGAME_DIR}MEUJOGO.E98`, SAVE);
+    extra(zip);
+    return zip.generateAsync({ type: 'uint8array' });
+  }
+
+  function emulator(persisted: Uint8Array): DosCI {
+    return { persist: () => { calls.push('persist'); return Promise.resolve(persisted); } } as unknown as DosCI;
+  }
+
+  /** What the call left in the layer, read back through the fake CI like js-dos would. */
+  async function writtenLayer(): Promise<JSZip> {
+    return JSZip.loadAsync(await written!.ci.persist());
+  }
+
+  beforeEach(() => {
+    // The service narrates its work to the console (the patched zip, its persisting); keep it out of the run.
+    spyOn(console, 'log');
+    calls = [];
+    written = undefined;
+    globals['saveGameFileSystem'] = () => { calls.push('flush'); return Promise.resolve(); };
+    globals['dosInstance'] = {
+      layers: {},
+      emulatorsUi: { persist: { save: (key: string, _layers: unknown, ci: { persist(): Promise<Uint8Array> }) => { written = { key, ci }; } } },
+    };
+  });
+
+  afterEach(() => {
+    delete globals['saveGameFileSystem'];
+    delete globals['dosInstance'];
+  });
+
+  it('asks for 800x600 by adding the flag, and leaves the disk and the saves as they were', async () => {
+    await new PatchService(noHttp).setDisplayMode(emulator(await layer()), '800');
+
+    const result = await writtenLayer();
+    expect(result.file(FLAG)).not.toBeNull();
+    expect(await result.file('hdd.img')!.async('uint8array')).toEqual(HDD);
+    expect(await result.file(`${BASE_SAVEGAME_DIR}MEUJOGO.E98`)!.async('uint8array')).toEqual(SAVE);
+  });
+
+  it('goes back to the default by removing the flag, and nothing else', async () => {
+    const withFlag = await layer(zip => zip.file(FLAG, 'x'));
+
+    await new PatchService(noHttp).setDisplayMode(emulator(withFlag), '640');
+
+    const result = await writtenLayer();
+    expect(result.file(FLAG)).toBeNull();
+    expect(await result.file('hdd.img')!.async('uint8array')).toEqual(HDD);
+    expect(await result.file(`${BASE_SAVEGAME_DIR}MEUJOGO.E98`)!.async('uint8array')).toEqual(SAVE);
+  });
+
+  it('is the same call whichever way the player was already set', async () => {
+    const service = new PatchService(noHttp);
+
+    await service.setDisplayMode(emulator(await layer()), '640');
+    expect((await writtenLayer()).file(FLAG)).toBeNull();
+
+    await service.setDisplayMode(emulator(await layer(zip => zip.file(FLAG, 'x'))), '800');
+    expect((await writtenLayer()).file(FLAG)).not.toBeNull();
+  });
+
+  it('writes under the key js-dos loads the layer from, which is the bundle URL plus ".changes"', async () => {
+    await new PatchService(noHttp).setDisplayMode(emulator(await layer()), '800');
+
+    // A different key would be a layer nothing reads: the player would reload into the old mode.
+    expect(written?.key).toBe('assets/elifoot/elifoot98.jsdos.changes');
+  });
+
+  it('flushes the running disk first, so the layer it edits is the current one', async () => {
+    await new PatchService(noHttp).setDisplayMode(emulator(await layer()), '800');
+
+    expect(calls).toEqual(['flush', 'persist', 'flush']);
+  });
+
+  it('writes nothing when the layer cannot be read, and says so in Portuguese', async () => {
+    const broken = { persist: () => Promise.reject(new Error('worker is gone')) } as unknown as DosCI;
+    spyOn(console, 'error');
+
+    const failure = await new PatchService(noHttp).setDisplayMode(broken, '800').then(() => null, error => error as Error);
+
+    expect(failure?.message).toBe('Não foi possível ler os dados do jogo. Recarregue a página e tente novamente.');
+    expect(written).toBeUndefined();
+  });
+
+  it('keeps the chosen mode through a patch and through removing it', async () => {
+    const withFlag = await layer(zip => zip.file(FLAG, 'x'));
+    const service = new PatchService(noHttp);
+
+    await service.applyPatch(emulator(withFlag), new JSZip());
+    expect((await writtenLayer()).file(FLAG)).not.toBeNull();
+
+    await service.clearPatch(emulator(withFlag));
+    expect((await writtenLayer()).file(FLAG)).not.toBeNull();
+  });
+});
+

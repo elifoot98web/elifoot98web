@@ -62,8 +62,11 @@ export const AUTO_SAVER = {
   // How often the framebuffer is sampled. A sample is a screenshot() plus a hash of a 132x20
   // region (about 1 ms together, measured), and OCR runs only when that hash changed, so it can
   // be fast. It has to be: the game's "A gravar o jogo..." dialog stays up for only about 1.7 s
-  // (measured on a real save, 800x600). The old 1.5 s tick could land inside that window only
-  // because 1.5 < 1.7, with nothing to spare for a phone whose OCR pass takes longer than 0.2 s.
+  // (measured on a real save at 800x600). Timed again with a 10 ms recorder on a new game, same
+  // machine, same minute: 0.61 s at 800x600 and 0.62 s at 640x480, so the length belongs to the
+  // machine and not to the video mode, and a quicker one has less than 1.7 s to spare. The old
+  // 1.5 s tick could land inside that window only because 1.5 < 1.7, with nothing to spare for a
+  // phone whose OCR pass takes longer than 0.2 s.
   DEFAULT_TICK_INTERVAL_MS: 300,
   DEFAULT_PERIODIC_SAVE_INTERVAL_MS: 5 * 60 * 1000, // 5 minutes
   // Gap between two looks at the dialog while waiting for it to go away.
@@ -114,10 +117,18 @@ export const GAME_BOOT = {
 }
 
 // What the framebuffer must look like for BootStageHelper to call a frame "the game's screen".
-// The pixels, the two greens and the tolerance are the ones load detection has always used
-// (Elifoot's backdrop on the splash and in play); they are coordinate- and colour-sensitive, see
-// CLAUDE.md before touching them. The desktop blue is Windows 3.1's own, seen while ELIFOOT.EXE
-// loads: it is only used to label a stage, never to decide the game is ready.
+// The pixels, the two greens and the tolerance are the ones load detection has always used; they
+// are coordinate- and colour-sensitive, see CLAUDE.md before touching them. The desktop blue is
+// Windows 3.1's own, seen while ELIFOOT.EXE loads: it is only used to label a stage, never to
+// decide the game is ready.
+//
+// What the pixels sample is Elifoot's green BACKDROP form (a full-screen form behind the game
+// window), not the game window. At 800x600 the window is ~634x474 and centred, so the backdrop
+// shows on every side and the probe holds for as long as the game runs. At 640x480 the window
+// fills the frame and hides the backdrop, so in play the four points read the menu bar and the
+// squad list: the probe passes at boot only because the splash (Acerca / Registo) is smaller than
+// the frame and sits on the backdrop, and "green lost" is the NORMAL state afterwards. Nothing may
+// read a missing green as "the game exited" at 640x480; the Program Manager is told by the blue.
 export const GAME_SCREEN_PROBE = {
   POINTS: [
     { x: 0, y: 25 },
@@ -138,6 +149,24 @@ export const GAME_SCREEN_PROBE = {
   DESKTOP_MATCHES_NEEDED: 3,
   // DOS draws text at 640x400 (80x25 characters); every Windows frame is 640x480 or 800x600.
   GRAPHICS_MIN_HEIGHT: 480,
+}
+
+// The guest's video mode is chosen at every boot by d/SETRES.BAT, from dosbox.conf (see
+// scripts/resolution/README.md): 640x480 unless FLAG_PATH exists in the saved disk, then 800x600.
+// The flag is a file in the changes layer, written by PatchService.setDisplayMode; nothing is
+// kept in storage, and the mode in force is read off the live framebuffer (DisplayModeHelper),
+// so there is no second copy of it to fall out of step.
+export const DISPLAY_MODE = {
+  FLAG_PATH: 'd/res/use800.flg',
+  // The frame each mode produces. Anything else (DOS text mode is 640x400, before the first
+  // frame the size is 0x0) belongs to neither.
+  SIZES: {
+    '640': { width: 640, height: 480 },
+    '800': { width: 800, height: 600 },
+  },
+  // How long the page waits for the emulator to exit before it reloads regardless. The layer is
+  // already written by then; a guest that does not stop must not hold the reload back.
+  EXIT_TIMEOUT_MS: 3000,
 }
 
 export const EMULATOR_CONTROL_CONFIG = {
