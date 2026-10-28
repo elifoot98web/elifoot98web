@@ -41,18 +41,29 @@
         <ion-label>Como funciona o teclado?</ion-label>
       </ion-item>
       <div class="ion-padding" slot="content">
-        No computador, o teclado pode ser utilizado normalmente, embora algumas letras acentuadas possam apresentar problemas devido a limitações do emulador.
+        No computador, o teclado pode ser utilizado normalmente, mas o Windows 3.1 que roda o jogo enxerga um teclado americano, sem teclas de acento: letras como ã, é e ç digitadas direto no teclado não saem corretas. Para escrever nomes com acento, use o <strong>Input de Texto</strong> (pelo menu <ion-icon name="ellipsis-vertical-outline"></ion-icon>), que envia cada letra acentuada ao jogo do jeito certo.
         <br>
         <p class="ion-padding-top">
         Em celulares, há duas formas de entrada de texto: <br>
         <ol class="ion-padding-start">
-          <li>- Utilizando o teclado virtual, que pode ser aberto e fechado ao clicar no botão de teclado <ion-icon slot="icon-only" src="../../assets/icon/keyboard.svg"></ion-icon>.</li>
-          <li>- Utilizando o teclado do celular para enviar um texto, acessando a opção no menu ou clicando no botão de input <ion-icon name="terminal-outline"></ion-icon>.</li>
+          <li>- Utilizando o teclado virtual, que pode ser aberto e fechado ao clicar no botão de teclado <ion-icon slot="icon-only" src="../../assets/icon/keyboard.svg"></ion-icon>. Ele envia as teclas de um teclado americano, sem acentos.</li>
+          <li>- Utilizando o teclado do celular para enviar um texto, acessando a opção no menu ou clicando no botão de input <ion-icon name="terminal-outline"></ion-icon>. Os acentos funcionam, e cada quebra de linha equivale a apertar Enter, o que permite preencher vários campos de uma vez. O que o jogo não consegue mostrar (emojis, por exemplo) é enviado como "?".</li>
         </ol>
         <p class="ion-padding-top">
         Em pé, os dois botões ficam na barra superior. Deitado, a barra é escondida para dar mais
         espaço ao jogo, e eles passam a ficar no menu <ion-icon name="menu-outline"></ion-icon> no
         canto superior esquerdo.
+        </p>
+      </div>
+    </ion-accordion>
+    <ion-accordion value="program-manager-info">
+      <ion-item slot="header" color="light">
+        <ion-label>O jogo fechou e apareceu o Program Manager. O que aconteceu?</ion-label>
+      </ion-item>
+      <div class="ion-padding" slot="content">
+        Na tela inicial do Elifoot 98, a que oferece <strong>Quero começar um jogo do início</strong> e <strong>Quero continuar um jogo</strong>, o jogo fecha sozinho se você apertar <strong>Enter</strong> antes de marcar uma das duas opções, ou se apertar <strong>Esc</strong> ou o botão <strong>Cancelar</strong> da própria tela. Sobra então a tela azul do Windows 3.1, com o ícone do Program Manager no canto. <br>
+        <p class="ion-padding-top">
+        Para voltar ao jogo, recarregue a página do navegador. Da próxima vez, marque uma das opções com o cursor antes de confirmar com Enter.
         </p>
       </div>
     </ion-accordion>

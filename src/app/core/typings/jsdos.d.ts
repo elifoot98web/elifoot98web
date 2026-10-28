@@ -31,9 +31,15 @@ export interface DosCI {
 
     // * `simulateKeyPress(...keyCodes)` - allows to simulate key press **AND** release event for key code
     // see `sendKeyPress` to find meaning of keyCode. Key combination is supported when more than 1 keyCode is set.
+    //
+    // NEVER CALL THIS. It stamps the release 16 ms in the future, so a second call within 16 ms
+    // permanently wedges the guest keyboard. Send through GuestKeyQueueService, which uses only
+    // `sendKeyEvent`. (js-dos's own virtual keyboard still calls this internally; see CLAUDE.md.)
+    /** @deprecated wedges the guest keyboard if two calls land within 16 ms; use GuestKeyQueueService. */
     simulateKeyPress: (...keyCodes: number[]) => void;
 
-    // * `sendKeyEvent(keyCode, pressed)` - sends single key (press or release) event to backend
+    // * `sendKeyEvent(keyCode, pressed)` - sends single key (press or release) event to backend.
+    // Only GuestKeyQueueService calls it: the queue is what spaces the events out.
     sendKeyEvent: (keyCode: number, pressed: boolean) => void;
 
     // * `sendMouseMotion` - sends mouse motion event to backend, position is in range [0, 1]

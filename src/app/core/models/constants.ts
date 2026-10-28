@@ -82,7 +82,32 @@ export const EMULATOR_CONTROL_CONFIG = {
     height: 20
   },
   DEFAULT_TOLERANCE_GAME_SAVING_DETECTION: 4,
-  KEYSTROKE_DELAY: 30,
+  // Gap between two groups of raw key events sent to the guest: keys down, gap, keys up, gap.
+  // It is a lower bound (a timer can only be late), and it exists because dosCI.simulateKeyPress
+  // stamps its release 16 ms in the future, so two calls closer than that wedge the guest
+  // keyboard for good. The queue never calls it: raw sendKeyEvent down/up with this gap held
+  // 141 characters at 5 ms and 384 at 8 ms on a desktop, and 10 is the margin for slower phones
+  // (not yet measured on a low-end Android). A chord costs two gaps, an Alt code ten, so about
+  // 20 ms per ordinary character and 100 ms per accented one.
+  KEY_PACING_MS: 10,
+  // DOSBox's keyboard buffer silently drops events past this many arriving without a pause in
+  // between (129 characters in one synchronous burst delivered 14). The only synchronous burst
+  // the queue produces is a chord's presses or releases, so this caps the chord length.
+  MAX_SYNC_KEY_EVENTS: 14,
+  // The BIOS keyboard flags byte (0040:0017). Verified on the real bundle that it follows the
+  // NumLock (0x20) and CapsLock (0x40) toggles and agrees with Windows' own idea of them: keypad
+  // digits type only after a NumLock tap, and letters invert case after a CapsLock tap. Both
+  // are off at boot. Only CapsLock is guarded: Alt+0nnn composes the same character with
+  // NumLock off or on, and an Alt-composed letter ignores CapsLock.
+  BIOS_KEYBOARD_FLAGS_ADDRESS: 0x417,
+  BIOS_CAPS_LOCK_FLAG: 0x40,
+  // readMemory is a round trip to the emulator's worker and has no deadline of its own. The
+  // queue is a single consumer, so a read that never answered would stop every key behind it.
+  KEYBOARD_STATE_TIMEOUT_MS: 500,
+  // A text shorter than this goes out without the "Enviando n/N" toast. At about 20 ms a
+  // character it is done before the toast has finished sliding in, and the typing showing up
+  // in the game is feedback enough.
+  PROGRESS_MIN_CHARACTERS: 24,
 }
 
 export const BASE_SAVEGAME_DIR = 'd/eli98/jogos/'

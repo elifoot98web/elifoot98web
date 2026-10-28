@@ -124,6 +124,31 @@ build, and a CLAUDE.md update.
    to ASCII or their Alt codes and U+00A0 to a space; check/tap NumLock and CapsLock via the BIOS
    flags byte (0x417) before an Alt send; CLAUDE.md must say js-dos's own virtual keyboard still
    calls `simulateKeyPress` until it is retired.
+   **As built:** `GuestKeyQueueService` is the only key sender (one FIFO consumer, tasks `chord` or
+   `altCode`; a text is planned by the pure `EmulatorKeyCodeHelper.planText`), `KEY_PACING_MS` 10
+   and at most 14 events per burst. Measured on the real bundle in headless desktop Chrome: a
+   493-character text with accents, folded punctuation and an emoji typed into Windows Notepad
+   through the dialog with no character lost (12.9 s, smallest gap between event groups 10.0 ms,
+   largest burst 2); 500 characters with ten FAB taps submitted mid-send queued behind it in order
+   and the guest stayed alive. Where it differs from the plan above, on evidence:
+   - **The euro sign and the rest of Windows-1252's 0x80-0x9F block are `?`,** not Alt+0128. The
+     alt codes are accepted, but the edit fields' font has no glyph there and draws a solid box.
+   - **The quotes, dashes, ellipsis and exotic spaces fold to ASCII** instead of using their Alt
+     codes (which would hit the same missing glyphs for most of them).
+   - **Only CapsLock is guarded.** The flags byte does track NumLock and CapsLock under Windows
+     3.1, but Alt+0nnn composes the same character with NumLock on or off, so a NumLock tap would
+     be dead weight. CapsLock inverts Shift-letters, so a text that types letters checks it first.
+   - **Progress is a toast, not a second dialog** (a dialog hides the very field being typed into),
+     shown from 24 tasks up, and its Cancelar calls `cancel()`. `enterkeyhint` is `enter` rather
+     than `send`: in a textarea that key inserts a line break, which is how several game fields are
+     filled in one go, so a "send" label would sit on a key that does not send.
+   - **The 8-letter filename field accepts the accents** (it upper-cases them), so there is no
+     ASCII fold anywhere.
+   - **Not verified:** the pacing on a low-end phone; any iOS or Android keyboard behaviour
+     (autocorrect, the smart-punctuation folds); whether Elifoot can save and reload a game whose
+     file name holds an accented letter.
+   - **Found on the way, documented in the FAQ:** on the game's first dialog Enter before a radio
+     is chosen, Esc and its own Cancelar all quit Elifoot to Windows (all three reproduced).
 3. **P3 — auto-save reliability and a centre-relative OCR rectangle.** Lazy memoised tesseract
    worker raced against a 20 s timeout with backoff; `tick()` reschedules in `finally`; ROI hash
    gate; skip ticks while hidden. Prerequisite for the resolution change.

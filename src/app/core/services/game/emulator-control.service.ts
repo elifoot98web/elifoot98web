@@ -2,7 +2,8 @@ import { Injectable } from '@angular/core';
 import { DosCI } from '../../typings/jsdos';
 import { createWorker, Rectangle, Worker } from 'tesseract.js';
 import { EMULATOR_CONTROL_CONFIG } from '../../models/constants';
-import { EmulatorKeyCode, EmulatorKeyCodeHelper } from '../../models/game';
+import { EmulatorKeyCode } from '../../models/game';
+import { GuestKeyQueueService, KeySendResult, TextSendResult } from './guest-key-queue.service';
 
 @Injectable({
   providedIn: 'root'
@@ -11,35 +12,27 @@ export class EmulatorControlService {
   private _worker: Worker | null = null;
   private areaOfInterest: Rectangle = EMULATOR_CONTROL_CONFIG.DEFAULT_AREA_OF_INTEREST
 
-  constructor() {
+  constructor(private keyQueue: GuestKeyQueueService) {
     this.getWorker()
   }
-  
-  public sendKey(dosCI: DosCI & any, ...keyCodes: EmulatorKeyCode[]): void {
-    if(dosCI && dosCI.simulateKeyPress) {
-      dosCI.simulateKeyPress(...keyCodes);
-    }
+
+  /**
+   * Press one key, or several together (modifiers first), through the guest key queue — the
+   * only way keys reach the guest. Resolves once the guest has seen the release; rejects, so
+   * a caller can say so, when there is no emulator or it throws.
+   */
+  public sendKey(dosCI: DosCI | null | undefined, ...keyCodes: EmulatorKeyCode[]): Promise<KeySendResult> {
+    return this.keyQueue.chord(dosCI, keyCodes);
   }
 
-  public async sendString(dosCI: DosCI & any, str: string): Promise<void> {
-    if(!dosCI || !dosCI.simulateKeyPress || !str) {
-      return;
-    }
-    
-    const individualStrokes = str.split('').map((char) => {
-      const keyStroke = EmulatorKeyCodeHelper.getKeyStrokeForCharacter(char);
-      if (keyStroke.length === 0) {
-        return [EmulatorKeyCode.KBD_space]; // Default to space for unsupported characters
-      }
-      return EmulatorKeyCodeHelper.getKeyStrokeForCharacter(char);
-    })
+  /** Type `str` into whatever the guest has focused. See GuestKeyQueueService.text. */
+  public sendString(dosCI: DosCI | null | undefined, str: string, onProgress?: (completed: number, total: number) => void): Promise<TextSendResult> {
+    return this.keyQueue.text(dosCI, str, { onProgress });
+  }
 
-    // iterate over the array of key strokes and send them to the emulator
-    for (const keyStroke of individualStrokes) {
-      this.sendKey(dosCI, ...keyStroke);
-      // Add a small delay between key presses for the emulator to process them
-      await new Promise(resolve => setTimeout(resolve, EMULATOR_CONTROL_CONFIG.KEYSTROKE_DELAY)); 
-    }
+  /** Drop every key that has not gone out yet; returns how many. */
+  public cancelKeys(): number {
+    return this.keyQueue.cancel();
   }
 
   public async isGameSaving(dosCI: DosCI): Promise<boolean> {

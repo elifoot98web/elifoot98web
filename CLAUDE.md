@@ -28,7 +28,7 @@ npm run mp:launch        # two browsers for a multiplayer session (see the harne
 Specs are karma + jasmine. The builder globs `**/*.spec.ts` (its `include` option, which is also
 what `--include` overrides); [src/test.ts](src/test.ts) only initialises the TestBed and
 `tsconfig.spec.json` type-checks `src/**/*.spec.ts`, so a spec needs no registration but must live
-under `src/` to be type-checked. Nothing in a spec reaches the bundle. There are **two spec files so
+under `src/` to be type-checked. Nothing in a spec reaches the bundle. There are **four spec files so
 far**. [room-code.helper.spec.ts](src/app/core/helpers/room-code.helper.spec.ts) is there as
 much to prove the harness as to cover `RoomCodeHelper`: `ng test` with **zero** specs
 prints `Executed 0 of 0 SUCCESS` and still exits 1, so a `test:ci` could never pass before the
@@ -36,7 +36,11 @@ first spec existed. [timeout.helper.spec.ts](src/app/core/helpers/timeout.helper
 first to use a fake clock, and shows the one trap in doing so: Angular's `fakeAsync` drains
 whatever timers are left when the body ends (`flush: true` is its default), which hides a timer
 that was never cleared, so pass `{ flush: false }` whenever "nothing is left scheduled" is part
-of what a spec asserts. Write specs for pure logic (helpers, planners, parsers, queues driven by a
+of what a spec asserts. [emulator-keycode.helper.spec.ts](src/app/core/models/game/emulator-keycode.helper.spec.ts)
+(the text planner) and [guest-key-queue.service.spec.ts](src/app/core/services/game/guest-key-queue.service.spec.ts)
+(the key queue, against a fake emulator that records every raw key event with the fake clock)
+are the model for "a service that talks to the emulator": hand it a stub `DosCI`, never the real
+one. Write specs for pure logic (helpers, planners, parsers, queues driven by a
 fake clock); the emulator, the screen-scrapers and the WebRTC paths have no karma coverage and
 are checked in a real browser (see the harness above). `ChromeHeadlessCI` in
 [karma.conf.js](karma.conf.js) is `ChromeHeadless --no-sandbox`, which a CI runner or container
@@ -146,8 +150,10 @@ the tag is hand-written).
 
 [src/app/core/typings/jsdos.d.ts](src/app/core/typings/jsdos.d.ts) is a hand-maintained typing of the js-dos
 command interface (`DosCI`) — screenshot, key/mouse injection, `persist()`, `readMemory`,
-`writeMemory`. `GamePage.dosCI` is `any` and gets threaded into every service as a parameter; there
-is no singleton holding it.
+`writeMemory`. `GamePage.dosCI` is `any` and gets threaded into every service as a parameter; no
+singleton owns it. The one root service that touches it for longer than a call is the key queue
+(see *Typing into the guest*), and it keeps it only for the length of a job; `GamePage.ngOnDestroy`
+cancels whatever is still queued.
 
 ### Inside the .jsdos bundle / boot chain
 
@@ -183,6 +189,62 @@ Team/flag patches also install two batch files from `src/assets/elifoot/`: the o
 `d/ELIFOOT.BAT` calls `d/PATCH.BAT` before launching Windows, and `PATCH.BAT` copies
 `d/eli98/PATCH/{EQUIPAS,FLAGS,CTRGROUP,COUNTRY.TXE}` over the originals at the DOS prompt. Uploaded
 patch zips are flattened/validated in `processPatchFile()` (needs ≥34 `.EFT` team files).
+
+### Typing into the guest
+
+[guest-key-queue.service.ts](src/app/core/services/game/guest-key-queue.service.ts) is the
+**only** thing that sends keys to the guest. A FAB tap, the text dialog and anything added later
+submit tasks (`chord`, `altCode`, or a whole text planned by `EmulatorKeyCodeHelper`) to one FIFO
+with one consumer, so two senders can never overlap. `GamePage.sendKey` and
+`EmulatorControlService.sendKey` / `sendString` are thin wrappers over it.
+
+Load-bearing invariants — each of these was a bug, or a measured trap:
+
+- **Never call `dosCI.simulateKeyPress`; the queue is the only key sender.** It stamps the release
+  16 ms in the future, so a second call within 16 ms loses its key and leaves the guest keyboard
+  dead until a reload (5 of 5 repros) — and a reload costs everything since the last save. It was
+  easy to hit: the old `sendString` was not awaited, so a FAB tap mid-text did it. The queue sends
+  only `sendKeyEvent` down then up, `EMULATOR_CONTROL_CONFIG.KEY_PACING_MS` (10 ms) between groups,
+  and never more than `MAX_SYNC_KEY_EVENTS` (14) events without a gap, because DOSBox's keyboard
+  buffer drops the rest without an error (129 characters in one burst delivered 14). **This cannot
+  be fully enforced yet:** js-dos's own on-screen keyboard (`toggleSoftKeyboard`) binds its key
+  presses to `simulateKeyPress` internally, so a tap on it within 16 ms of another press, or while
+  the queue is typing, can still wedge the guest until the planned control deck replaces that
+  keyboard. `grep -rn simulateKeyPress src/app` must keep finding only comments and the
+  `@deprecated` declaration in [jsdos.d.ts](src/app/core/typings/jsdos.d.ts), never a call.
+- **A task is atomic.** Once its first key is down it is carried through to the release, so
+  neither `cancel()` nor a failure can leave Alt or Shift held in the guest; `cancel()` drops only
+  tasks that have not started, and `GamePage.ngOnDestroy` calls it.
+- **Every code point is one visible character in the guest.** `EmulatorKeyCodeHelper.planText` is
+  the pure, specced step that turns a string into tasks: ASCII is a plain or Shift chord,
+  U+00A1–U+00FF are Alt+0nnn on the keypad (four digits, zero-padded, which selects ANSI over the
+  OEM page), typographic quotes, dashes, the ellipsis and exotic spaces fold to ASCII, and
+  **everything else becomes a visible `?` — never a space, never a drop**, so the host's string and
+  the guest's field stay 1:1 and Backspace stays correct. The guest is a plain US layout with no
+  dead keys and no way to install ABNT2, so accents can only be composed. The euro sign and the
+  rest of Windows-1252's 0x80–0x9F block (Š, ™…) are `?` on purpose: Alt+0128 is accepted, but the
+  fields' font has no glyph there and draws a solid box. Count with `Array.from`; UTF-16 units
+  would turn one emoji into two `?`. Elifoot's 8-letter filename field takes the accents too (and
+  upper-cases them).
+- **CapsLock is guarded, NumLock is not.** Before a text that types letters, the queue reads the
+  BIOS keyboard flags byte (`0040:0017`, through `readMemory`) and taps CapsLock off if it is set:
+  Shift-for-uppercase inverts under it, and a host with a hardware keyboard forwards its own
+  CapsLock to the guest, so the host cannot know. The byte does track both toggles under Windows
+  3.1, but Alt+0nnn composes the same character with NumLock on or off, so there is nothing to
+  guard there. The guard is best effort — `readMemory` has no deadline of its own and the consumer
+  is single, so a read is raced against `KEYBOARD_STATE_TIMEOUT_MS`, and a failed one is logged and
+  the text goes out as it is.
+- **A refused key says so.** With no emulator a submission rejects with `KeyQueueError` (its
+  message is Portuguese, meant for `showErrorAlert`) instead of becoming a tap that does nothing.
+- **The text dialog sets its field's attributes on the DOM, not through the input's
+  `attributes` option.** Ionic hands those to Stencil, which assigns an element *property* wherever
+  one exists, and `autocorrect` is a boolean property in WebKit and Chromium: `'off'` is truthy and
+  writes `autocorrect="on"`. `enterkeyhint` is `enter`, not `send`: the field is a textarea where
+  that key inserts a line break, which is how several game fields are filled in one go.
+- **Guest hazard to know before sending any Enter.** On Elifoot's first dialog, Enter before a
+  radio is chosen raises "List index out of bounds", and Esc or Cancelar quits; either way the game
+  exits to Program Manager (the FAQ says so). Anything that sends Enter on its own — a future type
+  bar, a "next field" button — must not do it on that screen.
 
 ### Screen-scraping instead of emulator events
 
@@ -309,8 +371,9 @@ the **only** chat entry point, because it is the one control that exists at ever
   scanner over `readMemory`/`writeMemory`, sweeping the 8 MB address space in 1 MB chunks and
   narrowing matches across successive searches (`SearchState` machine, byte/word/dword/string type
   inference, saveable `0x…` addresses).
-- [emulator-control.service.ts](src/app/core/services/game/emulator-control.service.ts) — also converts strings
-  to DOSBox keycode sequences (`EmulatorKeyCodeHelper`, 30 ms between strokes) for the text-input dialog.
+- [emulator-control.service.ts](src/app/core/services/game/emulator-control.service.ts) — also the entry
+  point for sending keys and text (thin wrappers over the key queue, see *Typing into the guest*) and
+  for the auto-save OCR.
 - [local-storage.service.ts](src/app/core/services/shared/local-storage.service.ts) — thin wrapper over
   `@ionic/storage-angular`; all keys in `STORAGE_KEY`.
 - [layout-helper.service.ts](src/app/core/services/shared/layout-helper.service.ts) — two APIs

@@ -1,14 +1,14 @@
 import { Component, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { AlertController, LoadingController, ModalController } from '@ionic/angular/lazy';
+import { AlertController, LoadingController, ModalController, ToastController } from '@ionic/angular/lazy';
 import JSZip from 'jszip';
 import { environment } from 'src/environments/environment';
-import { GAME_INPUT_FN_BTNS, GAME_INPUT_FN_BTNS_REVERSED, MULTIPLAYER, STORAGE_KEY } from '../../core/models/constants';
+import { EMULATOR_CONTROL_CONFIG, GAME_INPUT_FN_BTNS, GAME_INPUT_FN_BTNS_REVERSED, MULTIPLAYER, STORAGE_KEY } from '../../core/models/constants';
 import { UserGuideComponent } from './components/user-guide/user-guide.component';
 import { AboutComponent } from './components/about/about.component';
 import { OmaticModalComponent } from './components/omatic-modal/omatic-modal.component';
 import { filter, map, Observable, Subscription, take } from 'rxjs';
-import { EmulatorKeyCode } from '../../core/models/game';
+import { EmulatorKeyCode, EmulatorKeyCodeHelper } from '../../core/models/game';
 import { CursorClickMessage, CursorPositionMessage, MultiplayerJoinErrorKind, PlayerInfo } from '../../core/models/multiplayer';
 import { AutoSaverService, EmulatorControlService, PatchService, SaveGameService } from '../../core/services/game';
 import { LayoutHelperService, LocalStorageService } from '../../core/services/shared';
@@ -66,6 +66,9 @@ export class GamePage implements OnInit, OnDestroy {
   isMobile$: Observable<boolean>;
   isLandscape$: Observable<boolean>;
 
+  private static readonly KEY_FAILURE_REPORT_INTERVAL_MS = 5000;
+  private lastKeyFailureAt = 0;
+
   private multiplayerSubscriptions = new Subscription();
   private stopObservingOverlay?: () => void;
 
@@ -73,6 +76,7 @@ export class GamePage implements OnInit, OnDestroy {
     private loadingController: LoadingController,
     private alertController: AlertController,
     private modalController: ModalController,
+    private toastController: ToastController,
     private saveGameService: SaveGameService,
     private patchService: PatchService,
     private storageService: LocalStorageService,
@@ -154,6 +158,9 @@ export class GamePage implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    // The queue is a root service and outlives this page; whatever it still holds is typing
+    // meant for this page's emulator.
+    this.emulatorControlService.cancelKeys();
     this.stopObservingOverlay?.();
     this.multiplayerSubscriptions.unsubscribe();
     // Without this the room, its ping interval and the canvas capture outlive the page.
@@ -564,7 +571,19 @@ export class GamePage implements OnInit, OnDestroy {
 
   sendKey(key: EmulatorKeyCode) {
     console.log(`key pressed: ${key}`)
-    this.emulatorControlService.sendKey(this.dosCI, key)
+    this.emulatorControlService.sendKey(this.dosCI, key).catch(error => this.reportKeyFailure(error))
+  }
+
+  /**
+   * A key that could not be sent says so. Rate-limited because the usual cause (no emulator,
+   * or one that has exited) is also what makes the next tap fail, and a dialog per tap would
+   * bury the one that matters.
+   */
+  private reportKeyFailure(error: unknown) {
+    const now = Date.now()
+    if (now - this.lastKeyFailureAt < GamePage.KEY_FAILURE_REPORT_INTERVAL_MS) return
+    this.lastKeyFailureAt = now
+    void this.showErrorAlert(error instanceof Error ? error : new Error(String(error)))
   }
 
   async applyPatch(patch: JSZip) {
@@ -798,21 +817,29 @@ export class GamePage implements OnInit, OnDestroy {
     await this.promptHostRoom()
   }
 
+  /**
+   * Compose a text and type it into whatever the game has focused. Accents work (they are
+   * sent as Alt codes, see EmulatorKeyCodeHelper), a line break is an Enter, which is how
+   * several fields of a form are filled in one go, and anything the game cannot show is typed
+   * as "?".
+   */
   async promptInputText() {
+    // Every one carries an accent, so the first thing the dialog says about accents is that
+    // they are fine. Keep it that way when adding names: an unaccented pick says nothing.
     const placeholders = [
-      'Tite\nFelipao\nParreira',
-      'Ronaldo',
-      'Hristo',
-      'Lukunku',
-      'Denilson',
-      'Taffarel',
-      'Peter Schemichel',
-      'Roberto Carlos',
-      'Bosco',
-      'Zinedine Zidane',
-      'Rui Costa',
-      'Mirandinha',
-      'Batistuta'
+      'Tite\nFelipão\nParreira',
+      'Zé Roberto',
+      'Romário',
+      'Júnior',
+      'João André',
+      'Sócrates',
+      'Lúcio',
+      'Kaká',
+      'Ronaldinho Gaúcho',
+      'Zinédine Zidane',
+      'Mário Jardel',
+      'Fábio Júnior',
+      'Émerson',
     ]
 
     const randomIndex = Math.floor(Math.random() * placeholders.length);
@@ -820,7 +847,7 @@ export class GamePage implements OnInit, OnDestroy {
 
     const alert = await this.alertController.create({
       header: 'Input',
-      message: 'Digite o texto que deseja enviar para o jogo',
+      message: 'Digite o texto que deseja enviar para o jogo.\nAcentos são enviados normalmente, e cada quebra de linha equivale a apertar Enter.',
       backdropDismiss: false,
       cssClass: 'win9x-alert alert-whitespace wide-alert',
       inputs: [{
@@ -833,15 +860,97 @@ export class GamePage implements OnInit, OnDestroy {
         role: 'cancel'
       }, {
         text: 'Enviar',
-        handler: async (data) => {
-          const text = data.text
-          if (text) {
-            this.emulatorControlService.sendString(this.dosCI, text)
-          }
-        }
+        role: 'send'
       }]
     })
+    this.turnOffTextAssists(alert)
     await alert.present()
+
+    const { role, data } = await alert.onDidDismiss()
+    const text: string = data?.values?.text ?? ''
+    if (role === 'send' && text) {
+      await this.sendTextToGame(text)
+    }
+  }
+
+  /**
+   * Stop the phone's keyboard from rewriting a name on its way to the game: autocorrect
+   * turns "Felipão" into "Felipe", and sentence capitalisation, suggestions and a trailing
+   * auto-space all change what arrives. `enterkeyhint` is "enter", not "send", on purpose:
+   * the field is a textarea, where that key inserts a line break (and a line break is how
+   * several form fields get filled in one go), so a "send" label would sit on a key that does
+   * not send.
+   *
+   * Set on the DOM and not through the input's `attributes` option. Ionic hands those to
+   * Stencil, which assigns an element *property* wherever one exists, and `autocorrect` is a
+   * boolean property in WebKit and Chromium: 'off' is a truthy string, so the assignment
+   * writes autocorrect="on".
+   *
+   * The alert has rendered by the time `create()` resolves, so this runs before the field can
+   * be focused.
+   */
+  private turnOffTextAssists(alert: HTMLElement) {
+    const field = alert.querySelector('textarea, input')
+    if (!field) return
+    field.setAttribute('autocapitalize', 'off')
+    field.setAttribute('autocorrect', 'off')
+    field.setAttribute('autocomplete', 'off')
+    field.setAttribute('spellcheck', 'false')
+    field.setAttribute('enterkeyhint', 'enter')
+  }
+
+  /**
+   * Type `text` into the game and, once it is long enough to take a while, say how far along
+   * it is. Progress is a toast and not a second dialog: the dialog the text was composed in
+   * hid the very field it was typing into, which is the problem with this whole flow, so what
+   * is left on screen has to be something that leaves the game visible.
+   */
+  private async sendTextToGame(text: string) {
+    const total = EmulatorKeyCodeHelper.planText(text).tasks.length
+    let finished = false
+    let cancelled = false
+    let progress: Awaited<ReturnType<ToastController['create']>> | null = null
+
+    if (total >= EMULATOR_CONTROL_CONFIG.PROGRESS_MIN_CHARACTERS) {
+      progress = await this.toastController.create({
+        message: `Enviando 0/${total}`,
+        position: 'bottom',
+        buttons: [{ text: 'Cancelar', role: 'cancel' }]
+      })
+      // Any way of closing it before the send ends (the button, or the swipe-away on iOS)
+      // is a request to stop.
+      void progress.onDidDismiss().then(() => {
+        if (finished) return
+        cancelled = true
+        this.emulatorControlService.cancelKeys()
+      })
+      await progress.present()
+      // Cancelar can land while the toast is still sliding in, before there is anything queued.
+      if (cancelled) return
+    }
+
+    try {
+      const result = await this.emulatorControlService.sendString(this.dosCI, text, (done, count) => {
+        if (progress) progress.message = `Enviando ${done}/${count}`
+      })
+      finished = true
+      await progress?.dismiss()
+
+      if (result.cancelled) {
+        await this.multiplayerUiService.showToast(
+          `Envio cancelado: ${result.completed} de ${result.total} caracteres enviados.`, 'warning', 4000)
+      } else if (result.substituted > 0) {
+        await this.multiplayerUiService.showToast(
+          result.substituted === 1
+            ? '1 caractere sem equivalente no jogo foi enviado como "?".'
+            : `${result.substituted} caracteres sem equivalente no jogo foram enviados como "?".`,
+          'warning', 4000)
+      }
+    } catch (error) {
+      finished = true
+      await progress?.dismiss()
+      await this.showErrorAlert(error instanceof Error ? error : new Error(String(error)))
+    }
   }
 
   async promptHostRoom() {

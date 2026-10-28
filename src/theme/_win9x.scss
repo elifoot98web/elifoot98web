@@ -484,10 +484,14 @@ ion-alert.win9x-alert .alert-input::placeholder {
 }
 
 /* (0,2,2) beats Ionic's `textarea.alert-input` (0,2,1). The free-text box that sends a
-   whole string into the emulator is a textarea for a reason; one line of room isn't it. */
+   whole string into the emulator is a textarea for a reason; one line of room isn't it.
+   16px is a floor, not a style: iOS Safari zooms the page when a focused field is smaller,
+   and this is the one field in the app a phone user is sent to type a long text into. It is
+   above `--win9x-font-size` on purpose; the other alert inputs stay at 14px. */
 ion-alert.win9x-alert textarea.alert-input {
   min-height: 88px;
   resize: none;
+  font-size: 16px;
 }
 
 /* Ionic's focus rule swaps to a 2px primary bottom border and shaves 1px off the margin,
