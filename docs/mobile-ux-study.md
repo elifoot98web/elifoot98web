@@ -194,6 +194,70 @@ build, and a CLAUDE.md update.
    (its note at ~243 says only "4:3"); the one in `global.scss` is corrected.
 4. **P7 — accessibility / contrast / hit-target / copy sweep** on elements that survive the
    redesign.
+   **As built:** aria-labels on the About, FAQ/Manual and O Matic close buttons and the options
+   trigger; `#game-container` is `role="application"` with a label; the chat transcript is
+   `role="log"` (`polite`, `atomic=false`, `relevant=additions`). `--win9x-ink-muted` (#4a4a4a)
+   replaces `--win9x-shadow` as text colour, `#a11` is `#800000`, the landing footer subtitles are
+   `color="light"`. One `@media (pointer: coarse)` block at the end of `_win9x.scss` (44px
+   `.win9x-button`, `.win9x-expander`, alert buttons and titlebar close; 40px roster rows; 16px
+   text fields through `--win9x-input-font-size`), a shared `ion-button.win9x-titlebar-close`
+   replacing three copies of an `ion-toolbar ion-button` override, and a 44px `::after` on
+   `.mp-status-pill` (a transparent border, not an `::after`; still flat, still in `global.scss`).
+   Copy: "Múltiplas tentativas (3)", a
+   neutral "O jogo não carregou" header, "Como funcionam", "às pressas", the About year from
+   `new Date()`, and `PatchService`'s thrown messages in Portuguese (`save-game.service.ts` throws
+   nothing a person sees). The manual's video is a click-to-load youtube-nocookie facade in a 16:9
+   box without `aspect-ratio`. Two specs (`patch.service.spec.ts`, `win9x-palette.spec.ts`).
+   Measured in headless Chrome with synthetic touch emulation (`pointer: coarse` confirmed with
+   `matchMedia`), a build of the previous commit against the working tree, at 390x844, 844x390
+   and 1280x800:
+   - **Contrast** (WCAG ratio): hint/timestamp text on the window face 2.17 → 4.87; on white 3.95 →
+     8.86; on the shaded roster row 3.28 → 7.37; error text on the face 4.13 → 6.02; the landing
+     footer 3.02 → 9.75 (`light` is `#d5d5d5` in this theme, not Ionic's `#f4f5f8`).
+     **The investigation's "about 7:1 on #c0c0c0" for #4a4a4a was wrong; it is 4.87.** That clears
+     AA but not AAA, and a darker grey would stop reading as secondary next to the black ink.
+   - **Hit targets at 390x844, coarse:** `.recent-room` 16 → 44px, titlebar close 34.9x32 → 44x44,
+     alert buttons 36 → 44, the chat's roster expander 18 → 44, the O Matic's buttons 36 → 44,
+     roster rows 29.5 → 40 (the chat's compact strip stays 22.5), chat and room inputs 13 → 16px.
+   - **The status pill's hit area, corrected after review.** The first version laid a 44px `::after`
+     over the pill and the notes here said a 2-D grid showed a 44px rectangle. It did not hold in
+     the real header: the pill sits in an `ion-title`, whose shadow `.toolbar-title` is
+     `overflow: hidden` and one line box (~31px) tall, which clips the pseudo-element for hit
+     testing. An `elementFromPoint` column scan down the real spectator header found the pill only
+     from y = 12 to 43 (32px: 7px above the capsule, none below). The fix is 10px of transparent
+     border top and bottom with `background-clip: padding-box`: the scan now reads 5 to 49 (45px),
+     the toolbar title box is 44px inside the 56px toolbar, and the capsule is a true 24px pill
+     (it sits ~3px higher, on the toolbar's centre line with the icon buttons, where before it hung
+     off the line box's baseline). The floating instance measured identical to the pixel under a
+     mouse and a touch pointer (capsule top 9.91px, height 24.19px), with the hit area growing
+     from 26 to 45px.
+   - **Desktop (1280x800, fine pointer) is geometry-identical** before and after: every
+     bounding box in the dialogs, the panel and the alerts, and the O Matic's 416/416 scroll
+     (no overflow), is unchanged; only colours and ARIA differ.
+   - **The original 44px-floor overflow did return on touch tablets, and is fixed.** Review found
+     it: with touch emulation at 820x1180 and 1024x768 the O Matic is still the 480px desktop box
+     (768px+ wide) but its buttons are 44px, and the scroll area measured 440 against 416 (a
+     scrollbar and "Cheats Salvos" clipped). `@media (min-width: 768px) and (pointer: coarse)`
+     sets `.omatic-modal { --height: 520px }`: 456/456 at both sizes, and 1280x800 with a mouse is
+     still 416/416 with 36px buttons. The 844x390 phone and the 390x844 phone are unchanged.
+   - **Found on the way, fixed:** at 844x390 the O Matic modal's titlebar was already at y = -41
+     before this change (a 480px box centred on a 390px viewport), so its close button could not be
+     reached. `.omatic-modal` now has `--max-height: 90vh`; the titlebar is at y = 24 and the 44px
+     close button is fully on screen. The content scrolls inside (486 vs 287px); it overflowed
+     before too (462 vs 416, with the title clipped).
+   - **Cost to know about:** the saved-cheats alert (three stacked 44px buttons) leaves 61px of
+     list at 844x390, one row and a bit, against 85px with the 36px buttons. It scrolls.
+   - **Accessibility tree** (`Accessibility.queryAXTree`): before, the three close buttons and the
+     options trigger were unnamed and neither `#game-container` nor the transcript had a role;
+     after they read "Fechar" ×3, "Menu de opções", `application` "Elifoot 98 (emulador)…", and
+     `log` "Mensagens do chat" with `live: polite, atomic: false, relevant: additions`.
+   - **Manual at 390px:** the old iframe was 480x315 at x = 48 (right edge 528 on a 390px screen);
+     the facade box is 294x165 (16:9) and the iframe that replaces it keeps that size.
+   Not done here: label renames such as "Auto-Save" (P13), the FAB and header buttons and the chat
+   toggle (P10 deletes them), `maximum-scale`/`user-scalable` (VIEW-1; the 16px inputs are its
+   precondition). **Known:** the 'O Matic video id is dead (YouTube's oEmbed answers 404, against
+   200 for a control video), so the player says "Video unavailable" until the owner supplies a new
+   id.
 5. **Fix `game.js` first, then P6 — boot honesty and offline.** `elifootMain`'s async Promise
    executor swallows `Dos()`/`run()` failures (it never calls `reject`), so today a timeout is
    the only error that exists; classify real errors before changing `FAIL_COUNT` or the wipe

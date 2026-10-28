@@ -28,7 +28,7 @@ npm run mp:launch        # two browsers for a multiplayer session (see the harne
 Specs are karma + jasmine. The builder globs `**/*.spec.ts` (its `include` option, which is also
 what `--include` overrides); [src/test.ts](src/test.ts) only initialises the TestBed and
 `tsconfig.spec.json` type-checks `src/**/*.spec.ts`, so a spec needs no registration but must live
-under `src/` to be type-checked. Nothing in a spec reaches the bundle. There are **nine spec files so
+under `src/` to be type-checked. Nothing in a spec reaches the bundle. There are **twelve spec files so
 far**. [room-code.helper.spec.ts](src/app/core/helpers/room-code.helper.spec.ts) is there as
 much to prove the harness as to cover `RoomCodeHelper`: `ng test` with **zero** specs
 prints `Executed 0 of 0 SUCCESS` and still exits 1, so a `test:ci` could never pass before the
@@ -45,9 +45,14 @@ for "a loop that must survive its own failures": the collaborators are plain fak
 constructor's types, the clock is `fakeAsync`, and every spec ends with `stop()` so
 `{ flush: false }` can prove nothing is left scheduled. One trap there: build a rejected promise
 *inside* the fake (`outcomes()`), never up front, or it has no handler yet and fails the spec as
-unhandled. Write specs for pure logic (helpers, planners, parsers, queues driven by a
-fake clock); the emulator, the screen-scrapers and the WebRTC paths have no karma coverage and
-are checked in a real browser (see the harness above). `ChromeHeadlessCI` in
+unhandled. [patch.service.spec.ts](src/app/core/services/game/patch.service.spec.ts) is the model for
+"a service whose `Error` messages are the UI": the game page shows them verbatim, so the spec pins
+the Portuguese wording and fails on the English that JSZip and HttpClient reject with.
+[win9x-palette.spec.ts](src/theme/win9x-palette.spec.ts) is the model for asserting CSS: karma loads
+`src/global.scss`, so it probes the real `.win9x-roster-*` rules and `:root` tokens for contrast
+instead of keeping a second copy of the hex values. Write specs for pure logic (helpers,
+planners, parsers, queues driven by a fake clock); the emulator, the screen-scrapers and the WebRTC
+paths have no karma coverage and are checked in a real browser (see the harness above). `ChromeHeadlessCI` in
 [karma.conf.js](karma.conf.js) is `ChromeHeadless --no-sandbox`, which a CI runner or container
 needs; plain `npm test` keeps the visible Chrome and the file watcher.
 
@@ -452,10 +457,11 @@ the **only** chat entry point, because it is the one control that exists at ever
 ### Retro visual identity (scope rule)
 
 The Windows 95/98 vocabulary lives in [_win9x.scss](src/theme/_win9x.scss) — `:root`
-tokens (`--win9x-face`, `--win9x-shadow`, `--win9x-field`, `--win9x-titlebar-bg`,
-`--win9x-font`, `--win9x-hit-target`) plus `.win9x-element-border` / `-bevel`,
-`.win9x-outer-window`, `.win9x-modal-container`, `.win9x-titlebar`, `.win9x-input`,
-`.win9x-button`. It is loaded via `@use` as the **first statement** of
+tokens (`--win9x-face`, `--win9x-shadow`, `--win9x-field`, `--win9x-ink-muted`,
+`--win9x-titlebar-bg`, `--win9x-font`, `--win9x-input-font-size`, `--win9x-hit-target`) plus
+`.win9x-element-border` / `-bevel`, `.win9x-outer-window`, `.win9x-modal-container`,
+`.win9x-titlebar`, `.win9x-titlebar-close`, `.win9x-input`, `.win9x-button`. It is loaded via
+`@use` as the **first statement** of
 [global.scss](src/global.scss); `@use` must precede all other rules, so it cannot be moved
 below the Ionic imports.
 
@@ -512,17 +518,88 @@ and half a retro toolbar reads as a bug. Its landscape instance rides the game s
 keeps the same flat look, because one component changing identity by position is worse than
 one that does not. Do not "fix" it by moving it into `_win9x.scss`.
 
-Two gotchas the partial documents but are worth repeating:
+**Secondary text is `--win9x-ink-muted` (#4a4a4a), never `--win9x-shadow` (#808080).** The
+shadow grey is for bevels and borders: as text it is 2.2:1 on the window face and 3.95:1 on white.
+The muted ink is 4.9:1 and 8.9:1, and stays in the Win9x grey family; `--win9x-ink-disabled`
+(#808080) is for disabled controls only, which WCAG exempts. Error text is `#800000` (6.0:1 on the
+face; the `#a11` it replaced was 4.1:1). [win9x-palette.spec.ts](src/theme/win9x-palette.spec.ts)
+fails when a roster text class drops under 4.5:1 on the row it sits on. It cannot see the chat
+transcript, whose colours live in a component stylesheet and use the same token.
+
+**The 44px floor follows the pointer, not the width.** The `@media (pointer: coarse)` block at
+the *end* of [_win9x.scss](src/theme/_win9x.scss) gives a finger `min-height: var(--win9x-hit-target)`
+on every `.win9x-button`, `.win9x-expander`, alert button and titlebar close, 40px roster rows
+(not the chat's compact strip, whose rows are not controls) and 16px text fields (through
+`--win9x-input-font-size`, because the chat and the room dialog set their own size in component
+stylesheets). A mouse keeps the authentic ~16px controls. It must stay at the end: the alert
+button's 36px is a rule of the same specificity, and the later one wins. `.recent-room` is a
+`.win9x-button`, so the spectator's one-tap rejoin is covered without being named. The status pill
+is shell and has its own coarse rule beside it in [global.scss](src/global.scss): 10px of
+transparent border above and below (`background-clip: padding-box`), which still paints the flat
+24px capsule.
+
+**The pill's hit area is a border, never an `::after`.** In both toolbars the pill sits in an
+`ion-title`, whose shadow `.toolbar-title` is `overflow: hidden` and exactly one line box tall
+(~31px). Anything that overflows the pill's own box is clipped to that, for painting and hit
+testing alike, so the first version (a 44px `::after`) gave 7px of hit area above the capsule and
+none below while the comments claimed 44. A border is part of the box and grows the line box
+instead; the 56px toolbar absorbs it. Measured with an `elementFromPoint` column scan down the
+real spectator header: 32px of hit area before, 45px after. The floating instance (mobile
+landscape, no clipping parent) takes the border back out of the layout with a negative margin, so
+its capsule is where it always was.
+
+Gotchas the partial documents but are worth repeating:
 
 - `.win9x-button` only renders correctly on an `ion-button` with `fill="clear"`; otherwise
   Ionic's shadow-encapsulated `.button-native` paints over the host.
-- The 44px touch floor is **opt-in** via `.win9x-button--touch`. Applying it to
-  `.win9x-button` itself grew the omatic modal's buttons enough to overflow it into a
-  scrollbar. Authentic Win9x controls are ~16px tall.
+- The floor is automatic only under `(pointer: coarse)`; for a mouse it is **opt-in** via
+  `.win9x-button--touch`. Applying it to `.win9x-button` for every pointer grew the omatic
+  modal's buttons enough to overflow its 480px desktop box into a scrollbar (measured at
+  1280x800: 416/416 before and after, with a mouse). **A touch tablet is the case in between.**
+  820x1180 and 1024x768 are 768px+ viewports, so they get that same 480px box with the 44px
+  buttons, and the content was 24px too tall for it (440 against 416, a scrollbar and the last
+  button clipped). `@media (min-width: 768px) and (pointer: coarse)` in `global.scss` makes the
+  box 520px (456/456 at both sizes). On an 844x390 landscape phone the modal scrolls either way,
+  and `.omatic-modal` is capped at `--max-height: 90vh` for that reason: uncapped, a >=768px-wide,
+  390px-tall viewport centred the 480px box and put its titlebar and close button above the top
+  edge. Re-measure all four sizes (phone, both tablets, mouse) when the O Matic's content changes.
+- Inside `ion-buttons`, Ionic's `.sc-ion-buttons-md-s ion-button { min-height: 32px }` is (0,1,1)
+  and beats a bare class, so the titlebar close sets its own `min-height`.
+- The pill's border is a literal `10px`, not `--win9x-hit-target`: it is shell, not a Win9x control.
 
-`ion-toolbar ion-button` is deliberately **not** in the shared partial — that selector is
-unqualified and would restyle toolbar buttons on every page, so it stays local to the
-omatic modal.
+**`ion-button.win9x-titlebar-close` replaced three copies of an `ion-toolbar ion-button`
+override** (O Matic, room dialog, multiplayer panel). The old selector was unqualified and
+hoisted as it was it would restyle every toolbar button on the main, game and join-game pages, so
+the shared version is an opt-in class qualified by element. Put it beside `.win9x-button` on the
+button that closes a Win9x titlebar.
+
+### Help modals, copy and accessibility
+
+- **The manual's video is a click-to-load facade, and the landing page's privacy line is why.**
+  The FAQ/Manual accordions render their content slot immediately, so a plain iframe loaded
+  YouTube whenever the guide opened, against a footer that says nothing is sent to anyone.
+  `ManualComponent` draws a local placeholder (no thumbnail: that would be a request too) and
+  creates the `youtube-nocookie.com` iframe on the tap, with `autoplay=1` because the tap is the
+  request to play. Its box is 16:9 without `aspect-ratio` (Safari 14.1 is the floor): padding in
+  percent resolves against the *containing* block, so the 480px cap lives on an outer element and
+  the padded one is `width: 100%`. **Known:** the video id in that file is dead — YouTube's oEmbed
+  endpoint answers 404 for it, against 200 for a control video — so the player shows "Video
+  unavailable" until someone supplies a new id.
+- **Every `Error` thrown by `PatchService` is shown verbatim** by `GamePage.showErrorAlert`, so its
+  messages are Portuguese and say what to do next; JSZip's and HttpClient's own English goes to the
+  console at the catch site. [patch.service.spec.ts](src/app/core/services/game/patch.service.spec.ts)
+  pins the wording. Other English `throw`s remain: `CheatOmaticService`'s are logged by the O Matic
+  modal, never shown, but `MultiplayerService.joinRoom`'s "Already in a room…" can reach the join
+  page's error card. The `elifootMain` timeout ("jsdos timed out after 15 seconds") is English too and appears in the
+  load-failure dialog's "Motivo"; it belongs to the `game.js` rework.
+- **Labels the screen reader reads.** Icon-only buttons need `aria-label`; Ionic moves it from the
+  `ion-button` host to the native `<button>` it renders, so check the accessibility tree, not the
+  host attribute. `#game-container` is `role="application"` with a label (the canvas inside is
+  opaque to assistive tech whatever is said about it). The chat transcript is `role="log"`,
+  `aria-live="polite"`, `aria-atomic="false"`, `aria-relevant="additions"`: lines are announced
+  one at a time and the 100-line cap dropping the oldest is not announced. The docked panel is
+  `aria-hidden` while closed, which is what keeps a chat nobody opened silent. The copyright year
+  in the About modal is `new Date().getFullYear()`, not a literal.
 
 ### PWA
 

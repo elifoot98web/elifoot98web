@@ -133,9 +133,9 @@ export class GamePage implements OnInit, OnDestroy {
         window.location.reload()
       } else {
         const alert = await this.alertController.create({
-          header: `É ${failCount} papapá...`,
+          header: 'O jogo não carregou',
           cssClass: 'win9x-alert alert-whitespace',
-          message: `Multiplas tentativas(${failCount}) de carregar o jogo falharam\n\nMotivo: (${e.message})`,
+          message: `Múltiplas tentativas (${failCount}) de carregar o jogo falharam\n\nMotivo: (${e.message})`,
           backdropDismiss: false,
           buttons: [
             {

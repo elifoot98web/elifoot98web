@@ -5,6 +5,11 @@ import { lastValueFrom } from 'rxjs';
 import { BASE_SAVEGAME_DIR } from '../../models/constants';
 import JSZip from 'jszip';
 
+/**
+ * Every `Error` thrown from here ends up in the game page's error dialog verbatim, so each
+ * message is Portuguese and says what to do next. The technical cause (JSZip's and
+ * HttpClient's own messages are English) goes to the console at the catch site instead.
+ */
 @Injectable({
   providedIn: 'root'
 })
@@ -21,13 +26,13 @@ export class PatchService {
     // Get patched elifoot.bat
     const patchedElifootBatBlob = await this.getElifootBatchFile()
     if(!patchedElifootBatBlob) {
-      throw new Error('Could not get patched elifoot.bat')
+      throw new Error('Não foi possível obter o ELIFOOT.BAT do patch. Verifique sua conexão e tente novamente.')
     }
 
     // Get patch.bat
     const patchBatBlob = await this.getPatchBatchFile()
     if(!patchBatBlob) {
-      throw new Error('Could not get patch.bat')
+      throw new Error('Não foi possível obter o PATCH.BAT. Verifique sua conexão e tente novamente.')
     }
 
     // Prepare and load local changes
@@ -55,11 +60,18 @@ export class PatchService {
 
   async processPatchFile(patchFile: File): Promise<JSZip> {
     if (!patchFile) {
-      throw new Error('No file provided')
+      throw new Error('Nenhum arquivo foi selecionado.')
     }
     
-    // Load patch file
-    const patch = await JSZip.loadAsync(await patchFile.arrayBuffer(), { createFolders: true })
+    // Load patch file. JSZip's own rejection ("Can't find end of central directory...") is
+    // English and says nothing a person can act on.
+    let patch: JSZip
+    try {
+      patch = await JSZip.loadAsync(await patchFile.arrayBuffer(), { createFolders: true })
+    } catch (error) {
+      console.error('Patch file could not be read as a zip', error)
+      throw new Error('O arquivo selecionado não é um ZIP válido. Escolha um patch do Elifoot 98 em formato .zip.')
+    }
     
     // Sanitize input patch file to only contain .EFT files on the root
     const originalFiles = patch.files
@@ -114,12 +126,12 @@ export class PatchService {
    */
   async prepareSaveFilePatch(file: File): Promise<JSZip> {
     if (!file) {
-      throw new Error('No file provided')
+      throw new Error('Nenhum arquivo foi selecionado.')
     }
 
     // Check if the file is a .e98 file
     if (!file.name.toLowerCase().endsWith('.e98')) {
-      throw new Error('Invalid file type. Only .e98 files are allowed')
+      throw new Error('Tipo de arquivo inválido. Escolha um jogo salvo do Elifoot 98 (arquivo .e98).')
     }
 
     const fileName = file.name.toUpperCase()
@@ -134,7 +146,7 @@ export class PatchService {
     // Get local changes
     const localChanges = await this.getLocalChanges(dosCI)
     if (!localChanges) {
-      throw new Error('Could not get local changes')
+      throw new Error('Não foi possível ler os dados do jogo. Recarregue a página e tente novamente.')
     }
     
     Object.assign(localChanges.files, patch.files)
@@ -143,13 +155,19 @@ export class PatchService {
   }
 
   private async getAssetFile(assetFilePath: string): Promise<Blob> {
-    return await lastValueFrom(this.httpClient.get(`assets/${assetFilePath}`, { 
-      responseType: 'blob',
-      headers: {
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
-      }
-    }))
+    try {
+      return await lastValueFrom(this.httpClient.get(`assets/${assetFilePath}`, { 
+        responseType: 'blob',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      }))
+    } catch (error) {
+      // HttpErrorResponse's message is English ("Http failure response for ...").
+      console.error(`Could not download assets/${assetFilePath}`, error)
+      throw new Error(`Não foi possível baixar um arquivo necessário (${assetFilePath.split('/').pop()}). Verifique sua conexão e tente novamente.`)
+    }
   }
 
   private getElifootBatchFile(): Promise<Blob> {
@@ -204,9 +222,13 @@ export class PatchService {
   }
 
   private async getLocalChanges(dosCI: DosCI): Promise<JSZip> {
-    await saveGameFileSystem()
-    const rawChanges = await dosCI.persist()
-    const localChanges = await JSZip.loadAsync(rawChanges)
-    return localChanges
+    try {
+      await saveGameFileSystem()
+      const rawChanges = await dosCI.persist()
+      return await JSZip.loadAsync(rawChanges)
+    } catch (error) {
+      console.error('Could not read the emulator changes', error)
+      throw new Error('Não foi possível ler os dados do jogo. Recarregue a página e tente novamente.')
+    }
   }
 }

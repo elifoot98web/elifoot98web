@@ -1,7 +1,7 @@
 <ion-header>
   <ion-toolbar [ngClass]="{'ion-text-center': isMobile}" color="tertiary">
     <ion-buttons [slot]="isMobile ? 'start' : 'end'">
-      <ion-button (click)="close()">
+      <ion-button (click)="close()" aria-label="Fechar">
         <ion-icon name="close" slot="icon-only"></ion-icon>
       </ion-button>
     </ion-buttons>
@@ -11,7 +11,7 @@
 <ion-content class="ion-padding">
   <h2>Elifoot 98 Online</h2>
   <p>
-    Copyright © 2023-2025 <a href="https://github.com/jlcvp" target="_blank">Leonardo "Leu" Pereira</a> <br>
+    Copyright © {{ firstYear }}-{{ currentYear }} <a href="https://github.com/jlcvp" target="_blank">Leonardo "Leu" Pereira</a> <br>
     Licenciado sob a <a href="https://opensource.org/licenses/MIT" target="_blank">Licença MIT</a>.<br>
     <small>Veja o arquivo <a href="https://github.com/elifoot98web/elifoot98web/blob/main/LICENSE" target="_blank">LICENSE</a> para detalhes.</small>
   </p>

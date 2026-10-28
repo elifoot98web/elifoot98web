@@ -534,6 +534,10 @@ canvas {
 @media screen and (min-width: 768px) {
     .omatic-modal {
         --height: 480px;
+        // A landscape phone is >= 768px wide but only ~390px tall. Without a cap the 480px box
+        // is centred on a shorter viewport and its titlebar, close button included, lands above
+        // the top edge (measured at 844x390: toolbar at y = -41).
+        --max-height: 90vh;
     }
 
     .multiplayer-room-setup-modal {
@@ -547,6 +551,17 @@ canvas {
     .win9x-modal {
         --width: 470px;
         --max-height: 90vh;
+    }
+}
+
+// A touch tablet is a 768px+ viewport too, so it gets the 480px desktop box, with the 44px
+// controls of _win9x.scss's coarse block: four buttons in three rows, 8px taller each. In 480px
+// that content is 24px too tall for its scroll area (measured at 820x1180 and 1024x768: 440
+// against 416), which is the overflow the floor was made opt-in to avoid. 520px gives the room
+// back. --max-height above still wins on a short viewport, where scrolling inside is fine.
+@media screen and (min-width: 768px) and (pointer: coarse) {
+    .omatic-modal {
+        --height: 520px;
     }
 }
 
@@ -653,6 +668,46 @@ canvas {
     outline-offset: 2px;
 }
 
+/*
+ * A finger-sized hit area without a finger-sized pill. The pill is ~24px tall and it is a
+ * button (it copies the link), so on a coarse pointer it gets 10px of transparent border above
+ * and below: the capsule is painted on the padding box only (background-clip), the rest is a
+ * hit area 44px tall. Only the height grows: the pill is already wider than 44px. It stays
+ * here, in the shell's own sheet, and uses literals rather than --win9x-hit-target: this is
+ * not a Win9x control (see the scope rule above).
+ *
+ * It is a real border and not an `::after` laid over the pill because of where the pill lives.
+ * In both toolbars it sits in an `ion-title`, whose shadow `.toolbar-title` is `overflow:
+ * hidden` and exactly one line box tall (~31px), so anything that overflows the pill's own box
+ * is clipped to that, for painting and for hit testing alike: the first version of this was
+ * measured at 7px of hit area above the capsule and none below. A border is part of the box,
+ * so it grows the title's line box (the 56px toolbar absorbs it) and nothing is clipped.
+ * Physical sides and not `border-block`, to stay clear of the Safari 14.1 floor's gaps.
+ *
+ * The radius is the same capsule, restated: with a 10px border the padding box's corners are
+ * `outer radius - 10px` on the vertical axis only, so `999px` (clamped to 22px) would paint
+ * stretched ellipses. 12px across and 22px down leaves 12px on both axes inside.
+ *
+ * Where the pill floats over the game (mobile landscape) there is no clipping parent, and
+ * a negative margin takes the 10px back out of the layout so the capsule stays where it was.
+ * The extra hit area then sits in the same gutter as the pill, so it takes no taps from the
+ * game, except on the narrowest phones where the pill already overhangs the canvas edge (see
+ * .mp-status-pill-floating).
+ */
+@media (pointer: coarse) {
+    .mp-status-pill {
+        border-top: 10px solid transparent;
+        border-bottom: 10px solid transparent;
+        border-radius: 12px / 22px;
+        background-clip: padding-box;
+    }
+
+    // The ring would otherwise hug the invisible 44px box instead of the capsule.
+    .mp-status-pill:focus-visible {
+        outline-offset: -8px;
+    }
+}
+
 .mp-status-dot {
     flex: 0 0 auto;
     width: 8px;
@@ -724,4 +779,12 @@ canvas {
 
 .mp-status-pill-floating .mp-status-pill {
     background: rgba(0, 0, 0, 0.55);
+}
+
+// Takes back the transparent border the coarse rule above adds to every pill; see there.
+@media (pointer: coarse) {
+    .mp-status-pill-floating .mp-status-pill {
+        margin-top: -10px;
+        margin-bottom: -10px;
+    }
 }

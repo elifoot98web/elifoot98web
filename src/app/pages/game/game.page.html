@@ -26,7 +26,7 @@
     </ion-title>
 
     <ion-buttons slot="end">
-      <ion-button (click)="showPopover($event)">
+      <ion-button (click)="showPopover($event)" aria-label="Menu de opções">
         <ion-icon slot="icon-only" name="ellipsis-vertical-outline"></ion-icon>
       </ion-button>
     </ion-buttons>
@@ -205,7 +205,13 @@
   <input style="display:none;" type="file" accept=".e98" #saveGameFileInput (change)="onSaveFileSelected($event)" />
   <div class="full game-stream-flex-container">
     <div class="game-stream-container full">
-      <div [ngClass]="{ hidden: isHidden, full: !isHidden }" class="smooth-canvas not-selectable" id="game-container">
+      <!--
+        role="application": keystrokes in here are the game's, so a screen reader should hand
+        them over rather than treat the page as a document. The canvas inside stays opaque to
+        assistive tech whatever this says; the label is only so the region can be found and named.
+      -->
+      <div [ngClass]="{ hidden: isHidden, full: !isHidden }" class="smooth-canvas not-selectable" id="game-container"
+        role="application" aria-label="Elifoot 98 (emulador). As teclas que você digitar vão direto para o jogo.">
       </div>
       <!--
         Mobile landscape only: the header above is suppressed in that range, so without this

@@ -33,7 +33,15 @@
     </div>
   </ng-container>
 
-  <div class="chat-messages win9x-element-bevel" #messageList>
+  <!--
+    A log: new lines are announced, politely and one at a time, and the lines already there
+    are not read again. `aria-relevant="additions"` keeps the 100-line cap from announcing
+    the oldest line leaving, and `aria-atomic="false"` is what stops it re-reading the whole
+    transcript on every message. A closed panel is `aria-hidden` (see the pages that host
+    this), so a chat nobody opened stays silent too.
+  -->
+  <div class="chat-messages win9x-element-bevel" #messageList role="log" aria-live="polite"
+    aria-atomic="false" aria-relevant="additions" aria-label="Mensagens do chat">
     <ng-container *ngIf="lines$ | async as lines">
       <div *ngFor="let line of lines; trackBy: trackBy"
         class="chat-line"

@@ -33,8 +33,29 @@
                 </p>
                 <p class="ion-padding-top">
                 Veja abaixo um vídeo demonstrando como usar o 'O Matic no Elifoot 98 Online:
-                <iframe width="480" height="315" src="https://www.youtube.com/embed/m5QaqyveP6U?si=jGCrrdDsF2TVnIVn" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen="false"></iframe>
                 </p>
+                <!--
+                  A facade, not the embed: an iframe in an accordion's content slot loads as soon
+                  as the manual is created, i.e. whenever the FAQ opens, and the landing page
+                  promises that nothing is sent to anyone. The player (youtube-nocookie) is only
+                  created by the tap. The two wrappers are the aspect-ratio-free 16:9 box, see
+                  manual.component.scss for why there are two.
+                -->
+                <div class="video-embed">
+                  <div class="video-embed-ratio">
+                    <button *ngIf="!videoRequested; else omaticVideo" type="button" class="video-facade"
+                      (click)="loadVideo()">
+                      <ion-icon name="logo-youtube" aria-hidden="true"></ion-icon>
+                      <span class="video-facade-title">Assistir no YouTube</span>
+                      <span class="video-facade-note">O vídeo só é carregado quando você tocar aqui.</span>
+                    </button>
+                    <ng-template #omaticVideo>
+                      <iframe [src]="omaticVideoUrl" title="Vídeo: como usar o 'O Matic no Elifoot 98 Online"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+                    </ng-template>
+                  </div>
+                </div>
             </div>
           </ion-accordion>
           <ion-accordion>

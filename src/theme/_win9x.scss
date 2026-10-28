@@ -24,13 +24,24 @@
   --win9x-bevel-light: #dfdfdf;
   --win9x-field: #fff;        // sunken input/list background
   --win9x-ink: #000;
+  // Secondary text that must still be READ: hints, timestamps, the roster's "(você)". #4a4a4a
+  // is 4.9:1 on the face and 8.9:1 on white; the --win9x-shadow grey this replaces for text was
+  // 2.2:1 and 3.95:1. Darker would stop reading as "secondary" next to --win9x-ink, and it is
+  // still a system-grey, which is why it is not simply black.
+  --win9x-ink-muted: #4a4a4a;
+  // Disabled controls ONLY. WCAG exempts them from the contrast minimum, so this is the one
+  // place #808080 may carry text; anything a person is meant to read uses --win9x-ink-muted.
   --win9x-ink-disabled: #808080;
   --win9x-titlebar-bg: linear-gradient(to right, #000080 50%, #3a6ea5 100%);
   --win9x-titlebar-ink: #fff;
   --win9x-font: 'MS Sans Serif', Tahoma, Geneva, Verdana, sans-serif;
   --win9x-font-size: 14px;
-  // Touch target for surfaces that opt in via .win9x-button--touch. Deliberately not
-  // a floor on .win9x-button: it would resize the existing omatic controls.
+  // Font size of the chat and room-dialog text fields (the O Matic's inherits 16px already).
+  // A token so the 16px floor for coarse pointers at the end of this file is one declaration,
+  // not a specificity fight with two component stylesheets that set their own size.
+  --win9x-input-font-size: 13px;
+  // Touch target. Applied to .win9x-button automatically under (pointer: coarse) (see the end
+  // of this file) and to any surface that opts in via .win9x-button--touch.
   --win9x-hit-target: 44px;
 }
 
@@ -172,13 +183,34 @@ ion-button.win9x-button:focus {
 }
 
 /*
- * Opt-in touch sizing. NOT applied to .win9x-button itself: authentic Win9x controls
- * are ~16px tall, and forcing a floor on the existing omatic buttons grew them enough
- * to overflow the modal into a scrollbar. New retro surfaces that need a thumb target
- * add this class deliberately.
+ * Touch sizing that is opt-in on every pointer. NOT applied to .win9x-button itself for a
+ * mouse: authentic Win9x controls are ~16px tall, and forcing a floor on the existing omatic
+ * buttons grew them enough to overflow the desktop modal (480px) into a scrollbar. A finger
+ * is the other case, and the `(pointer: coarse)` block at the end of this file gives every
+ * .win9x-button the same floor there; surfaces that want it under a mouse too add this class.
  */
 .win9x-button--touch {
   min-height: var(--win9x-hit-target);
+}
+
+/*
+ * The close button of a Win9x titlebar, shared by the O Matic modal, the room dialog and the
+ * multiplayer panel, which each used to carry their own copy of an `ion-toolbar ion-button`
+ * override. Put it beside .win9x-button on the `ion-button` that closes the window.
+ *
+ * It is an opt-in class qualified by element on purpose. The copies were unqualified, and
+ * hoisted as they were into a global sheet they would restyle the toolbar buttons of every
+ * page in the shell. The `!important`s come with the copies, and they are needed: inside
+ * `ion-buttons`, Ionic's `.sc-ion-buttons-md-s ion-button` sets the same `--padding-*` at the
+ * same specificity and is injected after this sheet. The thumb-sized hit area for coarse
+ * pointers is at the end of this file.
+ */
+ion-button.win9x-titlebar-close {
+  --padding-start: 0px !important;
+  --padding-end: 0px !important;
+  --padding-top: 4px !important;
+  --padding-bottom: 4px !important;
+  padding: 0 8px !important;
 }
 
 ion-button.win9x-button {
@@ -247,7 +279,7 @@ ion-button.win9x-button.button-disabled::part(native) {
 .win9x-roster-self {
   margin-inline-start: 4px;
   font-weight: bold;
-  color: var(--win9x-shadow);
+  color: var(--win9x-ink-muted);
 }
 
 /*
@@ -258,7 +290,7 @@ ion-button.win9x-button.button-disabled::part(native) {
   margin-inline-start: 3px;
   font-family: 'Courier New', monospace;
   font-size: 10px;
-  color: var(--win9x-shadow);
+  color: var(--win9x-ink-muted);
 }
 
 /*
@@ -282,7 +314,7 @@ ion-button.win9x-button.button-disabled::part(native) {
 .win9x-roster-meta {
   flex: 0 0 auto;
   font-size: 11px;
-  color: var(--win9x-shadow);
+  color: var(--win9x-ink-muted);
 }
 
 /*
@@ -291,14 +323,14 @@ ion-button.win9x-button.button-disabled::part(native) {
  */
 .win9x-roster-meta[data-quality='success'] { color: #0a7a0a; }
 .win9x-roster-meta[data-quality='warning'] { color: #8a6100; }
-.win9x-roster-meta[data-quality='danger']  { color: #a11; }
+.win9x-roster-meta[data-quality='danger']  { color: #800000; }
 
 .win9x-roster-empty {
   text-align: center;
   font-family: var(--win9x-font);
   font-size: 12px;
   font-style: italic;
-  color: var(--win9x-shadow);
+  color: var(--win9x-ink-muted);
   margin: 1rem 0.5rem;
 }
 
@@ -371,8 +403,9 @@ ion-button.win9x-button.button-disabled::part(native) {
  * The app pins `mode: 'md'` globally (app.module.ts), so only alert.md.css is ever in
  * play — none of this has to reconcile with the iOS alert layout.
  *
- * Hit targets are deliberately Ionic-sized rather than authentic, for the same reason
- * .win9x-button--touch above exists.
+ * Hit targets are deliberately Ionic-sized (36px) rather than authentic, for the same reason
+ * .win9x-button--touch above exists, and a finger gets the full 44px floor from the
+ * `(pointer: coarse)` block at the end of this file.
  */
 
 ion-alert.win9x-alert {
@@ -678,4 +711,58 @@ ion-alert.win9x-alert ion-ripple-effect {
  */
 ion-alert.win9x-alert .alert-button.alert-danger {
   color: #800000 !important;
+}
+
+/*
+ * Coarse pointers: a finger gets thumb-sized controls, a mouse keeps the authentic ones.
+ * ---------------------------------------------------------------------------
+ * Keyed to the input device, not the viewport. A 1024px iPad needs the floor and a narrow
+ * desktop window must not get it, which is what a width query would have done the other way
+ * round. The omatic modal's original overflow is why this is not simply on for everyone: the
+ * 44px floor was first applied to .win9x-button for every pointer, and the modal (a fixed 480px
+ * box on desktop) grew a scrollbar. A mouse still gets the 36px buttons that fit that box. A
+ * phone's modal scrolls inside its box anyway, so the floor costs nothing there; a touch tablet
+ * is the case in between, a 768px+ viewport that gets the desktop box with 44px buttons, and
+ * global.scss makes that box 520px for it. Re-check the modal at 844x390 (phone), 820x1180 and
+ * 1024x768 (tablets, touch emulation on) and 1280x800 (mouse) after touching this.
+ *
+ * It sits at the end of the file on purpose: the alert button's 36px is a rule of the same
+ * specificity further up, and the later one wins.
+ *
+ * `.recent-room` (the spectator's one-tap rejoin) is a `.win9x-button`, so it is covered by
+ * the first rule without being named. The status pill is NOT here: it is shell, not Win9x,
+ * and keeps its own coarse rule beside it in global.scss.
+ */
+@media (pointer: coarse) {
+  :root {
+    // iOS Safari zooms the page when a focused field is under 16px, and the viewport meta
+    // (maximum-scale=1) is the only thing hiding that today.
+    --win9x-input-font-size: 16px;
+  }
+
+  .win9x-button,
+  .win9x-expander,
+  ion-alert.win9x-alert .alert-button {
+    min-height: var(--win9x-hit-target);
+  }
+
+  // The text/password inputs of an alert (the textarea is already 16px above).
+  ion-alert.win9x-alert .alert-input {
+    font-size: 16px;
+  }
+
+  // Its own rule, not left to `.win9x-button` above: inside `ion-buttons` Ionic's
+  // `.sc-ion-buttons-md-s ion-button { min-height: 32px }` is (0,1,1) and beats a bare class.
+  // Written as (0,1,2) rather than a tie at (0,1,1), because Stencil injects that sheet after
+  // this one and source order would hand it the win in a production build.
+  ion-buttons ion-button.win9x-titlebar-close {
+    min-width: var(--win9x-hit-target);
+    min-height: var(--win9x-hit-target);
+  }
+
+  // Not the compact strip in the chat: its rows are not controls, and every extra pixel there
+  // comes straight out of the transcript.
+  .win9x-roster:not(.win9x-roster--compact) .win9x-roster-row {
+    min-height: 40px;
+  }
 }
