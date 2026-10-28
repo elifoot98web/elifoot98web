@@ -262,6 +262,71 @@ build, and a CLAUDE.md update.
    executor swallows `Dos()`/`run()` failures (it never calls `reject`), so today a timeout is
    the only error that exists; classify real errors before changing `FAIL_COUNT` or the wipe
    offer. Progress-based deadline, stage text, add `wdosbox.js` to the ngsw jsdos group.
+   **As built:** `elifootMain(prefix, url, onProgress)` now rejects with the real error from
+   `Dos()`/`run()` (the executor's `async` swallowed them) or with a `JsdosTimeoutError`; a
+   `MutationObserver` on `.emulator-loading-pre-2` restarts a 20 s stall clock on every change of
+   js-dos's loading text (60 s once it reads "Downloading bundle 100%", 120 s hard cap per wait),
+   and calling it again re-attaches to the boot in flight instead of stacking a second DOSBox.
+   `GamePage.bootGame()` mirrors the text in Portuguese, then labels the stage from the polled
+   frames (`BootStageHelper`) for up to 45 s, and a timeout offers "Continuar esperando" /
+   "Tentar de novo" without touching `FAIL_COUNT`. The bundle URL is untouched (RES-3). The
+   `jsdos` ngsw group is prefetch with five named files including `wdosbox.js`; icons are a
+   `dataGroups` entry. Four spec files were added (55 cases; the suite is 258). Measured in headless
+   Chrome 156 against the dev server unless noted, each scenario in a fresh browser context:
+   - **Failure kinds.** *Bundle request never answered:* stall dialog at 20.5 s ("Última etapa:
+     Baixando o jogo…"); "Continuar esperando" returned to the loader and the next dialog came
+     20.5 s later; `FAIL_COUNT` stayed unset, nothing reloaded. *404 (or request refused):* js-dos
+     rejects "Network error, can't download …", which is `network`: the dialog says the files
+     could not be downloaded; `FAIL_COUNT` read 1, 2, 3 across two "Tentar de novo" and the
+     wipe button never appeared. *Corrupted bundle (200 with garbage):* js-dos rejects "Broken
+     bundle, .jsdos/dosbox.conf not found", which is `other`: the third attempt added
+     "Limpar todos os dados". With a real 4.5 MB changes layer saved first, "Baixar cópia dos meus
+     dados" downloaded `fullDiskChanges_….zip` (4,473,112 bytes, `PK` header, `hdd.img` of
+     26,214,400 bytes inside) and left the dialog up; the wipe then emptied the `files` store (it
+     would not have: `clearAllData(null)` returned early) and reset the count.
+   - **Slow is not a failure.** Bundle throttled to 200 KB/s: about 330 loader updates "Baixando o
+     jogo… N%", 34 s of download, a 9 s silent gap while `wdosbox.wasm` came down, game up at
+     46.7 s, no dialog. At 40 KB/s the hard cap fired at 120.4 s with the download at 71%;
+     "Continuar esperando" resumed at 72.6%, not from zero. That run also showed the flat 20 s
+     window firing a second dialog in the 43 s silent wasm gap after "100%", which is why that
+     one step has 60 s. With it, a clean rerun showed one dialog only (at 71%), the download
+     finishing at 171.5 s, the 43 s silent gap bridged ("Descompactando…" at 214.8 s), and the
+     welcome dialog at 218.7 s on the same single DOS instance.
+   - **Detection window.** With `screenshot()` stubbed to a black 640x400 frame the loader held
+     "Iniciando o DOS…" and the toast "O jogo ainda está iniciando…" came at 45.96 s, with no
+     welcome dialog and `FAIL_COUNT` 0; black 800x600 gave "Abrindo o Windows 3.1…" and a flat
+     `(0, 64, 128)` gave "Carregando o Elifoot…". A real boot went "Iniciando o DOS…" to
+     "Carregando o Elifoot…" to the welcome dialog at 4.9 s.
+   - **Offline (production build, plain http server on localhost).** The server is *killed* after
+     the worker installs (CDP's offline switch does not reach the worker's own fetches). New
+     config, one online visit: cold load boots to the game with js-dos "Ready" and 42 responses
+     from the worker; the only failures were 12 uncached icons (504), so the buttons were blank
+     circles. With the `icons` data group and two visits: 0 failed requests, icons present.
+     **Control, old config:** after one visit `js-dos.js` fails and the dialog says the files
+     could not be downloaded; after two visits it still fails at `wdosbox.js` (504), so PLAT-5 was
+     right.
+   - **Service worker registration** was left alone: it registers 0.26 s (1x CPU) / 0.88 s (6x)
+     after a direct `/#/game` load, prefetch complete at 1.3 s / 1.7 s, bundle requested once.
+   - **Review fixes (finalizer).** `elifootMain` re-attached to *any* boot still pending or
+     failed, but `Dos()` builds the canvas and input inside the element it was given and
+     `GamePage` is rebuilt within one document (Back, then Jogar), so the new page got a `dosCI`
+     in a detached tree, or the old failure replayed as a new attempt. A boot is now also
+     replaced when `#game-container` is not the element it started in. Checked in a bare node
+     `vm` with a hand-made DOM and a manual clock (12 cases, no browser could be launched in
+     the finalizer's sandbox): against the first version the rebuilt-container cases fail,
+     with the fix they pass, and the same harness pins the 20 s / 60 s / 120 s windows. Also:
+     `GamePage` dismisses its timeout/failure dialog on destroy and ignores "Continuar
+     esperando" afterwards, the `FAIL_COUNT` reset can no longer strand the boot overlay when
+     storage is blocked, the no-`databases()` backup path aborts instead of creating js-dos's
+     database, and the corrupt-*layer* claim was wrong (an unreadable layer is swallowed, a
+     readable non-zip fails in the worker as an `other` failure). The suite is 258 cases.
+   Deviations and leftovers: the wipe is *not* offered after `network` failures (a missing
+   download is not something a wipe fixes, and DANGER-1 is about exactly that nudge); the
+   control run found that the worker words a fetch failure "Unable to download '…', code: 504",
+   which first read as `other`, so it is `network` now; js-dos's own red toast ("Can't start
+   emulator…", English) still shows for a few seconds over the failure dialog; a timeout dialog
+   that was already up when the boot lands stays up until tapped; not measured: any phone, a
+   first visit on a slow link with the worker's prefetch competing with the page, iOS.
 6. **P2 — direct touch**, behind the "classic" switch and flagged until a device pass. A 497-line
    prototype exists (`touch/touch-layer.js`). Capture-phase pointer listeners on `layers.root`
    for `pointerType` touch/pen only (desktop mouse and pointer lock untouched; selected by

@@ -28,7 +28,7 @@ npm run mp:launch        # two browsers for a multiplayer session (see the harne
 Specs are karma + jasmine. The builder globs `**/*.spec.ts` (its `include` option, which is also
 what `--include` overrides); [src/test.ts](src/test.ts) only initialises the TestBed and
 `tsconfig.spec.json` type-checks `src/**/*.spec.ts`, so a spec needs no registration but must live
-under `src/` to be type-checked. Nothing in a spec reaches the bundle. There are **twelve spec files so
+under `src/` to be type-checked. Nothing in a spec reaches the bundle. There are **sixteen spec files so
 far**. [room-code.helper.spec.ts](src/app/core/helpers/room-code.helper.spec.ts) is there as
 much to prove the harness as to cover `RoomCodeHelper`: `ng test` with **zero** specs
 prints `Executed 0 of 0 SUCCESS` and still exits 1, so a `test:ci` could never pass before the
@@ -50,7 +50,10 @@ unhandled. [patch.service.spec.ts](src/app/core/services/game/patch.service.spec
 the Portuguese wording and fails on the English that JSZip and HttpClient reject with.
 [win9x-palette.spec.ts](src/theme/win9x-palette.spec.ts) is the model for asserting CSS: karma loads
 `src/global.scss`, so it probes the real `.win9x-roster-*` rules and `:root` tokens for contrast
-instead of keeping a second copy of the hex values. Write specs for pure logic (helpers,
+instead of keeping a second copy of the hex values. [save-game.service.spec.ts](src/app/core/services/game/save-game.service.spec.ts)
+is the model for "code that reads a browser store": karma's Chrome has a real IndexedDB, so the spec
+builds `js-dos-cache (spec …)` databases shaped like js-dos's and deletes every `js-dos-cache*`
+database before and after each case. Write specs for pure logic (helpers,
 planners, parsers, queues driven by a fake clock); the emulator, the screen-scrapers and the WebRTC
 paths have no karma coverage and are checked in a real browser (see the harness above). `ChromeHeadlessCI` in
 [karma.conf.js](karma.conf.js) is `ChromeHeadless --no-sandbox`, which a CI runner or container
@@ -147,8 +150,14 @@ the tag is hand-written).
 `game.js` exposes five browser globals, typed for TypeScript in
 [src/scripts/game.d.ts](src/scripts/game.d.ts) and called directly from Angular services:
 
-- `elifootMain(pathPrefix, gameBundleURL)` — creates the DOS instance in `#game-container`, runs the
-  bundle, resolves the command interface (`dosCI`); rejects after 15 s.
+- `elifootMain(pathPrefix, gameBundleURL, onProgress?)` — creates the DOS instance in
+  `#game-container`, runs the bundle, resolves the command interface (`dosCI`). `onProgress(text)`
+  gets js-dos's own loading text on every change, in English and unparsed (`BootProgressHelper`
+  makes the pt-BR line). **Error contract:** it rejects with the real error from `Dos()`/`run()`,
+  name and message untouched (a non-Error rejection keeps whatever `name`/`message` it carries),
+  or with an Error named `JsdosTimeoutError` (carrying `lastProgress`) when js-dos goes 20 s
+  without changing that text (60 s after the download completes) or one wait passes 120 s. A
+  timeout ends the *wait*, not the boot: see *Booting the emulator* below.
 - `saveGameFileSystem()` — `dosInstance.layers.save()`, i.e. flush changed FS to IndexedDB.
 - `toggleSoftKeyboard()` — shows/hides the js-dos `.emulator-keyboard` div.
 - `dosInstance` — the raw js-dos instance, needed by `PatchService` for `emulatorsUi.persist`.
@@ -178,6 +187,86 @@ sequence, all automatic:
 
 So DOS-level work (the patch file copies) happens *before* Windows loads, and everything the user
 sees is Windows 3.1 rendering the 16-bit app.
+
+### Booting the emulator
+
+`GamePage.bootGame()` starts js-dos through `elifootMain`, keeps the loader in step with it and
+decides what a failure means. The pure parts are specced
+([boot-progress](src/app/core/helpers/boot-progress.helper.ts),
+[boot-stage](src/app/core/helpers/boot-stage.helper.ts) and
+[boot-failure](src/app/core/helpers/boot-failure.helper.ts) helpers); the deadline logic lives in
+`game.js`, which karma cannot load, and is checked in a real browser. Load-bearing:
+
+- **A timeout is the end of a wait, not of the boot.** The old flat 15 s clock started before the
+  6.7 MB download and ended when `run()` resolved, so a slow first visit was a "failure" that
+  reloaded itself into the same failure. Now `game.js` watches `.emulator-loading-pre-2` with a
+  `MutationObserver` and restarts a 20 s stall clock on every *change* of its text (`BOOT_STALL_MS`;
+  60 s once the text reads "Downloading bundle 100%", see below; `BOOT_HARD_CAP_MS` = 120 s bounds
+  one wait however busy the text keeps). The download is still
+  running behind a `JsdosTimeoutError`, so `elifootMain` called again **re-attaches to the boot in
+  flight** instead of stacking a second DOSBox on `#game-container`; a boot that already failed
+  reports the same error again, and one that succeeded while nobody was waiting hands over its
+  `dosCI`. A boot is replaced when its result was delivered **or when `#game-container` is no
+  longer the element it was started in**. *Why:* `Dos()` builds the canvas, mouse layer and
+  keyboard inside the element it is given, and `GamePage` is destroyed and rebuilt within one
+  document (browser Back to the landing page, then Jogar). Re-attaching there handed the new page
+  a `dosCI` whose picture and input sat in a detached tree (a welcome dialog over an empty game
+  area), or replayed the old failure as if it were a new attempt: three round trips counted
+  three failures and reached the wipe offer without one real try. The abandoned boot is not
+  stopped (`stop()` cannot cancel a download in flight): the same ghost emulator the code had
+  before any of this. Because alerts outlive the route,
+  `GamePage.ngOnDestroy` also dismisses its timeout/failure dialog, and "Continuar esperando"
+  does nothing for a destroyed page (it would raise a loader that nothing dismisses). Without an
+  element to watch the stall clock is meaningless, so the hard cap is the only deadline.
+- **The progress is js-dos's own text, so the bundle URL must never change.** "Downloading bundle
+  N%" appears only when the server sends a length, "Extracting N%" is cumulative over the whole
+  bundle (monotonic, not per file), and one step is silent by construction: after the download
+  js-dos fetches and compiles `wdosbox.wasm` and writes nothing meanwhile. Measured with the page
+  throttled to 40 KB/s that gap was 43 s (the flat 20 s fired "Continuar esperando?" at a boot
+  one download from done), hence the longer window after "100%". A dialog that was already up
+  when the boot lands stays up until tapped; "Continuar esperando" then returns at once.
+  Never give `run()` a `blob:` URL or a renamed copy to get finer progress: the changes layer is
+  keyed by `bundleURL + '.changes'` (`PatchService` hardcodes the same string), so a different URL
+  orphans every saved game.
+- **"Ready" is not the game.** After `run()` resolves, `waitForGameScreen` polls the framebuffer
+  every 500 ms for up to 45 s (`GAME_BOOT.DETECTION_TIMEOUT_MS`) and `BootStageHelper.classify`
+  labels what it sees: a frame under 480 lines is DOS text mode ("Iniciando o DOS…"), a black
+  graphics frame is Windows 3.1 starting ("Abrindo o Windows 3.1…"), a flat `(0, 64, 128)` is
+  Windows' desktop with the game loading ("Carregando o Elifoot…"), the game's green ends the
+  wait. The label never goes back (a black frame between desktop and splash would flip it).
+  The green test is the old one moved verbatim: same four pixels, same two greens, tolerance 25.
+  A window that closes without green is not an error: the page carries on without the welcome
+  dialog and says "O jogo ainda está iniciando…" in a toast. Measured on a desktop dev server
+  (frames every 250 ms): DOS text at 0.5 s, black graphics at 1.8 s, the desktop at 2.0 s and the
+  game's green at 4.1 s after navigation, 3.5 s after `run()` resolved; a phone's numbers are
+  unknown, which is what the 45 s is a ceiling for.
+- **Three kinds of failure, three outcomes** (`BootFailureHelper.kindOf`). `timeout`: dialog with
+  "Continuar esperando" / "Tentar de novo", `FAIL_COUNT` untouched, nothing reloads by itself.
+  `network` (js-dos's "Network error, can't download", which is *any* non-200 including a 404, or
+  `js-dos.js` never loaded): counted, but a wipe cannot fix a missing download, so it is never
+  offered. `other` (the emulator itself threw, e.g. "Broken bundle"): counted, and from the third
+  in a row the dialog adds "Limpar todos os dados", always beside "Baixar cópia dos meus dados".
+  Nothing is shown from js-dos's English: it goes to the console. Only a failure to *start* the
+  emulator is a boot failure; an exception in the settings, welcome dialog or host intent after
+  it is logged and alerted, never a reload (the old catch-all reloaded a game that was running).
+- **The backup and the wipe work without an emulator.** `SaveGameService.readStoredChanges()` reads
+  the layer straight out of IndexedDB (database `js-dos-cache (emulators-ui-saves)`, store
+  `files`, key `<bundle url>.changes`, the zip's `ArrayBuffer`), and `clearAllData(null)` deletes
+  the databases anyway: it used to return early without a `dosCI`, which made the failure
+  dialog's wipe a reload with the broken disk intact. `runBundle`'s try/catch swallows only a
+  layer that cannot be *read* from IndexedDB (it retries with the bundle alone and boots a
+  pristine game). A layer that reads but is not a valid zip is not caught there, because the
+  `emulators.dosWorker([bundle, changes])` promise is returned, not awaited, inside that try: it
+  fails in the worker ("Unable to extract bundle archive"), `run()` rejects with the worker's
+  panic messages as a JSON string, and that is an `other` failure, which is what the third-failure
+  wipe offer is for. Read from the vendored source and pinned by a `kindOf` spec, not run in a
+  browser. Without `indexedDB.databases()` (Firefox before 126) the backup asks for the one
+  database name js-dos uses, and aborts the upgrade if it does not exist: an open that creates
+  it leaves a database without its `files` store, which js-dos then opens at the same version
+  and never repairs, so every later save fails.
+- **js-dos paints its own red toast** ("Can't start emulator look browser logs for more info",
+  English) on a failed `run()`. It sits over the failure dialog for a few seconds and is left
+  alone: it is a global notyf container shared with every other js-dos message.
 
 ### Persistence model
 
@@ -261,10 +350,13 @@ Load-bearing invariants — each of these was a bug, or a measured trap:
 Two flows read the framebuffer because js-dos exposes no game-level state (and the guest is a 16-bit
 Windows app, so there is nothing to hook):
 
-- **Load detection** — `GamePage.loadGame()` polls `dosCI.screenshot()` every 500 ms and samples four
-  hardcoded pixels for the game's green background (tolerance 25). Note this waits for the *game's*
-  screen, i.e. it also covers the DOS + Windows 3.1 boot time. Failures increment
-  `STORAGE_KEY.FAIL_COUNT`; after 3 the user is offered a reload or full data wipe.
+- **Load detection** — `GamePage.waitForGameScreen()` polls `dosCI.screenshot()` every 500 ms for up
+  to 45 s (each look raced against 5 s, because `screenshot()` has no deadline) and
+  `BootStageHelper.isGameScreen` samples four hardcoded pixels for the game's green background
+  (tolerance 25). Note this waits for the *game's* screen, i.e. it also covers the DOS + Windows 3.1
+  boot time, and the same frames label the loader's stage (see *Booting the emulator*). Failures
+  increment `STORAGE_KEY.FAIL_COUNT`, timeouts and an undetected screen do not; the wipe is
+  offered from the third failure of the emulator itself.
 - **Auto-save** — [auto-saver.service.ts](src/app/core/services/game/auto-saver.service.ts) samples
   the framebuffer every 300 ms and [emulator-control.service.ts](src/app/core/services/game/emulator-control.service.ts)
   OCRs one 132x20 strip with tesseract.js (`por` model) looking for "a gravar o jogo…" via
@@ -509,7 +601,7 @@ funnels — `GamePage.showErrorAlert` and `MultiplayerUiService.showError` — a
 so route new error dialogs through those rather than hand-rolling another `create()`.
 `alert-danger` is a *button*-level class and is unaffected. Before opening a PR, check that
 `grep -rc 'alertController.create' src/` and `grep -rc "cssClass: 'win9x-alert" src/app`
-still agree (24 today) — a manual check, because `npm run lint` covers only `.ts`/`.html`
+still agree (25 today) — a manual check, because `npm run lint` covers only `.ts`/`.html`
 and there is no stylelint setup to hang it on.
 
 The room status pill (`.mp-status-pill` in [global.scss](src/global.scss)) is on the shell
@@ -590,8 +682,9 @@ button that closes a Win9x titlebar.
   console at the catch site. [patch.service.spec.ts](src/app/core/services/game/patch.service.spec.ts)
   pins the wording. Other English `throw`s remain: `CheatOmaticService`'s are logged by the O Matic
   modal, never shown, but `MultiplayerService.joinRoom`'s "Already in a room…" can reach the join
-  page's error card. The `elifootMain` timeout ("jsdos timed out after 15 seconds") is English too and appears in the
-  load-failure dialog's "Motivo"; it belongs to the `game.js` rework.
+  page's error card. The `elifootMain` timeout used to be English too ("jsdos timed out after 15
+  seconds", shown in the load-failure dialog's "Motivo"); the boot dialogs now say it in Portuguese
+  and keep js-dos's own wording in the console.
 - **Labels the screen reader reads.** Icon-only buttons need `aria-label`; Ionic moves it from the
   `ion-button` host to the native `<button>` it renders, so check the accessibility tree, not the
   host attribute. `#game-container` is `role="application"` with a label (the canvas inside is
@@ -603,9 +696,36 @@ button that closes a Win9x titlebar.
 
 ### PWA
 
-`@angular/service-worker` with [ngsw-config.json](ngsw-config.json) prefetching the game bundle and
-lazily caching js-dos wasm. `AppComponent` watches `SwUpdate.versionUpdates`, records
-`STORAGE_KEY.PENDING_UPDATE`, and applies updates by reloading (immediately or on next launch).
+`@angular/service-worker` with [ngsw-config.json](ngsw-config.json). `AppComponent` watches
+`SwUpdate.versionUpdates`, records `STORAGE_KEY.PENDING_UPDATE`, and applies updates by reloading
+(immediately or on next launch).
+
+**One online visit is enough for the installed app to start offline, and that is a property to
+keep.** The `app` group prefetches the shell and `assets/elifoot/**` (the bundle), and the `jsdos`
+group *prefetches* exactly five files: `js-dos.js`, `js-dos.css`, `wdosbox.js`, `wdosbox.wasm`
+and the loader png. They are listed by name, not by a `js-dos*` wildcard, so neither the 1.8 MB
+`js-dos.js.map` nor `wdosbox.js.symbols` can ride along. `wdosbox.js` is the one that was
+missing: js-dos starts it with `new Worker(pathPrefix + 'wdosbox.js')`, no wildcard matched it,
+and the service worker answers an uncached URL offline with a 504, so even a second visit left
+the emulator dead at "Unable to download 'assets/js-dos/wdosbox.js', code: 504". It is also why
+the group is prefetch and not lazy: lazy only caches what the page asks for *through* the worker,
+which is nothing on the first visit. Icons are a `dataGroups` entry (`/svg/**`, cache-first),
+not an asset group: Ionic fetches `ion-icon name=…` files at runtime from `/svg/` (1,356 files,
+5.3 MB in the build, about ten used), an asset group would list all of them in `ngsw.json`'s hash
+table, and the data group caches what is actually requested, from the second online visit on.
+**Release check:** build, serve over http (a service worker needs localhost or https), load
+`/#/game`, wait for it to install, then *stop the server* (CDP's offline switch does not reach
+the worker's own fetches, so it can hide a gap in the cache) and cold-load `/#/game`: it must
+boot to the game with no failed request. Still not cached offline: the tesseract worker, core
+and model (jsDelivr, decision D5), so auto-save falls back to its periodic mode.
+
+`registerWhenStable:30000` stays. The worry was that a reload loop would never let the worker
+register; measured on a production build with a direct `/#/game` load, it registers 0.3 s after
+load at normal speed and 0.9 s at 6x CPU throttling, with the prefetch complete at 1.3 s and
+1.7 s, because the application is stable long before the emulator starts. The bundle is requested
+once on a first visit, not twice. What was not measured is a first visit on a slow link, where
+the worker's prefetch and the page's own download could compete (CDP throttling does not reach
+the worker).
 
 **An update reload saves first, and a hosting browser is asked before it reloads.** The
 auto-saver persists only after it sees the game's own save, so everything since then lives in

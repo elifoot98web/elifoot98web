@@ -1,9 +1,10 @@
 import { Component, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AlertController, LoadingController, ModalController, ToastController } from '@ionic/angular/lazy';
+import { AlertButton } from '@ionic/core';
 import JSZip from 'jszip';
 import { environment } from 'src/environments/environment';
-import { EMULATOR_CONTROL_CONFIG, GAME_INPUT_FN_BTNS, GAME_INPUT_FN_BTNS_REVERSED, MULTIPLAYER, STORAGE_KEY } from '../../core/models/constants';
+import { EMULATOR_CONTROL_CONFIG, GAME_BOOT, GAME_INPUT_FN_BTNS, GAME_INPUT_FN_BTNS_REVERSED, MULTIPLAYER, STORAGE_KEY } from '../../core/models/constants';
 import { UserGuideComponent } from './components/user-guide/user-guide.component';
 import { AboutComponent } from './components/about/about.component';
 import { OmaticModalComponent } from './components/omatic-modal/omatic-modal.component';
@@ -16,6 +17,10 @@ import { MultiplayerAudioService, MultiplayerChatService, MultiplayerCursorServi
 import { CursorRendererHelper } from 'src/app/core/helpers/cursor-renderer.helper';
 import { OverlaySyncHelper } from 'src/app/core/helpers/overlay-sync.helper';
 import { ChatPanelHelper } from 'src/app/core/helpers/chat-panel.helper';
+import { BootFailureHelper, BootFailureKind } from 'src/app/core/helpers/boot-failure.helper';
+import { BootProgressHelper } from 'src/app/core/helpers/boot-progress.helper';
+import { BootStage, BootStageHelper } from 'src/app/core/helpers/boot-stage.helper';
+import { TimeoutHelper } from 'src/app/core/helpers/timeout.helper';
 
 
 @Component({
@@ -72,6 +77,16 @@ export class GamePage implements OnInit, OnDestroy {
   private multiplayerSubscriptions = new Subscription();
   private stopObservingOverlay?: () => void;
 
+  /** The boot overlay while it is up, so leaving the page mid-boot does not strand it. */
+  private bootLoading?: Awaited<ReturnType<LoadingController['create']>>;
+  /**
+   * The timeout or failure dialog while it is up. Alerts are app-level overlays that outlive the
+   * route, so one left open when the person presses Back would float over the landing page
+   * offering to wait for, or wipe the disk of, a game they are no longer on.
+   */
+  private bootAlert?: Awaited<ReturnType<AlertController['create']>>;
+  private destroyed = false;
+
   constructor(
     private loadingController: LoadingController,
     private alertController: AlertController,
@@ -100,64 +115,190 @@ export class GamePage implements OnInit, OnDestroy {
   }
 
   async ngOnInit() {
+    console.time("carregando game...")
+    await this.bootGame()
+  }
+
+  /**
+   * Start the emulator and, once it is up, make the page usable. Can run more than once per page
+   * load: "Continuar esperando" after a timeout comes back here, and `elifootMain` re-attaches to
+   * the boot that is still running.
+   *
+   * Only a failure to START the emulator is a boot failure. What follows (settings, the welcome
+   * dialog, the host intent) runs with a working game behind it, so an exception there is
+   * logged and reported but never reloads the page, which is what the old catch-all did to a
+   * game that was running fine.
+   */
+  private async bootGame() {
     const loading = await this.loadingController.create({
-      message: 'Carregando game...',
+      message: 'Carregando o jogo…',
       backdropDismiss: false
     });
+    this.bootLoading = loading;
     await loading.present();
 
+    let detected: boolean;
     try {
-      console.time("carregando game...")
-      const { detected } = await this.loadGame()
-      console.timeEnd("carregando game...")
+      ({ detected } = await this.loadGame(message => {
+        // Stencil re-renders on the property write; nothing here needs a change-detection pass.
+        if (loading.message !== message) loading.message = message;
+      }));
+    } catch (e) {
+      await this.dismissBootLoading(loading);
+      await this.handleBootFailure(e);
+      return;
+    }
+
+    if (this.destroyed) {
+      await this.dismissBootLoading(loading);
+      return;
+    }
+
+    // The emulator started, so the failures in a row are over, whether or not its screen showed.
+    // Its own try: with site data blocked every Ionic Storage write rejects while js-dos itself
+    // boots fine, and that must not leave the overlay over a running game.
+    try {
+      await this.storageService.set(STORAGE_KEY.FAIL_COUNT, 0)
+    } catch (e) {
+      console.warn('Could not reset the failure count', e)
+    }
+    console.timeEnd("carregando game...")
+
+    try {
       await this.loadConfig()
-      this.isHidden = false
-      await loading.dismiss()
-      // A wall of welcome text over a screen that never rendered is worse than silence.
+    } catch (e) {
+      console.error('Could not apply the saved settings', e)
+    }
+    this.isHidden = false
+    await this.dismissBootLoading(loading)
+
+    try {
       if (detected) {
         await this.handleShowTutorial()
       } else {
+        // A wall of welcome text over a screen that never rendered is worse than silence, but
+        // silence is not an answer either: the guest may just be slow.
         console.warn('Game screen was never detected; skipping the welcome dialog.')
+        await this.multiplayerUiService.showToast('O jogo ainda está iniciando…', 'warning', 6000)
       }
-      await this.storageService.set(STORAGE_KEY.FAIL_COUNT, 0)
       await this.consumeHostIntent()
-    } catch (e: any) {
+    } catch (e) {
       console.error(e)
-      await loading.dismiss()
+      await this.showErrorAlert(e instanceof Error ? e : new Error(String(e)))
+    }
+  }
 
-      let failCount = await this.storageService.get<number>(STORAGE_KEY.FAIL_COUNT) || 0
-      failCount += 1
-      await this.storageService.set(STORAGE_KEY.FAIL_COUNT, failCount)
+  private async dismissBootLoading(loading: Awaited<ReturnType<LoadingController['create']>>) {
+    if (this.bootLoading === loading) this.bootLoading = undefined;
+    await loading.dismiss();
+  }
 
-      if (failCount < 3) {
-        window.location.reload()
-      } else {
-        const alert = await this.alertController.create({
-          header: 'O jogo não carregou',
-          cssClass: 'win9x-alert alert-whitespace',
-          message: `Múltiplas tentativas (${failCount}) de carregar o jogo falharam\n\nMotivo: (${e.message})`,
-          backdropDismiss: false,
-          buttons: [
-            {
-              text: 'Tentar novamente',
-              handler: () => {
-                window.location.reload()
-              }
-            }, {
-              text: 'Limpar todos os dados',
-              cssClass: 'alert-danger',
-              handler: async () => {
-                await this.clearAllData()
-              }
-            }
-          ],
-        });
-        await alert.present();
+  /**
+   * The three answers to "the emulator did not come up", each with its own way out.
+   *
+   * A timeout is not a failure: nothing counts against the user, nothing reloads, and the
+   * download keeps going behind the dialog. Anything else is counted, because the count decides
+   * whether the dialog may offer to wipe the saved disk (see BootFailureHelper.offersWipe).
+   */
+  private async handleBootFailure(error: unknown) {
+    console.error('The game did not load', error)
+    if (this.destroyed) return;
+
+    const kind = BootFailureHelper.kindOf(error)
+    if (kind === 'timeout') {
+      await this.offerToKeepWaiting(error)
+      return
+    }
+
+    const failures = (await this.storageService.get<number>(STORAGE_KEY.FAIL_COUNT) || 0) + 1
+    await this.storageService.set(STORAGE_KEY.FAIL_COUNT, failures)
+    await this.showBootFailure(kind, failures)
+  }
+
+  private async offerToKeepWaiting(error: unknown) {
+    const alert = await this.alertController.create({
+      header: 'O jogo está demorando',
+      cssClass: 'win9x-alert alert-whitespace',
+      message: BootFailureHelper.timeoutMessage(error),
+      backdropDismiss: false,
+      buttons: [
+        { text: 'Continuar esperando', role: 'wait' },
+        {
+          text: 'Tentar de novo',
+          handler: () => {
+            window.location.reload()
+          }
+        }
+      ]
+    });
+    this.bootAlert = alert;
+    await alert.present();
+    const { role } = await alert.onDidDismiss();
+    if (this.bootAlert === alert) this.bootAlert = undefined;
+    // Not once the page is gone: bootGame() would put a loader nothing dismisses over whatever
+    // page is showing now, for as long as the boot stays pending.
+    if (role === 'wait' && !this.destroyed) {
+      await this.bootGame()
+    }
+  }
+
+  private async showBootFailure(kind: Exclude<BootFailureKind, 'timeout'>, failures: number) {
+    const buttons: AlertButton[] = [
+      {
+        text: 'Tentar de novo',
+        handler: () => {
+          window.location.reload()
+        }
+      },
+      {
+        // Reads IndexedDB directly: there is no emulator, so no dosCI to persist from. Returns
+        // false to leave the dialog up, because the next thing the person may do is the wipe.
+        text: 'Baixar cópia dos meus dados',
+        handler: async () => {
+          await this.downloadStoredBackup()
+          return false
+        }
       }
+    ]
+    if (BootFailureHelper.offersWipe(kind, failures)) {
+      buttons.push({
+        text: 'Limpar todos os dados',
+        cssClass: 'alert-danger',
+        handler: async () => {
+          await this.clearAllData()
+        }
+      })
+    }
+
+    const alert = await this.alertController.create({
+      header: 'O jogo não carregou',
+      cssClass: 'win9x-alert alert-whitespace',
+      message: BootFailureHelper.failureMessage(kind, failures),
+      backdropDismiss: false,
+      buttons
+    });
+    this.bootAlert = alert;
+    await alert.present();
+  }
+
+  private async downloadStoredBackup() {
+    try {
+      const saved = await this.saveGameService.downloadStoredChanges()
+      await this.multiplayerUiService.showToast(
+        saved ? 'Cópia dos seus dados baixada.' : 'Não há dados salvos neste navegador para copiar.',
+        saved ? 'success' : 'warning', 4000)
+    } catch (e) {
+      console.error('Could not read the stored data', e)
+      await this.showErrorAlert(new Error('Não foi possível ler os dados salvos neste navegador.'))
     }
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
+    // Ends the detection loop in waitForGameScreen(); a boot overlay still up would otherwise
+    // cover whatever page comes next.
+    void this.bootLoading?.dismiss().catch(() => undefined);
+    void this.bootAlert?.dismiss(undefined, 'destroyed').catch(() => undefined);
     // The queue is a root service and outlives this page; whatever it still holds is typing
     // meant for this page's emulator.
     this.emulatorControlService.cancelKeys();
@@ -172,86 +313,65 @@ export class GamePage implements OnInit, OnDestroy {
   }
 
   /**
-   * Boot the emulator and wait for the game's own green screen.
+   * Boot the emulator and wait for the game's own screen.
    *
-   * Returns whether it was actually seen: the polling loop exits both on success and on the
-   * 10s timeout, and resolving identically for both meant a failed boot went on to show the
+   * Returns whether it was actually seen: the polling loop exits both on success and when the
+   * window closes, and resolving identically for both meant a failed boot went on to show the
    * welcome dialog over a black screen.
+   *
+   * `onStatus` hears what the loader should say, in Portuguese: first the download and the
+   * unpacking (js-dos's own text, through BootProgressHelper), then the stage the guest is in.
+   * A rejection is `elifootMain`'s own: the real error, or a JsdosTimeoutError that is only the
+   * end of one wait (see bootGame).
    */
-  async loadGame(): Promise<{ detected: boolean }> {
-    this.dosCI = await elifootMain(environment.prefixPath, environment.gameBundleURL)
-    let timeout = false
-    let loaded = false
-    setTimeout(() => {
-      timeout = true
-    }, 10000);
+  async loadGame(onStatus?: (message: string) => void): Promise<{ detected: boolean }> {
+    this.dosCI = await elifootMain(environment.prefixPath, environment.gameBundleURL, loaderText => {
+      const message = BootProgressHelper.describe(loaderText)
+      if (message) onStatus?.(message)
+    })
 
-    // Properly detect the green screen of the game
-    const getColorAt = (x: number, y: number, imageData: ImageData) => {
-      const { data, width } = imageData;
-      const index = (y * width + x) * 4;
+    return { detected: await this.waitForGameScreen(onStatus) }
+  }
 
-      const r = data[index];
-      const g = data[index + 1];
-      const b = data[index + 2];
-      const a = data[index + 3];
+  /**
+   * Poll the framebuffer until it shows the game's green or `DETECTION_TIMEOUT_MS` passes,
+   * telling `onStatus` which stage of the boot each look found. Windows 3.1 on a phone can take
+   * most of a minute to get here, and this window is where the person would otherwise be
+   * looking at nothing.
+   */
+  private async waitForGameScreen(onStatus?: (message: string) => void): Promise<boolean> {
+    const deadline = Date.now() + GAME_BOOT.DETECTION_TIMEOUT_MS
+    const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-      return { r, g, b, a }; // or return as rgba string if you prefer
-    }
+    let stage: BootStage = 'dos'
+    onStatus?.(BootStageHelper.message(stage))
 
-    const checkGreenScreen = async () => {
+    // wait for the js-dos to settle
+    await pause(GAME_BOOT.DETECTION_SETTLE_MS)
+    while (!this.destroyed && Date.now() < deadline) {
       try {
-        const imageData: ImageData = await this.dosCI.screenshot()
-        const points = [
-          { x: 0, y: 25 },
-          { x: 200, y: 25 },
-          { x: 400, y: 25 },
-          { x: 10, y: 250 },
-        ]
-
-        const expectedGreens = [{ r: 0, g: 128, b: 0, a: 255 }, { r: 0, g: 170, b: 85, a: 255 }]
-        const tolerance = 25 // Adjust this value as needed (depends on the color range of the monitor)
-        let greenCount = 0
-        for (const expectedGreen of expectedGreens) {
-          for (const point of points) {
-            const color = getColorAt(point.x, point.y, imageData)
-            // Check if the color is within the tolerance range
-            if (
-              Math.abs(color.r - expectedGreen.r) <= tolerance &&
-              Math.abs(color.g - expectedGreen.g) <= tolerance &&
-              Math.abs(color.b - expectedGreen.b) <= tolerance &&
-              Math.abs(color.a - expectedGreen.a) <= tolerance
-            ) {
-              // Color is within the tolerance range
-              greenCount++
-            }
-          }
+        const budget = Math.max(1, Math.min(GAME_BOOT.SCREENSHOT_TIMEOUT_MS, deadline - Date.now()))
+        const frame: ImageData = await TimeoutHelper.withTimeout(() => this.dosCI.screenshot(), budget)
+        const seen = BootStageHelper.classify(frame)
+        if (seen === 'game') {
+          console.log("Green check passed")
+          console.log("jogo carregado")
+          return true
         }
 
-        if (greenCount > 2) {
-          console.log("Green check passed")
-          return true
+        const next = BootStageHelper.advance(stage, seen)
+        if (next !== stage) {
+          stage = next
+          onStatus?.(BootStageHelper.message(stage))
         }
       } catch (e) {
         console.warn("Error checking green screen", { reason: e })
       }
-      return false
+      console.log("aguardando o jogo carregar...")
+      await pause(GAME_BOOT.DETECTION_POLL_MS)
     }
 
-    // wait 500ms for the js-dos to settle
-    await new Promise(resolve => setTimeout(resolve, 500))
-    while (!timeout && !loaded) {
-      const isGreenScreen = await checkGreenScreen()
-      if (isGreenScreen) {
-        console.log("jogo carregado")
-        loaded = true
-      } else {
-        console.log("aguardando o jogo carregar...")
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-    }
-
-    return { detected: loaded }
+    return false
   }
 
   async loadConfig() {

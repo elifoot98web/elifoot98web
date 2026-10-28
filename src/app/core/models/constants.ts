@@ -95,6 +95,51 @@ export const APP_UPDATE = {
   SAVE_TIMEOUT_MS: 5000,
 }
 
+export const GAME_BOOT = {
+  // How long loadGame() keeps looking for the game's own screen once the emulator is up. That
+  // covers DOS, Windows 3.1 and the game's own start, because the screen it waits for is the
+  // game's: measured on a desktop it is green 3.5 s after run() resolves, so this is a ceiling
+  // chosen for a phone, not a measurement of one. The old 10 s ended a slow boot in silence.
+  DETECTION_TIMEOUT_MS: 45 * 1000,
+  // Wait before the first look, so js-dos has painted something, and between looks after it.
+  DETECTION_SETTLE_MS: 500,
+  DETECTION_POLL_MS: 500,
+  // screenshot() is a round trip to the emulator's worker and has no deadline of its own. One
+  // that never answers must cost a look, not the whole window.
+  SCREENSHOT_TIMEOUT_MS: 5 * 1000,
+  // The wipe is offered from the Nth failure in a row (a timeout is never one). Earlier than
+  // this a failure is most likely a bad connection, and "Limpar todos os dados" is the one
+  // button on the dialog that cannot be taken back.
+  WIPE_OFFER_AFTER_FAILURES: 3,
+}
+
+// What the framebuffer must look like for BootStageHelper to call a frame "the game's screen".
+// The pixels, the two greens and the tolerance are the ones load detection has always used
+// (Elifoot's backdrop on the splash and in play); they are coordinate- and colour-sensitive, see
+// CLAUDE.md before touching them. The desktop blue is Windows 3.1's own, seen while ELIFOOT.EXE
+// loads: it is only used to label a stage, never to decide the game is ready.
+export const GAME_SCREEN_PROBE = {
+  POINTS: [
+    { x: 0, y: 25 },
+    { x: 200, y: 25 },
+    { x: 400, y: 25 },
+    { x: 10, y: 250 },
+  ],
+  GAME_COLORS: [
+    { r: 0, g: 128, b: 0, a: 255 },
+    { r: 0, g: 170, b: 85, a: 255 },
+  ],
+  WINDOWS_DESKTOP_COLOR: { r: 0, g: 64, b: 128, a: 255 },
+  // Adjust this value as needed (depends on the color range of the monitor)
+  TOLERANCE: 25,
+  // A match is one (colour, point) pair. The game's screen needs at least 3 of the 8 pairs (the
+  // old `greenCount > 2`), the desktop 3 of its 4 points.
+  GAME_MATCHES_NEEDED: 3,
+  DESKTOP_MATCHES_NEEDED: 3,
+  // DOS draws text at 640x400 (80x25 characters); every Windows frame is 640x480 or 800x600.
+  GRAPHICS_MIN_HEIGHT: 480,
+}
+
 export const EMULATOR_CONTROL_CONFIG = {
   // Where the title of the game's "A gravar o jogo..." dialog is, as an offset from the CENTRE of
   // the frame: the dialog is centred and its size does not depend on the video mode (cropped at
