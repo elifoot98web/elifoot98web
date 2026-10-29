@@ -50,8 +50,9 @@ export class MultiplayerAudioService {
       return null;
     }
 
-    // A suspended context yields a silent track. js-dos resumes it on the first gesture,
-    // which has long since happened by the time anyone hosts; this is only insurance.
+    // A suspended context yields a silent track. js-dos resumes it on the first gesture (on a
+    // touch screen the touch layer does, TouchInputService), which has long since happened by
+    // the time anyone hosts; this is only insurance.
     if (ctx.state === 'suspended') ctx.resume().catch(() => { });
 
     track.enabled = enabled;

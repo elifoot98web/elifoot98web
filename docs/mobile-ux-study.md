@@ -335,6 +335,65 @@ build, and a CLAUDE.md update.
    pointer type, never UA). **Critic adjustments:** use the validated 40 ms chunk spacing (or
    re-run the 40-tap oracle test at 24 ms); add visible tap feedback on the host canvas; add
    drag-to-scroll mapped to arrows/PgUp/PgDn; grade on >= 10 screens.
+   **As built:** `TouchInputService` (capture-phase listeners on `layers.root`, by `pointerType`, `touch` and `pen` only),
+   `GestureRecognizer` (pure state machine), `GuestPointer` (blind dead-reckoning engine), `TouchModeHelper`,
+   `TouchFeedbackHelper`, the "Modo de toque" setting, the new copy, 125 specs across four files, and
+   `scripts/touch-harness/` (a driver, the RAM oracle and twelve checks, with its README holding the tables). Measured in
+   headless Chrome 143 against the dev server, 640x480, guest cursor read from RAM, **synthetic touches on a desktop CPU
+   only**:
+   - **Spacing.** Pairs of 2-unit sends were summed by the guest 40 of 40 times at 14 ms, 11 of 40 at 16 ms and 0 of 40 from
+     18 ms to 28 ms: the boundary is the frame (~16.7 ms), and the 3 px claim of TOUCH-9 (measured at 40 ms) holds down to 18.
+     Over 18 screens (the six dialogs of starting a game, the main window and its five tabs, two menus, five modals) x 8 seeded
+     taps x six spacings, every spacing from 16 to 40 stayed within 3 px (worst 3 at 16, 2 from 18; 288 axis readings each);
+     16 ms passes only because the workload is long moves, and the pair test shows it summing sends. **24 ms was chosen, not the
+     smallest passing value (18):** it is the boundary plus 7 ms, the margin costs nothing a person can feel (the click follows
+     the lift by 0.1 ms because the cursor walks during the touch; at 40 ms the press waits 9 ms), and a phone's emulator is
+     unmeasured.
+   - **The model.** Home (four sends of -200) landed on (0, 0) 60 times of 60. The model was off by exactly 2 px in 14 of 108
+     short runs and never otherwise: a 2 px quantum (one mickey at the 2x gain) that comes and goes at every gap and does not
+     accumulate (160 far taps and 250 short ones with re-homing off: 0 throughout). The research's "steady +2 bias" is this.
+     No warp: 12 menus, tabs and modals opened with the guest's cursor exactly where the model had it.
+   - **Gestures on the real game.** A palm, a second finger and a cancelled touch click nothing; a tap clicks once; aim mode puts the cursor on a
+     6 px radio from a finger 56 px below it; a double tap on a country row leaves it selected and two taps 900 ms apart toggle it
+     on and off (a real `WM_LBUTTONDBLCLK`); dragging the 16 px scrollbar thumb scrolls the list and releases; a tap in the
+     trough pages it. The button was released after `pointercancel`, a second finger, blur, pagehide, a `touchend` without
+     `pointerup`, `visibilitychange`, `freeze` and a detach.
+   - **The iPad matrix** (Macintosh user agent, 820x1180, Chromium emulation): js-dos binds `mousedown`; the layer is attached,
+     a tap clicks with no pointer-lock request, a real mouse still reaches js-dos, the setting is not offered, a stored `classic`
+     is ignored; with the layer off a tap sends the guest nothing (the control).
+   - **The setting.** In portrait and at 844x390 the entry shows in the options menu, the Win9x dialog fits, switching detaches the
+     layer at once, stock js-dos then clicks at the old cursor position with no motion and no ring, the choice survives a reload
+     and "Apagar todos os dados" removes it.
+   Where it differs from the plan above, on evidence: **no list drag-to-scroll gesture** (the critic's addition). In
+   Elifoot's country list the arrow and page keys SELECT as they move (the selected-teams counter went 20, 25, 38, 40, 43), so
+   mapping a two-finger drag to them would break the selection; the scrollbar thumb drag and a tap in the trough already work, and
+   two-finger gestures are reserved for P11. **No right click**, as decided. **The tap ring lives in the host's DOM**, not in
+   the guest's frame, so spectators and the OCR never see it. **Classic is not offered where it cannot work** (a default-UA
+   iPad, a phone in "desktop site"), and a stored `classic` is ignored there. The re-home returns the cursor to where it was.
+   **Not verified:** any phone, any real finger (the 10 px / 450 ms / 56 px / 400 ms / 32 px thresholds are recalled), iOS
+   Safari (compat events, `touch-action`, edge swipe, pull-to-refresh, callouts), a real background/foreground switch (CDP's
+   `Page.setWebLifecycleState` delivers no events to this headless page), a host with a spectator watching the cursor, and the
+   live-match and auction dialogs. **Known risks:** two quick taps on adjacent list rows read as a double-tap on the first;
+   the emulator's worker on a phone may sum sends the desktop never did (raise `SEND_SPACING_MS` first). **Found in review and fixed before the
+   commit** (each has a spec, and `edge-cases.mjs` re-checks the first three on the real guest): (1) the 80 ms "`touchend`
+   without `pointerup`" check cancelled whatever was down when it fired, so a second tap landing within 80 ms of the first
+   lifting, which is a normal fast double tap or two thumbs, was dropped with its click (the guest saw `down,up` instead of
+   `down,up,down,up`); a new finger now calls the check off. (2) A tap that clicked nothing (it landed in the strip beside
+   the picture) still counted as the first tap of a double-tap, so the retry clicked wherever the cursor had been left; the
+   layer now takes it back (`forgetTap()`). (3) The 600-send re-home budget, a frame-size change and `invalidate()` could all
+   home with the button held, flinging a scrollbar thumb or a window to the corner; the budget now waits for the release, and
+   a press that has lost its position is released. (4) The idle re-home did not know a finger was down, so aim mode (a still
+   finger, no button) could lose its cursor to the corner after 0.9 s; the layer now tells the engine (`setFingerDown()`).
+   (5) The layer stops the events js-dos listens for to resume its `AudioContext` (a document-level one-shot `click` or
+   `touchstart`), so on iOS the game would have stayed silent, and a hosting phone streamed silence, until a tap outside the
+   game; a lifted finger now calls `resume()` (the headless shell resumes a context once per boot, so the harness grades the
+   request, not the state). (6) A rejected Ionic Storage read skipped installing the layer, which on a default-UA iPad is the
+   only touch input there is; an unreadable choice is now `direct`, and a failed write still applies the choice for the
+   visit. No finding was dismissed. Re-run after these fixes: `gestures.mjs` 10 of 10, `stuck-button.mjs` 8 of 8, `ipad.mjs`
+   8 of 8, `setting-ui.mjs portrait` 10 of 10, `edge-cases.mjs` 4 of 4. **Found on the way,
+   not fixed:** in about 3 boots of ~35 the guest stayed at the DOS prompt (`C:\>D:\ELIFOOT.BAT`, Windows never started, the frame a
+   black 640x400); two followed minutes of play in the same profile (the 5-minute forced periodic save, since OCR cannot load in the
+   sandbox, is the first suspect), one came with the site data wiped. It happens before any touch code runs and is not understood.
 7. **P4 — 640x480 via `dosbox.conf [autoexec]` + `d/SETRES.BAT`** (LFS bundle; needs the owner).
    Manual QA of the unvisited screens (Finanças, Estádio, Calendário, live match, loan and
    auction dialogs), re-run the pointer gain harness.

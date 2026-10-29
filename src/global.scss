@@ -149,6 +149,72 @@ canvas {
 }
 
 /*
+ * Direct-touch feedback (TouchFeedbackHelper): a ring where a tap landed, and one that stays
+ * under a finger that is dragging or aiming. The guest cursor is a ~6x10 css px sprite hidden
+ * under the fingertip, so without this a tap that registered looks like one that was lost.
+ *
+ * These are DOM nodes inside #game-container, not pixels in the guest's frame: the stream the
+ * spectators get and every screen-scraper read the canvas, so neither sees them. They are
+ * absolutely positioned and pointer-events:none, so they take no space (js-dos re-letterboxes
+ * its canvas whenever the container resizes) and no touch. White with a hairline of black on both
+ * sides, because the game underneath is green, grey, white and navy in turn and no single colour
+ * reads on all of them. transform and opacity only: it has to be cheap on a low-end phone.
+ * Neutral on purpose, not Win9x: it is feedback, not a window.
+ */
+.touch-feedback {
+    position: absolute;
+    z-index: 20;
+    box-sizing: border-box;
+    width: 44px;
+    height: 44px;
+    margin: -22px 0 0 -22px;
+    border: 3px solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7), inset 0 0 0 1px rgba(0, 0, 0, 0.7);
+    pointer-events: none;
+}
+
+// 420ms is TOUCH_INPUT.FEEDBACK_RING_MS: the node is removed on animationend, and by a timer built on that constant when no animation runs.
+.touch-feedback--tap {
+    animation: touch-feedback-ring 420ms ease-out both;
+}
+
+// A double-tap is two clicks, so its ring is heavier.
+.touch-feedback--double {
+    border-width: 6px;
+    animation: touch-feedback-ring 420ms ease-out both;
+}
+
+.touch-feedback--hold {
+    opacity: 0.9;
+}
+
+@keyframes touch-feedback-ring {
+    from {
+        transform: scale(0.3);
+        opacity: 1;
+    }
+    to {
+        transform: scale(1.15);
+        opacity: 0;
+    }
+}
+
+@keyframes touch-feedback-fade {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+// The ring is information (the tap registered), not decoration, so reduced motion keeps it and
+// only stops it growing.
+@media (prefers-reduced-motion: reduce) {
+    .touch-feedback--tap,
+    .touch-feedback--double {
+        animation-name: touch-feedback-fade;
+    }
+}
+
+/*
  * ---------------------------------------------------------------------------
  * Multiplayer chat — DOCKED beside/below the game, sized to the letterbox margin.
  * Shared by the host (game) and guest (join-game) pages.

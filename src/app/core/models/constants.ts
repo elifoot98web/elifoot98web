@@ -31,6 +31,10 @@ export const STORAGE_KEY = {
   // with it. The tail is what survives a tab the OS evicted; see DiagnosticsService.
   DIAGNOSTICS: 'diagnostics',
   DIAGNOSTICS_LOG: 'diagnosticsLog',
+  // How a finger drives the game: 'direct' (a tap lands under the finger, the default) or
+  // 'classic' (js-dos's own touchpad). Absent means direct. Lives in Ionic Storage, so
+  // "Apagar todos os dados" restores the default; see TouchModeHelper.
+  TOUCH_MODE: 'touchMode',
 }
 
 // The opt-in diagnostics log (DiagnosticsService). Off by default; every limit below exists to keep
@@ -256,6 +260,85 @@ export const EMULATOR_CONTROL_CONFIG = {
   // character it is done before the toast has finished sliding in, and the typing showing up
   // in the game is feedback enough.
   PROGRESS_MIN_CHARACTERS: 24,
+}
+
+/**
+ * Direct touch (TouchInputService, GestureRecognizer, GuestPointer). The pointer numbers are
+ * properties of the GUEST, not of the app: Windows 3.1's mouse driver and DOSBox's callback. They
+ * were measured with the RAM oracle in scripts/touch-harness (see its README for the tables), and
+ * must be measured again after any change to the video mode, the Windows mouse settings
+ * (WIN.INI / SYSTEM.INI), js-dos or the disk image.
+ */
+export const TOUCH_INPUT = {
+  // ---- the gestures (css px and ms; recalled thresholds, to be tuned on a real finger) ----
+  // A finger may wander this far from where it landed and still be a tap. Past it, before the
+  // hold time, the touch is a drag.
+  TAP_SLOP_PX: 10,
+  // Still for this long = aim mode: the guest cursor is parked above the finger and the click
+  // happens when the finger lifts, because a fingertip is bigger than the 6 px targets.
+  HOLD_MS: 450,
+  // A second tap this soon after the first one lifted (measured release to release), and this
+  // near it, is a double-click. Windows needs a real WM_LBUTTONDBLCLK, two single clicks at two
+  // positions are not one, so the second click goes out where the first one did.
+  DOUBLE_TAP_MS: 400,
+  DOUBLE_TAP_SLOP_PX: 32,
+  // How far above the finger aim mode parks the cursor, so the sprite (~6x10 css px) is not
+  // under the fingertip.
+  AIM_OFFSET_PX: 56,
+  // Contacts reporting a radius over this are a palm, not a finger, and are ignored. Only
+  // browsers that report contact geometry can use it (Chrome on Android does).
+  PALM_RADIUS_PX: 48,
+  // What a long hold does: 'aim' (above) or 'none' (a hold is just a slow tap).
+  HOLD_MODE: 'aim' as 'aim' | 'none',
+  // A mouse event this soon after a touch is the browser's compatibility copy of it, and is
+  // dropped: on an iPad with the default (Macintosh) user agent js-dos would answer it with a
+  // pointer-lock request.
+  COMPAT_MOUSE_WINDOW_MS: 500,
+  // A gesture that has heard nothing at all from its finger for this long lost its pointerup
+  // (an OS gesture stole the touch, say) and is released, because a held button is the worst
+  // failure this layer has.
+  GESTURE_STALL_MS: 20 * 1000,
+
+  // ---- the guest cursor ----
+  // Windows 3.1 moves the cursor 1 px per unit of a relative event up to 2 units and 2 px per unit
+  // beyond, per axis, and clips it to the frame. A single positive event of 256 units or more wraps
+  // modulo 256 (and -300 does something else again), so a send never exceeds MAX_SEND_UNITS.
+  MAX_SEND_UNITS: 255,
+  // The biggest chunk a move sends. Two sends can land in one guest callback on a slow device and
+  // their units are summed there, so two chunks must stay under the 256 that wrap: 90 + 90 = 180.
+  MAX_CHUNK_UNITS: 90,
+  // The least time between two motion sends (and between the last one and a button event). The guest
+  // sums the units of sends that arrive within a frame, ~16.7 ms, and applies Windows' gain to the sum:
+  // a pair of 2-unit sends moves 8 px instead of 4. Measured with the oracle, pairs were summed 40 of 40
+  // times at 14 ms, 11 of 40 at 16 ms and 0 of 40 from 18 ms. Over 18 screens x 144 taps every spacing
+  // from 16 to 40 stayed within 3 px (worst 3 at 16, 2 from 18). 24 is the boundary plus 7 ms rather
+  // than the smallest value that passes (18): the margin costs nothing a person can feel (the click
+  // follows the lift by 0.1 ms, because the cursor walks during the touch) and the phone's emulator is
+  // unmeasured. 40 ms costs 9 ms per click, because the press waits for the spacing to run out.
+  SEND_SPACING_MS: 24,
+  // Homing: this many (HOME_UNITS, HOME_UNITS) sends clip the cursor into the top-left corner,
+  // which is the one position the model knows exactly. 4 x 400 px is twice the biggest frame. A
+  // single -2000 also worked in one run and is unproven across boots.
+  HOME_SENDS: 4,
+  HOME_UNITS: -200,
+  // The button is held this long for a click. Windows needs the press to be seen as a state.
+  CLICK_HOLD_MS: 50,
+  // Re-homing is for drift the model cannot see, and the cursor is part of the stream the
+  // spectators watch, so it is rare: only after this long with nothing happening AND more than
+  // REHOME_AFTER_MOVES moves since the last home. The cursor returns to where it was.
+  IDLE_REHOME_MS: 900,
+  REHOME_AFTER_MOVES: 12,
+  // Safety net: never go this many sends without a home, even mid-use.
+  FORCED_REHOME_SENDS: 600,
+  // A move op gives up after this many sends (a target that keeps running away from a stalled
+  // emulator would otherwise loop for ever); the next gesture starts a new one.
+  MAX_SENDS_PER_MOVE: 200,
+
+  // ---- feedback ----
+  // How long a tap ring lives (the animation in global.scss, `.touch-feedback--tap`, is the same 420 ms;
+  // this is what the cleanup timer is built on), and how many may be on screen at once.
+  FEEDBACK_RING_MS: 420,
+  FEEDBACK_MAX_RINGS: 8,
 }
 
 export const BASE_SAVEGAME_DIR = 'd/eli98/jogos/'

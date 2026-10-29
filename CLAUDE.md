@@ -29,7 +29,7 @@ python3 scripts/resolution/build_bundle.py verify src/assets/elifoot/elifoot98.j
 Specs are karma + jasmine. The builder globs `**/*.spec.ts` (its `include` option, which is also
 what `--include` overrides); [src/test.ts](src/test.ts) only initialises the TestBed and
 `tsconfig.spec.json` type-checks `src/**/*.spec.ts`, so a spec needs no registration but must live
-under `src/` to be type-checked. Nothing in a spec reaches the bundle. There are **twenty-six spec files so
+under `src/` to be type-checked. Nothing in a spec reaches the bundle. There are **thirty spec files so
 far**. [room-code.helper.spec.ts](src/app/core/helpers/room-code.helper.spec.ts) is there as
 much to prove the harness as to cover `RoomCodeHelper`: `ng test` with **zero** specs
 prints `Executed 0 of 0 SUCCESS` and still exits 1, so a `test:ci` could never pass before the
@@ -59,6 +59,16 @@ the service off so a failing case cannot leave listeners on the karma page. Its 
 `recordingDiagnostics()`, `memoryStorage()`) are what every other spec passes where a service now takes
 a `DiagnosticsService`; for "did it log this" the specs of the key queue and the auto-saver hand in a
 two-line recorder that reads each data thunk at the call, as the real one does.
+[guest-pointer.helper.spec.ts](src/app/core/helpers/guest-pointer.helper.spec.ts) is the model for "an engine whose
+worst failure only shows against the real guest": it drives the engine against a fake guest written from the
+measured rules, independently of the code under test (the gain, the clip, the wrap and, the part that matters, sends
+inside one frame being summed), under `fakeAsync` with `Date.now` handed in as the clock, because zone.js fakes `Date`
+and not `performance.now`; one spec is a control that shows the fake really does punish a spacing below a frame.
+[gesture-recognizer.helper.spec.ts](src/app/core/helpers/gesture-recognizer.helper.spec.ts) is the model for a state
+machine with no clock of its own: every sample carries its time, so the specs are plain calls with made-up timestamps.
+[touch-input.service.spec.ts](src/app/core/services/game/touch-input.service.spec.ts) is the one DOM spec worth copying:
+real elements, js-dos's handlers stood in for by a bubbling listener, a `scenario()` helper that builds the rig INSIDE
+`fakeAsync` (attaching starts the engine's timers) and detaches in a `finally`.
 [win9x-palette.spec.ts](src/theme/win9x-palette.spec.ts) is the model for asserting CSS: karma loads
 `src/global.scss`, so it probes the real `.win9x-roster-*` rules and `:root` tokens for contrast
 instead of keeping a second copy of the hex values. [save-game.service.spec.ts](src/app/core/services/game/save-game.service.spec.ts)
@@ -76,6 +86,14 @@ launcher, driver and the scenario checklist, plus the traps that silently invali
 covered window throttles timers and stalls Ionic's overlay animations, which hangs the join
 dialog). Read its README before doing multiplayer work by hand. Nothing in `scripts/` reaches
 the bundle: `angular.json`'s inputs are all under `src/`.
+
+Direct touch has the same problem in another shape: it is blind dead reckoning, so the only way to know a tap
+landed where the finger was is to read the guest's cursor out of its RAM from outside. That is
+[scripts/touch-harness/](scripts/touch-harness/README.md): a driver, a RAM oracle, and the checks (tap accuracy over 18
+screens per send spacing, the gain table, the frame period, drift, stuck buttons, the Macintosh-user-agent iPad matrix,
+the "Modo de toque" UI, and the edge cases a review found: a fast second tap, a retry after a miss, a drag past the send
+budget, the audio wake), with the tables the constants rest on. **Re-run it after any change to the video mode, the
+Windows mouse settings, js-dos or the disk image.** It needs a dev build (`window.ng`) served with `--live-reload=false`.
 
 Git LFS is required: `*.jsdos` is LFS-tracked (`src/assets/elifoot/elifoot98.jsdos`, ~6.7 MB holding
 the entire Windows 3.1 + game environment). Without LFS the game bundle is a pointer file and the app
@@ -171,7 +189,8 @@ the tag is hand-written).
   timeout ends the *wait*, not the boot: see *Booting the emulator* below.
 - `saveGameFileSystem()` — `dosInstance.layers.save()`, i.e. flush changed FS to IndexedDB.
 - `toggleSoftKeyboard()` — shows/hides the js-dos `.emulator-keyboard` div.
-- `dosInstance` — the raw js-dos instance, needed by `PatchService` for `emulatorsUi.persist`.
+- `dosInstance` — the raw js-dos instance, needed by `PatchService` for `emulatorsUi.persist` and by `GamePage`
+  for `layers` (`root`, `mouseOverlay`, `canvas`), the elements direct touch attaches to.
 - `getDosAudioNode()` — js-dos's own `ScriptProcessorNode`, or `null`. js-dos builds its
   `AudioContext` privately inside `run()`, so `game.js` wraps `AudioContext.prototype
   .createScriptProcessor` at load (before `elifootMain` can run) and keeps the one node created
@@ -181,9 +200,9 @@ the tag is hand-written).
 [src/app/core/typings/jsdos.d.ts](src/app/core/typings/jsdos.d.ts) is a hand-maintained typing of the js-dos
 command interface (`DosCI`) — screenshot, key/mouse injection, `persist()`, `readMemory`,
 `writeMemory`. `GamePage.dosCI` is `any` and gets threaded into every service as a parameter; no
-singleton owns it. The one root service that touches it for longer than a call is the key queue
-(see *Typing into the guest*), and it keeps it only for the length of a job; `GamePage.ngOnDestroy`
-cancels whatever is still queued.
+singleton owns it. Two root services touch it for longer than a call: the key queue (see *Typing into the
+guest*), which keeps it only for the length of a job, and `TouchInputService` (see *Touching the guest*), which
+holds it from `attach()` to `detach()`. `GamePage.ngOnDestroy` cancels whatever is still queued and detaches.
 
 ### Inside the .jsdos bundle / boot chain
 
@@ -419,6 +438,127 @@ Load-bearing invariants — each of these was a bug, or a measured trap:
   exits to Program Manager (the FAQ says so). Anything that sends Enter on its own — a future type
   bar, a "next field" button — must not do it on that screen.
 
+### Touching the guest (direct touch)
+
+A tap lands where the finger is. js-dos cannot do that against this guest: it treats a user agent that matches
+`/iPhone|iPad|iPod|Android/` as a phone and gives it a touchpad (a tap clicks at the OLD cursor position, a swipe moves
+the cursor two guest pixels per unit, no drag), gives anything else the desktop pointer-lock path, under which a touch
+does NOTHING (a default-UA iPad reports a Mac, so it is the second case), and its absolute mode lands 150-350 px off
+(DOSBox keeps its int33 range at 640x200 and Windows 3.1 consumes mickey deltas). So
+[touch-input.service.ts](src/app/core/services/game/touch-input.service.ts) takes the finger over before js-dos sees it
+and wires four helpers together, the first two of them testable without a DOM:
+
+- [gesture-recognizer.helper.ts](src/app/core/helpers/gesture-recognizer.helper.ts): samples in, intents out, no timer
+  and no DOM (the hold is a `deadline` the caller schedules and answers with `advance()`).
+- [guest-pointer.helper.ts](src/app/core/helpers/guest-pointer.helper.ts): the engine, `GuestPointerMath` (the guest's
+  rules as plain functions) and `GuestPointer` (a serial queue that drives the guest's mouse, with a clock it is
+  handed). Depends on nothing but the `DosCI` interface.
+- [touch-mode.helper.ts](src/app/core/helpers/touch-mode.helper.ts): the setting, and what the device can run (pure).
+- [touch-feedback.helper.ts](src/app/core/helpers/touch-feedback.helper.ts): the ring (DOM, see below).
+
+**The guest's rules, measured with the RAM oracle in [scripts/touch-harness/](scripts/touch-harness/README.md) at
+640x480** (the pointer constants live in `TOUCH_INPUT` and must be measured again after any change to the video mode,
+the Windows mouse settings, js-dos or the disk image):
+
+- *Per axis, 1 px per unit for an event of 1 or 2 units and 2 px per unit from 3,* the axes independent; clipped to
+  [0, width-1] x [0, height-1]. A single positive event of 256 units or more wraps modulo 256 (and -300 does something
+  else again), so nothing over 255 is ever sent, and a chunk is at most 90 units. Home = four sends of (-200, -200),
+  which clip into the corner: (0, 0) 60 times of 60. A single -2000 worked once and is unproven.
+- *The guest sums sends that arrive close together and applies the gain to the sum.* Two 2-unit sends are 1x each, but
+  summed they are 4 units and move 8 px. Pairs were summed 40 of 40 times at 14 ms, 11 of 40 at 16 ms, 0 of 40 from
+  18 ms: the boundary is the frame, ~16.7 ms. Sends in one tick are summed outright, and then the wrap applies to the
+  sum. **Hence one send per frame: `SEND_SPACING_MS` = 24**, counted from the previous send's real time (a late timer
+  only widens the gap), and also between the last send and a button event. Over 18 screens x 144 taps every spacing
+  from 16 to 40 ms stayed within 3 px (worst 3 at 16, 2 from 18); **24 is not the smallest that passes (18), it is the
+  boundary plus 7 ms**, because the margin costs nothing a person can feel (the click follows the lift by 0.1 ms,
+  because the cursor walks during the touch; at 40 ms it is 9 ms) and the phone's emulator is unmeasured.
+- *There is a 2 px quantum.* Now and then a send lands 2 px further than the rules say, on one axis, at any gap. It
+  comes and goes and does not accumulate (160 far and 250 short taps with re-homing off: model error 0 throughout;
+  across the 108 short sweep runs it left 0 in 14), and it is why a tap is graded against 3 px, not 1.
+- *Elifoot and Windows never warp the cursor* when a menu, tab or modal opens (12 steps, 0 px). Not reached: the loan
+  and auction prompts and the live match's dialogs.
+
+Load-bearing invariants, each measured or a bug waiting:
+
+- **Blind dead reckoning, no `readMemory`.** The model adds exactly what the guest applies and clips as it does; it
+  is homed to (0, 0) first. The RAM oracle (the cursor as two `uint16`s, found by verify-then-scan) is a harness tool: it
+  couples to addresses that may move, and `readMemory` rejects concurrent calls, which the Cheat 'O Matic would hit.
+- **The listeners are on `layers.root`, in the capture phase, and chosen by `pointerType`, never by user agent.** They
+  `stopPropagation()` for `touch` and `pen` pointers aimed at js-dos's overlay or canvas, so its own handlers (on the
+  overlay, bubbling) never see a finger. A real mouse is not touched (desktop pointer lock, a hybrid laptop, an iPad
+  with a mouse all behave as before), and neither is anything else inside the root (js-dos's virtual keyboard).
+  `layers.pointerDisabled` was rejected: it disables the mouse path too. A mouse event within 500 ms of a touch is the
+  browser's copy of it and is dropped (on a default-UA iPad js-dos would answer a stray `mousedown` with a pointer
+  lock). Touch events are cancelled too, `gesturestart` as well; `touch-action`, `user-select` and `-webkit-touch-callout`
+  are js-dos's own on `.emulator-root`, and `#game-container` adds `overscroll-behavior: none`.
+- **A real mouse makes the model forget the cursor** (`invalidate()`): both can move one guest cursor on a hybrid
+  device, and the engine only knows what it sent, so the next touch re-homes.
+- **Every way a gesture can end releases the button, synchronously.** `GuestPointer.abort()` drops the queue, makes any
+  op in flight stand down (an epoch counter: a late timer cannot press or release for a cancelled gesture) and
+  releases at once. It runs on the recognizer's cancel, `pointercancel`, a `touchend` with no `pointerup` (checked
+  80 ms later, and called off by any finger that lands in between: what is down by then is a NEW gesture, and cancelling
+  it lost every fast second tap), any `visibilitychange`, `freeze`, `blur`, `pagehide`, a finger silent for 20 s, and
+  `detach()`. A press whose position is lost (the frame changed, a real mouse moved the cursor) is released rather than
+  homed, because a home with the button down drags what is under the cursor to the corner. A
+  hidden page's timers are throttled or frozen, so the release of a held button cannot be left to one. Checked in
+  `stuck-button.mjs`; a real background/foreground switch could not be reproduced (CDP delivers no lifecycle event).
+- **The click is at release, at the point where the finger LANDED** (the cursor was sent there at touch-down, so the
+  click follows the lift by ~0.1 ms). That is what lets a second finger cancel a touch before anything happened.
+- **A double-tap is a real `WM_LBUTTONDBLCLK`:** the second tap (within 400 ms of the first lifting and 32 px of where it
+  landed) clicks again WITHOUT moving the cursor, and its touch-down says `preAim: false` so the cursor is not sent to a
+  finger that landed 20 px away, which could leave Windows' double-click rectangle. Measured on the country list, where
+  each click toggles a row: a double tap leaves the row selected, two taps 900 ms apart toggle it on and off. A tap that
+  clicked nothing (it landed in the strip beside the picture) is taken back with `forgetTap()`, or the retry would be a
+  "double-tap" that clicks wherever the cursor was last left. **Known
+  risk:** two quick taps on adjacent rows (within 400 ms and 32 px, ~50 guest px) read as a double-tap on the first; the
+  thresholds are one line each in `TOUCH_INPUT` and are on the device checklist.
+- **A drag presses where the finger landed** (movement past 10 css px before 450 ms), follows at the engine's pace
+  (latest target wins) and releases where it lifted. **Holding still 450 ms is aim mode:** the cursor is parked 56 css px
+  above the finger, follows it, and the click is at release (`HOLD_MODE: 'none'` turns it into a slow tap).
+- **A second finger cancels the gesture, and the touch stays dead until every finger is up.** Two-finger gestures are
+  reserved for the camera planned for P11, so they mean nothing now. A palm (contact radius over 48 css px) is ignored
+  outright, not tracked. There is no right click: no tested Elifoot screen reacts to one.
+- **Scrolling is the scrollbar.** Dragging the 16 px thumb scrolls a list without touching the selection, and a tap in
+  the trough pages it (both on the country list). Mapping a drag to Up/Down was tested and rejected: in that list the
+  arrow and page keys SELECT as they move (the counter went 20, 25, 38, 40, 43).
+- **A move is one op whose target is replaced while it runs, and nothing is ever sent twice in a tick.** Chunks of at
+  most 90 units so that two summed chunks stay under 256. `GuestPointerMath.isSendable` refuses anything that is not a
+  whole number in range: a NaN poisons the guest's mouse until the page reloads (found in P4).
+- **Re-homing is rare and in place.** The cursor is part of the stream the spectators watch, so a re-home flings it to
+  the corner. It happens only after 900 ms of quiet AND more than 12 moves since the last home, or when the frame size
+  changes, or after `invalidate()`, or (a safety net) 600 sends; and the cursor walks back to where it was, as an ordinary
+  move, so a finger that lands meanwhile redirects it. **Never while a finger is down** (aim mode holds one still, which
+  from the engine's side looks exactly like idle; the layer tells it with `setFingerDown()`), and the 600-send budget
+  never fires with the button held, it waits for the release. It also homes once when the layer attaches, before anyone is touching, but only on a device with a touch screen (`any-pointer: coarse`): on a plain desktop it would move the guest's cursor for nothing.
+- **A lifted finger wakes the game's audio.** js-dos builds its `AudioContext` inside `run()`, before any gesture, and wakes
+  it from a one-shot `click`/`touchstart`/`keydown` listener on `document`. This layer stops the touch at `layers.root` and
+  cancels the click the browser would have made of it, so on iOS (a context made outside a gesture stays suspended) the game
+  would stay silent, and a hosting phone would stream silence, until the person tapped something outside the game. So
+  `pointerup` and `touchend` of a handled touch call `resume()` on `getDosAudioNode()`'s context when it is not running.
+  **Why:** stock js-dos on a phone stopped `touchstart` at the overlay too, but the click still reached `document`. The
+  headless shell used by the harness resumes a context once per boot and then leaves `resume()` pending, so the check
+  grades the request, not the state.
+- **The tap ring is DOM on the host, never pixels in the guest's frame.** `.touch-feedback` nodes are appended to
+  `#game-container` (absolute, `pointer-events: none`, transform and opacity only), so the stream the spectators get and
+  every screen-scraper (`dosCI.screenshot()`) never see them, and they cannot resize the surface. The look is neutral on
+  purpose, not Win9x (it is feedback, not a window), and survives `prefers-reduced-motion` as a fade.
+- **The layer runs outside Angular's zone** (pointer events arrive at the display rate), holds the emulator only
+  between `attach()` and `detach()`, and `GamePage.ngOnDestroy`, "Voltar ao menu" and a switch to classic detach it.
+  All keys still go through the key queue; this layer sends none.
+
+**The setting is "Modo de toque": Direto (default) | Touchpad (clássico)** (`STORAGE_KEY.TOUCH_MODE`, cleared by "Apagar
+todos os dados"). Classic means the layer is not installed, so stock js-dos, whose handlers are always bound, takes the
+finger; it switches live, with no reload. **It is only real where js-dos itself calls the device a phone** (its UA test,
+copied into `TouchModeHelper.stockTouchWorks`): on a default-UA iPad, or a phone asked for its "desktop site", classic
+would be a dead screen (the harness has the control), so `effective()` turns a stored `classic` into `direct` there and
+the entry is not offered. It is offered only under `(pointer: coarse)` (the options popover, `touchModeChoice$`); the layer
+itself is installed everywhere, because it only reacts to fingers and pens.
+
+**Verified only in headless Chromium with synthetic touches on a desktop CPU.** Real fingers err by 25-40 css px
+(recalled), so the thresholds are untested where they matter; iOS Safari (compat events, `touch-action`, edge swipes,
+pull-to-refresh, callouts), a phone's emulator speed (which could sum sends the desktop never did), the real lifecycle
+and a hosting phone with a spectator watching the cursor are not. The PR carries the device checklist.
+
 ### Screen-scraping instead of emulator events
 
 Two flows read the framebuffer because js-dos exposes no game-level state (and the guest is a 16-bit
@@ -594,7 +734,13 @@ with how far the device stretched the 10 ms pacing, cancel, fail, refused, the C
 recognition pass, the saving verdict when it changes), `AutoSaverService` and `SaveGameService` (`save`:
 the dialog seen and gone, each persist with its reason and duration, tick failures, hidden-page pauses,
 `layers.save()` time) and `AppComponent` (`update`: the prompt, the choice, the save before the reload).
-Pointer, touch and IME are NOT hooked: the phases that add them log into this.
+`TouchInputService` and `GuestPointer` log into `touch` (the layer attached or detached; each finger landing with its
+guest position and whether the cursor was sent ahead; every decision: tap, double-tap, drag start and end, aim start
+and end, cancel with its reason, a palm or an extra finger ignored; the first compat mouse event dropped) and `pointer`
+(each move with its from, to, sends, units, duration and the smallest and largest gap between sends, which is the
+number that says whether a device stretches the spacing; each home with its reason; each click with how long it waited
+behind the cursor and how long it held; each abort with what it dropped; a refused send). IME is NOT hooked: the
+type-bar phase logs into it.
 
 ### Multiplayer (watch-together, not play-together)
 
@@ -769,7 +915,7 @@ funnels — `GamePage.showErrorAlert` and `MultiplayerUiService.showError` — a
 so route new error dialogs through those rather than hand-rolling another `create()`.
 `alert-danger` is a *button*-level class and is unaffected. Before opening a PR, check that
 `grep -rc 'alertController.create' src/` and `grep -rc "cssClass: 'win9x-alert" src/app`
-still agree (28 today) — a manual check, because `npm run lint` covers only `.ts`/`.html`
+still agree (29 today) — a manual check, because `npm run lint` covers only `.ts`/`.html`
 and there is no stylelint setup to hang it on.
 
 The room status pill (`.mp-status-pill` in [global.scss](src/global.scss)) is on the shell

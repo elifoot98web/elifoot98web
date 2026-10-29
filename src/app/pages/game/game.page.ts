@@ -13,7 +13,7 @@ import { DiagnosticsReportHelper } from 'src/app/core/helpers/diagnostics-report
 import { filter, map, Observable, Subscription, take } from 'rxjs';
 import { EmulatorKeyCode, EmulatorKeyCodeHelper } from '../../core/models/game';
 import { CursorClickMessage, CursorPositionMessage, MultiplayerJoinErrorKind, PlayerInfo } from '../../core/models/multiplayer';
-import { AutoSaverService, EmulatorControlService, PatchService, SaveGameService } from '../../core/services/game';
+import { AutoSaverService, EmulatorControlService, PatchService, SaveGameService, TouchInputService } from '../../core/services/game';
 import { DiagnosticsService, LayoutHelperService, LocalStorageService } from '../../core/services/shared';
 import { MultiplayerAudioService, MultiplayerChatService, MultiplayerCursorService, MultiplayerPlayerInfoService, MultiplayerRelayHealthService, MultiplayerService, MultiplayerUiService } from '../../core/services/multiplayer';
 import { CursorRendererHelper } from 'src/app/core/helpers/cursor-renderer.helper';
@@ -24,6 +24,7 @@ import { BootProgressHelper } from 'src/app/core/helpers/boot-progress.helper';
 import { BootStage, BootStageHelper } from 'src/app/core/helpers/boot-stage.helper';
 import { TimeoutHelper } from 'src/app/core/helpers/timeout.helper';
 import { DisplayMode, DisplayModeHelper } from 'src/app/core/helpers/display-mode.helper';
+import { TouchMode, TouchModeHelper } from 'src/app/core/helpers/touch-mode.helper';
 
 
 @Component({
@@ -73,6 +74,15 @@ export class GamePage implements OnInit, OnDestroy {
   isMobile$: Observable<boolean>;
   isLandscape$: Observable<boolean>;
 
+  /**
+   * Whether the options menu offers "Modo de toque": a finger is the primary pointer AND the
+   * classic touchpad would work on this device (see TouchModeHelper). Reactive, because a
+   * convertible changes its primary pointer when the keyboard is detached.
+   */
+  touchModeChoice$: Observable<boolean>;
+  /** The person's choice. What is actually in force is {@link TouchModeHelper.effective}. */
+  touchMode: TouchMode = 'direct';
+
   private static readonly KEY_FAILURE_REPORT_INTERVAL_MS = 5000;
   private lastKeyFailureAt = 0;
 
@@ -111,12 +121,16 @@ export class GamePage implements OnInit, OnDestroy {
     private multiplayerAudioService: MultiplayerAudioService,
     private relayHealthService: MultiplayerRelayHealthService,
     private diagnostics: DiagnosticsService,
+    private touchInputService: TouchInputService,
     chatService: MultiplayerChatService
   ) {
     this.unreadCount$ = chatService.unreadCount$;
     this.participantCount$ = this.playerInfoService.playerList$.pipe(map(players => players.length));
     this.isMobile$ = this.layoutHelperService.isMobile$;
     this.isLandscape$ = this.layoutHelperService.isLandscape$;
+    this.touchModeChoice$ = this.layoutHelperService.matches$('(pointer: coarse)').pipe(
+      map(coarse => TouchModeHelper.offersChoice(coarse, navigator.userAgent))
+    );
   }
 
   /**
@@ -330,6 +344,9 @@ export class GamePage implements OnInit, OnDestroy {
     // now survives errors by design) and keep the OCR worker's memory for the rest of the visit.
     this.autoSaverService.stop();
     this.autoSaverService.stopPeriodicSave();
+    // The layer is a root service too: its listeners sit on this page's container, and it holds
+    // the emulator. Detaching also releases a button the guest may have been left holding.
+    this.touchInputService.detach('page destroyed');
     this.stopObservingOverlay?.();
     this.multiplayerSubscriptions.unsubscribe();
     // Without this the room, its ping interval and the canvas capture outlive the page.
@@ -416,6 +433,7 @@ export class GamePage implements OnInit, OnDestroy {
     this.setupPeriodicSave()
     this.setupSpectatorCursors()
     this.setupSpectatorAudio()
+    await this.setupTouchInput()
   }
 
   async handleShowTutorial() {
@@ -449,7 +467,7 @@ export class GamePage implements OnInit, OnDestroy {
         '\n' +
         'Dicas de uso:\n' +
         '- No computador, pressione ESC para liberar o mouse da janela do jogo.\n' +
-        '- No celular, mova o cursor deslizando o dedo na tela, como em um touchpad de notebook.\n' +
+        '- No celular, toque direto no que quiser clicar. Toque duas vezes para um clique duplo, arraste para mover barras e janelas, e segure o dedo por meio segundo para mirar com precisão: o cursor aparece acima do dedo e o clique acontece quando você solta.\n' +
         '\nAproveite para reviver a nostalgia do clássico Elifoot 98 diretamente no seu navegador!\n',
       backdropDismiss: false,
       cssClass: 'win9x-alert alert-whitespace wide-alert',
@@ -854,6 +872,104 @@ export class GamePage implements OnInit, OnDestroy {
     window.location.reload()
   }
 
+  /**
+   * Install direct touch on the booted emulator, or leave stock js-dos in charge when the person
+   * chose the classic touchpad. Runs once the game is up (loadConfig), after the stored choice
+   * is read.
+   */
+  async setupTouchInput() {
+    // Not allowed to throw past applyTouchMode: with site data blocked the read rejects while the
+    // game itself boots, and the layer is the only way some devices (a default-UA iPad) can touch
+    // it at all. An unreadable choice is the default.
+    let stored: string | undefined
+    try {
+      stored = await this.storageService.get<string>(STORAGE_KEY.TOUCH_MODE)
+    } catch (e) {
+      console.warn('Could not read the touch mode; using direct touch', e)
+      this.diagnostics.log('touch', 'touch mode unreadable', () => ({ error: String(e) }))
+    }
+    this.touchMode = TouchModeHelper.normalise(stored)
+    this.applyTouchMode()
+  }
+
+  /**
+   * Put the layer in step with the choice. Nothing reloads: classic is simply "the layer is not
+   * installed", so js-dos's own handlers, which are always bound, take the finger. The choice
+   * that is stored can be a mode this device cannot run (the same browser asked for its "desktop
+   * site" turns a phone into a user agent js-dos gives no touch to), and then it is direct.
+   */
+  private applyTouchMode() {
+    if (this.destroyed) return
+    const effective = TouchModeHelper.effective(this.touchMode, navigator.userAgent)
+    if (effective === 'classic') {
+      this.touchInputService.detach('classic mode')
+      return
+    }
+
+    const layers = dosInstance?.layers
+    if (!layers?.root || !layers.mouseOverlay || !layers.canvas) {
+      // Stock js-dos keeps the finger, as it always did.
+      console.warn('The emulator has no input layers to attach direct touch to.')
+      this.diagnostics.log('touch', 'no input layers to attach to')
+      return
+    }
+    this.touchInputService.attach(this.dosCI, {
+      root: layers.root,
+      overlay: layers.mouseOverlay,
+      canvas: layers.canvas,
+    })
+  }
+
+  /** The subtitle of the "Modo de toque" entry. */
+  get touchModeSummary(): string {
+    return TouchModeHelper.label(TouchModeHelper.effective(this.touchMode, navigator.userAgent))
+  }
+
+  /** Direct (a tap lands under the finger) or classic (js-dos's touchpad). Applies at once. */
+  async promptTouchMode() {
+    this.hidePopover()
+
+    const current = TouchModeHelper.effective(this.touchMode, navigator.userAgent)
+    let chosen: TouchMode | undefined
+    const alert = await this.alertController.create({
+      header: 'Modo de toque',
+      cssClass: 'win9x-alert alert-whitespace wide-alert',
+      // Short on purpose: on a landscape phone anything longer pushes the radios out of view.
+      message:
+        'Direto: o toque clica onde o dedo está.\n' +
+        'Touchpad: o dedo move o cursor, como em um notebook.',
+      inputs: TouchModeHelper.modes().map(mode => ({
+        type: 'radio' as const,
+        label: TouchModeHelper.label(mode),
+        value: mode,
+        checked: mode === current,
+      })),
+      buttons: [{
+        text: 'Cancelar',
+        role: 'cancel'
+      }, {
+        text: 'Aplicar',
+        handler: (value: TouchMode | undefined) => {
+          chosen = value
+        }
+      }]
+    })
+    await alert.present()
+    await alert.onDidDismiss()
+
+    if (!chosen || chosen === current) return
+    this.touchMode = chosen
+    this.diagnostics.log('touch', 'mode chosen', () => ({ mode: chosen }))
+    this.applyTouchMode()
+    try {
+      await this.storageService.set<string>(STORAGE_KEY.TOUCH_MODE, chosen)
+    } catch (e) {
+      // It applies for this visit either way.
+      console.warn('Could not store the touch mode', e)
+    }
+    await this.multiplayerUiService.showToast(`Modo de toque: ${TouchModeHelper.label(chosen)}.`, 'success', 3000)
+  }
+
   showPopover(e: Event) {
     this.popover.event = null
     this.popover.event = e;
@@ -1076,6 +1192,7 @@ export class GamePage implements OnInit, OnDestroy {
     try {
       this.autoSaverService.stop()
       this.autoSaverService.stopPeriodicSave()
+      this.touchInputService.detach('leaving the game')
       this.stopObservingOverlay?.()
       this.multiplayerService.leaveRoom()
       await this.saveGameService.saveGame()

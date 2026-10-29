@@ -108,6 +108,19 @@
             </ion-label>
             <ion-icon slot="end" name="resize-outline"></ion-icon>
           </ion-item>
+          <!--
+            Only where a finger is how the game is played AND the classic touchpad would work
+            there (TouchModeHelper.offersChoice): on a default-UA iPad js-dos gives the classic
+            path no touch input at all, so offering it would only offer a dead screen. The
+            subtitle is the mode in force, which is not always the stored choice.
+          -->
+          <ion-item *ngIf="touchModeChoice$ | async" button detail="false" (click)="promptTouchMode()">
+            <ion-label>
+              Modo de toque
+              <p>{{ touchModeSummary }}</p>
+            </ion-label>
+            <ion-icon slot="end" name="hand-left-outline"></ion-icon>
+          </ion-item>
           <ion-item detail="false">
             <ion-toggle [checked]="smoothFilterDisabled" (ionChange)="toggleSmoothFilter($event)">Desativar
               Suavização</ion-toggle>
