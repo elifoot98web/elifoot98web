@@ -6,6 +6,7 @@ import { DeckKeysPanel, DeckPanel, DeckPanelHelper, DeckPanelState } from '../..
 import { KeyRepeatScheduler, KeyRepeatTimers } from '../../helpers/key-repeat.helper';
 import { Modifier, ModifierLatch } from '../../helpers/modifier-latch.helper';
 import { ChatPanelHelper } from '../../helpers/chat-panel.helper';
+import { FieldHint } from '../../helpers/field-hint.helper';
 import { DECK } from '../../models/constants';
 import { EmulatorControlService, GuestKeyQueueService } from '../../services/game';
 import { DiagnosticsService } from '../../services/shared';
@@ -64,6 +65,16 @@ export class DockComponent implements OnInit, OnChanges, OnDestroy {
   @Input() chatAvailable = false;
   @Input() chatOpen = false;
   @Input() unread = 0;
+
+  /**
+   * The experimental live type bar is on: Texto opens it instead of the compose dialog (the page
+   * decides which, this only changes the button), and the button presses on the lift, because iOS
+   * brings up the keyboard only for a focus made in a gesture it counts, and a lift is more likely
+   * to be one than a landing is.
+   */
+  @Input() liveKeyboard = false;
+  /** A text field seems to have the focus in the guest (FieldHintService): Texto pulses. Only a cue, never a gate. */
+  @Input() fieldHint: FieldHint = 'none';
 
   /** The launcher's sheet. Two-way: the page's button opens it and this one closes it. */
   @Input() sheetOpen = false;
@@ -150,6 +161,16 @@ export class DockComponent implements OnInit, OnChanges, OnDestroy {
   /** The sheet has no folded state: with nothing chosen it shows the first panel. */
   get sheetKeys(): DeckKeysPanel {
     return this.panelState.keys ?? DeckPanelHelper.DEFAULT;
+  }
+
+  /** Texto pulses while a field seems to be there and the live bar could take the text. */
+  get textPulses(): boolean {
+    return this.liveKeyboard && this.fieldHint === 'field';
+  }
+
+  get textAriaLabel(): string {
+    if (!this.liveKeyboard) return 'Digitar um texto e enviar ao jogo';
+    return this.textPulses ? 'Digitar no teclado ao vivo. Parece haver um campo de texto no jogo' : 'Digitar no teclado ao vivo';
   }
 
   get chatLabel(): string {

@@ -20,6 +20,7 @@ interface Rig {
   reached: string[];
   motions: Array<[number, number]>;
   buttons: boolean[];
+  dosCI: DosCI;
 }
 
 let host: HTMLElement | undefined;
@@ -60,7 +61,7 @@ function build(): Rig {
   const service = new TouchInputService(new NgZone({ enableLongStackTrace: false }), silentDiagnostics());
   service.retune({ now: () => Date.now() });
   service.attach(dosCI, { root, overlay, canvas });
-  return { service, root, overlay, canvas, keyboard, reached, motions, buttons };
+  return { service, root, overlay, canvas, keyboard, reached, motions, buttons, dosCI };
 }
 
 function pointer(target: HTMLElement, type: string, x: number, y: number, init: PointerEventInit = {}) {
@@ -374,6 +375,86 @@ describe('TouchInputService', () => {
 
       expect(context.resume).toHaveBeenCalledTimes(1);
       expect(rig.buttons).toEqual([true, false]);
+    }));
+  });
+
+  describe('for the live type bar', () => {
+
+    const clicks = () => {
+      const seen: Array<{ x: number; y: number }> = [];
+      rig.service.clicks$.subscribe(point => seen.push(point));
+      return seen;
+    };
+
+    it('tells where the cursor is once a tap has been clicked, and not before', scenario(() => {
+      const seen = clicks();
+      down(200, 150);
+      tick(60);
+      up(200, 150);
+      expect(seen).toEqual([]);
+
+      tick(500);
+      expect(seen).toEqual([{ x: 200, y: 150 }]);
+    }));
+
+    it('tells for a double tap and for the end of aim mode, each time', scenario(() => {
+      const seen = clicks();
+      tap(200, 150);
+      tick(100);
+      tap(212, 154);
+      tick(500);
+      expect(seen).toEqual([{ x: 200, y: 150 }, { x: 200, y: 150 }]);
+
+      down(400, 300);
+      tick(TOUCH_INPUT.HOLD_MS + 20);
+      tick(300);
+      up(400, 300);
+      tick(500);
+      expect(seen.length).toBe(3);
+      expect(seen[2]).toEqual({ x: 400, y: 300 - TOUCH_INPUT.AIM_OFFSET_PX });
+    }));
+
+    it('stays quiet for a drag and for a touch outside the picture', scenario(() => {
+      const seen = clicks();
+      down(100, 100);
+      tick(40);
+      move(300, 200);
+      tick(300);
+      up(300, 200);
+      tick(500);
+
+      rig.overlay.style.width = '800px';
+      tick(1000);
+      tap(700, 100);
+      tick(500);
+      expect(seen).toEqual([]);
+    }));
+
+    it('moves the focus to the game on a touch, as a mouse press would', scenario(() => {
+      down(200, 150);
+      expect(document.activeElement).toBe(rig.root);
+      up(200, 150);
+      tick(500);
+    }));
+
+    it('leaves the focus where it is when the page asks to keep it: the OS keyboard stays open', scenario(() => {
+      const field = document.createElement('input');
+      document.body.append(field);
+      rig.service.attach(rig.dosCI, { root: rig.root, overlay: rig.overlay, canvas: rig.canvas, keepFocus: () => document.activeElement === field });
+      field.focus();
+
+      down(200, 150);
+      expect(document.activeElement).toBe(field);
+      up(200, 150);
+      tick(500);
+      expect(rig.buttons).withContext('the tap still clicks').toEqual([true, false]);
+
+      field.blur();
+      down(200, 150);
+      expect(document.activeElement).toBe(rig.root);
+      up(200, 150);
+      tick(500);
+      field.remove();
     }));
   });
 

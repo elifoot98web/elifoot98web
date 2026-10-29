@@ -123,8 +123,8 @@
       <ion-icon [name]="panel.icon" aria-hidden="true"></ion-icon>
       <span class="deck-tab-label">{{ panel.label }}</span>
     </button>
-    <button class="deck-key deck-tab" appDeckKey (deckPress)="onTextTab()" [deckKeyDisabled]="keysDisabled"
-      aria-label="Digitar um texto e enviar ao jogo">
+    <button class="deck-key deck-tab" appDeckKey [deckKeyOn]="liveKeyboard ? 'up' : 'down'" (deckPress)="onTextTab()"
+      [deckKeyDisabled]="keysDisabled" [class.deck-tab--field]="textPulses" [attr.aria-label]="textAriaLabel">
       <ion-icon name="terminal-outline" aria-hidden="true"></ion-icon>
       <span class="deck-tab-label">Texto</span>
     </button>
@@ -163,8 +163,8 @@
       <ion-icon [name]="panel.icon" aria-hidden="true"></ion-icon>
       <span class="deck-tab-label">{{ panel.label }}</span>
     </button>
-    <button class="deck-key deck-tab" appDeckKey (deckPress)="onTextTab()" [deckKeyDisabled]="keysDisabled"
-      aria-label="Digitar um texto e enviar ao jogo">
+    <button class="deck-key deck-tab" appDeckKey [deckKeyOn]="liveKeyboard ? 'up' : 'down'" (deckPress)="onTextTab()"
+      [deckKeyDisabled]="keysDisabled" [class.deck-tab--field]="textPulses" [attr.aria-label]="textAriaLabel">
       <ion-icon name="terminal-outline" aria-hidden="true"></ion-icon>
       <span class="deck-tab-label">Texto</span>
     </button>

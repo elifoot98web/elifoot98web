@@ -658,7 +658,94 @@ build, and a CLAUDE.md update.
    by accident while driving it; P5's recovery brought the game back every time. **Not verified:** any phone or finger, haptics,
    iOS Safari, the real safe areas, the OS keyboard over the chat, TalkBack/VoiceOver, a low-end CPU, and what `*` and `-` do in
    the game beyond the owner's word. The checklist for the device pass is in the PR.
-10. Then P8 (live type bar), P9 (idle pause), P11 (zoom/pan camera), P12 (stage layout, landscape
+10. **P8 — live type bar**, behind a flag (decision D7: the compose dialog stays the default and the owner decides after the
+    device pass). **As built:** `app-type-bar` (a real one-line field above the OS keyboard, opened by the deck's Texto button
+    only when "Teclado ao vivo (experimental)" is on, `STORAGE_KEY.LIVE_KEYBOARD`, off by default), the pure `TypeMirror` (the diff
+    of the field's value against what the guest holds, over code points), `TypeKeyHelper`, `TypeBarSession` (the field's events
+    wired to the mirror and the key queue), `TypeBarLayoutHelper`, and for the shortcut hazard a field hint: `CaretWatcher`,
+    `IBeamHelper`, `FieldHintHelper` and `FieldHintService`. `GuestKeyQueueService.send()` takes planned tasks as one submission;
+    `KeyboardInsetService.inset$`; `TouchInputService.clicks$` and `TouchSurface.keepFocus`. 152 new specs (nine new spec files and five cases in the touch layer's; the suite is
+    1077), including scripted IME sequences against a real `<input>` and real 640x480 frames of the guest. The contract and the
+    rules are in CLAUDE.md, *The live type bar*. Measured in headless Chrome 143 (chrome-headless-shell, touch emulation,
+    393x852 unless noted) against the dev server and the real game, with **synthetic IME events** (CDP `Input.imeSetComposition`,
+    `insertText`, `dispatchKeyEvent`) and a keyboard **simulated** by shrinking `visualViewport.height` and telling the real
+    `KeyboardInsetService`:
+    - **It types into the real game.** In the Jogadores dialog (the coach names) a committed "João" came out as `J o Alt+0227 o`
+      and the field read "João"; a composition `F`, `Fe`, `Feli`, `Felipao`, `Felipe` sent NOTHING until the commit and then
+      `F e l i p e` once; "Silva" then a space then a keydown Backspace sent only `S i l v a` (the space is held back; taking it back
+      sends nothing), and " Jr" sent the space with it ("Silva Jr" in field 3). A strip Enter moved to the next field and cleared the
+      bar with the focus still in it. Backspace in a field with text sent ONE guest Backspace (keydown and input would have been two);
+      in the empty bar it went to the guest (no `input` event exists for it), and a hardware Enter keydown sent Enter and typed nothing.
+      F5, Shift+Tab, Esc and Down from the hardware path reached the game as themselves and did not reload the page or leave the field.
+    - **A paste of 80 characters** is one send; "Enviando 14/80" and Cancelar appeared above the bar, Cancelar cut it after 19 keys,
+      nothing more was typed in the next 2.5 s, the bar was emptied and the toast said "Envio cancelado: 19 de 80 teclas enviadas".
+      A 30 character paste went out whole.
+    - **The picture does not move.** Over twelve viewport and keyboard cases (393x852 with no keyboard, 250 and 336 px; 360x740 with
+      310; 430x932 with 336; 375x667; 820x1180; 844x390, 667x375, 932x430 and 1180x820 in landscape) `#game-container` and the canvas
+      had the same rect with the bar open, with the keyboard up, and closed; the bar's bottom was `innerHeight - inset` to the pixel;
+      every key was 44x44 or more, none overlapped another or left the bar, and the field was at least 120 px wide (the 360 px one-row
+      layout has 180). The full window is 190 px; the A07-like 360x740 with a 310 px keyboard and the iPhone in a Safari tab (430x932,
+      336) are one row and the full window respectively, and the same iPhone installed (59 px more status bar) folds.
+    - **The hazard is real.** On the main window (no field), with the badge saying "nenhum campo detectado", a typed "a" selected the
+      automatic squad. By decision nothing is gated: the badge and the Texto button's cue are all there is.
+    - **The hint, on the real dialog.** Caret: frames 528-600 ms apart, consecutive frames differ by one bar 1 px wide and 14 tall at
+      640x480 (as at 800x600: the font fixes it, so no threshold depends on the frame size), and the hint was "campo detectado"
+      2.0 s after a cold start. I-beam: the guest draws an XOR cursor, so it is blue on the focused yellow field and black on a white
+      one, 17 rows with two 7 px serifs; the look took 0.2 ms, found stem 15 / serif both over a tapped field and was "no" over the
+      dialog's face. A tap on the game's own field left the focus in the bar (`keepFocus`).
+    - **Switching it off** unmounted the bar and stopped the hint, stored `false`, and Texto was the dialog again; the stored `true`
+      survived a reload (the bar was mounted and the hint running before the first tap); destroying the view with the bar open left
+      no console error and gave the focus back to the emulator; opening the chat closed the bar and the reverse (simulated room).
+    Where it differs from the plan above, on evidence or by decision: **the opener is the deck's Texto button, not a new "Digitar"
+    button**, and it presses on the lift in this mode. **Composition is mirrored when it ends** (plus a 700 ms settle for an IME that
+    never ends one, and a flush for a strip key, a blur and closing): mirroring the middle was not shown to be safe. **The trailing
+    space is held back until something follows it**, rather than filtered: it needs no guess about which spaces the keyboard added.
+    **The bar clears itself after a key that moves the guest**, never in the middle of a composition. **The two frames of the caret
+    check are taken at frame events** (the prototype's 290 ms apart lands both in one half of the blink half the time). **The I-beam
+    needs the serif**: a stem-only test calls the arrow over a white list a field. **Landscape and a short phone fold into ONE row**
+    (the keys that fit by width), where the plan said "one row or the dialog": the dialog covers the same pixels and puts its buttons
+    under the keyboard. **A "Lista" key** on the strip hands over to the compose dialog. **The strip has nine keys in two rows of five**
+    (the arrows and Shift+Tab are the full window's); under 400 px the one row has Tab and Enter, from 400 Esc, from 560 Backspace and
+    "123". **Not done:** panning `#game-container` above the keyboard in landscape (a transform against the overlay sync, left for
+    P11/P12); a fold for Elifoot's 8-letter filename field (it rejects an accented name when it SAVES, see P10's found-on-the-way);
+    any real keyboard. **Not verified:** everything in CLAUDE.md's list under *The live type bar*; the checklist for the device pass
+    is in the PR.
+    **Changed by the review of this phase** (four reviewers, then headless Chrome 143 again on the final code with the harness's new
+    `typebar.mjs moves`; `ime`, `hint` and the 108 checks of `layout` re-run and unchanged):
+    - **The bar did not let go when the guest left its field.** `keepFocus` only said "I have it", the one subscriber of `clicks$` was the
+      field hint, and the bar's own keys were the only thing that cleared it, so after "Felipe" a tap on Jogador 2 left "Felipe" in the bar
+      and the next "Silva" read "FelipeSilva" over a field holding "Silva"; Backspaces past what was typed there deleted text the bar never
+      wrote. A strip key pressed while a word was still underlined was worse: the clear waited for a composition that nothing ended (a
+      keyboard that keeps a word underlined until a space does not end it for a tap on a keycap), and the first cut's spec locked that in.
+      Now `TypeBarSession.abandon` runs for a key that moves the guest, a finger that lands on the game (at `keepFocus`, before the click,
+      with a flush so a word being composed goes to the field it was for) and a key sent from elsewhere (`GuestKeyQueueService.activity$`,
+      which fires inside the submission, so the bar's own sends are told apart by a flag; no flush there, the guest has already moved). It ends a
+      composition by blurring and focusing the field inside the gesture, ignoring what the browser commits on the way, and never writes the
+      value of a field the IME is composing in (the strip's Backspace ends the composition first too). Measured with CDP `imeSetComposition`:
+      "Felipe", a tap on Jogador 2 and "Silva" gave Felipe / Silva with the bar reading Silva; a deck Tab then "Costa" gave Costa alone in
+      Jogador 3; "Leu" composed and the strip's Tab gave L e u + Tab, an empty bar, the focus still in it, and "Ze" alone in Jogador 5; "Ab"
+      composed and the strip's Backspace gave A, b, ONE Backspace and "A". **Whether a real keyboard stays open through that blur and focus
+      is the one new thing on the device checklist.**
+    - **A pasted Tab (or U+2028/2029, or a backspace character) pressed the key.** `<input type=text>` strips only CR and LF, and the
+      planner turned the rest into Tab and Enter behind a mirror that believed it was one field. They are spaces now (a trailing one held
+      back): "Zé", Tab, "Silva" sent Z, the accent, Space and S i l v a, and Jogador 1 read "FelipeZé Silva".
+    - **Closing the bar in the middle of a paste left the queue typing with no Cancelar.** Closing now cancels the rest and says so (an 80
+      character paste closed after 15 keys typed nothing more).
+    - **`KeyboardInsetService` told `inset$` before it wrote `--kb-inset`**, so the type bar's `bar layout` log line measured the previous
+      inset's rect: the numbers the device pass reads to decide whether iOS pushed the bar off-screen would have been one step behind.
+      Reversed (a spec pins the order); measured at 336 px after 250 px the line reads bottom 516 on an 852 px page, which is the new inset's rect (by construction the old order would have read 602, the previous one's; the old code was not run).
+    - **The CapsLock guard re-armed every 15 s of continuous typing**, a read in the middle of a word on a slow phone, against the
+      documented "after silence". The clock is now the last send of letters (a pure rule in the session, with a fake clock in its specs).
+    - **Smaller:** the FAQ said Esc sits beside the field, and the one-row layout has no Esc under 400 px (the field must stay 120 px
+      wide); it now says the keys shown are the ones that fit. Mutation-checked: seven deliberate breaks of the new rules (the deferred
+      clear on a strip key, the blur sync not suppressed, the caps clock, the inset order, the control characters, the flush on a touch,
+      the Backspace writing over a composition) each fail at least one spec.
+    **Dismissed or left, with reasons:** a click can still land before keys that are still queued (the pointer engine and the key
+      queue are separate serial queues): it takes a long paste on a slow phone, a paste shows its progress, and the fix is an ordering gate
+      inside `GuestPointer`, which is the P2 engine's hot path and not this phase's to change; it is in CLAUDE.md as known, and on the
+      checklist. The bar's `maxlength` of 300 against Elifoot's shorter fields is documented as an assumption (nothing knows a field's
+      limit) and put on the checklist. Esc under 400 px is a layout decision with a cost either way and stays.
+11. Then P9 (idle pause), P11 (zoom/pan camera), P12 (stage layout, landscape
     rails, spectator parity — re-run the multiplayer harness), P13 (menu IA, first-run coach),
     P14 (wake lock, fullscreen, audio health, install), P15 (desktop mouse, gamepad).
 
@@ -673,7 +760,7 @@ reachable from the options menu; `?diag=1` turns it on for a tab's session. Off,
 boolean check; on, a 5000-entry ring buffer of `{t, w, cat, msg, data?}`. Hooked: the key queue
 (enqueue, start, flush with timings, cancel, fail), the boot stages, the OCR worker lifecycle and each
 saving verdict, every persist with its duration, and the update flow. Pointer, touch and IME are not
-hooked: P2, P8, P9 and P11 log into it. CLAUDE.md has the design and its invariants; what was measured,
+hooked: P2, P8, P9 and P11 log into it (P2 and P8 now do). CLAUDE.md has the design and its invariants; what was measured,
 headless Chrome 143 with touch emulation at 390x844, 844x390 and 1280x800, against the dev server:
 - **Zero cost off.** After a fresh load of `/#/game` no `error`, `unhandledrejection`, `pagehide`,
   `pageshow`, `orientationchange` or `freeze` listener exists on the page; switching on adds all of them

@@ -160,6 +160,19 @@
           <ion-item *ngIf="canVibrate" detail="false">
             <ion-toggle [checked]="keyVibration" (ionChange)="toggleKeyVibration($event)">Vibração nas teclas</ion-toggle>
           </ion-item>
+          <!--
+            EXPERIMENTAL, and honest about it: the live type bar has only run against simulated keyboards.
+            Off (the default) the Texto button opens the compose dialog it always opened. The label is
+            outside the toggle so the explanation can wrap under it on a narrow phone.
+          -->
+          <ion-item detail="false">
+            <ion-label class="ion-text-wrap">
+              Teclado ao vivo (experimental)
+              <p>O botão Texto abre um campo acima do teclado do celular, e o que você digita aparece no jogo na hora. Ainda não foi testado em celulares de verdade: se algo sair errado, desligue.</p>
+            </ion-label>
+            <ion-toggle slot="end" [checked]="liveKeyboard" (ionChange)="toggleLiveKeyboard($event)"
+              aria-label="Teclado ao vivo (experimental)"></ion-toggle>
+          </ion-item>
           <ion-item detail="false">
             <ion-toggle [checked]="smoothFilterDisabled" (ionChange)="toggleSmoothFilter($event)">Desativar
               Suavização</ion-toggle>
@@ -353,14 +366,30 @@
       [dosCI]="dosCI"
       [disabled]="deckDisabled"
       [vibrate]="keyVibration"
+      [liveKeyboard]="liveKeyboard"
+      [fieldHint]="fieldHint"
       [chatAvailable]="isStreaming"
       [chatOpen]="isChatOpen"
       [unread]="(unreadCount$ | async) || 0"
       [(sheetOpen)]="deckSheetOpen"
       (chatToggle)="toggleChat($event)"
-      (textRequest)="promptInputText()"
+      (textRequest)="onTextRequest()"
       (omaticRequest)="showOmaticModal()"
       (keyFailure)="onKeyFailure($event)">
     </app-dock>
+    <!--
+      The live type bar (experimental, behind the "Teclado ao vivo" setting): fixed to the bottom of the
+      screen above the OS keyboard, so like the deck it is a SIBLING of #game-container and takes no space
+      from it. Mounted wherever the deck is, since the deck's Texto button is what opens it.
+    -->
+    <app-type-bar *ngIf="liveKeyboard && layout.kind !== 'none'"
+      [dosCI]="dosCI"
+      [hint]="fieldHint"
+      [shape]="layout.shape"
+      [disabled]="deckDisabled"
+      (pasteList)="promptInputText()"
+      (notice)="showTypeBarNotice($event)"
+      (keyFailure)="onKeyFailure($event)">
+    </app-type-bar>
   </div>
 </ion-content>

@@ -1,4 +1,5 @@
 import { Injectable, OnDestroy } from '@angular/core';
+import { BehaviorSubject, distinctUntilChanged, Observable } from 'rxjs';
 
 /** Anything shorter than this is collapsing browser chrome or rounding noise. */
 const MIN_KEYBOARD_INSET_PX = 60;
@@ -18,6 +19,10 @@ const MIN_KEYBOARD_INSET_PX = 60;
  * whenever that box changes — the exact jump the overlay chat exists to remove.
  * visualViewport reports the occlusion with zero layout effect.
  *
+ * The same number is also `inset$`, for the one consumer that has to decide something from it and
+ * not only lift itself by it (the live type bar folds into one row when the keyboard leaves it no
+ * room). Subscribing starts nothing: the measuring is still `start()` and `stop()`.
+ *
  * `offsetTop` is added to `height` because Safari may also shift the visual viewport down
  * while scrolling a field into view; innerHeight minus that bottom edge is the strip the
  * user cannot see. Android Chrome behaves the same under the default
@@ -28,6 +33,10 @@ export class KeyboardInsetService implements OnDestroy {
   private consumers = 0;
   private frame: number | null = null;
   private published = -1;
+  private readonly insetSubject = new BehaviorSubject<number>(0);
+
+  /** The occluded strip in px, `0` with no keyboard. Emits only on a change. */
+  readonly inset$: Observable<number> = this.insetSubject.pipe(distinctUntilChanged());
 
   private readonly viewport: VisualViewport | null =
     typeof window === 'undefined' ? null : window.visualViewport;
@@ -89,5 +98,8 @@ export class KeyboardInsetService implements OnDestroy {
     const style = document.documentElement.style;
     style.setProperty('--kb-inset', `${inset}px`);
     style.setProperty('--kb-open', inset > 0 ? '1' : '0');
+    // Last, so that a subscriber that measures the page when it is told (the type bar logs where it
+    // sits) reads the layout of the new inset and not of the one before it.
+    this.insetSubject.next(inset);
   }
 }

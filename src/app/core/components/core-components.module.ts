@@ -10,6 +10,7 @@ import { RoomStatusPillComponent } from './multiplayer/room-status-pill/room-sta
 import { RoomSetupModalComponent } from './multiplayer/room-setup-modal/room-setup-modal.component';
 import { DockComponent } from './dock/dock.component';
 import { DeckKeyDirective } from './dock/deck-key.directive';
+import { TypeBarComponent } from './type-bar/type-bar.component';
 
 @NgModule({
   imports: [
@@ -25,7 +26,8 @@ import { DeckKeyDirective } from './dock/deck-key.directive';
     RoomSetupModalComponent,
     RoomStatusPillComponent,
     DockComponent,
-    DeckKeyDirective
+    DeckKeyDirective,
+    TypeBarComponent
   ],
   exports: [
     ChatComponent,
@@ -37,7 +39,9 @@ import { DeckKeyDirective } from './dock/deck-key.directive';
     // The control deck: the page mounts it beside the game, as a sibling of #game-container, and
     // gives its own launcher buttons the keycap behaviour (no focus taken, one release).
     DockComponent,
-    DeckKeyDirective
+    DeckKeyDirective,
+    // The live type bar (experimental): the page mounts it beside the deck, a sibling of #game-container.
+    TypeBarComponent
   ],
 })
 export class CoreComponentsModule { }

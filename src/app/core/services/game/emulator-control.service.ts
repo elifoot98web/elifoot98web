@@ -3,10 +3,10 @@ import { Observable } from 'rxjs';
 import { DosCI } from '../../typings/jsdos';
 import { createWorker } from 'tesseract.js';
 import { EMULATOR_CONTROL_CONFIG } from '../../models/constants';
-import { EmulatorKeyCode } from '../../models/game';
+import { EmulatorKeyCode, KeyTask } from '../../models/game';
 import { OcrRegionHelper, PixelRegion } from '../../helpers/ocr-region.helper';
 import { RegionVerdictCache } from '../../helpers/region-verdict-cache.helper';
-import { GuestKeyQueueService, KeySendResult, TextSendResult } from './guest-key-queue.service';
+import { GuestKeyQueueService, KeySendResult, TaskSendOptions, TextSendResult } from './guest-key-queue.service';
 import { OcrWorkerHost } from './ocr-worker-host';
 import { DiagnosticsService } from '../shared/diagnostics.service';
 
@@ -56,6 +56,16 @@ export class EmulatorControlService {
   /** Type `str` into whatever the guest has focused. See GuestKeyQueueService.text. */
   public sendString(dosCI: DosCI | null | undefined, str: string, onProgress?: (completed: number, total: number) => void): Promise<TextSendResult> {
     return this.keyQueue.text(dosCI, str, { onProgress });
+  }
+
+  /** Send tasks that are already planned, as one submission. See GuestKeyQueueService.send. */
+  public sendTasks(dosCI: DosCI | null | undefined, tasks: readonly KeyTask[], options?: TaskSendOptions): Promise<KeySendResult> {
+    return this.keyQueue.send(dosCI, tasks, options);
+  }
+
+  /** Tasks waiting to go out, the one in flight included. */
+  public get pendingKeys(): number {
+    return this.keyQueue.pending;
   }
 
   /** Drop every key that has not gone out yet; returns how many. */

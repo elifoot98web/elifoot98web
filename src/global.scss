@@ -14,6 +14,7 @@
    is not a trailing @import. */
 @use './theme/win9x' as *;
 @use './theme/deck';
+@use './theme/type-bar';
 
 /* Core CSS required for Ionic components to work properly */
 @import "@ionic/angular/css/core.css";

@@ -53,6 +53,10 @@ export const STORAGE_KEY = {
   // The deck's keys buzz the phone by default where the browser can (Android; iOS has no
   // vibration API). Stored as the OFF flag so that an absent key, every existing install, means on.
   DISABLE_KEY_VIBRATION: 'disableKeyVibration',
+  // EXPERIMENTAL. The deck's Texto button opens the live type bar (TypeBarComponent) instead of the
+  // compose dialog. Absent means off: the bar has never run on a real phone's keyboard, and the
+  // owner decides after the device pass (decision D7).
+  LIVE_KEYBOARD: 'liveKeyboard',
 }
 
 /** Where a STORAGE_KEY lives. Ionic Storage is the default; the others are written around it. */
@@ -96,6 +100,7 @@ export const STORAGE_KEY_HOMES: Readonly<Record<keyof typeof STORAGE_KEY, readon
   BACKUP_NUDGE_DISMISSED: ['ionic'],
   DECK_MODE: ['ionic'],
   DISABLE_KEY_VIBRATION: ['ionic'],
+  LIVE_KEYBOARD: ['ionic'],
 };
 
 /**
@@ -462,6 +467,104 @@ export const DECK = {
   // focused, is the keyboard, and the layout must not move for it (the contract: it depends on
   // the viewport and the orientation, not on the OS keyboard).
   KEYBOARD_HEIGHT_RATIO: 0.8,
+}
+
+/**
+ * The live type bar (TypeBarComponent, TypeBarSession, TypeMirror), EXPERIMENTAL and behind
+ * STORAGE_KEY.LIVE_KEYBOARD. Every number here is a guess about keyboards nobody has held yet; the
+ * device pass (the `ime` category of the diagnostics log) is what settles them.
+ */
+export const TYPE_BAR = {
+  // An IME holding a word may still rewrite it, so a composition is mirrored when it ends. An IME
+  // that never ends one must not leave the bar mute: after this long without a composition or
+  // input event, the text as it stands is mirrored, and a later rewrite is a plain diff on top.
+  // Long enough that continuous typing never trips it; 0 turns it off (commit-only).
+  COMPOSITION_SETTLE_MS: 700,
+  // The key queue reads the guest's CapsLock (a round trip to the emulator) before a text that
+  // types letters. Per keystroke that would be a round trip per keystroke, so the bar asks when it
+  // first types letters and again only after this long without typing any (the clock is the last
+  // send of letters, not the last read): nothing on a phone can toggle the guest's CapsLock, only
+  // a hardware keyboard forwarded to it can.
+  CAPS_GUARD_REARM_MS: 15 * 1000,
+  // A send of at least this many keys shows "Enviando n/N" with a Cancelar (a paste): the compose
+  // dialog's threshold, so the two surfaces agree on what a long text is.
+  PROGRESS_MIN_TASKS: EMULATOR_CONTROL_CONFIG.PROGRESS_MIN_CHARACTERS,
+  // A held Backspace, arrow or PageUp on a hardware keyboard repeats unless the queue is already
+  // this backed up, as the deck's keys do.
+  REPEAT_MAX_PENDING: DECK.REPEAT_MAX_PENDING,
+  // What one field holds. A paste is one send and the bar is for a name or a number; a list belongs
+  // to the "Colar lista" dialog.
+  MAX_LENGTH: 300,
+  // Layout, in css px. The bar is a title, the field and a strip of keys; it is pinned to the bottom
+  // of the screen, above the OS keyboard, and never takes space from the page. It needs
+  // FULL_HEIGHT_* of room between the picture and the keyboard (two rows of five keys on a phone,
+  // one row of ten from WIDE_STRIP_MIN_WIDTH wide); with less, or in landscape, whose keyboard covers
+  // 55-60% of the screen, it folds into ONE row (56 px high) of the field and the keys that fit:
+  // Tab, Enter and the way out always, Esc from 400 px wide, "123" and Backspace from 560 (the OS
+  // keyboard has a Backspace and a number page of its own).
+  // Measured at 393 px wide: 190 (title 24, field row 58, two strip rows 54 each), and 196 asks for a
+  // little more than that, so a bar that "fits" never touches the picture.
+  FULL_HEIGHT_NARROW: 196,
+  FULL_HEIGHT_WIDE: 148,
+  WIDE_STRIP_MIN_WIDTH: 520,
+}
+
+/**
+ * Is there a text field in the guest? (CaretWatcher, IBeamHelper, FieldHintHelper). A HINT for the
+ * live type bar and the Texto button, never a gate: a selected-text field shows no caret, and a
+ * blinking thing that is not a caret is possible, so nothing is ever blocked or opened by it.
+ *
+ * Measured on the real game at 640x480 (and, before it, at 800x600): Windows' CursorBlinkRate is
+ * 530 ms and frames arrived 528-600 ms apart with a field focused (none at all on a still screen),
+ * the caret is one bar 1 px wide and 14 tall (17 tall in the sale price field) whatever the video
+ * mode, because the font and not the frame fixes it, and consecutive frames differ by exactly that
+ * bar. So none of the numbers below depend on the frame size or on where the field is.
+ */
+export const FIELD_HINT = {
+  // A frame event is a blink when it comes this long after the one before it...
+  BLINK_MIN_MS: 420,
+  BLINK_MAX_MS: 700,
+  // ...and a caret is suspected when, within this window, at least two gaps are blinks and at most
+  // one is not. The frames kept for it are the last few only.
+  BLINK_WINDOW_MS: 2600,
+  BLINK_MIN_GAPS: 2,
+  BLINK_MAX_STRAY_GAPS: 1,
+  FRAME_HISTORY: 8,
+  // After a verification that found no bar, the next one waits this long (frames of something else
+  // that happens to tick at about 530 ms must not cost a pair of screenshots every frame).
+  VERIFY_COOLDOWN_MS: 1000,
+  // The caret is gone when no frame has come for this long (a still screen sends none), or when
+  // frames keep coming for this long without a single blink-sized gap (the screen is animating).
+  GONE_AFTER_MS: 1200,
+  STALE_AFTER_MS: 8000,
+  // What a bar looks like, in guest pixels: the sum of the three channel differences that counts as
+  // changed, the widest and the shortest and tallest bar, and how much of its box it must fill.
+  PIXEL_DIFF: 150,
+  BAR_MAX_WIDTH: 3,
+  BAR_MIN_HEIGHT: 8,
+  BAR_MAX_HEIGHT: 25,
+  BAR_MIN_FILL: 0.6,
+
+  // The I-beam under a tap. The guest draws its mouse cursor into the frame, and Windows' I-beam is
+  // an XOR cursor: a 17-row sprite, a one pixel stem 15 rows tall between two 7 pixel serifs, in the
+  // inverse of whatever is under it (blue on the focused yellow field, black on a white one).
+  // The arrow is not: its black left edge has the same stem-like look over a white list, and what
+  // tells them apart is the serif.
+  IBEAM_LOOK_DELAY_MS: 150,
+  IBEAM_TTL_MS: 4000,
+  IBEAM_SEARCH_X: 4,
+  IBEAM_SEARCH_Y: 4,
+  IBEAM_TOP_ROWS_ABOVE_HOTSPOT: 9,
+  IBEAM_STEM_ROWS: 15,
+  IBEAM_STEM_MIN_ROWS: 11,
+  IBEAM_STEM_NEIGHBOUR: 2,
+  IBEAM_SERIF_HALF_WIDTH: 3,
+  IBEAM_SERIF_MIN_PIXELS: 6,
+  IBEAM_SERIF_REFERENCE: 6,
+  // A pixel differs from its neighbour at this sum of channel differences; two that are "the same
+  // background" differ by less than IBEAM_SAME.
+  IBEAM_DIFF: 120,
+  IBEAM_SAME: 48,
 }
 
 /**

@@ -25,6 +25,15 @@ export interface TextSendOptions {
   onProgress?: (completed: number, total: number) => void;
 }
 
+export interface TaskSendOptions extends TextSendOptions {
+  /**
+   * Read the guest's CapsLock before the first task, and tap it off if it is on. By default that
+   * is done for tasks that type letters; a sender that submits keystroke by keystroke (the live
+   * type bar) decides for itself how often, because each read is a round trip to the emulator.
+   */
+  guardCapsLock?: boolean;
+}
+
 export type KeyQueueErrorCode =
   /** There is no emulator to send to: the game has not booted, or the caller lost it. */
   | 'no-emulator'
@@ -88,7 +97,7 @@ interface Entry {
 
 /**
  * The only thing in the app that sends keys to the guest. Everything that types — a control deck
- * key, the text dialog, a future type bar — submits here, and a single consumer sends them one at a
+ * key, the text dialog, the live type bar — submits here, and a single consumer sends them one at a
  * time, so two senders can never overlap.
  *
  * Why it must be the only sender: `dosCI.simulateKeyPress` stamps its release 16 ms in the
@@ -136,7 +145,9 @@ export class GuestKeyQueueService implements OnDestroy {
   /**
    * Emits once for every submission that is accepted, before any key goes out. It is how the rest
    * of the app learns that something is typing into the guest without anything else being allowed
-   * to send (SaveStatusService marks the game as having unsaved input from it). A refused
+   * to send (SaveStatusService marks the game as having unsaved input from it, and the live type
+   * bar learns that a key it did not send has moved the guest: it is emitted synchronously, inside
+   * the call that submits, which is how the bar tells its own sends from the rest). A refused
    * submission is not activity.
    */
   readonly activity$: Observable<void> = this.activitySubject.asObservable();
@@ -176,11 +187,20 @@ export class GuestKeyQueueService implements OnDestroy {
    */
   async text(dosCI: DosCI | null | undefined, text: string, options: TextSendOptions = {}): Promise<TextSendResult> {
     const plan = EmulatorKeyCodeHelper.planText(text);
-    const result = await this.submit(dosCI, plan.tasks, {
-      guardCapsLock: EmulatorKeyCodeHelper.typesLetters(plan.tasks),
+    const result = await this.send(dosCI, plan.tasks, options);
+    return { ...result, substituted: plan.substituted };
+  }
+
+  /**
+   * Send tasks that were planned elsewhere, as ONE submission: they go out in order, behind
+   * whatever is already queued, and succeed, fail or get cancelled together. This is how the live
+   * type bar sends "N Backspaces and then this text" without a second sender or a second planner.
+   */
+  send(dosCI: DosCI | null | undefined, tasks: readonly KeyTask[], options: TaskSendOptions = {}): Promise<KeySendResult> {
+    return this.submit(dosCI, tasks, {
+      guardCapsLock: options.guardCapsLock ?? EmulatorKeyCodeHelper.typesLetters(tasks),
       onProgress: options.onProgress,
     });
-    return { ...result, substituted: plan.substituted };
   }
 
   /**

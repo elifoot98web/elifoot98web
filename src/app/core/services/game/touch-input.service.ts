@@ -1,4 +1,5 @@
 import { Injectable, NgZone } from '@angular/core';
+import { Observable, Subject } from 'rxjs';
 import { GestureConfig, GestureIntent, GestureRecognizer, TouchSample } from '../../helpers/gesture-recognizer.helper';
 import { GuestPoint, GuestPointer, GuestPointerOptions } from '../../helpers/guest-pointer.helper';
 import { TouchFeedbackHelper } from '../../helpers/touch-feedback.helper';
@@ -14,6 +15,15 @@ export interface TouchSurface {
   overlay: HTMLElement;
   /** `.emulator-canvas`: the picture; its rectangle maps the finger to the guest frame. */
   canvas: HTMLElement;
+  /**
+   * Asked once for every finger that lands on the game, before the layer moves the focus to `root`
+   * (which a hardware keyboard needs). A text field of the page that is meant to keep it answers
+   * true: the live type bar, whose OS keyboard would otherwise close on every tap the player makes
+   * on the game's own field. It is also the moment the page learns that the guest is about to be
+   * clicked in, which the type bar uses to drop the text it was mirroring; the layer cares only about
+   * the answer.
+   */
+  keepFocus?: () => boolean;
 }
 
 /** What {@link TouchInputService.retune} may change on a live layer. The harness sweeps these. */
@@ -90,6 +100,14 @@ interface Binding {
 export class TouchInputService {
   private session: TouchSession | null = null;
   private tuning: TouchTuning = {};
+  private readonly clickSubject = new Subject<GuestPoint>();
+
+  /**
+   * Where the guest's cursor was once a click the layer sent (a tap, a double tap, the end of aim
+   * mode) had gone out, in guest pixels. The live type bar looks at the pixels there to see
+   * whether the guest's cursor is an I-beam (FieldHintService). Emits outside Angular's zone.
+   */
+  readonly clicks$: Observable<GuestPoint> = this.clickSubject.asObservable();
 
   constructor(private zone: NgZone, private diagnostics: DiagnosticsService) { }
 
@@ -105,7 +123,7 @@ export class TouchInputService {
   attach(dosCI: DosCI, surface: TouchSurface): void {
     this.detach('replaced');
     this.zone.runOutsideAngular(() => {
-      this.session = new TouchSession(dosCI, surface, this.tuning, this.diagnostics);
+      this.session = new TouchSession(dosCI, surface, this.tuning, this.diagnostics, point => this.clickSubject.next(point));
     });
   }
 
@@ -161,6 +179,7 @@ class TouchSession {
     private readonly surface: TouchSurface,
     tuning: TouchTuning,
     private readonly diagnostics: DiagnosticsService,
+    private readonly onClick?: (point: GuestPoint) => void,
   ) {
     this.now = tuning.now ?? (() => performance.now());
     this.ownClock = !!tuning.now;
@@ -390,8 +409,12 @@ class TouchSession {
    * The same focus a mouse press gives for free. Cancelling the touch cancels the browser's
    * focus change with it, and js-dos reads the keyboard from this element: a hardware keyboard
    * on an iPad would otherwise stop reaching the game after the first tap.
+   *
+   * Not when a text field of the page asks to keep it (`keepFocus`): taking it would close the OS
+   * keyboard that the player has open to type into the very field they are tapping.
    */
   private focusSurface(): void {
+    if (this.surface.keepFocus?.()) return;
     if (document.activeElement !== this.surface.root) {
       this.surface.root.focus({ preventScroll: true });
     }
@@ -453,7 +476,7 @@ class TouchSession {
       case 'double-tap':
         // No move: the second click must land where the first one did.
         if (inside) {
-          void this.pointer.click();
+          this.announce(this.pointer.click());
           this.feedback.pulse('double', intent.x, intent.y);
         }
         this.logGesture('double-tap', intent);
@@ -517,8 +540,16 @@ class TouchSession {
       return;
     }
     this.moveGuest(intent);
-    void this.pointer.click();
+    this.announce(this.pointer.click());
     this.logGesture(label, intent);
+  }
+
+  /** Say where the cursor is once a click has gone out (or was dropped: a look at the same place is harmless). */
+  private announce(click: Promise<void>): void {
+    void click.then(() => {
+      const at = this.pointer.position;
+      if (!this.disposed && at) this.onClick?.(at);
+    });
   }
 
   private logGesture(label: string, intent: { x: number; y: number }): void {

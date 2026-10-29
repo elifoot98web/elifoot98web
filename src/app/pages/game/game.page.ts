@@ -5,6 +5,8 @@ import { AlertButton } from '@ionic/core';
 import JSZip from 'jszip';
 import { environment } from 'src/environments/environment';
 import { AUTO_SAVER, DISPLAY_MODE, EMULATOR_CONTROL_CONFIG, GAME_BOOT, GAME_EXIT_WATCH, MULTIPLAYER, SAVE_SAFETY, STORAGE_KEY } from '../../core/models/constants';
+import { TypeBarComponent, TypeBarNotice } from '../../core/components/type-bar/type-bar.component';
+import { FieldHint } from '../../core/helpers/field-hint.helper';
 import { UserGuideComponent } from './components/user-guide/user-guide.component';
 import { AboutComponent } from './components/about/about.component';
 import { OmaticModalComponent } from './components/omatic-modal/omatic-modal.component';
@@ -13,7 +15,7 @@ import { DiagnosticsReportHelper } from 'src/app/core/helpers/diagnostics-report
 import { BehaviorSubject, combineLatest, distinctUntilChanged, filter, map, Observable, Subscription, take } from 'rxjs';
 import { EmulatorKeyCodeHelper } from '../../core/models/game';
 import { CursorClickMessage, CursorPositionMessage, MultiplayerJoinErrorKind, PlayerInfo } from '../../core/models/multiplayer';
-import { AutoSaverService, EmulatorControlService, GameExitWatcherService, PatchService, SaveBeforeReloadResult, SaveGameService, SaveImportPlan, SaveSafetyService, SavesBackup, TouchInputService } from '../../core/services/game';
+import { AutoSaverService, EmulatorControlService, FieldHintService, GameExitWatcherService, PatchService, SaveBeforeReloadResult, SaveGameService, SaveImportPlan, SaveSafetyService, SavesBackup, TouchInputService } from '../../core/services/game';
 import { DiagnosticsService, LayoutHelperService, LocalStorageService, SaveStatusService } from '../../core/services/shared';
 import { MultiplayerAudioService, MultiplayerChatService, MultiplayerCursorService, MultiplayerPlayerInfoService, MultiplayerRelayHealthService, MultiplayerService, MultiplayerUiService } from '../../core/services/multiplayer';
 import { CursorRendererHelper } from 'src/app/core/helpers/cursor-renderer.helper';
@@ -39,6 +41,8 @@ import { NavigationGuardHelper } from 'src/app/core/helpers/navigation-guard.hel
 })
 export class GamePage implements OnInit, OnDestroy {
   @ViewChild('popover') popover: any;
+  /** The live type bar, while it is mounted (the setting is on and the deck is shown). */
+  @ViewChild(TypeBarComponent) typeBar?: TypeBarComponent;
   // UI state properties
   smoothFilterDisabled = false;
   spectatorCursorsHidden = false;
@@ -83,6 +87,13 @@ export class GamePage implements OnInit, OnDestroy {
   /** Whether the keys buzz the phone (STORAGE_KEY.DISABLE_KEY_VIBRATION, inverted); the device still has to be able to. */
   keyVibration = true;
   readonly canVibrate = typeof navigator.vibrate === 'function';
+  /**
+   * EXPERIMENTAL (STORAGE_KEY.LIVE_KEYBOARD, off by default): Texto opens the live type bar instead of
+   * the compose dialog. Read before the boot, like the deck's settings, so the bar is not mounted late.
+   */
+  liveKeyboard = false;
+  /** Whether a text field seems to have the focus in the guest (FieldHintService). Only a cue. */
+  fieldHint: FieldHint = 'none';
   /** `(any-pointer: coarse)`: only to tell, in the menu, why an automatic deck is hidden on a device that has a touch screen. */
   anyCoarse = false;
 
@@ -151,6 +162,7 @@ export class GamePage implements OnInit, OnDestroy {
     private saveSafety: SaveSafetyService,
     private saveStatus: SaveStatusService,
     private exitWatcher: GameExitWatcherService,
+    private fieldHintService: FieldHintService,
     chatService: MultiplayerChatService
   ) {
     this.unreadCount$ = chatService.unreadCount$;
@@ -174,6 +186,7 @@ export class GamePage implements OnInit, OnDestroy {
       if (layout.kind !== 'launcher') this.deckSheetOpen = false;
     }));
     this.pageSubscriptions.add(this.layoutHelperService.anyCoarse$.subscribe(coarse => { this.anyCoarse = coarse; }));
+    this.pageSubscriptions.add(this.fieldHintService.hint$.subscribe(hint => { this.fieldHint = hint; }));
     this.touchModeChoice$ = this.layoutHelperService.matches$('(pointer: coarse)').pipe(
       map(coarse => TouchModeHelper.offersChoice(coarse, navigator.userAgent))
     );
@@ -407,6 +420,7 @@ export class GamePage implements OnInit, OnDestroy {
     // The layer is a root service too: its listeners sit on this page's container, and it holds
     // the emulator. Detaching also releases a button the guest may have been left holding.
     this.touchInputService.detach('page destroyed');
+    this.fieldHintService.stop();
     this.stopObservingOverlay?.();
     this.pageSubscriptions.unsubscribe();
     this.multiplayerSubscriptions.unsubscribe();
@@ -495,6 +509,7 @@ export class GamePage implements OnInit, OnDestroy {
     this.setupSpectatorCursors()
     this.setupSpectatorAudio()
     await this.setupTouchInput()
+    this.syncFieldHint()
     this.gameDetected = gameDetected
     this.startSafetyNets()
   }
@@ -1077,6 +1092,9 @@ export class GamePage implements OnInit, OnDestroy {
       root: layers.root,
       overlay: layers.mouseOverlay,
       canvas: layers.canvas,
+      // A tap on the game's own field must not close the OS keyboard the live type bar has open, and
+      // the tap moves the guest on from whatever the bar was describing (see onGameTouched).
+      keepFocus: () => this.typeBar?.onGameTouched() ?? false,
     })
   }
 
@@ -1138,6 +1156,7 @@ export class GamePage implements OnInit, OnDestroy {
     try {
       this.applyDeckSetting(DeckLayoutHelper.normalise(await this.storageService.get<string>(STORAGE_KEY.DECK_MODE)))
       this.keyVibration = !(await this.storageService.get<boolean>(STORAGE_KEY.DISABLE_KEY_VIBRATION))
+      this.liveKeyboard = !!(await this.storageService.get<boolean>(STORAGE_KEY.LIVE_KEYBOARD))
     } catch (e) {
       console.warn('Could not read the key panel settings; using the defaults', e)
     }
@@ -1206,6 +1225,62 @@ export class GamePage implements OnInit, OnDestroy {
     } catch (error) {
       console.warn('Could not store the key vibration setting', error)
     }
+  }
+
+  /**
+   * "Teclado ao vivo (experimental)". Off, Texto opens the compose dialog as it always did. On, it
+   * opens the live type bar, and the field hint (the Texto button's pulse, the bar's badge) starts
+   * to watch the guest. Turning it off closes the bar and stops the watching.
+   */
+  async toggleLiveKeyboard(e: any) {
+    this.liveKeyboard = !!e.detail.checked
+    this.diagnostics.log('ime', 'live keyboard setting', () => ({ on: this.liveKeyboard }))
+    if (!this.liveKeyboard) this.typeBar?.close()
+    this.syncFieldHint()
+    try {
+      await this.storageService.set<boolean>(STORAGE_KEY.LIVE_KEYBOARD, this.liveKeyboard)
+    } catch (error) {
+      // It applies for this visit either way.
+      console.warn('Could not store the live keyboard setting', error)
+    }
+    if (this.liveKeyboard) {
+      // At the top: the bottom is where the Texto button it mentions is.
+      const toast = await this.toastController.create({
+        message: 'Teclado ao vivo ligado. Toque em Texto, no painel de teclas.',
+        duration: 3500,
+        position: 'top',
+        color: 'success',
+      })
+      await toast.present()
+    }
+  }
+
+  /** The field hint watches the guest while the live keyboard is on and there is an emulator, and not otherwise. */
+  private syncFieldHint() {
+    if (this.liveKeyboard && this.dosCI && !this.destroyed) {
+      this.fieldHintService.start(this.dosCI)
+    } else {
+      this.fieldHintService.stop()
+    }
+  }
+
+  /**
+   * The deck's Texto button. With the live keyboard on it opens the type bar, in this very call: the
+   * bar renders and focuses its field synchronously, which iOS requires of a keyboard that opens.
+   * With it off, or where the bar is not mounted, it is the compose dialog.
+   */
+  onTextRequest() {
+    if (!this.liveKeyboard || !this.typeBar) {
+      void this.promptInputText()
+      return
+    }
+    // One text surface at a time: the chat has a field of its own.
+    this.toggleChat(false)
+    this.typeBar.open()
+  }
+
+  showTypeBarNotice(notice: TypeBarNotice) {
+    void this.multiplayerUiService.showToast(notice.message, notice.color, 4000)
   }
 
   /** The launcher's button, in the toolbar or in the landscape gutter. */
@@ -1706,6 +1781,8 @@ export class GamePage implements OnInit, OnDestroy {
    * as "?".
    */
   async promptInputText() {
+    // Two keyboards at once help nobody: the bar's text is mirrored first, then it gives way.
+    this.typeBar?.close()
     // Every one carries an accent, so the first thing the dialog says about accents is that
     // they are fine. Keep it that way when adding names: an unaccented pick says nothing.
     const placeholders = [
@@ -2083,6 +2160,8 @@ export class GamePage implements OnInit, OnDestroy {
     this.isChatOpen = shouldOpen;
 
     if (shouldOpen) {
+      // The chat has a field of its own, and the type bar mirrors into the game: not both.
+      this.typeBar?.close();
       ChatPanelHelper.focusPanel();
     } else {
       // Back to the game, not to the toggle: js-dos reads keys from .emulator-root.

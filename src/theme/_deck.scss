@@ -19,7 +19,9 @@
  *    that box changes, and every cursor overlay is measured against it.
  *  - The launcher's sheet is `position: absolute` over the page and takes no space at all.
  *  - Nothing here depends on the OS keyboard. The chat is the only panel with a text field, and it
- *    lifts itself by `--kb-inset` (global.scss); the deck's own taskbar stays under the keyboard.
+ *    lifts itself by `--kb-inset` (global.scss); the deck's own taskbar stays under the keyboard. The
+ *    live type bar (experimental) is not a panel: it is fixed over the deck's lower part and lifts
+ *    itself too, taking no room (_type-bar.scss).
  *
  * Touch: the deck is `touch-action: none` (a drag on it must never scroll, zoom or rubber-band the
  * page behind it), and the one panel that can overflow opts back in to vertical panning. The
