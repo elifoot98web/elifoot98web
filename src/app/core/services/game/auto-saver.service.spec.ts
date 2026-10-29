@@ -50,6 +50,8 @@ interface Fixture {
   /** Drive the OCR availability the emulator service would report. */
   ocrUnavailable: BehaviorSubject<boolean>;
   saveGame: jasmine.Spy;
+  /** What the auto-saver told the status service about the game's own save, in order. */
+  writing: boolean[];
   loader: { present: jasmine.Spy; dismiss: jasmine.Spy };
   createLoader: jasmine.Spy;
   toast: { present: jasmine.Spy };
@@ -87,18 +89,20 @@ function fixture(diagnostics: unknown = silentDiagnostics()): Fixture {
   const toast = { present: jasmine.createSpy('toast.present').and.resolveTo(undefined) };
   const createToast = jasmine.createSpy('toast.create').and.resolveTo(toast);
 
+  const writing: boolean[] = [];
   const service = new AutoSaverService(
     { saveGame } as never,
     { isGameSaving, startOcr, stopOcr, ocrUnavailable$: ocrUnavailable.asObservable() } as never,
     { create: createLoader } as never,
     { create: createToast } as never,
     new NgZone({ enableLongStackTrace: false }),
-    diagnostics as never
+    diagnostics as never,
+    { setGameWriting: (value: boolean) => writing.push(value) } as never
   );
 
   return {
     service, dosCI: {} as DosCI, looks, isGameSaving, startOcr, stopOcr, ocrUnavailable,
-    saveGame, loader, createLoader, toast, createToast, events,
+    saveGame, writing, loader, createLoader, toast, createToast, events,
   };
 }
 
@@ -131,6 +135,17 @@ describe('AutoSaverService', () => {
       expect(f.isGameSaving).toHaveBeenCalledTimes(3);
 
       f.service.stop();
+    }));
+
+    it('says whether it is running, which is what keeps the OCR worker alive', strict(() => {
+      const f = fixture();
+      expect(f.service.running).toBeFalse();
+
+      start(f);
+      expect(f.service.running).toBeTrue();
+
+      f.service.stop();
+      expect(f.service.running).toBeFalse();
     }));
 
     it('refuses a second start while it is running', strict(() => {
@@ -296,6 +311,50 @@ describe('AutoSaverService', () => {
       tick(10 * TICK);
       expect(f.saveGame).toHaveBeenCalledTimes(1);
       f.service.stop();
+    }));
+
+    it('tells the status service the game is writing from the moment the dialog is seen until it is gone', strict(() => {
+      const f = fixture();
+      f.looks.length = 0;
+      f.looks.push(true, true, false);
+
+      start(f);
+      expect(f.writing).toEqual([true]);
+
+      tick(POLL);
+      expect(f.writing).toEqual([true]);
+
+      tick(POLL);
+      // False when the dialog is gone, before the persist (which is not the game writing).
+      expect(f.writing).toEqual([true, false]);
+      expect(f.saveGame).toHaveBeenCalledTimes(1);
+      f.service.stop();
+    }));
+
+    it('does not claim the game is writing on a look OCR could not read, nor when nothing was seen', strict(() => {
+      const f = fixture();
+      f.looks.length = 0;
+      f.looks.push('unknown', false);
+
+      start(f);
+      tick(10 * TICK);
+
+      expect(f.writing.filter(value => value)).toEqual([]);
+      f.service.stop();
+    }));
+
+    it('takes the claim back when it is stopped mid-save', strict(() => {
+      const f = fixture();
+      f.looks.length = 0;
+      f.looks.push(true);
+
+      start(f);
+      expect(f.writing).toEqual([true]);
+      f.service.stop();
+      tick(POLL);
+
+      expect(f.writing[f.writing.length - 1]).toBeFalse();
+      expect(f.saveGame).not.toHaveBeenCalled();
     }));
 
     it('does not persist when the game did not save', strict(() => {

@@ -1,4 +1,5 @@
 import { Injectable, NgZone } from '@angular/core';
+import { Observable, Subject } from 'rxjs';
 import { TimeoutHelper } from '../../helpers/timeout.helper';
 import { EMULATOR_CONTROL_CONFIG } from '../../models/constants';
 import { EmulatorKeyCode, EmulatorKeyCodeHelper, KeyTask } from '../../models/game';
@@ -122,6 +123,15 @@ export class GuestKeyQueueService {
   private inFlight: Entry | null = null;
   private running = false;
   private lastJobId = 0;
+  private readonly activitySubject = new Subject<void>();
+
+  /**
+   * Emits once for every submission that is accepted, before any key goes out. It is how the rest
+   * of the app learns that something is typing into the guest without anything else being allowed
+   * to send (SaveStatusService marks the game as having unsaved input from it). A refused
+   * submission is not activity.
+   */
+  readonly activity$: Observable<void> = this.activitySubject.asObservable();
 
   constructor(private zone: NgZone, private diagnostics: DiagnosticsService) { }
 
@@ -200,6 +210,7 @@ export class GuestKeyQueueService {
       }
     }
 
+    this.activitySubject.next();
     return new Promise<KeySendResult>((resolve, reject) => {
       const job: Job = {
         id: ++this.lastJobId,

@@ -4,7 +4,15 @@ import { DosCI } from '../../typings/jsdos';
 import { lastValueFrom } from 'rxjs';
 import { BASE_SAVEGAME_DIR, DISPLAY_MODE } from '../../models/constants';
 import { DisplayMode } from '../../helpers/display-mode.helper';
+import { BackupInput, BackupReading, BackupSave, SaveBackupHelper } from '../../helpers/save-backup.helper';
 import JSZip from 'jszip';
+
+/** What an import will do, ready to be shown and then applied. */
+export interface SaveImportPlan extends BackupReading {
+  /** The saves under `d/eli98/jogos/`, in the shape `applySaveFilePatch` merges into the disk. */
+  patch: JSZip;
+  saves: BackupSave[];
+}
 
 /**
  * Every `Error` thrown from here ends up in the game page's error dialog verbatim, so each
@@ -148,26 +156,55 @@ export class PatchService {
   }
 
   /**
-   * 
-   * @param file - Save(s) to be validated
-   * @returns 
+   * Read what the player picked for "Importar jogos salvos": `.e98` files and `.zip` backups, any
+   * number of them (see SaveBackupHelper for what is taken from a zip), and lay the saves out
+   * where the guest keeps them. Nothing is written yet; the caller shows the plan first.
    */
-  async prepareSaveFilePatch(file: File): Promise<JSZip> {
-    if (!file) {
+  async prepareSaveFilesPatch(files: readonly File[]): Promise<SaveImportPlan> {
+    if (!files || files.length === 0) {
       throw new Error('Nenhum arquivo foi selecionado.')
     }
 
-    // Check if the file is a .e98 file
-    if (!file.name.toLowerCase().endsWith('.e98')) {
-      throw new Error('Tipo de arquivo inválido. Escolha um jogo salvo do Elifoot 98 (arquivo .e98).')
+    let inputs: BackupInput[]
+    try {
+      inputs = await Promise.all(files.map(async file => ({ name: file.name, data: await file.arrayBuffer() })))
+    } catch (error) {
+      // A file the phone has not downloaded yet (a cloud drive), or one it can no longer reach.
+      console.error('A picked file could not be read', error)
+      throw new Error('Não foi possível ler o arquivo escolhido. Se ele estiver na nuvem, baixe-o para o aparelho e tente de novo.')
     }
 
-    const fileName = file.name.toUpperCase()
-    const zip = new JSZip()
-    // load .e98 file in the zip
-    await zip.file(BASE_SAVEGAME_DIR + fileName, file.arrayBuffer())
+    const reading = await SaveBackupHelper.read(inputs)
+    if (reading.saves.length === 0) {
+      const supported = inputs.some(input => /\.(e98|zip)$/i.test(input.name))
+      if (!supported) {
+        throw new Error('Tipo de arquivo inválido. Escolha jogos salvos do Elifoot 98 (arquivos .e98) ou um backup em .zip.')
+      }
+      if (reading.unreadable.length > 0) {
+        throw new Error('O arquivo selecionado não é um ZIP válido. Escolha um backup exportado pelo jogo (.zip) ou jogos salvos (.e98).')
+      }
+      throw new Error('Nenhum jogo salvo (.e98) foi encontrado nos arquivos escolhidos.')
+    }
 
-    return zip
+    const patch = new JSZip()
+    for (const save of reading.saves) {
+      patch.file(BASE_SAVEGAME_DIR + save.name, save.data)
+    }
+    return { patch, ...reading }
+  }
+
+  /**
+   * The saves the running game already has, for the import's confirm dialog to flag the ones it
+   * would replace. Read from the live changed files, like the export, so a save made a second ago
+   * counts.
+   */
+  async existingSaveNames(dosCI: DosCI): Promise<string[]> {
+    try {
+      return await SaveBackupHelper.existingNames(await dosCI.persist())
+    } catch (error) {
+      console.error('Could not list the saves in the emulator', error)
+      throw new Error('Não foi possível ler os dados do jogo. Recarregue a página e tente novamente.')
+    }
   }
 
   async applySaveFilePatch(dosCI: DosCI, patch: JSZip) {

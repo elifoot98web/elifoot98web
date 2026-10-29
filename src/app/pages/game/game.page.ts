@@ -4,7 +4,7 @@ import { AlertController, LoadingController, ModalController, ToastController } 
 import { AlertButton } from '@ionic/core';
 import JSZip from 'jszip';
 import { environment } from 'src/environments/environment';
-import { DISPLAY_MODE, EMULATOR_CONTROL_CONFIG, GAME_BOOT, GAME_INPUT_FN_BTNS, GAME_INPUT_FN_BTNS_REVERSED, MULTIPLAYER, STORAGE_KEY } from '../../core/models/constants';
+import { AUTO_SAVER, DISPLAY_MODE, EMULATOR_CONTROL_CONFIG, GAME_BOOT, GAME_EXIT_WATCH, GAME_INPUT_FN_BTNS, GAME_INPUT_FN_BTNS_REVERSED, MULTIPLAYER, SAVE_SAFETY, STORAGE_KEY } from '../../core/models/constants';
 import { UserGuideComponent } from './components/user-guide/user-guide.component';
 import { AboutComponent } from './components/about/about.component';
 import { OmaticModalComponent } from './components/omatic-modal/omatic-modal.component';
@@ -13,8 +13,8 @@ import { DiagnosticsReportHelper } from 'src/app/core/helpers/diagnostics-report
 import { filter, map, Observable, Subscription, take } from 'rxjs';
 import { EmulatorKeyCode, EmulatorKeyCodeHelper } from '../../core/models/game';
 import { CursorClickMessage, CursorPositionMessage, MultiplayerJoinErrorKind, PlayerInfo } from '../../core/models/multiplayer';
-import { AutoSaverService, EmulatorControlService, PatchService, SaveGameService, TouchInputService } from '../../core/services/game';
-import { DiagnosticsService, LayoutHelperService, LocalStorageService } from '../../core/services/shared';
+import { AutoSaverService, EmulatorControlService, GameExitWatcherService, PatchService, SaveBeforeReloadResult, SaveGameService, SaveImportPlan, SaveSafetyService, SavesBackup, TouchInputService } from '../../core/services/game';
+import { DiagnosticsService, LayoutHelperService, LocalStorageService, SaveStatusService } from '../../core/services/shared';
 import { MultiplayerAudioService, MultiplayerChatService, MultiplayerCursorService, MultiplayerPlayerInfoService, MultiplayerRelayHealthService, MultiplayerService, MultiplayerUiService } from '../../core/services/multiplayer';
 import { CursorRendererHelper } from 'src/app/core/helpers/cursor-renderer.helper';
 import { OverlaySyncHelper } from 'src/app/core/helpers/overlay-sync.helper';
@@ -25,6 +25,9 @@ import { BootStage, BootStageHelper } from 'src/app/core/helpers/boot-stage.help
 import { TimeoutHelper } from 'src/app/core/helpers/timeout.helper';
 import { DisplayMode, DisplayModeHelper } from 'src/app/core/helpers/display-mode.helper';
 import { TouchMode, TouchModeHelper } from 'src/app/core/helpers/touch-mode.helper';
+import { SaveBackupHelper } from 'src/app/core/helpers/save-backup.helper';
+import { SaveStatusHelper } from 'src/app/core/helpers/save-status.helper';
+import { NavigationGuardHelper } from 'src/app/core/helpers/navigation-guard.helper';
 
 
 @Component({
@@ -100,6 +103,18 @@ export class GamePage implements OnInit, OnDestroy {
   private destroyed = false;
   /** The js-dos loading text last written to the diagnostics log, at ten-percent resolution. */
   private lastLoaderStep = '';
+  /**
+   * The page is on its way out on purpose (leaving, or a save-then-reload): the route guard must
+   * let the navigation through, and the browser must not ask "leave site?". Never set back.
+   */
+  private leaving = false;
+  /** The leave dialog is open; a second Back must not stack another on top of it. */
+  private leavePromptOpen = false;
+  /** The "O Elifoot foi fechado" dialog is open. */
+  private exitBannerOpen = false;
+  /** The boot saw the game's own screen, which is what lets the exit watcher run (see startSafetyNets). */
+  private gameDetected = false;
+  private exitSubscription?: Subscription;
 
   constructor(
     private loadingController: LoadingController,
@@ -122,6 +137,9 @@ export class GamePage implements OnInit, OnDestroy {
     private relayHealthService: MultiplayerRelayHealthService,
     private diagnostics: DiagnosticsService,
     private touchInputService: TouchInputService,
+    private saveSafety: SaveSafetyService,
+    private saveStatus: SaveStatusService,
+    private exitWatcher: GameExitWatcherService,
     chatService: MultiplayerChatService
   ) {
     this.unreadCount$ = chatService.unreadCount$;
@@ -142,6 +160,11 @@ export class GamePage implements OnInit, OnDestroy {
     return this.diagnostics.enabled
   }
 
+  /** The subtitle of the "Salvar agora" menu entry: what the toolbar chip says, for the layouts that have no toolbar. */
+  get saveSummary(): string {
+    return SaveStatusHelper.describe(this.saveStatus.snapshot, Date.now()).text
+  }
+
   /** The subtitle of the "Diagnóstico" menu entry. */
   get diagnosticsSummary(): string {
     if (!this.diagnostics.enabled) return 'Desligado'
@@ -151,6 +174,9 @@ export class GamePage implements OnInit, OnDestroy {
 
   async ngOnInit() {
     console.time("carregando game...")
+    // Not awaited: the chip shows "Ainda não salvo" for the few milliseconds it takes, and the
+    // boot has nothing to wait for.
+    void this.saveStatus.load()
     await this.bootGame()
   }
 
@@ -201,7 +227,7 @@ export class GamePage implements OnInit, OnDestroy {
     console.timeEnd("carregando game...")
 
     try {
-      await this.loadConfig()
+      await this.loadConfig(detected)
     } catch (e) {
       console.error('Could not apply the saved settings', e)
     }
@@ -222,6 +248,8 @@ export class GamePage implements OnInit, OnDestroy {
       console.error(e)
       await this.showErrorAlert(e instanceof Error ? e : new Error(String(e)))
     }
+    // After the welcome dialog and the room dialog, and not awaited: it waits for the player.
+    void this.maybeNudgeBackup()
   }
 
   private async dismissBootLoading(loading: Awaited<ReturnType<LoadingController['create']>>) {
@@ -333,6 +361,7 @@ export class GamePage implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.destroyed = true;
+    this.stopSafetyNets();
     // Ends the detection loop in waitForGameScreen(); a boot overlay still up would otherwise
     // cover whatever page comes next.
     void this.bootLoading?.dismiss().catch(() => undefined);
@@ -427,13 +456,15 @@ export class GamePage implements OnInit, OnDestroy {
     return false
   }
 
-  async loadConfig() {
+  async loadConfig(gameDetected = true) {
     this.setupSmoothFilter()
     this.setupAutoSave()
     this.setupPeriodicSave()
     this.setupSpectatorCursors()
     this.setupSpectatorAudio()
     await this.setupTouchInput()
+    this.gameDetected = gameDetected
+    this.startSafetyNets()
   }
 
   async handleShowTutorial() {
@@ -559,15 +590,66 @@ export class GamePage implements OnInit, OnDestroy {
     return this.layoutHelperService.isMobile
   }
 
-  async saveGame() {
-    await this.saveGameService.saveGame()
+  /**
+   * Save now: the menu's "Salvar agora" and the toolbar chip. It asks the game first (see
+   * SavePolicyHelper): the game's own save dialog being up is not the moment to copy the disk, and
+   * the auto-saver takes the copy as soon as it closes, so the answer then is to say so.
+   */
+  async saveNow() {
     this.hidePopover()
+    const result = await this.saveSafety.saveNow('manual')
+    switch (result.outcome) {
+      case 'saved':
+        // Saved either way, but an unreadable look (auto-save off, the OCR still loading or down)
+        // is not proof the game was not mid-write, and the toast does not pretend it was.
+        if (result.verified) {
+          await this.multiplayerUiService.showToast(`Jogo salvo no navegador às ${SaveStatusHelper.clock(result.at)}.`, 'success', 2500)
+        } else {
+          await this.multiplayerUiService.showToast(`Jogo salvo no navegador às ${SaveStatusHelper.clock(result.at)}, mas não foi possível confirmar se o Elifoot estava gravando.`, 'warning', 5000)
+        }
+        break
+      case 'busy':
+        await this.multiplayerUiService.showToast('O jogo está gravando agora. Ele será salvo no navegador logo em seguida.', 'warning', 4000)
+        break
+      case 'no-emulator':
+        await this.multiplayerUiService.showToast('O jogo ainda está iniciando.', 'warning', 3000)
+        break
+      case 'failed':
+        await this.showErrorAlert(new Error('Não foi possível salvar o jogo agora. Tente de novo em instantes.'))
+        break
+    }
   }
 
-  async downloadGameSaves() {
-    const hasSaved = await this.saveGameService.downloadGameSaves(this.dosCI)
+  /**
+   * "Exportar jogos salvos". The backup is built first, behind a loader, and only then offered:
+   * on a phone with a share sheet the choice is a button of its own, because Safari honours
+   * `navigator.share()` only while the tap is the current user gesture and the zip takes longer
+   * than a gesture lasts. A desktop, or a browser that cannot share a file, downloads at once.
+   */
+  async exportGameSaves() {
     this.hidePopover()
-    if (!hasSaved) {
+    if (await this.saveSafety.isGameWriting()) {
+      await this.multiplayerUiService.showToast('O jogo está gravando agora. Tente exportar de novo em alguns segundos.', 'warning', 4000)
+      return
+    }
+
+    const loading = await this.loadingController.create({
+      message: 'Preparando o backup...',
+      backdropDismiss: false
+    })
+    await loading.present()
+    let backup: SavesBackup | null
+    try {
+      backup = await this.saveGameService.prepareSavesBackup(this.dosCI)
+    } catch (e) {
+      console.error('Could not build the backup', e)
+      await loading.dismiss()
+      await this.showErrorAlert(new Error('Não foi possível preparar o backup. Recarregue a página e tente novamente.'))
+      return
+    }
+    await loading.dismiss()
+
+    if (!backup) {
       const alert = await this.alertController.create({
         header: 'Aviso',
         message: 'Não há jogos salvos para baixar',
@@ -576,11 +658,76 @@ export class GamePage implements OnInit, OnDestroy {
         buttons: ['OK']
       });
       await alert.present();
+      return
+    }
+
+    const canShare = matchMedia('(pointer: coarse)').matches
+      && SaveBackupHelper.canShareFile(navigator, this.saveGameService.backupFile(backup))
+    if (!canShare) {
+      await this.deliverBackup(backup, 'download')
+      return
+    }
+
+    const ready = backup
+    const kilobytes = Math.max(1, Math.round(ready.bytes.byteLength / 1024))
+    const alert = await this.alertController.create({
+      header: 'Backup pronto',
+      message: `${ready.names.length === 1 ? '1 jogo salvo' : `${ready.names.length} jogos salvos`} (${kilobytes} KB). Escolha onde guardar o arquivo.`,
+      cssClass: 'win9x-alert alert-whitespace',
+      backdropDismiss: false,
+      buttons: [
+        { text: 'Cancelar', role: 'cancel' },
+        // Called from the tap itself, with nothing awaited before the share: see above.
+        { text: 'Baixar arquivo', handler: () => { void this.deliverBackup(ready, 'download') } },
+        { text: 'Compartilhar…', handler: () => { void this.deliverBackup(ready, 'share') } },
+      ]
+    })
+    await alert.present()
+  }
+
+  private async deliverBackup(backup: SavesBackup, how: 'download' | 'share') {
+    try {
+      const delivery = await this.saveGameService.deliverBackup(backup, how)
+      if (delivery === 'cancelled') return
+      await this.multiplayerUiService.showToast(
+        delivery === 'shared' ? 'Backup compartilhado.' : 'Backup baixado.', 'success', 3000)
+    } catch (e) {
+      console.error('Could not hand over the backup', e)
+      await this.showErrorAlert(new Error('Não foi possível entregar o backup. Tente de novo.'))
     }
   }
 
-  async importGameSaves() {
-
+  /**
+   * A one-time reminder when a week has passed without a backup (SavePolicyHelper.backupNudgeDue).
+   * A dialog, because it is asked once in the life of the install and has to be read: the first
+   * version was a toast, and with two buttons beside the text Ionic squeezed the sentence into a
+   * column a few words wide. Either button answers it for good; closing the page without pressing
+   * one does not count, so it is still there next visit.
+   */
+  private async maybeNudgeBackup() {
+    try {
+      if (this.destroyed || !(await this.saveStatus.backupNudgeDue())) return
+      // "Dos seus jogos salvos" has to be true: a visit that only looked around persists the layer
+      // too, and a reminder answered with nothing to back up would be spent for good.
+      if ((await this.patchService.existingSaveNames(this.dosCI)).length === 0) return
+      const alert = await this.alertController.create({
+        header: 'Faça um backup',
+        message: 'Já faz mais de 7 dias sem um backup dos seus jogos salvos. O navegador pode apagar os dados de sites que ficam muito tempo sem uso, e o backup é a cópia que sobrevive.\n\nExportar uma cópia agora?',
+        backdropDismiss: false,
+        cssClass: 'win9x-alert alert-whitespace',
+        buttons: [
+          { text: 'Agora não', role: 'cancel' },
+          { text: 'Fazer backup', role: 'confirm' },
+        ]
+      })
+      await alert.present()
+      this.diagnostics.log('save', 'backup nudge shown')
+      const { role } = await alert.onDidDismiss()
+      this.saveStatus.dismissBackupNudge()
+      if (role === 'confirm') await this.exportGameSaves()
+    } catch (e) {
+      console.warn('Could not show the backup reminder', e)
+    }
   }
 
   async downloadFullDiskChanges() {
@@ -617,6 +764,14 @@ export class GamePage implements OnInit, OnDestroy {
           })
           await loading.present()
 
+          // Before anything is deleted. The auto-saver would persist the layer that is being
+          // deleted, the page-hidden save would do it again when the reload fires `visibilitychange`,
+          // and a status write that lands after the wipe would claim a save the disk no longer has.
+          this.autoSaverService.stop()
+          this.autoSaverService.stopPeriodicSave()
+          this.stopSafetyNets()
+          this.saveStatus.freeze()
+
           // clear all data
           await this.saveGameService.clearAllData(this.dosCI)
           // Before the storage is emptied, not after: with the log still on, the reload below
@@ -624,7 +779,7 @@ export class GamePage implements OnInit, OnDestroy {
           await this.diagnostics.disable({ persist: false })
           await this.storageService.clearAllData()
           await loading.dismiss()
-          window.location.reload()
+          this.reloadPage()
         }
       }]
     })
@@ -845,6 +1000,7 @@ export class GamePage implements OnInit, OnDestroy {
 
     this.autoSaverService.stop()
     this.autoSaverService.stopPeriodicSave()
+    this.stopSafetyNets()
 
     const loading = await this.loadingController.create({
       message: 'Trocando a resolução…',
@@ -857,8 +1013,7 @@ export class GamePage implements OnInit, OnDestroy {
       console.error(e)
       await loading.dismiss()
       // Nothing was written, so the game goes on as it was, with its saving back on.
-      await this.setupAutoSave()
-      await this.setupPeriodicSave()
+      await this.restoreSaving()
       await this.showErrorAlert(e instanceof Error ? e : new Error(String(e)))
       return
     }
@@ -869,7 +1024,7 @@ export class GamePage implements OnInit, OnDestroy {
       // The layer is written; a guest that will not stop must not hold the reload back.
       console.warn('The emulator did not exit cleanly before the reload', e)
     }
-    window.location.reload()
+    this.reloadPage()
   }
 
   /**
@@ -1004,15 +1159,18 @@ export class GamePage implements OnInit, OnDestroy {
   async applyPatch(patch: JSZip) {
     this.autoSaverService.stop()
     this.autoSaverService.stopPeriodicSave()
+    this.stopSafetyNets()
 
     const loading = await this.loadingController.create({
       message: 'Aplicando patch...',
       backdropDismiss: false
     });
     await loading.present();
+    let written = false
     try {
       await this.saveGameService.saveGame()
       await this.patchService.applyPatch(this.dosCI, patch)
+      written = true
       await loading.dismiss()
       const alert = await this.alertController.create({
         header: 'Patch aplicado',
@@ -1022,7 +1180,7 @@ export class GamePage implements OnInit, OnDestroy {
         buttons: [{
           text: 'Recarregar',
           handler: async () => {
-            window.location.reload()
+            this.reloadPage()
           }
         }]
       });
@@ -1030,6 +1188,12 @@ export class GamePage implements OnInit, OnDestroy {
       await this.dosCI.exit()
     } catch (e: any) {
       console.error(e)
+      await loading.dismiss()
+      if (!written) {
+        // Nothing was replaced, so the game goes on as it was, with its saving back on. Once the
+        // layer is written the running VM must not be persisted over it, so then it stays off.
+        await this.restoreSaving()
+      }
       await this.showErrorAlert(e)
     }
 
@@ -1054,97 +1218,298 @@ export class GamePage implements OnInit, OnDestroy {
     await alert.present()
   }
 
-  async onSaveFileSelected(e: any) {
-    const file: File = e.target.files[0]
-    console.log("Save file selected", { file })
+  /**
+   * "Importar jogos salvos": any number of `.e98` files and `.zip` backups. The list of what is
+   * about to happen, with the replacements flagged, comes before anything is touched.
+   *
+   * The input is emptied in `finally`, on every way out: a file input fires `change` only when
+   * its value changes, so choosing the same file again (after answering "Cancelar" to the confirm,
+   * say) would otherwise do nothing at all. The files are copied out of it first, because
+   * emptying it empties `input.files`. A picker that was closed without choosing is not an
+   * error, just nothing to do.
+   */
+  async onSaveFileSelected(e: Event) {
+    const input = e.target as HTMLInputElement
+    const files = Array.from(input.files ?? [])
     this.hidePopover()
 
-    const loading = await this.loadingController.create({
-      message: 'Validando arquivos...',
-      backdropDismiss: false
-    });
-    await loading.present();
-
     try {
-      const patch = await this.patchService.prepareSaveFilePatch(file)
-      await loading.dismiss()
-      const alert = await this.alertController.create({
-        header: 'Aviso',
-        message: `Se já existir um arquivo com o mesmo nome do save, ele será substituído.\nDeseja continuar?`,
-        backdropDismiss: false,
-        cssClass: 'win9x-alert alert-whitespace',
-        buttons: [{
-          text: 'Não',
-          role: 'cancel'
-        }, {
-          text: 'Sim',
-          handler: async () => {
-            await this.applySaveGamePatch(patch)
-          }
-        }]
+      if (files.length === 0) return
+      console.log("Save files selected", { files })
+
+      const loading = await this.loadingController.create({
+        message: 'Validando arquivos...',
+        backdropDismiss: false
       });
-      await alert.present();
-    } catch (e: any) {
-      console.error(e)
-      await loading.dismiss()
-      await this.showErrorAlert(e)
+      await loading.present();
+
+      try {
+        const plan = await this.patchService.prepareSaveFilesPatch(files)
+        const overwrites = SaveBackupHelper.overwrites(plan.saves, await this.patchService.existingSaveNames(this.dosCI))
+        await loading.dismiss()
+
+        const skipped = SaveBackupHelper.skippedMessage(plan)
+        const alert = await this.alertController.create({
+          header: 'Importar jogos salvos',
+          message: SaveBackupHelper.importMessage(plan.saves, overwrites) + (skipped ? `\n\n${skipped}` : ''),
+          backdropDismiss: false,
+          cssClass: 'win9x-alert alert-whitespace',
+          buttons: [{
+            text: 'Cancelar',
+            role: 'cancel'
+          }, {
+            text: overwrites.length > 0 ? 'Substituir e importar' : 'Importar',
+            cssClass: overwrites.length > 0 ? 'alert-danger' : undefined,
+            handler: async () => {
+              await this.applySaveGamePatch(plan)
+            }
+          }]
+        });
+        await alert.present();
+      } catch (e: any) {
+        console.error(e)
+        await loading.dismiss()
+        await this.showErrorAlert(e)
+      }
+    } finally {
+      input.value = ''
     }
   }
 
-  async onPatchFileSelected(e: any) {
-    const file: File = e.target.files[0]
-    console.log("Patch File selected", { file })
+  /** "Carregar Patch". Emptied and tolerant of an empty selection for the same reasons as above. */
+  async onPatchFileSelected(e: Event) {
+    const input = e.target as HTMLInputElement
+    const file: File | undefined = input.files?.[0]
     this.hidePopover()
-    const loading = await this.loadingController.create({
-      message: 'Validando patch...',
-      backdropDismiss: false
-    });
-    await loading.present();
 
     try {
-      const patch = await this.patchService.processPatchFile(file)
-      const numberOfFiles = Object.keys(patch.files).length
-      await loading.dismiss()
-      const alert = await this.alertController.create({
-        header: 'Confirmação',
-        message: `${numberOfFiles} arquivos do patch serão carregados, incluindo bandeiras, equipes e arquivos de configuração\n Continuar?`,
-        backdropDismiss: false,
-        cssClass: 'win9x-alert alert-whitespace',
-        buttons: [{
-          text: 'Não',
-          role: 'cancel'
-        }, {
-          text: 'Sim',
-          handler: async () => {
-            await this.applyPatch(patch)
-          }
-        }]
+      if (!file) return
+      console.log("Patch File selected", { file })
+      const loading = await this.loadingController.create({
+        message: 'Validando patch...',
+        backdropDismiss: false
       });
-      await alert.present();
-    } catch (e: any) {
-      console.error(e)
-      await loading.dismiss()
-      await this.showErrorAlert(e)
+      await loading.present();
+
+      try {
+        const patch = await this.patchService.processPatchFile(file)
+        const numberOfFiles = Object.keys(patch.files).length
+        await loading.dismiss()
+        const alert = await this.alertController.create({
+          header: 'Confirmação',
+          message: `${numberOfFiles} arquivos do patch serão carregados, incluindo bandeiras, equipes e arquivos de configuração\n Continuar?`,
+          backdropDismiss: false,
+          cssClass: 'win9x-alert alert-whitespace',
+          buttons: [{
+            text: 'Não',
+            role: 'cancel'
+          }, {
+            text: 'Sim',
+            handler: async () => {
+              await this.applyPatch(patch)
+            }
+          }]
+        });
+        await alert.present();
+      } catch (e: any) {
+        console.error(e)
+        await loading.dismiss()
+        await this.showErrorAlert(e)
+      }
+    } finally {
+      input.value = ''
     }
   }
 
+  /**
+   * "Salvar e recarregar". The old entry reloaded without saving, directly above "Voltar ao menu",
+   * which saves, so the two read as the same thing. This one saves first, and only on proof that
+   * the game is not in the middle of writing its own save (SavePolicyHelper): a reading that
+   * cannot be made does not become permission, it becomes a question.
+   */
   async confirmRefresh() {
+    this.hidePopover()
     const alert = await this.alertController.create({
-      header: 'Aviso',
-      message: 'Tem certeza que deseja recarregar o jogo? \n\nO progresso que não foi salvo, será perdido.',
+      header: 'Salvar e recarregar?',
+      message: 'O jogo será salvo no navegador e a página recarregada.\n\nO que você não gravou dentro do próprio jogo será perdido.'
+        + (this.isStreaming ? '\n\nA sala será encerrada.' : ''),
       backdropDismiss: false,
       cssClass: 'win9x-alert alert-whitespace',
       buttons: [{
         text: 'Cancelar',
         role: 'cancel'
       }, {
-        text: 'Recarregar',
-        handler: async () => {
-          window.location.reload()
-        }
+        text: 'Salvar e recarregar',
+        role: 'confirm'
       }]
     })
     await alert.present()
+    const { role } = await alert.onDidDismiss()
+    if (role !== 'confirm') return
+
+    const loading = await this.loadingController.create({
+      message: 'Salvando...',
+      backdropDismiss: false
+    })
+    await loading.present()
+    let result: SaveBeforeReloadResult
+    try {
+      result = await this.saveSafety.saveBeforeReload()
+    } finally {
+      await loading.dismiss()
+    }
+
+    if (result === 'saved') {
+      this.reloadPage()
+    } else if (result === 'busy') {
+      const busy = await this.alertController.create({
+        header: 'O jogo está gravando',
+        message: 'O Elifoot está gravando o jogo neste instante. Espere alguns segundos e tente de novo.',
+        backdropDismiss: false,
+        cssClass: 'win9x-alert alert-whitespace',
+        buttons: ['OK']
+      })
+      await busy.present()
+    } else {
+      await this.offerReloadWithoutSaving(result === 'failed')
+    }
+  }
+
+  /**
+   * The progress could not be saved, and reloading throws it away: say so, and let the player
+   * decide (the chip, or "Salvar agora", can still be tried first).
+   */
+  private async offerReloadWithoutSaving(saveFailed: boolean) {
+    const alert = await this.alertController.create({
+      header: 'Não foi possível salvar',
+      message: (saveFailed
+        ? 'O jogo não pôde ser salvo agora.'
+        : 'Não foi possível confirmar que o jogo terminou de gravar, então ele não foi salvo agora.')
+        + '\n\nRecarregar agora perde o que não foi salvo.',
+      backdropDismiss: false,
+      cssClass: 'win9x-alert alert-whitespace',
+      buttons: [{
+        text: 'Cancelar',
+        role: 'cancel'
+      }, {
+        text: 'Recarregar sem salvar',
+        cssClass: 'alert-danger',
+        handler: () => { this.reloadPage() }
+      }]
+    })
+    await alert.present()
+  }
+
+  /**
+   * Reload the page on purpose. The browser's "leave site?" prompt is for the closes nobody
+   * chose (a tab, a swipe); every reload the app starts has already said what it costs, and
+   * asking again would be a second confirm for the same decision.
+   */
+  private reloadPage() {
+    this.leaving = true
+    this.saveStatus.allowExit()
+    window.location.reload()
+  }
+
+  /**
+   * The route guard's question (see NavigationGuardHelper): Back, the Android Back button and an
+   * iOS edge swipe leave the game without passing through "Voltar ao menu". They get that
+   * menu's own dialog instead, once.
+   */
+  canLeave(currentUrl: string, nextUrl: string): boolean {
+    const verdict = NavigationGuardHelper.verdict({
+      currentUrl,
+      nextUrl,
+      leaving: this.leaving || this.destroyed,
+      hasEmulator: !!this.dosCI,
+      promptOpen: this.leavePromptOpen,
+    })
+    this.diagnostics.log('page', 'leave guard', () => ({ verdict, to: NavigationGuardHelper.pathOf(nextUrl) }))
+    if (verdict === 'prompt') void this.confirmLeaveGame()
+    return verdict === 'allow'
+  }
+
+  /** Everything that watches the running game for the length of this page. */
+  private startSafetyNets() {
+    if (this.destroyed || !this.dosCI) return
+    this.saveSafety.attach(this.dosCI, { isHosting: () => this.multiplayerService.isHosting })
+
+    // Armed only once the game's own screen has been seen: Windows draws the very desktop the
+    // watcher looks for while the game loads. When the boot's window ran out before the game
+    // showed (a slow phone), the watcher waits for the same green itself instead of staying off
+    // for the whole session.
+    this.exitSubscription?.unsubscribe()
+    this.exitSubscription = this.exitWatcher.exited$.subscribe(() => void this.onGameExited())
+    this.exitWatcher.start(this.dosCI, this.gameDetected ? {} : { armWhen: frame => BootStageHelper.isGameScreen(frame) })
+  }
+
+  /** Detach everything `startSafetyNets` attached. Safe to call twice. */
+  private stopSafetyNets() {
+    this.saveSafety.detach()
+    this.exitWatcher.stop()
+    this.exitSubscription?.unsubscribe()
+    this.exitSubscription = undefined
+  }
+
+  /**
+   * Elifoot quit to the Program Manager (GameExitWatcherService): its first dialog's Esc and
+   * Cancelar do it, and so does a crash. The only way back is a reload, so the dialog offers it,
+   * with the disk saved first. There is nothing to wait for before saving: the game is not
+   * running, so it cannot be in the middle of writing a save.
+   */
+  private async onGameExited() {
+    if (this.destroyed || this.leaving || this.exitBannerOpen) return
+    this.exitBannerOpen = true
+    this.diagnostics.log('frame', 'exit dialog shown')
+
+    const alert = await this.alertController.create({
+      header: 'O Elifoot foi fechado',
+      message: 'O jogo saiu para o Gerenciador de Programas do Windows e não volta sozinho. O que já foi gravado dentro dele é mantido.\n\nReiniciar jogo?'
+        + (this.isStreaming ? '\n\nA sala será encerrada.' : ''),
+      backdropDismiss: false,
+      cssClass: 'win9x-alert alert-whitespace',
+      buttons: [{
+        text: 'Agora não',
+        role: 'cancel'
+      }, {
+        text: 'Reiniciar jogo',
+        role: 'confirm'
+      }]
+    })
+    await alert.present()
+    const { role } = await alert.onDidDismiss()
+    this.exitBannerOpen = false
+    this.diagnostics.log('frame', 'exit dialog answered', () => ({ role }))
+    if (role === 'confirm') await this.restartAfterExit()
+  }
+
+  private async restartAfterExit() {
+    this.autoSaverService.stop()
+    this.autoSaverService.stopPeriodicSave()
+    this.stopSafetyNets()
+    // The dialog said the room ends; leaving it properly tells the spectators, who would
+    // otherwise wait out the grace period on a host that simply vanished.
+    this.multiplayerService.leaveRoom()
+
+    const loading = await this.loadingController.create({
+      message: 'Reiniciando o jogo...',
+      backdropDismiss: false
+    })
+    await loading.present()
+    try {
+      // Bounded: the loader cannot be dismissed, and a flush that never answers (IndexedDB stalls
+      // after a mobile browser has been in the background) must not pin it over the screen.
+      await TimeoutHelper.withTimeout(() => this.saveGameService.saveGame(), AUTO_SAVER.PERSIST_TIMEOUT_MS)
+    } catch (e) {
+      // Whatever the game had written is in the last snapshot; restarting is still the way out.
+      console.error('Could not save before restarting the game', e)
+    }
+    try {
+      await TimeoutHelper.withTimeout(() => this.dosCI.exit(), GAME_EXIT_WATCH.EXIT_TIMEOUT_MS)
+    } catch (e) {
+      console.warn('The emulator did not exit cleanly before the reload', e)
+    }
+    this.reloadPage()
   }
 
   /**
@@ -1155,6 +1520,8 @@ export class GamePage implements OnInit, OnDestroy {
    */
   async confirmLeaveGame() {
     this.hidePopover()
+    if (this.leavePromptOpen) return
+    this.leavePromptOpen = true
     const alert = await this.alertController.create({
       header: 'Voltar ao menu?',
       message: this.isStreaming
@@ -1171,18 +1538,29 @@ export class GamePage implements OnInit, OnDestroy {
         }
       }]
     })
+    void alert.onDidDismiss().then(() => { this.leavePromptOpen = false })
     await alert.present()
   }
 
   /**
    * Full teardown, in an order that matters.
    *
-   * The tickers stop first: the auto-saver samples the framebuffer several times a second and
-   * would otherwise fire a persist into a VM that is already exiting. The room is left explicitly
-   * so spectators get a clean departure instead of waiting out a grace period on a host that
-   * simply vanished. Only then is the disk flushed and the emulator told to exit.
+   * The room is left explicitly so spectators get a clean departure instead of waiting out a
+   * grace period on a host that simply vanished. Then the disk is flushed, and only after that are
+   * the tickers stopped and the emulator told to exit.
+   *
+   * **The auto-saver must still be running when the flush is asked for.** The flush first asks the
+   * game whether its own save dialog is up and waits for it to close (SaveSafetyService), and that
+   * look needs the auto-saver's OCR worker: stopped first, the look is skipped and the disk is
+   * copied under a half-written `.e98`, which is the truncation the wait exists to prevent. A
+   * persist the auto-saver starts meanwhile queues behind ours (`SaveGameService.saveGame` runs one
+   * at a time), so the two cannot overlap, and nothing runs between the flush and the stop.
+   *
+   * `leaving` is what tells the route guard that the navigation it is about to see is this one,
+   * and the exit watcher goes first so a game on its way out cannot raise "O Elifoot foi fechado".
    */
   private async leaveGameToMenu() {
+    this.leaving = true
     const loading = await this.loadingController.create({
       message: 'Salvando e saindo...',
       backdropDismiss: false
@@ -1190,12 +1568,19 @@ export class GamePage implements OnInit, OnDestroy {
     await loading.present()
 
     try {
-      this.autoSaverService.stop()
-      this.autoSaverService.stopPeriodicSave()
       this.touchInputService.detach('leaving the game')
+      this.exitWatcher.stop()
       this.stopObservingOverlay?.()
       this.multiplayerService.leaveRoom()
-      await this.saveGameService.saveGame()
+      const saved = await this.saveSafety.saveNow('leave')
+      if (saved.outcome === 'no-emulator') {
+        // The nets were never attached or were taken down (a patch that failed, a settings step
+        // that threw): the old path saved anyway, and leaving without a save would be a regression.
+        await this.saveGameService.saveGame()
+      }
+      this.autoSaverService.stop()
+      this.autoSaverService.stopPeriodicSave()
+      this.stopSafetyNets()
       await this.dosCI?.exit()
     } catch (e: any) {
       // Never strand the user in the emulator over a failed save: report and leave anyway.
@@ -1208,6 +1593,7 @@ export class GamePage implements OnInit, OnDestroy {
     // keeps its DOSBox instance and wasm module alive, so re-entering /game would create a
     // second one on top of the first. Changing only the hash does not reload, hence both
     // statements.
+    this.saveStatus.allowExit()
     window.location.hash = '#/main'
     window.location.reload()
   }
@@ -1696,6 +2082,7 @@ export class GamePage implements OnInit, OnDestroy {
 
   private async clearCustomPatch() {
     this.hidePopover()
+    this.stopSafetyNets()
     const loading = await this.loadingController.create({
       message: 'Limpando patch...',
       backdropDismiss: false
@@ -1712,7 +2099,7 @@ export class GamePage implements OnInit, OnDestroy {
         buttons: [{
           text: 'Recarregar',
           handler: async () => {
-            window.location.reload()
+            this.reloadPage()
           }
         }]
       })
@@ -1722,29 +2109,41 @@ export class GamePage implements OnInit, OnDestroy {
     } catch (e: any) {
       console.error(e)
       await loading.dismiss()
+      // Nothing was replaced, so the game goes on as it was.
+      this.startSafetyNets()
       await this.showErrorAlert(e)
     }
   }
 
-  private async applySaveGamePatch(patch: JSZip) {
+  private async applySaveGamePatch(plan: SaveImportPlan) {
+    // Like a patch, this replaces what `layers.save()` persists with the edited layer: the
+    // auto-saver, or the page going hidden, persisting the running VM now would write the saves
+    // that were just imported out of the disk again.
+    this.autoSaverService.stop()
+    this.autoSaverService.stopPeriodicSave()
+    this.stopSafetyNets()
+
     const loading = await this.loadingController.create({
-      message: 'Aplicando jogo salvo...',
+      message: 'Importando jogos salvos...',
       backdropDismiss: false
     });
     await loading.present();
 
+    let written = false
     try {
-      await this.patchService.applySaveFilePatch(this.dosCI, patch)
+      await this.patchService.applySaveFilePatch(this.dosCI, plan.patch)
+      written = true
       await loading.dismiss()
+      const count = plan.saves.length
       const alert = await this.alertController.create({
-        header: 'Jogo salvo aplicado',
-        message: 'O jogo salvo foi aplicado com sucesso.\nO jogo será reiniciado.',
+        header: count === 1 ? 'Jogo salvo importado' : 'Jogos salvos importados',
+        message: `${count === 1 ? '1 jogo salvo foi importado' : `${count} jogos salvos foram importados`} com sucesso.\nO jogo será reiniciado.`,
         cssClass: 'win9x-alert alert-whitespace',
         backdropDismiss: false,
         buttons: [{
           text: 'Recarregar',
           handler: async () => {
-            window.location.reload()
+            this.reloadPage()
           }
         }]
       });
@@ -1753,8 +2152,23 @@ export class GamePage implements OnInit, OnDestroy {
     } catch (e: any) {
       console.error(e)
       await loading.dismiss()
+      if (!written) {
+        // Nothing was replaced, so the game goes on as it was, with its saving back on. Once the
+        // layer is written the running VM must not be persisted over the imported saves.
+        await this.restoreSaving()
+      }
       await this.showErrorAlert(e)
     }
+  }
+
+  /**
+   * Put back what a flow that was about to rewrite the layer took down (the auto-saver, the
+   * periodic save, the safety nets) when it failed before writing anything.
+   */
+  private async restoreSaving() {
+    await this.setupAutoSave()
+    await this.setupPeriodicSave()
+    this.startSafetyNets()
   }
 
   private prepareRemoteCursorContainer() {

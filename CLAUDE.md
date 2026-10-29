@@ -24,12 +24,13 @@ npm run test:ci          # ng test --watch=false --browsers=ChromeHeadlessCI: on
 npx ng test --include='**/my.spec.ts' --watch=false --browsers=ChromeHeadlessCI   # single spec
 npm run mp:launch        # two browsers for a multiplayer session (see the harness README)
 python3 scripts/resolution/build_bundle.py verify src/assets/elifoot/elifoot98.jsdos   # the resolution switch is in the bundle
+node scripts/frame-fixtures/make-fixtures.mjs <out.ts> name=frame.png::note ...   # real guest frames -> a spec fixture
 ```
 
 Specs are karma + jasmine. The builder globs `**/*.spec.ts` (its `include` option, which is also
 what `--include` overrides); [src/test.ts](src/test.ts) only initialises the TestBed and
 `tsconfig.spec.json` type-checks `src/**/*.spec.ts`, so a spec needs no registration but must live
-under `src/` to be type-checked. Nothing in a spec reaches the bundle. There are **thirty spec files so
+under `src/` to be type-checked. Nothing in a spec reaches the bundle. There are **forty spec files so
 far**. [room-code.helper.spec.ts](src/app/core/helpers/room-code.helper.spec.ts) is there as
 much to prove the harness as to cover `RoomCodeHelper`: `ng test` with **zero** specs
 prints `Executed 0 of 0 SUCCESS` and still exits 1, so a `test:ci` could never pass before the
@@ -74,7 +75,21 @@ real elements, js-dos's handlers stood in for by a bubbling listener, a `scenari
 instead of keeping a second copy of the hex values. [save-game.service.spec.ts](src/app/core/services/game/save-game.service.spec.ts)
 is the model for "code that reads a browser store": karma's Chrome has a real IndexedDB, so the spec
 builds `js-dos-cache (spec …)` databases shaped like js-dos's and deletes every `js-dos-cache*`
-database before and after each case. Write specs for pure logic (helpers,
+database before and after each case. [save-policy.helper.spec.ts](src/app/core/helpers/save-policy.helper.spec.ts)
+is the model for a decision that must not drift: the table is written out row by row (purpose x answer), and the
+rule the table exists for (`null`, "OCR could not read it", is never the all-clear) is asserted again on its own.
+[save-backup.roundtrip.spec.ts](src/app/core/services/game/save-backup.roundtrip.spec.ts) is the model for both ends of
+a file format: the export is fed to the import through the two services the page calls, against a stand-in emulator
+that keeps its changed files in a zip like js-dos's. [game-exit.helper.spec.ts](src/app/core/helpers/game-exit.helper.spec.ts)
+is the model for "real pixel data as a fixture": the frames in [game-exit.fixtures.ts](src/app/core/helpers/game-exit.fixtures.ts)
+are captures of the live guest (`dosCI.screenshot()` via the touch harness), stored as a palette plus one deflated
+index per pixel (1 to 9 KB a frame, 54 KB for ten) by [scripts/frame-fixtures/](scripts/frame-fixtures/make-fixtures.mjs)
+and inflated in the spec with `DecompressionStream`; the specs then paint on copies of them (a cursor over the icon, a second icon).
+[storage-keys.spec.ts](src/app/core/services/shared/storage-keys.spec.ts) writes every `STORAGE_KEY` to every place the
+registry says it lives, runs the real wipe against the real Ionic Storage and fails if anything is left. One trap in a
+service spec: a synthetic `beforeunload` on the real `window` reaches Karma's own handler and fails the whole run
+("Some of your tests did a full page reload!"), so `SaveSafetyService.unloadTarget()` is overridable and the spec dispatches
+on a stand-in. Write specs for pure logic (helpers,
 planners, parsers, queues driven by a fake clock); the emulator, the screen-scrapers and the WebRTC
 paths have no karma coverage and are checked in a real browser (see the harness above). `ChromeHeadlessCI` in
 [karma.conf.js](karma.conf.js) is `ChromeHeadless --no-sandbox`, which a CI runner or container
@@ -200,9 +215,11 @@ the tag is hand-written).
 [src/app/core/typings/jsdos.d.ts](src/app/core/typings/jsdos.d.ts) is a hand-maintained typing of the js-dos
 command interface (`DosCI`) — screenshot, key/mouse injection, `persist()`, `readMemory`,
 `writeMemory`. `GamePage.dosCI` is `any` and gets threaded into every service as a parameter; no
-singleton owns it. Two root services touch it for longer than a call: the key queue (see *Typing into the
-guest*), which keeps it only for the length of a job, and `TouchInputService` (see *Touching the guest*), which
-holds it from `attach()` to `detach()`. `GamePage.ngOnDestroy` cancels whatever is still queued and detaches.
+singleton owns it. Four root services touch it for longer than a call: the key queue (see *Typing into the
+guest*), which keeps it only for the length of a job, `TouchInputService` (see *Touching the guest*), which
+holds it from `attach()` to `detach()`, and `SaveSafetyService` and `GameExitWatcherService` (see *Save safety
+nets*), which hold it from `GamePage.loadConfig()` to `stopSafetyNets()`. `GamePage.ngOnDestroy` cancels whatever
+is still queued, detaches and stops them.
 
 ### Inside the .jsdos bundle / boot chain
 
@@ -365,7 +382,143 @@ js-dos keeps the *changed* portion of the virtual disk as a zip inside IndexedDB
 the app reads or writes lives under the mounted `d/` tree: game in `d/eli98/`, save games in
 `d/eli98/jogos/*.e98` (`BASE_SAVEGAME_DIR`). Clearing data means deleting those IndexedDB databases
 ([save-game.service.ts](src/app/core/services/game/save-game.service.ts)) plus the Ionic Storage keys,
-and the one `localStorage` key the diagnostics log keeps its tail in (see *Diagnostics log*).
+and the one `localStorage` key the diagnostics log keeps its tail in (see *Diagnostics log*). What is wiped
+is not a list in a method: `STORAGE_KEY_HOMES` in [constants.ts](src/app/core/models/constants.ts) says where each
+`STORAGE_KEY` lives (`Record<keyof typeof STORAGE_KEY, ...>`, so a key added without deciding that does not
+compile), `LocalStorageService.clearAllData` derives its `localStorage` removals from it, and
+[storage-keys.spec.ts](src/app/core/services/shared/storage-keys.spec.ts) proves the wipe leaves nothing standing.
+Nothing survives the wipe today; a key that ever must needs `clearAllData` to learn to spare it and the spec to name it.
+
+### Save safety nets
+
+What stops progress from vanishing without anyone choosing it, and what tells the player it is safe. It is the
+work of P5; the design record is [docs/mobile-ux-study.md](docs/mobile-ux-study.md).
+
+**What "saved" means.** One thing: the emulator's changes layer was written to IndexedDB (`layers.save()`). Every
+persist in the app goes through `SaveGameService.saveGame()`, which runs **one flush at a time** (a second
+`layers.save()` started while the first reads the disk is not something the emulator promises to survive; the
+auto-saver's own serialisation composes with it) and reports start and end to
+[`SaveStatusService`](src/app/core/services/shared/save-status.service.ts). The layer holds whatever the game had written to its own
+files by then; it does not hold the game's state in memory (Elifoot writes its `.e98` at kickoffs). That is why the
+status also tracks **input since the last persist**: `dirty` is set by any pointer-down or key aimed at
+`#game-container` (document-level capture listeners, so a finger the touch layer takes over is still seen) and by the
+key queue's `activity$` (virtual keys never become a DOM event), and it is a *counter*, not a flag: a persist
+remembers the count as it began, and only clears `dirty` if nothing moved meanwhile, so a click that lands during
+the second a persist takes is not called saved. It is conservative by nature (it cannot tell a click on a tab from a
+click that changed the game) and errs towards "not saved".
+
+**The chip** (`app-save-status-chip`, `.save-chip` in `global.scss`) sits in the game toolbar's end slot and says
+`Salvo às 14:32` / `Salvo ontem 21:14` / `Salvo em 20/10 21:14` / `Salvando…` / `Sem salvar há 12 min` (unsaved
+input older than 10 minutes, amber) / `Falha ao salvar` / `Ainda não salvo`, in `SaveStatusHelper`'s words; a tap is
+`GamePage.saveNow()`. **It is shell, flat, not Win9x**, for the reason the room pill is: it renders inside a page
+toolbar. It shares that toolbar's title slot with the pill, and the pill needs 119 px of a title that has 168 at 360 px
+(the title has 20 px of padding each side), so while a room is live the chip drops its words below 600 px and
+steps aside altogether below 402 px (measured: with the dot only the pill was still cut to 78 px at 360 and its
+code with it). Mobile landscape has no toolbar; the menu's first entry, "Salvar agora", carries the same words as its
+subtitle. `lastPersistedAt`, `firstPersistedAt`, `lastBackupAt` and the nudge's answer are `STORAGE_KEY`s in Ionic
+Storage, and `GamePage.clearAllData` calls `freeze()` before the wipe so a persist that finishes after it cannot
+write its timestamp back (the diagnostics tail had the same bug through `pagehide`).
+
+**`isGameSaving` is three-valued everywhere, and `null` is never "not saving".** [`SavePolicyHelper`](src/app/core/helpers/save-policy.helper.ts)
+holds the table, and what differs between rows is the price of being wrong. `hidden` (nobody asked) persists only on
+a proven `false`. `reload` (throws the page away) persists only on a proven `false`, refuses on `true` ("O jogo está
+gravando": try again in a moment), and on `null` **asks the person** ("Recarregar sem salvar") rather than pretend. `manual` and `leave` (the player asked, and the
+leave dialog promises a save) persist on `false` and on `null`, because with the OCR down the button is the only
+manual save there is and the forced periodic save runs just as unguarded; only a seen dialog waits (`manual` says the
+auto-saver will take it as the dialog closes; `leave` waits for it, at most 15 s). Such a save is not passed off as a
+clean one: `saveNow` returns `verified: false` and the toast says it could not confirm whether the game was writing
+(amber, 5 s) instead of the plain "Jogo salvo". `SaveSafetyService.look()` does
+not ask at all when the auto-saver is not running (asking starts the OCR worker's 5 MB download for a page that
+switched auto-save off) and counts that, a throw and a look that overruns the heartbeat as `null`. **So the leave
+has to flush BEFORE it stops the auto-saver**: stopped first, the look is `null` and the wait for the dialog never
+happens (it was dead code in the first cut). `leaveGameToMenu` flushes, then stops the tickers and the nets, then exits
+the emulator; if the nets were never attached (`no-emulator`) it falls back to a plain `saveGame()`, as the old path did. Every persist
+the safety service starts is **bounded to `AUTO_SAVER.PERSIST_TIMEOUT_MS`** and ends as a failed save, because each
+sits behind a loader the player cannot dismiss and IndexedDB is known to stall after a phone has been in the
+background; the deadline stops the *wait*, not the flush, so `saveGame()` keeps its queue and a later persist behind a
+stuck one times out the same way (the chip says "Salvando…" for as long as the flush is truly in flight). The export refuses
+only a proven `true` (`isGameWriting`): it copies the disk without writing it, but a copy made under the game's write
+holds a half file. The update prompt is the one path that does not use the table: `AutoSaverService` tells
+`SaveStatusService.setGameWriting()` for as long as it has *seen* the dialog, `installUpdate()` waits that out for
+at most `APP_UPDATE.IDLE_WAIT_MS` and then persists whatever the OCR could read, because the reload is certain and
+what is not saved is lost for sure. With the OCR down that path can still race a write, as the forced periodic save can.
+
+**The page going hidden persists, a little.** `visibilitychange` to hidden (the last event a mobile browser reliably
+delivers before it may freeze the tab; `pagehide` leaves no time for an asynchronous write) runs
+`SavePolicyHelper.gateHidden` in the order that spares the most work: an emulator, input since the last persist,
+no hide-persist in the last `HIDDEN_PERSIST_MIN_GAP_MS` (3 min; a failed attempt counts, so a broken disk is not retried
+on every tab flip), the auto-saver running; only then does it look at the screen, and only a `false` persists. It gives
+up if the page is visible again by the time the look comes back. Every decision is a `save` line in the diagnostics
+log (`hidden: no persist {"reason":…}`). After the first persist that worked the app asks `navigator.storage.persist()`
+once per page (feature-detected; the answer is logged and kept in `SaveStatusService.durable`, and no copy promises
+protection the browser may refuse).
+
+**Flows that rewrite the layer stop the savers, and give them back only if nothing was written.** A patch, a clear of
+a patch, the save import and the resolution switch each stop the auto-saver, the periodic save and the nets first
+(a persist of the running VM would write the old disk over what they are about to write), and when one fails BEFORE the
+write `GamePage.restoreSaving()` turns them back on, so a failed patch does not leave a game that plays on with no
+chip, no page-hidden save and no `beforeunload`. Once the layer is written they stay off whatever happens next
+(`written` in `applyPatch` and `applySaveGamePatch`): the reload is coming, and persisting the running VM would undo it.
+
+**The ways out of the game page.** `GamePageRoutingModule` has a `canDeactivate` that asks the page
+([`NavigationGuardHelper`](src/app/core/helpers/navigation-guard.helper.ts)): a navigation that stays on `/game`
+(`?host=1` is stripped by one), one the page started (`leaving`), and one with no emulator to lose pass; anything else
+opens the existing "Voltar ao menu?" dialog once (a Back pressed while it is open changes nothing). Only the game page is guarded. **The router
+has to be told how to put the address back:** its default (`canceledNavigationResolution: 'replace'`) rewrites the
+history entry the browser already moved to, which loses a level: measured, the first Back asked and the next one left
+the page with no question. `AppRoutingModule` sets `'computed'`, which walks the history pointer back, and the same
+sequence (Back, Back with the dialog open, Cancelar, Back, `router.navigate`) was one dialog each time with
+`history.length` constant. Nothing is pushed, so nothing is trapped. `beforeunload` asks the browser to confirm only when
+`dirty` or hosting, and **every reload the app starts goes through `GamePage.reloadPage()` (or calls
+`SaveStatusService.allowExit()` first)**, which is what keeps a deliberate reload from asking: the player has just
+answered. A new `window.location.reload()` in the game page that skips it would ask twice. "Recarregar" is now "Salvar e
+recarregar": confirm, then `saveBeforeReload()`, then reload only on a proven all-clear.
+
+**The backup is one file format with both ends in one place** ([`SaveBackupHelper`](src/app/core/helpers/save-backup.helper.ts)).
+Export writes a flat zip of `NAME.E98` named `elifoot98_saves_YYYY-MM-DD_HH-mm-ss.zip` (the older names counted
+the month from 0; every download is now stamped by `SaveBackupHelper.fileStamp`). Import takes `.e98` files and
+`.zip` backups, several at once, and from a zip takes every `.e98` wherever it sits (so the full-disk copy of the
+boot-failure dialog restores its saves, and a Mac zip's `__MACOSX/._NAME.E98` shadows are skipped). The confirm lists
+what will be added and flags the ones that replace a save the guest already has (read from the live `dosCI.persist()`,
+since the bundle ships no `.E98`); unreadable zips and unusable files are named, not fatal. **Both file inputs are
+emptied in `finally`** (a `change` fires only when the value changes, so choosing the same file again after "Cancelar"
+did nothing), after the files are copied out of `input.files`, and an empty selection is a no-op. Import stops the
+auto-saver and the safety nets first, like a patch: a persist of the running VM would write the imported saves out again.
+**Sharing is a button, not a side effect:** Safari honours `navigator.share()` only inside the tap, and the zip takes longer
+than a gesture, so on a coarse pointer whose browser says `canShare({files})` the page builds the backup, then offers
+"Baixar arquivo" / "Compartilhar…", and `deliverBackup('share')` calls `navigator.share` before awaiting anything
+(checked: `navigator.userActivation.isActive` was true inside the call). A desktop downloads at once. A share closed by the
+player (`AbortError`) is not a backup; any other failure downloads instead. A week without a backup (counted from the
+first save when there never was one) earns **one** dismissible reminder, ever: answering it, either way, is stored.
+It is shown only when the disk holds at least one `.e98` (`PatchService.existingSaveNames`): a visit that only looked
+around persists the layer too, and a reminder that is answered with nothing to back up is spent for good.
+
+**Recovery: telling that Elifoot has exited to the Program Manager.** The boot chain leaves Windows with the game as its
+only program, so when it quits (Esc or Cancelar in its first dialog, Enter before a choice, a crash) the player is on a
+blue desktop with no way back but a reload. **The green probe cannot tell** (see *Screen-scraping*: at 640x480 "green lost"
+is the normal state), so [`GameExitHelper`](src/app/core/helpers/game-exit.helper.ts) recognises the desktop itself, and the
+signature is nearly the whole frame: a flat `(0, 64, 128)` at every sample of an 8 px grid (all but 8, for the mouse
+cursor, which is drawn into the frame) outside the Program Manager's icon, and in that icon's box, a fixed distance from the
+bottom-left corner (x 16-61, 60 px tall, 10 px above the edge, identical at 640x480 and 800x600), white text and ink. Measured: the real frame is
+99.3% desktop colour; across 127 real frames at 640x480 (every dialog, tab, menu, list and live match of the P4 walk,
+the team-colour standings, the team editor and the Program Manager) the desktop colour never appears in any of Elifoot's own screens, not even within a
+tolerance of 25, the fewest stray samples in any of them was 3,268 against the 8 allowed, and the only two frames that
+matched were the Program Manager's. The programs that share the screen with it leave it 31% (the team editor) and 44%
+(the Program Manager window) of the frame, and a second icon (a minimised Elifoot) fails the grid, so none of
+them is an exit. A live walk of 20 screens (new game, countries, draw, the main window's five tabs, menus, modals) with the
+watcher running never saw a desktop sample. [`GameExitWatcherService`](src/app/core/services/game/game-exit-watcher.service.ts)
+looks once a second, needs `LOOKS_NEEDED` (3) in a row (so ~3 s, as the roadmap asks; measured 2.9 s from Esc to the dialog),
+resets on anything else, on a `screenshot()` that throws or hangs, and says it **once per episode**: "Agora não" is not
+asked again until something else has been on screen. It is armed only once the game's own screen has been seen, because
+Windows draws this very desktop while the game loads: the page starts it armed after a boot that saw the game, and
+with `armWhen` (the boot's own green probe) when the 45 s window ran out first, so a slow phone is not left without the
+dialog for the whole session (checked: the bare desktop never arms it, the splash does, and Esc then raised the dialog
+in 2.9 s). It is stopped by every flow that rewrites the layer or leaves. The
+banner is a `win9x-alert` ("O Elifoot foi fechado" / "Reiniciar jogo?"); its action leaves the room if one is live
+(the dialog says it ends), saves (no isGameSaving check: the game is not running; bounded like every persist), asks the
+emulator to exit for at most 3 s, and reloads. The FAQ's team-editor recipe quits the game on purpose and tells
+the reader to answer "Agora não". It is a dialog, not a docked banner, because it is
+the one thing on screen worth reading and the game behind it is gone. The load-detection pixels are unchanged.
 
 ### Patching (the central trick)
 
@@ -587,8 +740,9 @@ menu bar and the squad list (measured in play: 1 match of the 3 needed, only the
 stays green; on the splash, the new-game dialog and the Registo screen it is 4 of 4). The probe
 passes at boot only because the splash (Acerca, or Registo on a later visit) is smaller than the
 frame and sits on the backdrop, and "green lost" is the normal state afterwards. That is fine for
-`waitForGameScreen`, which runs only at boot; anything built on "the green went away" (the planned
-recovery banner) must use Windows' desktop blue `(0, 64, 128)` and the Program Manager icon instead.
+`waitForGameScreen`, which runs only at boot; anything built on "the green went away" must use
+Windows' desktop blue `(0, 64, 128)` and the Program Manager icon instead, which is what the exit watcher
+does (see *Save safety nets*).
 Confirmed on a real boot at 640x480 in the app: `Green check passed`, and the loader reads "Iniciando
 o DOS…" then "Carregando o Elifoot…" ("Abrindo o Windows 3.1…" is shorter than the 500 ms between
 looks, as in P6). The OCR strip is **centre-relative** (`OcrRegionHelper.savingDialogRegion`:
@@ -915,10 +1069,11 @@ funnels — `GamePage.showErrorAlert` and `MultiplayerUiService.showError` — a
 so route new error dialogs through those rather than hand-rolling another `create()`.
 `alert-danger` is a *button*-level class and is unaffected. Before opening a PR, check that
 `grep -rc 'alertController.create' src/` and `grep -rc "cssClass: 'win9x-alert" src/app`
-still agree (29 today) — a manual check, because `npm run lint` covers only `.ts`/`.html`
+still agree (34 today) — a manual check, because `npm run lint` covers only `.ts`/`.html`
 and there is no stylelint setup to hang it on.
 
-The room status pill (`.mp-status-pill` in [global.scss](src/global.scss)) is on the shell
+The save status chip (`.save-chip`, see *Save safety nets*) is on the shell side too, for the same
+reason, and shares the pill's touch-floor trick (a transparent border, not an `::after`). The room status pill (`.mp-status-pill` in [global.scss](src/global.scss)) is on the shell
 side of that line and is deliberately flat, not Win9x: it renders inside the page toolbars,
 and half a retro toolbar reads as a bug. Its landscape instance rides the game surface but
 keeps the same flat look, because one component changing identity by position is worse than
@@ -992,7 +1147,9 @@ button that closes a Win9x titlebar.
   endpoint answers 404 for it, against 200 for a control video — so the player shows "Video
   unavailable" until someone supplies a new id.
 - **Every `Error` thrown by `PatchService` is shown verbatim** by `GamePage.showErrorAlert`, so its
-  messages are Portuguese and say what to do next; JSZip's and HttpClient's own English goes to the
+  messages are Portuguese and say what to do next (the import's too: `prepareSaveFilesPatch` names a file type
+  it cannot use, a zip it cannot open, a zip with no save in it and a cloud file it cannot read, and
+  `SaveGameService`'s three IndexedDB failures are Portuguese as well); JSZip's and HttpClient's own English goes to the
   console at the catch site. [patch.service.spec.ts](src/app/core/services/game/patch.service.spec.ts)
   pins the wording. Other English `throw`s remain: `CheatOmaticService`'s are logged by the O Matic
   modal, never shown, but `MultiplayerService.joinRoom`'s "Already in a room…" can reach the join
@@ -1047,7 +1204,9 @@ memory and a bare `location.reload()` threw it away, on every release's update p
 `installUpdate()` therefore awaits the global `saveGameFileSystem()` (a no-op without an
 emulator, so the landing page and the launch-time install share the path) through
 `TimeoutHelper.withTimeout` and `APP_UPDATE.SAVE_TIMEOUT_MS`, logs a failure or a timeout, and
-reloads regardless: a persist that hangs must not be able to hold an update hostage. Cutting a
+reloads regardless: a persist that hangs must not be able to hold an update hostage. Before it writes it
+waits (at most `APP_UPDATE.IDLE_WAIT_MS`) for a game save the auto-saver has seen in progress, and it calls
+`SaveStatusService.allowExit()` so the game page's "leave site?" prompt does not ask a second time. Cutting a
 persist short loses only what it was writing, because the write is one IndexedDB put. "Instalar
 agora" first asks `MultiplayerService.isHosting` and, for a host, shows a confirm because a
 reload ends the room for every spectator; "Atualizar depois" leaves `PENDING_UPDATE` set, so the

@@ -35,6 +35,140 @@ export const STORAGE_KEY = {
   // 'classic' (js-dos's own touchpad). Absent means direct. Lives in Ionic Storage, so
   // "Apagar todos os dados" restores the default; see TouchModeHelper.
   TOUCH_MODE: 'touchMode',
+  // Save visibility (SaveStatusService). All four are epoch milliseconds or a flag, and all four
+  // are about the DISK they describe, so "Apagar todos os dados" has to reset them with it.
+  // When the emulator's disk last reached IndexedDB, by any path (the auto-saver, the chip, the
+  // page going hidden, leaving). It is what the toolbar chip says.
+  LAST_PERSISTED_AT: 'lastPersistedAt',
+  // The first time that ever happened here. A player who has never exported anything has no
+  // lastBackupAt to count seven days from, so the nudge counts from this.
+  FIRST_PERSISTED_AT: 'firstPersistedAt',
+  // When a backup last left the app (a download, or a share sheet that was not cancelled).
+  LAST_BACKUP_AT: 'lastBackupAt',
+  // The "faça um backup" nudge was answered. Once, ever: see SavePolicyHelper.backupNudgeDue.
+  BACKUP_NUDGE_DISMISSED: 'backupNudgeDismissed',
+}
+
+/** Where a STORAGE_KEY lives. Ionic Storage is the default; the others are written around it. */
+export type StorageHome = 'ionic' | 'localStorage';
+
+/**
+ * Where every {@link STORAGE_KEY} is written, and the reason this table exists: "Apagar todos os
+ * dados" has to reach each of them, and `LocalStorageService.clearAllData` derives what it removes
+ * from here. Ionic Storage is emptied wholesale (`storage.clear()`), so a key that lives only
+ * there is wiped by construction; a key that is ALSO written somewhere Ionic Storage cannot see
+ * (the diagnostics log's second copy, in `localStorage`) has to be listed with that home or the
+ * wipe leaves it behind. The type is `Record<keyof typeof STORAGE_KEY, ...>`, so adding a key
+ * without deciding where it lives does not compile, and storage-keys.spec.ts writes every key to
+ * every home it declares and fails if the wipe leaves any of them standing.
+ *
+ * A key written anywhere not listed here (a bare `localStorage.setItem` somewhere else in the
+ * app) is invisible to both the wipe and the spec: route it through a STORAGE_KEY entry instead.
+ */
+export const STORAGE_KEY_HOMES: Readonly<Record<keyof typeof STORAGE_KEY, readonly StorageHome[]>> = {
+  DISABLE_SMOOTH_FILTER: ['ionic'],
+  DISABLE_AUTO_SAVE: ['ionic'],
+  PERIODIC_SAVE: ['ionic'],
+  HIDE_TUTORIAL: ['ionic'],
+  PENDING_UPDATE: ['ionic'],
+  FAIL_COUNT: ['ionic'],
+  PLAYER_NAME: ['ionic'],
+  PLAYER_COLOR: ['ionic'],
+  HIDE_SPECTATOR_CURSORS: ['ionic'],
+  DISABLE_SPECTATOR_AUDIO: ['ionic'],
+  SPECTATOR_MUTED: ['ionic'],
+  MAX_SPECTATORS: ['ionic'],
+  RECENT_ROOMS: ['ionic'],
+  DIAGNOSTICS: ['ionic'],
+  // The tail is written to Ionic Storage every few seconds and to localStorage when the page goes
+  // hidden, because only the second write is complete when the page dies.
+  DIAGNOSTICS_LOG: ['ionic', 'localStorage'],
+  TOUCH_MODE: ['ionic'],
+  LAST_PERSISTED_AT: ['ionic'],
+  FIRST_PERSISTED_AT: ['ionic'],
+  LAST_BACKUP_AT: ['ionic'],
+  BACKUP_NUDGE_DISMISSED: ['ionic'],
+};
+
+/**
+ * Save visibility and the safety nets around it (SaveStatusService, SaveSafetyService,
+ * SavePolicyHelper). Every number here is a policy, not a measurement of the guest.
+ */
+export const SAVE_SAFETY = {
+  // A page going hidden persists at most this often, however many times the player flips
+  // between tabs: each persist rewrites the whole changes layer (about 5 MB, about a second on a
+  // desktop), and a mobile browser that is busy being backgrounded has little time to spare.
+  HIDDEN_PERSIST_MIN_GAP_MS: 3 * 60 * 1000,
+  // Seven days without exporting a backup (counted from the first save when there never was one)
+  // earns the player one reminder, ever.
+  BACKUP_NUDGE_AFTER_MS: 7 * 24 * 60 * 60 * 1000,
+  // Unsaved input older than this turns the chip from "Salvo às 14:32" into a warning. The game
+  // writes its own save at kickoffs, so a long stretch of clicking in menus is normal; ten minutes
+  // is where "nothing has reached the browser's storage" starts to be worth saying.
+  UNSAVED_WARNING_AFTER_MS: 10 * 60 * 1000,
+  // How often the chip re-reads the clock for its own text ("Sem salvar há 12 min").
+  CHIP_REFRESH_MS: 30 * 1000,
+  // The longest a leave waits for the game's own "A gravar o jogo..." dialog to close before it
+  // saves anyway. The dialog is up for about a second, so this is a ceiling for a stuck one.
+  GAME_IDLE_WAIT_MS: 15 * 1000,
+  GAME_IDLE_POLL_MS: 500,
+}
+
+/**
+ * Telling that Elifoot has exited to the Windows Program Manager, which the boot chain makes the
+ * only other thing there is (`win D:\ELI98\ELIFOOT.EXE`), see GameExitHelper for the signature and
+ * why the game's green is no use for it at 640x480.
+ */
+export const GAME_EXIT_WATCH = {
+  // One look a second is plenty (a look is a screenshot and a coarse scan, about a millisecond),
+  // and the game has to stay gone for this many looks in a row before anyone is told: Windows draws
+  // this very desktop for a moment while the game starts, and an hourglass cursor or a closing
+  // window must not read as an exit.
+  POLL_MS: 1000,
+  LOOKS_NEEDED: 3,
+  // screenshot() has no deadline of its own; one that never answers costs a look.
+  SCREENSHOT_TIMEOUT_MS: 5 * 1000,
+  // How long "Reiniciar jogo" waits for the emulator to exit before it reloads anyway.
+  EXIT_TIMEOUT_MS: 3000,
+}
+
+/**
+ * What the frame looks like once ELIFOOT.EXE has exited and left Windows 3.1 with nothing but the
+ * Program Manager (GameExitHelper). Measured on real frames at 640x480 and 800x600, which differ
+ * only in size: the desktop is a flat (0, 64, 128), and the Program Manager sits at the bottom
+ * left as an icon (x 16-61, 60 px tall, 10 px above the bottom edge, in both modes) with its title
+ * in white on a navy bar. That is the whole picture: 99.3% of a 640x480 frame is the desktop colour.
+ *
+ * This is NOT the load-detection probe, and cannot be built from it: that one looks for the game's
+ * green backdrop, which the window hides at 640x480, so "green lost" is the normal state there.
+ * Across ~120 real Elifoot frames at 640x480 (every dialog, tab, menu, list and live match walked
+ * for P4, plus the team lists) the desktop colour never appeared once, not even within a tolerance
+ * of 25, and the programs that do share the screen with it (the team editor, the Program Manager
+ * window itself) leave it 31% and 44% of the frame, nowhere near the 99% asked for here.
+ */
+export const GAME_EXIT_SIGNATURE = {
+  DESKTOP_COLOR: { r: 0, g: 64, b: 128 },
+  // The 256-colour driver paints the desktop in one exact palette entry; the slack is for a
+  // driver that rounds, not for look-alikes.
+  COLOR_TOLERANCE: 8,
+  // Only graphics modes: DOS text mode is 640x400, and a frame that small is another stage.
+  MIN_WIDTH: 640,
+  MIN_HEIGHT: 480,
+  // One sample every GRID_STEP pixels each way (4,800 at 640x480, about a millisecond). The
+  // guest's mouse cursor is drawn into the frame (12x20 px, so at most 2x3 samples), and so is an
+  // hourglass, which is why a few samples are allowed to be something else.
+  GRID_STEP: 8,
+  MAX_STRAY_SAMPLES: 8,
+  // The Program Manager's icon, measured from the bottom-left corner so it holds at both sizes:
+  // the box spans x 8-71 and the 74 rows above the 6 px margin. It is excluded from the grid above
+  // and tested on its own. A second icon (Elifoot merely minimised) lands to the right of it, in
+  // the grid, and is what keeps that from reading as an exit.
+  ICON_BOX: { LEFT: 8, WIDTH: 64, BOTTOM_INSET: 6, HEIGHT: 74 },
+  // Measured in the box: 489 white pixels (the title and icon highlights) and 2,035 that are not
+  // the desktop colour. The floors are well under that so a cursor sitting on the icon passes.
+  ICON_MIN_WHITE_PIXELS: 200,
+  ICON_MIN_INK_PIXELS: 800,
+  ICON_WHITE_MIN_CHANNEL: 200,
 }
 
 // The opt-in diagnostics log (DiagnosticsService). Off by default; every limit below exists to keep
@@ -137,6 +271,9 @@ export const APP_UPDATE = {
   // short loses what it was still writing and nothing else, because the write is one
   // IndexedDB put and the previous snapshot stays in place until it commits.
   SAVE_TIMEOUT_MS: 5000,
+  // How long an update waits for the game's own save dialog to close before it persists anyway.
+  // The dialog is up for about a second; this only bounds a stuck one.
+  IDLE_WAIT_MS: 5000,
 }
 
 export const GAME_BOOT = {

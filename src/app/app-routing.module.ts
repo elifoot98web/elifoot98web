@@ -23,7 +23,18 @@ const routes: Routes = [
 
 @NgModule({
   imports: [
-    RouterModule.forRoot(routes, { preloadingStrategy: PreloadAllModules, useHash: true })
+    RouterModule.forRoot(routes, {
+      preloadingStrategy: PreloadAllModules,
+      useHash: true,
+      // What the router does to the address bar when a guard refuses a Back. The default
+      // ('replace') rewrites the entry the browser already moved to, which loses a level of
+      // history: the first Back asks "Voltar ao menu?" and, after Cancelar, the second one leaves
+      // the page with no question at all. 'computed' walks the history pointer back to where the
+      // page is instead (a `history.go` that fires a popstate for the page's own URL, which the
+      // router ignores), so every Back asks, and nothing loops. Only the game page has a guard
+      // (see NavigationGuardHelper); no other navigation is ever refused.
+      canceledNavigationResolution: 'computed',
+    })
   ],
   exports: [RouterModule]
 })

@@ -1,94 +1,118 @@
 import { Injectable } from '@angular/core';
-import { BASE_SAVEGAME_DIR } from '../../models/constants';
 import JSZip from 'jszip';
+import { SaveBackupHelper } from '../../helpers/save-backup.helper';
 import { DiagnosticsService } from '../shared/diagnostics.service';
+import { SaveStatusService } from '../shared/save-status.service';
 
 /** Where emulators-ui keeps the changed part of the virtual disk (see readStoredChanges). */
 const JS_DOS_SAVES_DATABASE = 'js-dos-cache (emulators-ui-saves)';
+
+/** The saves backup, built and not yet handed to the player. */
+export interface SavesBackup {
+  bytes: Uint8Array;
+  /** The DOS names inside, upper case. */
+  names: string[];
+  fileName: string;
+}
+
+/** How a backup left the app. `cancelled` is a share sheet the player closed: nothing left. */
+export type BackupDelivery = 'downloaded' | 'shared' | 'cancelled';
 
 @Injectable({
   providedIn: 'root'
 })
 export class SaveGameService {
-  constructor(private diagnostics: DiagnosticsService) { }
+  /** The persist now running or queued last: the next one starts when it settles. */
+  private persistTail: Promise<unknown> = Promise.resolve()
 
-  async saveGame(): Promise<void> {
+  constructor(private diagnostics: DiagnosticsService, private status: SaveStatusService) { }
+
+  /**
+   * Flush the emulator's changes to IndexedDB (`layers.save()`), one flush at a time. Every persist
+   * in the app passes through here, from the auto-saver, the chip, a page going hidden and leaving
+   * the game, and a second `layers.save()` started while the first is still reading the disk is
+   * not something the emulator promises to cope with, so a caller that arrives meanwhile waits its
+   * turn (the auto-saver serialises its own too; the two compose). It is also where
+   * SaveStatusService hears about it, which is what the toolbar chip says.
+   *
+   * It has no deadline of its own: a flush that never settles holds the queue (and the chip's
+   * "Salvando…") rather than let a second one start on top of it. Each caller bounds its own wait
+   * instead (`SaveSafetyService.persist`, the auto-saver), so a stuck flush costs a failed save
+   * the player can decide about, never a loader that stays.
+   */
+  saveGame(): Promise<void> {
+    const run = this.persistTail.then(() => this.persistOnce(), () => this.persistOnce())
+    this.persistTail = run.catch(() => undefined)
+    return run
+  }
+
+  private async persistOnce(): Promise<void> {
     const began = performance.now()
+    const token = this.status.persistStarted()
     try {
       await saveGameFileSystem()
+      this.status.persistSucceeded(token)
       this.diagnostics.log('save', 'layers.save ok', () => ({ ms: Math.round(performance.now() - began) }))
     } catch (error) {
+      this.status.persistFailed()
       this.diagnostics.log('save', 'layers.save failed', () => ({ ms: Math.round(performance.now() - began), error }))
       throw error
     }
   }
 
-  async downloadGameSaves(dosCI: any): Promise<boolean> {
+  /**
+   * The saves backup of the running game, or null when it has no save. Built from what
+   * `dosCI.persist()` returns (the live changed files, not what was last written to IndexedDB), as
+   * a flat zip of `NAME.E98` that "Importar jogos salvos" reads back (SaveBackupHelper).
+   */
+  async prepareSavesBackup(dosCI: any): Promise<SavesBackup | null> {
     if(!dosCI) {
       console.warn('dosCI is not defined');
-      return false
+      return null
     }
 
-    const rawChanges = await dosCI.persist()
-    let zip = new JSZip()
-    zip = await zip.loadAsync(rawChanges, { createFolders: true })
-    
-    let hasSaves = false
-    let accumulatedPath = ''
-    
-    // remove non save game files
-    const keptDirectories: string[] = BASE_SAVEGAME_DIR.split('/').filter(dir => !!dir).map((dir) => {
-      accumulatedPath += dir + '/'
-      return accumulatedPath
-    })
-
-    let filesToRemove = zip.filter((_, file) => {
-      return !file.name.toLowerCase().includes(BASE_SAVEGAME_DIR) && !keptDirectories.includes(file.name.toLowerCase())
-    })
-    filesToRemove.forEach(file => {
-      zip.remove(file.name)
-    })
-
-    // Preparing to move files to the root of the zip
-    zip.forEach((_, file) => {
-      if (file.name.toLowerCase().includes('.e98')) {
-        hasSaves = true
-        file.name = file.name.replace(BASE_SAVEGAME_DIR, '')
-      }
-    })
-
-    if(!hasSaves){
-      return false
+    const built = await SaveBackupHelper.build(await dosCI.persist())
+    if (!built) {
+      return null
     }
+    return { ...built, fileName: SaveBackupHelper.backupFileName(new Date()) }
+  }
 
-    let originalFiles = zip.files
-    
-    // Clearing file list
-    zip.files = {}
-    
-    // Adding only save game files
-    for(let filePath in originalFiles) {
-      const file = originalFiles[filePath]
-      if (file.name.toLowerCase().endsWith('.e98')) {
-        zip.files[file.name] = file
+  /**
+   * Hand the backup to the player: through the system share sheet (`how` = 'share', which the
+   * caller only asks for where the browser can share a file), or as a download. Either counts as a
+   * backup for the reminder, except a share sheet that was closed without choosing anything.
+   *
+   * **Call it straight from the tap's handler when sharing.** Safari honours `navigator.share()`
+   * only while the tap is the current user gesture, and building the zip is asynchronous, so the
+   * game page builds first and shares from a button of its own; everything here before the share
+   * is synchronous. A share that fails for any reason but the player closing it falls back to a
+   * download rather than losing the backup.
+   */
+  async deliverBackup(backup: SavesBackup, how: 'download' | 'share'): Promise<BackupDelivery> {
+    if (how === 'share') {
+      const file = this.backupFile(backup)
+      try {
+        await navigator.share({ files: [file], title: 'Backup do Elifoot 98' })
+        this.status.recordBackup()
+        return 'shared'
+      } catch (error) {
+        if ((error as DOMException | undefined)?.name === 'AbortError') {
+          return 'cancelled'
+        }
+        console.warn('Sharing the backup failed; downloading it instead', error)
+        this.diagnostics.log('save', 'share failed; downloading', () => ({ error }))
       }
     }
 
-    // generate zip file
-    let content = await zip.generateAsync({ 
-      type: 'uint8array', 
-      compression: 'DEFLATE',
-      compressionOptions: {
-        level: 9
-      }
-    })
-    
-    // save zip file
-    const dateTime = new Date()
-    dateTime.toISOString()
-    const dateTimeString = `${dateTime.getFullYear()}-${dateTime.getMonth()}-${dateTime.getDate()}_${dateTime.getHours()}-${dateTime.getMinutes()}-${dateTime.getSeconds()}`
-    this.saveUint8ArrayAsFile(content, `saveGames_${dateTimeString}.zip`)
-    return true
+    this.saveUint8ArrayAsFile(backup.bytes, backup.fileName)
+    this.status.recordBackup()
+    return 'downloaded'
+  }
+
+  /** The backup as a `File`, which is what the share sheet takes. */
+  backupFile(backup: SavesBackup): File {
+    return new File([backup.bytes as BlobPart], backup.fileName, { type: 'application/zip' })
   }
 
   async downloadFullDiskChanges(dosCI: any): Promise<boolean> {
@@ -107,11 +131,9 @@ export class SaveGameService {
     }
     
     // Save the zip file
-    const dateTime = new Date()
-    dateTime.toISOString()
-    const dateTimeString = `${dateTime.getFullYear()}-${dateTime.getMonth()}-${dateTime.getDate()}_${dateTime.getHours()}-${dateTime.getMinutes()}-${dateTime.getSeconds()}`
     const zipContent = await zip.generateAsync({ type: 'uint8array' });
-    this.saveUint8ArrayAsFile(zipContent, `fullDiskChanges_${dateTimeString}.zip`)
+    this.saveUint8ArrayAsFile(zipContent, `fullDiskChanges_${SaveBackupHelper.fileStamp(new Date())}.zip`)
+    this.status.recordBackup()
     return true; 
   }
 
@@ -197,7 +219,8 @@ export class SaveGameService {
     if (changes == null) {
       return false
     }
-    this.saveUint8ArrayAsFile(changes, `fullDiskChanges_${this.fileTimestamp(new Date())}.zip`)
+    this.saveUint8ArrayAsFile(changes, `fullDiskChanges_${SaveBackupHelper.fileStamp(new Date())}.zip`)
+    this.status.recordBackup()
     return true
   }
 
@@ -218,9 +241,9 @@ export class SaveGameService {
           resolve(null)
           return
         }
-        reject(open.error ?? new Error(`Can't open ${databaseName}`))
+        reject(open.error ?? new Error(`Não foi possível abrir o armazenamento ${databaseName}.`))
       }
-      open.onblocked = () => reject(new Error(`Opening ${databaseName} is blocked`))
+      open.onblocked = () => reject(new Error(`A abertura do armazenamento ${databaseName} está bloqueada. Feche as outras abas do jogo e tente de novo.`))
       open.onsuccess = () => {
         const db = open.result
         let largest: Uint8Array | null = null
@@ -233,7 +256,7 @@ export class SaveGameService {
           const cursor = db.transaction('files', 'readonly').objectStore('files').openCursor()
           cursor.onerror = () => {
             db.close()
-            reject(cursor.error ?? new Error(`Can't read ${databaseName}`))
+            reject(cursor.error ?? new Error(`Não foi possível ler o armazenamento ${databaseName}.`))
           }
           cursor.onsuccess = () => {
             const entry = cursor.result
@@ -257,15 +280,8 @@ export class SaveGameService {
     })
   }
 
-  /** yyyy-mm-dd_hh-mm-ss in local time; the older file names count months from 0. */
-  private fileTimestamp(date: Date): string {
-    const two = (value: number) => String(value).padStart(2, '0')
-    return `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())}_`
-      + `${two(date.getHours())}-${two(date.getMinutes())}-${two(date.getSeconds())}`
-  }
-
   private saveUint8ArrayAsFile(uint8Array: Uint8Array, fileName: string): void {
-    const blob = new Blob([uint8Array.buffer as ArrayBuffer], { type: 'application/octet-stream' });
+    const blob = new Blob([uint8Array as BlobPart], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
   
     const link = document.createElement('a');
@@ -276,6 +292,7 @@ export class SaveGameService {
     link.click();
   
     document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    // Not at once: Safari starts the download after this returns, and a revoked URL is an empty file.
+    setTimeout(() => URL.revokeObjectURL(url), 60 * 1000);
   }
 }

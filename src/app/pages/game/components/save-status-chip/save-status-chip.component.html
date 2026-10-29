@@ -1,0 +1,4 @@
+<button type="button" class="save-chip" [class.save-chip--compact]="compact" [attr.data-tone]="view.tone" [attr.aria-label]="view.label" [attr.title]="view.text" (click)="activate.emit()">
+  <span class="save-chip-dot" aria-hidden="true"></span>
+  <span class="save-chip-text">{{ view.text }}</span>
+</button>

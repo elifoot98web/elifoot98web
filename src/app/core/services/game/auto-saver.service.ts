@@ -8,6 +8,7 @@ import { AUTO_SAVER } from '../../models/constants';
 import { BackoffHelper } from '../../helpers/backoff.helper';
 import { TimeoutHelper } from '../../helpers/timeout.helper';
 import { DiagnosticsService } from '../shared/diagnostics.service';
+import { SaveStatusService } from '../shared/save-status.service';
 
 export interface AutoSaverOptions {
   tickIntervalMs?: number;
@@ -65,9 +66,19 @@ export class AutoSaverService {
     private loadingController: LoadingController,
     private toastController: ToastController,
     private zone: NgZone,
-    private diagnostics: DiagnosticsService) {
+    private diagnostics: DiagnosticsService,
+    private status: SaveStatusService) {
   }
 
+
+  /**
+   * The loop is running, which is also what keeps the OCR worker alive. Anything that wants to
+   * ask `isGameSaving` first checks this: asking while the loop is stopped would start the
+   * worker's 5 MB download for a page that switched auto-save off.
+   */
+  public get running(): boolean {
+    return this.state !== AutoSaverState.IDLE
+  }
 
   public start(dosCI: DosCI, options: AutoSaverOptions = {}) {
     if (this.state !== AutoSaverState.IDLE) {
@@ -112,6 +123,7 @@ export class AutoSaverService {
     this.ocrSubscription?.unsubscribe()
     this.ocrSubscription = undefined
     this.emulatorControlService.stopOcr()
+    this.status.setGameWriting(false)
     if (this.periodicForced) {
       this.periodicForced = false
       this.syncPeriodicSave()
@@ -291,21 +303,28 @@ export class AutoSaverService {
     this.diagnostics.log('save', 'save dialog seen')
     const dialogSeenAt = performance.now()
     this.persistOwed = true
+    // Told to the status service for as long as the dialog is known to be up: it is what lets the
+    // update prompt wait for a save it can see instead of reloading over it.
+    this.status.setGameWriting(true)
     const waitUntil = Date.now() + AUTO_SAVER.MAX_WAITING_TIME_FOR_GAME_SAVE_DETECTED
-    while (isGameSaving && waitUntil > Date.now()) {
-      console.log('Game is still saving...')
-      await new Promise(resolve => setTimeout(resolve, AUTO_SAVER.DEFAULT_GAME_SAVING_DETECTED_TIMEOUT_MS))
-      if (run !== this.runId) {
-        return
+    try {
+      while (isGameSaving && waitUntil > Date.now()) {
+        console.log('Game is still saving...')
+        await new Promise(resolve => setTimeout(resolve, AUTO_SAVER.DEFAULT_GAME_SAVING_DETECTED_TIMEOUT_MS))
+        if (run !== this.runId) {
+          return
+        }
+        try {
+          const look = await this.heartbeat(() => this.emulatorControlService.isGameSaving(this.dosCI))
+          isGameSaving = look ?? true
+        } catch (error) {
+          // Not a reason to persist either: the dialog was up a moment ago, so a persist now could
+          // be the truncated one this wait exists to prevent. Keep looking until the ceiling.
+          console.warn('Could not tell whether the game is still saving; waiting:', error)
+        }
       }
-      try {
-        const look = await this.heartbeat(() => this.emulatorControlService.isGameSaving(this.dosCI))
-        isGameSaving = look ?? true
-      } catch (error) {
-        // Not a reason to persist either: the dialog was up a moment ago, so a persist now could
-        // be the truncated one this wait exists to prevent. Keep looking until the ceiling.
-        console.warn('Could not tell whether the game is still saving; waiting:', error)
-      }
+    } finally {
+      this.status.setGameWriting(false)
     }
 
     if (run !== this.runId) {

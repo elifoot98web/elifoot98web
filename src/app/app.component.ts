@@ -3,7 +3,7 @@ import { SwUpdate } from '@angular/service-worker';
 import { AlertController, LoadingController, Platform } from '@ionic/angular/lazy';
 import { TimeoutError, TimeoutHelper } from './core/helpers/timeout.helper';
 import { APP_UPDATE, STORAGE_KEY } from './core/models/constants';
-import { DiagnosticsService, LayoutHelperService, LocalStorageService } from './core/services/shared';
+import { DiagnosticsService, LayoutHelperService, LocalStorageService, SaveStatusService } from './core/services/shared';
 
 @Component({
     selector: 'app-root',
@@ -23,7 +23,8 @@ export class AppComponent {
     // Injected here, and not left for the first page that logs, so the service exists from the
     // first moment of the visit: it reads `?diag=1` and the stored choice in its constructor, and
     // the window listeners that explain a tab eviction must be on before the game page is.
-    private diagnostics: DiagnosticsService) {
+    private diagnostics: DiagnosticsService,
+    private saveStatus: SaveStatusService) {
 
     platform.ready().then(async () => {
       console.log('Platform ready', { 
@@ -122,6 +123,9 @@ export class AppComponent {
     // This is necessary because the service worker may not be able to update the app
     // if the app is already open
     this.diagnostics.log('update', 'reloading');
+    // The game page asks "leave site?" of a page with unsaved input or a room; the player has just
+    // answered that question (and the save above is what it was about).
+    this.saveStatus.allowExit();
     window.location.reload();
   }
 
@@ -146,6 +150,14 @@ export class AppComponent {
         .create({ message: 'Salvando o jogo antes de atualizar...', backdropDismiss: false })
         .then(loading => loading.present())
         .catch(() => undefined);
+    }
+
+    // A persist that lands in the middle of the game's own write stores a truncated .e98 over the
+    // last good one, so a save that is in progress (one the auto-saver SAW) is waited out first,
+    // for a few seconds at most. This is not the check the other paths make: it persists whatever
+    // the OCR could read, because the reload is certain and what is not saved is lost for sure.
+    if (hasEmulator && !(await this.saveStatus.whenGameIdle(APP_UPDATE.IDLE_WAIT_MS))) {
+      this.diagnostics.log('update', 'game still saving; persisting anyway');
     }
 
     const began = performance.now();

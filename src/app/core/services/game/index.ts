@@ -5,3 +5,5 @@ export * from './guest-key-queue.service';
 export * from './patch.service';
 export * from './save-game.service';
 export * from './touch-input.service';
+export * from './game-exit-watcher.service';
+export * from './save-safety.service';

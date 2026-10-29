@@ -861,3 +861,138 @@ canvas {
         margin-bottom: -10px;
     }
 }
+/*
+ * Save status chip ("Salvo às 14:32"), in the game page's toolbar.
+ *
+ * Flat, like the room pill above and for the same reason: it renders inside a page toolbar, which
+ * is app shell, and half a retro toolbar reads as a mistake. The state is the words; the dot is
+ * a redundant cue (green saved, amber warning, pulsing while saving), never the only one.
+ *
+ * It has no clipping parent (an `ion-buttons` slot, not an `ion-title`), so the touch floor is
+ * plain: the capsule is ~24px and a coarse pointer gets a 44px-tall hit area by transparent
+ * border, painted on the padding box only, exactly as the pill does.
+ */
+.save-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    max-width: 100%;
+    margin: 0 4px;
+    padding: 3px 10px;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.28);
+    color: #fff;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.4;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.save-chip:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+}
+
+.save-chip-dot {
+    flex: 0 0 auto;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--ion-color-medium, #92949c);
+}
+
+.save-chip[data-tone='ok'] .save-chip-dot {
+    background: #2dd36f;
+}
+
+.save-chip[data-tone='busy'] .save-chip-dot {
+    background: #ffc409;
+    animation: mp-status-breathe 0.8s ease-in-out infinite;
+}
+
+// Amber on the chip over the navy toolbar is 10.4:1 (9.0:1 on the bare toolbar), so the warning is
+// readable and not just coloured.
+.save-chip[data-tone='warn'] {
+    color: #ffc409;
+}
+
+.save-chip[data-tone='warn'] .save-chip-dot {
+    background: #ffc409;
+}
+
+.save-chip-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@media (pointer: coarse) {
+    .save-chip {
+        border-top: 10px solid transparent;
+        border-bottom: 10px solid transparent;
+        border-radius: 12px / 22px;
+        background-clip: padding-box;
+    }
+
+    .save-chip:focus-visible {
+        outline-offset: -8px;
+    }
+}
+
+// A phone in portrait has the room for the time and not for the sentence around it.
+@media (max-width: 420px) {
+    .save-chip {
+        padding: 3px 8px;
+        font-size: 12px;
+    }
+}
+
+// While a room is live the pill needs the title slot (119px of pill in a title with 20px of padding
+// each side, measured), and on a phone there is no room for both with words: the chip keeps its dot,
+// its tone and its accessible name, and loses the text. The dot with its 44px hit area still leaves
+// the pill too little under about 400px (at 360 the pill is cut to 78px and the code with it), so
+// there the chip steps aside until the room closes: the menu's "Salvar agora" says the same words
+// and the pill is the one thing a host must see.
+@media (max-width: 401px) {
+    .save-chip--compact {
+        display: none;
+    }
+}
+
+@media (max-width: 599px) {
+    .save-chip--compact .save-chip-text {
+        display: none;
+    }
+
+    .save-chip--compact {
+        padding: 3px 8px;
+        margin: 0 2px;
+    }
+
+    .save-chip--compact .save-chip-dot {
+        width: 10px;
+        height: 10px;
+    }
+}
+
+@media (max-width: 599px) and (pointer: coarse) {
+    // The hit area stays 44px wide as well as tall, by the same transparent-border trick.
+    .save-chip--compact {
+        border-left: 10px solid transparent;
+        border-right: 10px solid transparent;
+        border-radius: 22px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .save-chip[data-tone='busy'] .save-chip-dot {
+        animation: none;
+    }
+}

@@ -103,8 +103,9 @@
             <div class="ion-padding" slot="content">
               <p>Submenu com opções de salvamento de dados da máquina virtual/emulador.</p>
 
-              <h4>Salvar Máquina Virtual <ion-icon name="save-outline"></ion-icon></h4>
+              <h4>Salvar agora <ion-icon name="save-outline"></ion-icon></h4>
               <p>
+                Fica no alto do menu e também no aviso <strong>Salvo às 14:32</strong>, na barra de cima: tocar no aviso faz o mesmo.
                 Salva o estado atual da máquina virtual, incluindo o sistema de arquivos do emulador em geral.
                 Essa opção é útil caso você tenha feito alterações nos arquivos em geral, como a utilização do editor de
                 equipes do Elifoot 98 ou mudanças nas configurações do Windows 3.1, por exemplo.
@@ -140,14 +141,17 @@
               <p>
                 Permite baixar os jogos salvos (arquivos .e98) da máquina virtual para o seu dispositivo.<br>
                 <strong>Nota:</strong> O download será feito em um arquivo compactado (.zip) contendo todos os jogos
-                salvos.
+                salvos. No celular, depois de preparar o arquivo você escolhe entre <strong>Baixar arquivo</strong> e
+                <strong>Compartilhar</strong>, que abre a lista do aparelho (Arquivos, Drive, WhatsApp...).
               </p>
 
               <h4>Importar Jogos Salvos <ion-icon name="download-outline"></ion-icon></h4>
               <p>
-                Permite adicionar um jogo salvo de outro local (arquivo .e98) para dentro da máquina virtual.<br>
+                Permite adicionar jogos salvos de outro local para dentro da máquina virtual. Escolha o <strong>.zip</strong>
+                do backup, ou um ou mais arquivos <strong>.e98</strong>.<br>
+                Antes de importar, o aplicativo mostra a lista do que será adicionado e marca os jogos que já existem.<br>
                 <strong>Atenção:</strong> Caso já exista um arquivo com o mesmo nome na máquina virtual, o arquivo
-                importado irá SUBSTITUIR o existente.
+                importado irá SUBSTITUIR o existente. O jogo é reiniciado depois da importação.
               </p>
               <ion-text color="danger">
                 <h4 color="danger">Apagar Todos os Dados <ion-icon name="trash-outline"></ion-icon></h4>
@@ -220,12 +224,14 @@
           <ion-accordion>
             <ion-item slot="header">
               <ion-label>
-                <strong>Recarregar</strong>
+                <strong>Salvar e recarregar</strong>
               </ion-label>
             </ion-item>
             <div class="ion-padding" slot="content">
               <p>
-                Recarrega a aplicação.<br>
+                Salva o jogo e recarrega a aplicação. O salvamento só acontece quando o aplicativo consegue ter certeza
+                de que o Elifoot não está gravando o jogo naquele instante; se não conseguir, ele avisa e pergunta se você
+                quer recarregar sem salvar.<br>
               </p>
             </div>
           </ion-accordion>

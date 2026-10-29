@@ -57,22 +57,73 @@ describe('PatchService error messages', () => {
     });
   });
 
-  describe('prepareSaveFilePatch', () => {
+  describe('prepareSaveFilesPatch', () => {
     it('asks for a file when none was chosen', async () => {
-      await expectAsync(service().prepareSaveFilePatch(undefined as unknown as File))
+      await expectAsync(service().prepareSaveFilesPatch([]))
+        .toBeRejectedWithError('Nenhum arquivo foi selecionado.');
+      await expectAsync(service().prepareSaveFilesPatch(undefined as unknown as File[]))
         .toBeRejectedWithError('Nenhum arquivo foi selecionado.');
     });
 
-    it('says which kind of file it wants when given another', async () => {
-      await expectAsync(service().prepareSaveFilePatch(new File(['x'], 'jogo.txt')))
-        .toBeRejectedWithError('Tipo de arquivo inválido. Escolha um jogo salvo do Elifoot 98 (arquivo .e98).');
+    it('says which kinds of file it wants when given another', async () => {
+      await expectAsync(service().prepareSaveFilesPatch([new File(['x'], 'jogo.txt')]))
+        .toBeRejectedWithError('Tipo de arquivo inválido. Escolha jogos salvos do Elifoot 98 (arquivos .e98) ou um backup em .zip.');
+    });
+
+    it('explains a zip that cannot be opened, instead of passing JSZip\'s message on', async () => {
+      const failure = await service().prepareSaveFilesPatch([new File(['isto não é um zip'], 'backup.zip')])
+        .then(() => null, error => error as Error);
+
+      expect(failure?.message).toBe('O arquivo selecionado não é um ZIP válido. Escolha um backup exportado pelo jogo (.zip) ou jogos salvos (.e98).');
+      expect(failure?.message).not.toMatch(/central directory/i);
+    });
+
+    it('says so when a zip holds no save', async () => {
+      const zip = new JSZip();
+      zip.file('leiame.txt', 'oi');
+      const file = new File([await zip.generateAsync({ type: 'arraybuffer' })], 'vazio.zip');
+
+      await expectAsync(service().prepareSaveFilesPatch([file]))
+        .toBeRejectedWithError('Nenhum jogo salvo (.e98) foi encontrado nos arquivos escolhidos.');
+    });
+
+    it('says what to do when a picked file cannot be read at all, as a cloud file may not', async () => {
+      const unreadable = { name: 'JOGO.E98', arrayBuffer: () => Promise.reject(new DOMException('not downloaded', 'NotReadableError')) } as unknown as File;
+
+      await expectAsync(service().prepareSaveFilesPatch([unreadable]))
+        .toBeRejectedWithError('Não foi possível ler o arquivo escolhido. Se ele estiver na nuvem, baixe-o para o aparelho e tente de novo.');
     });
 
     it('accepts a save in any letter case and stores it upper-cased under the save directory', async () => {
-      const zip = await service().prepareSaveFilePatch(new File(['dados'], 'Meu Jogo.E98'));
+      const { patch } = await service().prepareSaveFilesPatch([new File(['dados'], 'Meu Jogo.E98')]);
 
-      const files = Object.values(zip.files).filter(entry => !entry.dir).map(entry => entry.name);
+      const files = Object.values(patch.files).filter(entry => !entry.dir).map(entry => entry.name);
       expect(files).toEqual([`${BASE_SAVEGAME_DIR}MEU JOGO.E98`]);
+    });
+
+    it('works with one good file among ones it cannot use, and reports the rest', async () => {
+      const plan = await service().prepareSaveFilesPatch([new File(['dados'], 'BOM.E98'), new File(['x'], 'lixo.txt')]);
+
+      expect(plan.saves.map(save => save.name)).toEqual(['BOM.E98']);
+      expect(plan.ignored).toEqual(['lixo.txt']);
+    });
+  });
+
+  describe('existingSaveNames', () => {
+    it('lists the saves the game already has', async () => {
+      const zip = new JSZip();
+      zip.file(`${BASE_SAVEGAME_DIR}UM.E98`, 'x');
+      zip.file('hdd.img', 'x');
+      const emulator = { persist: async () => zip.generateAsync({ type: 'uint8array' }) } as unknown as DosCI;
+
+      expect(await service().existingSaveNames(emulator)).toEqual(['UM.E98']);
+    });
+
+    it('reports an emulator that cannot be read in Portuguese', async () => {
+      const broken = { persist: () => Promise.reject(new Error('worker is gone')) } as unknown as DosCI;
+
+      await expectAsync(service().existingSaveNames(broken))
+        .toBeRejectedWithError('Não foi possível ler os dados do jogo. Recarregue a página e tente novamente.');
     });
   });
 

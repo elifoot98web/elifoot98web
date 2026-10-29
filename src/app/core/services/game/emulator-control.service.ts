@@ -39,6 +39,9 @@ export class EmulatorControlService {
   /** True once OCR has failed to start and until it works. See {@link OcrWorkerHost.unavailable$}. */
   readonly ocrUnavailable$: Observable<boolean> = this.ocr.unavailable$;
 
+  /** Keys were submitted to the guest, by whatever sender; see {@link GuestKeyQueueService.activity$}. */
+  readonly keyActivity$: Observable<void> = this.keyQueue.activity$;
+
   constructor(private keyQueue: GuestKeyQueueService, private zone: NgZone, private diagnostics: DiagnosticsService) { }
 
   /**

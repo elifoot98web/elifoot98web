@@ -99,6 +99,38 @@ describe('GuestKeyQueueService', () => {
     expect(EMULATOR_CONTROL_CONFIG.KEY_PACING_MS).toBeGreaterThanOrEqual(8);
   });
 
+  describe('activity$', () => {
+
+    it('announces every submission that is accepted, before a key goes out', strict(() => {
+      const emulator = fakeEmulator(Date.now());
+      const queue = newQueue();
+      const seen: number[] = [];
+      queue.activity$.subscribe(() => seen.push(emulator.events.length));
+
+      queue.chord(emulator.dosCI, [K.KBD_a]);
+      const afterFirst = emulator.events.length;
+      queue.text(emulator.dosCI, 'ab');
+      tick(20 * GAP);
+
+      expect(seen.length).toBe(2);
+      // The first is announced before its own key leaves; the second while the first is being sent.
+      expect(seen[0]).toBe(0);
+      expect(seen[1]).toBe(afterFirst);
+    }));
+
+    it('says nothing for a submission that is refused or empty', strict(() => {
+      const queue = newQueue();
+      let announced = 0;
+      queue.activity$.subscribe(() => announced++);
+      const refused = outcome(queue.chord(null, [K.KBD_a]));
+      queue.text(fakeEmulator(Date.now()).dosCI, '');
+      flushMicrotasks();
+
+      expect(refused.state).toBe('rejected');
+      expect(announced).toBe(0);
+    }));
+  });
+
   describe('one key', () => {
 
     it('presses, waits a gap, releases, waits a gap, and only then resolves', strict(() => {

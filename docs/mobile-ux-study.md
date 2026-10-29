@@ -483,6 +483,102 @@ build, and a CLAUDE.md update.
 8. **P5 — save safety nets** (backup round trip, navigation guards, "Salvo às HH:mm" chip).
    **Re-specify the recovery banner against 640x480** (detect the Program Manager blue ~(0,64,128)
    plus icon; green is boot-only).
+   **As built:** `SaveStatusService` (main bundle: last persist, first persist, last backup, input since the last
+   persist as a counter, the one-time reminder, `freeze()` for the wipe, `allowExit()` for deliberate reloads),
+   `SaveSafetyService` (the game chunk: input listeners, the page-hidden save, `saveNow`, `saveBeforeReload`,
+   `beforeunload`), `SavePolicyHelper` (the decision tables), `SaveBackupHelper` (both ends of the backup file),
+   `NavigationGuardHelper` + a `canDeactivate` on the game route, `GameExitHelper` + `GameExitWatcherService` (the
+   recovery signature), the toolbar chip, and `STORAGE_KEY_HOMES` with the spec that proves the wipe.
+   `SaveGameService.saveGame()` now runs one flush at a time and is where every persist is reported. Measured in
+   headless Chrome 143 (chrome-headless-shell) against the dev server, 640x480, synthetic input on a desktop CPU:
+   - **The recovery state was reproduced for real, not inferred.** Boot, Enter on the splash, Esc in the first
+     dialog: Elifoot quits to a bare `(0, 64, 128)` desktop with the Program Manager icon and nothing else, 99.3% of
+     the frame desktop colour (305,039 of 307,200 pixels; 11 colours in all). The icon is at x 16-61, y 410-469, 10 px
+     above the bottom edge: **the same offsets at 800x600** (`use800.flg`, captured the same way). It stays selected
+     (navy label) after a tap on the desktop. The signature is a grid scan (every 8 px; all but 8 samples outside the
+     icon's box must be the desktop colour, the 8 being the mouse cursor, which is drawn into the frame) plus white
+     and ink in that box. Over the 127 real 640x480 frames of the P4 walk the desktop colour never appears in Elifoot's own
+     screens (0 pixels, tolerance 25 included); the fewest stray samples in any non-Program-Manager frame was 3,268 of
+     4,728 (the team editor over the desktop, 31% blue); only the two Program Manager captures match. A fresh walk of 20 screens through the
+     live app with the watcher on (new game, 6 setup dialogs, the draw, the main window and its 5 tabs, 2 menus, 5
+     modals) found 0 desktop samples in any frame and showed no dialog. The Program Manager window restored from its
+     icon (44% blue) and a minimised-Elifoot lookalike (a copied second icon) do not match.
+   - **The dialog.** Esc to "O Elifoot foi fechado" took 2.9 s (the three looks of the watcher, one a second);
+     "Agora não" was not asked again over the next 7 s; "Reiniciar jogo" saved (a 5.4 MB layer in IndexedDB, the chip
+     read "Salvo às 22:50" after the reload), exited, reloaded, and the game came back up.
+   - **Back.** With the router's default, the first Back asked and the next left the page. With
+     `canceledNavigationResolution: 'computed'`: Back, Back with the dialog open, Cancelar, Back again,
+     `router.navigate(['/main'])` each gave exactly one "Voltar ao menu?", `history.length` stayed at 10 and the hash at
+     `#/game`; a query-only navigation on the same route passed; "Sair" saved, left for `#/main` and the landing card
+     showed, with no browser prompt.
+   - **`beforeunload`.** A clean page navigated away silently; after one tap on the game (dirty) Chrome opened a
+     `beforeunload` dialog (it blocked the harness until it was accepted: `scripts/touch-harness` runs need that handled),
+     "Stay" kept the page and its state; `reloadPage()` reloaded with no prompt.
+   - **Saving.** A tap on the chip saved ("Salvo às 22:23", a toast, `lastPersistedAt` and `firstPersistedAt` stored,
+     the 5.36 MB layer present). Hiding the page (the event dispatched by hand: CDP delivers no lifecycle events here) with
+     input pending and the real OCR (it loaded here) returning `false` persisted once (about a second); a second hide inside the gap was
+     `throttled` and left `dirty`; with the look answering `null` or `true` it did not persist (`unreadable`,
+     `game-saving`), and with auto-save off it did not even look (`auto-save-off`, no OCR pass started).
+     "Salvar agora" with the look answering `true` said the game was writing and wrote nothing. "Salvar e recarregar":
+     `null` offered "Recarregar sem salvar", `true` said to try again, the real look saved and reloaded.
+     `navigator.storage.persist()` was asked once and refused in this headless profile (logged).
+   - **The backup.** Two `.e98` files through the picker: the confirm listed both ("serão adicionados"), the input was
+     emptied, an empty `change` did nothing (no loader, no dialog); after the reload the game's own "Jogos gravados" list
+     showed `DOIS` (the other fake save, 14 bytes of text, is in the layer, `existingSaveNames` lists both, but the
+     game did not list it; why was not investigated). Export downloaded `elifoot98_saves_2026-10-28_23-15-16.zip` (flat `UM.E98`,
+     `DOIS.E98`); with stand-in `navigator.share`/`canShare` the page showed "Backup pronto" with three buttons, and a real
+     tap on "Compartilhar…" reached `navigator.share` with a 3,223-byte `application/zip` `File` while
+     `navigator.userActivation.isActive` was true. Re-importing that zip flagged both as "(substitui o atual)" under a
+     danger button; picking the same file again after "Cancelar" asked again; a `.e98` plus a `.json` listed the second as ignored.
+   - **The chip at phone widths.** It fits beside the menu at 360 and 390 px. While hosting it collides with the room pill
+     (119 px wanted, 78 px left at 360 with a dot-only chip), so the chip drops its words under 600 px and steps aside under
+     402 px; at 412 and 430 px both fit.
+   Where it differs from the plan: the recovery "banner" is a `win9x-alert` (modal), not a docked banner; the
+   router's `canceledNavigationResolution` is set to `'computed'` (not in the plan: the default made the guard a one-shot);
+   the share sheet is a button after the zip is built (Safari wants the gesture), and only on a coarse pointer, so a
+   desktop still downloads at once; "Salvar Máquina Virtual" moved out of the Auto-Save submenu to a top-level
+   "Salvar agora" (the chip's twin, and the only chip surface in mobile landscape, which has no toolbar); the settings
+   registry is `STORAGE_KEY_HOMES` plus a wipe spec, with no allow-list because no key survives a wipe; the update prompt
+   waits for a save the auto-saver has seen and otherwise persists as P0 did. **Not verified:** any phone; Safari
+   (`navigator.share`, `storage.persist()`, tab eviction, `beforeunload`, the edge-swipe Back); the Android Back button and
+   a PWA's history stack (the sequence above is `history.back()`); a real background/foreground switch; the chip's
+   legibility on a real screen; a hosting phone's room pill beside the chip; the share sheet's real targets; importing a zip
+   from Files or Drive; a real save from a played round going through export and import (the saves used were small fakes).
+   **Found on the way, not fixed:** a hand-made `.E98` may not appear in "Jogos gravados" even though it is on the disk
+   (one of the two fakes did not), so a test of the import needs a real save; the chip is not shown in mobile landscape; `clearCustomPatch` still
+   leaves the auto-saver running after it rewrites the layer (it only gained `stopSafetyNets`).
+   **Changed by the review of this phase** (three reviewers, headless Chrome again on the final code):
+   - **The leave never waited for the game's save dialog.** `leaveGameToMenu` stopped the auto-saver before it called
+     `saveNow('leave')`, and the look needs the auto-saver's OCR worker, so the look was always `null`, `decide('leave',
+     null)` is `persist`, and the 15 s wait was dead code; the spec passed because its rig sets `autoSaver.running`. It now
+     flushes first and stops the tickers after. Checked on the live page with the game's dialog faked as "up" for 1.3 s
+     after the tap on "Sair": four looks with the auto-saver running, then the leave's persist at 1.72 s with the look
+     `false`, and the page landed on `#/main`. With the nets detached (`no-emulator`) the leave still saves (`saveGame()`
+     was called), as the old path did.
+   - **A failed patch left the page without its nets.** `applyPatch` stopped the nets and, unlike the other three flows,
+     never restarted them on failure (and never dismissed its loader, which was already so before P5). A new
+     `restoreSaving()` does it for all four, only when nothing was written yet (a `written` flag: after the layer is
+     written the running VM must not be persisted over it). Checked: a patch that threw gave the auto-saver, the nets and
+     the exit watcher back and left no loader.
+   - **No persist waited for ever.** The chip, the reload, the leave and the restart sat behind an undismissable loader on
+     a flush with no deadline. `SaveSafetyService.persist` (and the restart's own save) now give up at
+     `AUTO_SAVER.PERSIST_TIMEOUT_MS` and report a failed save; `saveGame()` still holds its queue behind a stuck flush on
+     purpose (see its docblock). Specced with a never-resolving flush; not provoked in a browser.
+   - **A save on an unreadable look says so.** The deviation from "null is never not-saving" for `manual` and `leave` stays
+     (the OCR down is when the button is all there is), but the result carries `verified` and the toast warns when it is
+     false. Checked: auto-save on gave the green "Jogo salvo no navegador às 00:18.", auto-save off gave the amber one with
+     "mas não foi possível confirmar se o Elifoot estava gravando.".
+   - **The one-time reminder needs a save to remind about.** `firstPersistedAt` is set by any persist, so a visit that only
+     looked around could spend the reminder on a disk with no `.e98`. It now returns early without consuming it. Checked:
+     8 days old and no save: no dialog and still due; with a save: the dialog, and answered it is no longer due.
+   - **The exit watcher is armed, not merely started.** It used to start only if the boot's 45 s window saw the game, so a
+     slow phone that overran it had no recovery dialog for the session. It now always starts, with `armWhen` (the boot's
+     green probe) in that case. Checked: the bare desktop alone never arms it (9 s, no look counted); the splash arms it
+     and Esc then raised the dialog in 2.9 s. The ordinary path is unchanged (re-run: 2.4 s).
+   - Smaller: "Reiniciar jogo" leaves the room it says it ends; the "Salvar e recarregar" confirm says the room ends when
+     hosting; the FAQ's team-editor recipe tells the reader to answer "Agora não" when the game is quit on purpose.
+   **Dismissed:** the room is not left in "Salvar e recarregar" itself (the reload follows at once, so `leaveRoom()`'s
+   asynchronous goodbye would not flush, and the reload was always abrupt for a host).
 9. **P10 — control deck replacing the FABs**, **without** the P8 dependency (its "Texto" panel
    opens the P1 dialog). Needs D3 and D8.
 10. Then P8 (live type bar), P9 (idle pause), P11 (zoom/pan camera), P12 (stage layout, landscape
@@ -573,6 +669,11 @@ a real soft keyboard, and the 5 s write cost on a low-end CPU (the write is a `J
 - Offline start was inferred from ngsw semantics and never run.
 - Alt codes were not tried in the 8-letter filename field, the team editor, password dialogs or
   numeric price fields.
-- Several settings come from multiple phases (touch mode, idle pause, dock side, type-bar flag,
+- ~~Several settings come from multiple phases (touch mode, idle pause, dock side, type-bar flag,
   resolution flag, view mode, last-saved time) and only P5 mentions clearing them in
-  `clearAllData`; there is no flag registry.
+  `clearAllData`; there is no flag registry.~~ Closed by P5: `STORAGE_KEY_HOMES` says where each key lives
+  (a key added without a home does not compile), `clearAllData` derives its `localStorage` removals from it, and
+  `storage-keys.spec.ts` fails if the wipe leaves any key standing. Every key the mobile work added
+  (touch mode, diagnostics and its log, last/first persist, last backup, the nudge) was already wiped, because Ionic
+  Storage is emptied wholesale; the real gap was the second copy of the diagnostics log in `localStorage`, which was
+  hard-coded and is now derived. The resolution flag is a file in the layer and goes with the IndexedDB wipe.

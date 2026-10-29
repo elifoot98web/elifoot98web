@@ -26,6 +26,12 @@
     </ion-title>
 
     <ion-buttons slot="end">
+      <!--
+        What the player's progress looks like from the outside ("Salvo às 14:32"); a tap saves
+        now. Shell, not Win9x: it sits in the toolbar, like the room pill. Mobile landscape has
+        no toolbar, so the menu's "Salvar agora" carries the same words there.
+      -->
+      <app-save-status-chip [compact]="isStreaming" (activate)="saveNow()"></app-save-status-chip>
       <ion-button (click)="showPopover($event)" aria-label="Menu de opções">
         <ion-icon slot="icon-only" name="ellipsis-vertical-outline"></ion-icon>
       </ion-button>
@@ -49,6 +55,17 @@
           <ion-list-header class="ion-no-padding ion-padding-start" color="light">
             <ion-label>Opções</ion-label>
           </ion-list-header>
+          <!--
+            First, because it is the thing a player wants when the chip says nothing has been
+            saved; the subtitle is the chip's text, for mobile landscape where there is no toolbar.
+          -->
+          <ion-item button detail="false" (click)="saveNow()">
+            <ion-label>
+              Salvar agora
+              <p>{{ saveSummary }}</p>
+            </ion-label>
+            <ion-icon slot="end" name="save-outline"></ion-icon>
+          </ion-item>
           <ion-item button detail="false" (click)="showOmaticModal()">
             <ion-label>Abrir 'O Matic</ion-label>
             <ion-icon slot="end" color="warning" src="../../assets/icon/cheese.svg"></ion-icon>
@@ -132,10 +149,6 @@
             <ng-template>
               <ion-content>
                 <ion-list>
-                  <ion-item button detail="false" (click)="saveGame()">
-                    <ion-label>Salvar Máquina Virtual</ion-label>
-                    <ion-icon slot="end" name="save-outline"></ion-icon>
-                  </ion-item>
                   <ion-item detail="false">
                     <ion-toggle [checked]="autoSaveDisabled" (ionChange)="toggleDisableAutoSave($event)">Desativar Sync
                       Save</ion-toggle>
@@ -153,12 +166,12 @@
             <ng-template>
               <ion-content>
                 <ion-list>
-                  <ion-item button detail="false" (click)="downloadGameSaves()">
+                  <ion-item button detail="false" (click)="exportGameSaves()">
                     <ion-label>Exportar jogos salvos</ion-label>
                     <ion-icon slot="end" name="share-outline"></ion-icon>
                   </ion-item>
                   <ion-item button detail="false" (click)="saveGameFileInput.click()">
-                    <ion-label>Importar jogo salvo</ion-label>
+                    <ion-label>Importar jogos salvos</ion-label>
                     <ion-icon slot="end" name="download-outline"></ion-icon>
                   </ion-item>
                   <ion-item *ngIf="debugMode" button detail="false" (click)="downloadFullDiskChanges()">
@@ -223,7 +236,7 @@
             <ion-icon slot="end" name="information-circle-outline"></ion-icon>
           </ion-item>
           <ion-item button detail="false" (click)="confirmRefresh()">
-            <ion-label>Recarregar</ion-label>
+            <ion-label>Salvar e recarregar</ion-label>
             <ion-icon slot="end" name="refresh-outline"></ion-icon>
           </ion-item>
           <ion-item button detail="false" (click)="confirmLeaveGame()">
@@ -238,7 +251,11 @@
     </ng-template>
   </ion-popover>
   <input style="display:none;" type="file" accept=".zip" #patchFileInput (change)="onPatchFileSelected($event)" />
-  <input style="display:none;" type="file" accept=".e98" #saveGameFileInput (change)="onSaveFileSelected($event)" />
+  <!--
+    Saves (.e98) or a backup (.zip), several at once. Android's picker filters by MIME type and
+    does not know .e98, so the zip type is listed as well as the extension.
+  -->
+  <input style="display:none;" type="file" multiple accept=".e98,.zip,application/zip" #saveGameFileInput (change)="onSaveFileSelected($event)" />
   <div class="full game-stream-flex-container">
     <div class="game-stream-container full">
       <!--
