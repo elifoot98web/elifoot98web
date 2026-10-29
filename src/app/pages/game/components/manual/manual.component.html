@@ -7,9 +7,8 @@
       </ion-item>
       <div class="ion-padding" slot="content">
         <p>
-          O menu de opções (<ion-icon name="menu-outline"></ion-icon> <ion-icon name="arrow-forward-outline"></ion-icon> <ion-icon name="options-outline"></ion-icon> ou
-          <ion-icon name="ellipsis-vertical-outline"></ion-icon>)
-          está localizado no canto superior da tela.
+          O menu de opções (<ion-icon name="ellipsis-vertical-outline"></ion-icon>) fica no canto superior direito da tela.
+          Com o aparelho deitado, quando a barra superior é escondida, ele passa para o canto superior esquerdo, ao lado da imagem do jogo.
         </p>
         <ion-accordion-group expand="inset">
           <ion-accordion>
@@ -172,7 +171,7 @@
               <p>
                 Permite abrir uma caixa de texto para enviar conteúdo diretamente para a máquina virtual.<br>
                 Essa funcionalidade é útil para colar textos do seu computador ou celular diretamente no emulador, ou
-                para digitar caracteres que não estão disponíveis no teclado virtual, como as letras acentuadas.
+                para digitar caracteres que não estão no teclado americano do jogo, como as letras acentuadas. Nos celulares e tablets, a aba <strong>Texto</strong> do painel de teclas abre a mesma caixa.
               </p>
               <p>
                 Cada quebra de linha equivale a apertar Enter, o que permite preencher vários campos de uma vez. O
@@ -184,12 +183,15 @@
           <ion-accordion>
             <ion-item slot="header">
               <ion-label>
-                <strong>Teclado Virtual</strong>
+                <strong>Mostrar painel de teclas</strong>
               </ion-label>
             </ion-item>
             <div class="ion-padding" slot="content">
               <p>
-                Ativa ou desativa o teclado virtual.<br>
+                Escolhe se o painel de teclas (veja <strong>Painel de Teclas</strong>, mais abaixo) aparece:
+                <strong>Automático</strong> (nos aparelhos de toque, como celulares e tablets), <strong>Sempre mostrar</strong>
+                ou <strong>Nunca mostrar</strong>. A mudança vale na hora.<br>
+                Nos aparelhos que vibram, <strong>Vibração nas teclas</strong> liga e desliga a vibração ao apertar uma tecla.
               </p>
             </div>
           </ion-accordion>
@@ -390,17 +392,28 @@
     </ion-accordion>
     <ion-accordion value="aux-controls">
       <ion-item slot="header" color="light">
-        <ion-label>Controles Auxiliares</ion-label>
-        <ion-icon slot="end" name="game-controller"></ion-icon>
+        <ion-label>Painel de Teclas</ion-label>
+        <ion-icon slot="end" name="keypad-outline"></ion-icon>
       </ion-item>
       <div class="ion-padding" slot="content">
         <p>
-          Os botões flutuantes de controles auxiliares são exibidos como ícones de joystick na parte inferior da tela.<br>
-          Esses botões são úteis para acessar rapidamente atalhos e teclas do teclado com ações específicas para o jogo.
+          Nos celulares e tablets, as teclas do jogo ficam num painel embaixo da imagem, que nunca cobre a tela do Elifoot.<br>
+          Uma barra de abas escolhe o que aparece: toque na aba aberta para recolher o painel e toque numa aba para abrir outro.
         </p>
         <p>
-          Em um dos botões flutuantes, você encontrará os botões <strong>F1 ao F12</strong>, <strong>A</strong> e <strong>M</strong>, utilizados para escolher táticas para a partida.<br>
-          Enquanto no outro, há atalhos de teclas de navegação, como as <strong>setas direcionais <ion-icon name="caret-back-outline"></ion-icon> <ion-icon name="caret-up-outline"></ion-icon> <ion-icon name="caret-forward-outline"></ion-icon> <ion-icon name="caret-down-outline"></ion-icon></strong> e <strong>Enter <ion-icon name="return-down-back-outline"></ion-icon></strong>.
+          <strong>Táticas</strong> reúne as teclas <strong>F1 a F12</strong>, cada uma com a formação que escolhe, e
+          <strong>A</strong> (Automático) e <strong>M</strong> (Melhores), usadas para escolher táticas para a partida.<br>
+          <strong>Setas</strong> tem as <strong>setas direcionais <ion-icon name="caret-back-outline"></ion-icon> <ion-icon name="caret-up-outline"></ion-icon> <ion-icon name="caret-forward-outline"></ion-icon> <ion-icon name="caret-down-outline"></ion-icon></strong>,
+          <strong>Enter <ion-icon name="return-down-back-outline"></ion-icon></strong>, <strong>Esc</strong> e <strong>Tab</strong>; segure uma seta para repeti-la.<br>
+          <strong>Texto</strong> abre a caixa de Input de Texto.<br>
+          <strong>Chat</strong> aparece quando você hospeda uma sala.<br>
+          <strong>Mais</strong> traz o restante do teclado: Shift, Ctrl e Alt (toque para valer na próxima tecla, toque duas vezes para travar),
+          Espaço, Backspace, Del, Tab, Shift+Tab, PgUp, PgDn, Home, End, F1 a F12, <strong>Num *</strong> (Craque, a procura de jogadores craque),
+          <strong>Num -</strong> (Registro, onde se digita o código de registro), o O Matic e o <strong>Sair (Alt+F4)</strong>, que fecha o jogo
+          e por isso pede confirmação.
+        </p>
+        <p>
+          Com o aparelho deitado não sobra espaço embaixo da imagem: o painel vira o botão <strong>Teclas</strong>, que abre as mesmas abas por cima da tela.
         </p>
       </div>
     </ion-accordion>

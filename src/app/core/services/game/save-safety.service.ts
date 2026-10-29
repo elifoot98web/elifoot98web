@@ -87,7 +87,7 @@ export class SaveSafetyService {
       document.addEventListener('visibilitychange', this.onVisibilityChange);
       this.unloadTarget().addEventListener('beforeunload', this.onBeforeUnload);
     });
-    // The virtual keys (the FABs, the text dialog) never become a DOM event on the game.
+    // The virtual keys (the control deck, the text dialog) never become a DOM event on the game.
     this.keySubscription = this.emulatorControl.keyActivity$.subscribe(() => this.status.markDirty());
   }
 

@@ -1,0 +1,3 @@
+// Intentionally empty. The deck's layout is src/theme/_deck.scss and its Win9x skin is the
+// "Control deck" block of src/theme/_win9x.scss, both global: a component stylesheet is budgeted
+// at 2 kB and a deck's worth of rules does not fit, and the skin has to be one flip, not scattered.

@@ -4,14 +4,14 @@ import { AlertController, LoadingController, ModalController, ToastController } 
 import { AlertButton } from '@ionic/core';
 import JSZip from 'jszip';
 import { environment } from 'src/environments/environment';
-import { AUTO_SAVER, DISPLAY_MODE, EMULATOR_CONTROL_CONFIG, GAME_BOOT, GAME_EXIT_WATCH, GAME_INPUT_FN_BTNS, GAME_INPUT_FN_BTNS_REVERSED, MULTIPLAYER, SAVE_SAFETY, STORAGE_KEY } from '../../core/models/constants';
+import { AUTO_SAVER, DISPLAY_MODE, EMULATOR_CONTROL_CONFIG, GAME_BOOT, GAME_EXIT_WATCH, MULTIPLAYER, SAVE_SAFETY, STORAGE_KEY } from '../../core/models/constants';
 import { UserGuideComponent } from './components/user-guide/user-guide.component';
 import { AboutComponent } from './components/about/about.component';
 import { OmaticModalComponent } from './components/omatic-modal/omatic-modal.component';
 import { DiagnosticsModalComponent } from './components/diagnostics-modal/diagnostics-modal.component';
 import { DiagnosticsReportHelper } from 'src/app/core/helpers/diagnostics-report.helper';
-import { filter, map, Observable, Subscription, take } from 'rxjs';
-import { EmulatorKeyCode, EmulatorKeyCodeHelper } from '../../core/models/game';
+import { BehaviorSubject, combineLatest, distinctUntilChanged, filter, map, Observable, Subscription, take } from 'rxjs';
+import { EmulatorKeyCodeHelper } from '../../core/models/game';
 import { CursorClickMessage, CursorPositionMessage, MultiplayerJoinErrorKind, PlayerInfo } from '../../core/models/multiplayer';
 import { AutoSaverService, EmulatorControlService, GameExitWatcherService, PatchService, SaveBeforeReloadResult, SaveGameService, SaveImportPlan, SaveSafetyService, SavesBackup, TouchInputService } from '../../core/services/game';
 import { DiagnosticsService, LayoutHelperService, LocalStorageService, SaveStatusService } from '../../core/services/shared';
@@ -25,6 +25,7 @@ import { BootStage, BootStageHelper } from 'src/app/core/helpers/boot-stage.help
 import { TimeoutHelper } from 'src/app/core/helpers/timeout.helper';
 import { DisplayMode, DisplayModeHelper } from 'src/app/core/helpers/display-mode.helper';
 import { TouchMode, TouchModeHelper } from 'src/app/core/helpers/touch-mode.helper';
+import { DeckLayoutHelper, DeckPresentation, DeckSetting } from 'src/app/core/helpers/deck-layout.helper';
 import { SaveBackupHelper } from 'src/app/core/helpers/save-backup.helper';
 import { SaveStatusHelper } from 'src/app/core/helpers/save-status.helper';
 import { NavigationGuardHelper } from 'src/app/core/helpers/navigation-guard.helper';
@@ -37,7 +38,6 @@ import { NavigationGuardHelper } from 'src/app/core/helpers/navigation-guard.hel
     standalone: false
 })
 export class GamePage implements OnInit, OnDestroy {
-  EmulatorKeyCode = EmulatorKeyCode
   @ViewChild('popover') popover: any;
   // UI state properties
   smoothFilterDisabled = false;
@@ -47,7 +47,6 @@ export class GamePage implements OnInit, OnDestroy {
   autoSaveDisabled = false;
   periodicSave = false;
   isPopoverOpen = false;
-  isVirtualKeyboardShowing = false;
   isHidden = true;
   dosCI: any = null;
   versionConfig = environment.versionConfig;
@@ -70,12 +69,22 @@ export class GamePage implements OnInit, OnDestroy {
   participantCount$: Observable<number>;
 
   /**
-   * Reactive breakpoints for the floating status pill. The synchronous getters below are
-   * fine for markup that is re-evaluated anyway, but the pill has to appear and disappear on
-   * rotation, which needs an emission.
+   * The shape of the page and how the control deck is presented in it (DeckLayoutHelper): the
+   * toolbar, the deck's band or launcher, and where the launcher lives all follow from this one
+   * value, which is recomputed whenever the viewport, the primary pointer or the setting changes.
+   * A field and not an async pipe, because half the template reads it.
    */
-  isMobile$: Observable<boolean>;
-  isLandscape$: Observable<boolean>;
+  layout: DeckPresentation;
+  /** The player's word on the deck (STORAGE_KEY.DECK_MODE); the default follows the device. */
+  deckSetting: DeckSetting = 'auto';
+  private readonly deckSetting$ = new BehaviorSubject<DeckSetting>('auto');
+  /** The launcher's sheet is open. Only meaningful where the deck is a launcher. */
+  deckSheetOpen = false;
+  /** Whether the keys buzz the phone (STORAGE_KEY.DISABLE_KEY_VIBRATION, inverted); the device still has to be able to. */
+  keyVibration = true;
+  readonly canVibrate = typeof navigator.vibrate === 'function';
+  /** `(any-pointer: coarse)`: only to tell, in the menu, why an automatic deck is hidden on a device that has a touch screen. */
+  anyCoarse = false;
 
   /**
    * Whether the options menu offers "Modo de toque": a finger is the primary pointer AND the
@@ -90,6 +99,8 @@ export class GamePage implements OnInit, OnDestroy {
   private lastKeyFailureAt = 0;
 
   private multiplayerSubscriptions = new Subscription();
+  /** The page's own, for as long as it lives; the room's are the ones above. */
+  private pageSubscriptions = new Subscription();
   private stopObservingOverlay?: () => void;
 
   /** The boot overlay while it is up, so leaving the page mid-boot does not strand it. */
@@ -144,8 +155,25 @@ export class GamePage implements OnInit, OnDestroy {
   ) {
     this.unreadCount$ = chatService.unreadCount$;
     this.participantCount$ = this.playerInfoService.playerList$.pipe(map(players => players.length));
-    this.isMobile$ = this.layoutHelperService.isMobile$;
-    this.isLandscape$ = this.layoutHelperService.isLandscape$;
+    this.layout = DeckLayoutHelper.presentation({
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      touchPrimary: this.layoutHelperService.isTouchPrimary,
+      setting: this.deckSetting,
+    });
+    this.pageSubscriptions.add(combineLatest([
+      this.layoutHelperService.viewport$,
+      this.layoutHelperService.isTouchPrimary$,
+      this.deckSetting$,
+    ]).pipe(
+      map(([viewport, touchPrimary, setting]) => DeckLayoutHelper.presentation({ viewport, touchPrimary, setting })),
+      distinctUntilChanged(DeckLayoutHelper.samePresentation),
+    ).subscribe(layout => {
+      this.layout = layout;
+      this.diagnostics.log('page', 'deck layout', () => ({ ...layout, setting: this.deckSetting }));
+      // A sheet belongs to a launcher; one left open across a rotation into the band would reopen with it.
+      if (layout.kind !== 'launcher') this.deckSheetOpen = false;
+    }));
+    this.pageSubscriptions.add(this.layoutHelperService.anyCoarse$.subscribe(coarse => { this.anyCoarse = coarse; }));
     this.touchModeChoice$ = this.layoutHelperService.matches$('(pointer: coarse)').pipe(
       map(coarse => TouchModeHelper.offersChoice(coarse, navigator.userAgent))
     );
@@ -177,6 +205,9 @@ export class GamePage implements OnInit, OnDestroy {
     // Not awaited: the chip shows "Ainda não salvo" for the few milliseconds it takes, and the
     // boot has nothing to wait for.
     void this.saveStatus.load()
+    // Before the boot and not with the other settings after it: the deck is on screen behind the
+    // loader, and a player who switched it off should not see it come and go.
+    void this.setupDeck()
     await this.bootGame()
   }
 
@@ -377,6 +408,7 @@ export class GamePage implements OnInit, OnDestroy {
     // the emulator. Detaching also releases a button the guest may have been left holding.
     this.touchInputService.detach('page destroyed');
     this.stopObservingOverlay?.();
+    this.pageSubscriptions.unsubscribe();
     this.multiplayerSubscriptions.unsubscribe();
     // Without this the room, its ping interval and the canvas capture outlive the page.
     this.multiplayerService.leaveRoom();
@@ -499,6 +531,7 @@ export class GamePage implements OnInit, OnDestroy {
         'Dicas de uso:\n' +
         '- No computador, pressione ESC para liberar o mouse da janela do jogo.\n' +
         '- No celular, toque direto no que quiser clicar. Toque duas vezes para um clique duplo, arraste para mover barras e janelas, e segure o dedo por meio segundo para mirar com precisão: o cursor aparece acima do dedo e o clique acontece quando você solta.\n' +
+        '- No celular e no tablet, as teclas do jogo ficam no painel embaixo da imagem: Táticas (F1 a F12), Setas, Texto (para escrever com acento) e Mais. Com o aparelho deitado, o botão Teclas abre o mesmo painel.\n' +
         '\nAproveite para reviver a nostalgia do clássico Elifoot 98 diretamente no seu navegador!\n',
       backdropDismiss: false,
       cssClass: 'win9x-alert alert-whitespace wide-alert',
@@ -574,20 +607,14 @@ export class GamePage implements OnInit, OnDestroy {
     await modal.present()
   }
 
-  get gameInputs() {
-    if (!this.isLandscape) {
-      return GAME_INPUT_FN_BTNS_REVERSED;
-    } else {
-      return GAME_INPUT_FN_BTNS;
-    }
+  /** The deck's presentation as the deck takes it; the deck is not mounted for `none`. */
+  get deckPresentation(): 'band' | 'launcher' {
+    return this.layout.kind === 'band' ? 'band' : 'launcher'
   }
 
-  get isLandscape() {
-    return this.layoutHelperService.isLandscape
-  }
-
-  get isMobile() {
-    return this.layoutHelperService.isMobile
+  /** Keys are refused while the page is on its way out: the emulator is about to be exited. */
+  get deckDisabled(): boolean {
+    return this.leaving || this.destroyed
   }
 
   /**
@@ -784,28 +811,6 @@ export class GamePage implements OnInit, OnDestroy {
       }]
     })
     await alert.present()
-  }
-
-  /**
-   * The js-dos virtual keyboard and the chat panel are mutually exclusive.
-   *
-   * Chosen over "position them so they cannot overlap": the keyboard is
-   * `position:absolute; bottom:0; left:0; right:0; z-index:999` inside #game-container and
-   * js-dos picks its height from its own simple-keyboard layout, so there is no height we
-   * could reserve; and on a portrait phone the two together (~287px panel + ~230px
-   * keyboard) exceed the whole content area anyway. Mutual exclusion is one boolean;
-   * coexistence is unbounded work.
-   */
-  toggleKeyboard() {
-    // Opening the game keyboard closes the chat. No toast in this direction: the user
-    // asked for the keyboard and the panel visibly slides away. Routed through toggleChat
-    // so focus is handed back to the emulator, which is where the js-dos keyboard wants it.
-    if (!this.isVirtualKeyboardShowing && this.isChatOpen) {
-      this.toggleChat(false);
-    }
-    this.isVirtualKeyboardShowing = !this.isVirtualKeyboardShowing
-    toggleSoftKeyboard()
-    this.hidePopover()
   }
 
   async setupAutoSave() {
@@ -1125,6 +1130,90 @@ export class GamePage implements OnInit, OnDestroy {
     await this.multiplayerUiService.showToast(`Modo de toque: ${TouchModeHelper.label(chosen)}.`, 'success', 3000)
   }
 
+  /**
+   * The control deck's two settings. Read before the boot (see ngOnInit); a storage that cannot be
+   * read leaves the defaults, which show the deck where a finger is the primary pointer.
+   */
+  private async setupDeck() {
+    try {
+      this.applyDeckSetting(DeckLayoutHelper.normalise(await this.storageService.get<string>(STORAGE_KEY.DECK_MODE)))
+      this.keyVibration = !(await this.storageService.get<boolean>(STORAGE_KEY.DISABLE_KEY_VIBRATION))
+    } catch (e) {
+      console.warn('Could not read the key panel settings; using the defaults', e)
+    }
+  }
+
+  private applyDeckSetting(setting: DeckSetting) {
+    this.deckSetting = setting
+    this.deckSetting$.next(setting)
+  }
+
+  /** The subtitle of the "Painel de teclas" entry: the choice, and what the automatic one comes to here. */
+  get deckSummary(): string {
+    const shown = this.layout.kind !== 'none'
+    if (this.deckSetting !== 'auto') return DeckLayoutHelper.label(this.deckSetting)
+    // A touch screen that is not the primary pointer (a laptop's) is the case that needs the words.
+    if (!shown && this.anyCoarse) return 'Automático · oculto (o mouse é o ponteiro principal)'
+    return `Automático · ${shown ? 'aparece' : 'oculto'} neste aparelho`
+  }
+
+  /** "Painel de teclas": show it, hide it, or let the device decide. Applies at once. */
+  async promptDeckMode() {
+    this.hidePopover()
+
+    const current = this.deckSetting
+    let chosen: DeckSetting | undefined
+    const alert = await this.alertController.create({
+      header: 'Painel de teclas',
+      cssClass: 'win9x-alert alert-whitespace wide-alert',
+      // Short on purpose, like the touch mode's: on a landscape phone anything longer pushes the radios out of view.
+      message: DeckLayoutHelper.describe('auto'),
+      inputs: DeckLayoutHelper.settings().map(setting => ({
+        type: 'radio' as const,
+        label: DeckLayoutHelper.label(setting),
+        value: setting,
+        checked: setting === current,
+      })),
+      buttons: [{
+        text: 'Cancelar',
+        role: 'cancel'
+      }, {
+        text: 'Aplicar',
+        handler: (value: DeckSetting | undefined) => {
+          chosen = value
+        }
+      }]
+    })
+    await alert.present()
+    await alert.onDidDismiss()
+
+    if (!chosen || chosen === current) return
+    this.diagnostics.log('page', 'deck setting chosen', () => ({ setting: chosen }))
+    this.applyDeckSetting(chosen)
+    try {
+      await this.storageService.set<string>(STORAGE_KEY.DECK_MODE, chosen)
+    } catch (e) {
+      // It applies for this visit either way.
+      console.warn('Could not store the key panel setting', e)
+    }
+  }
+
+  /** "Vibração nas teclas". Stored as the OFF flag, so that an absent key (every existing install) means on. */
+  async toggleKeyVibration(e: any) {
+    this.keyVibration = !!e.detail.checked
+    try {
+      await this.storageService.set<boolean>(STORAGE_KEY.DISABLE_KEY_VIBRATION, !this.keyVibration)
+    } catch (error) {
+      console.warn('Could not store the key vibration setting', error)
+    }
+  }
+
+  /** The launcher's button, in the toolbar or in the landscape gutter. */
+  toggleDeckSheet() {
+    this.deckSheetOpen = !this.deckSheetOpen
+    this.diagnostics.log('page', 'deck sheet', () => ({ open: this.deckSheetOpen }))
+  }
+
   showPopover(e: Event) {
     this.popover.event = null
     this.popover.event = e;
@@ -1134,22 +1223,13 @@ export class GamePage implements OnInit, OnDestroy {
     }, 50);
   }
 
-  sendKeyWithoutClosingFab(e: Event, key: EmulatorKeyCode) {
-    e.stopImmediatePropagation()
-    this.sendKey(key)
-  }
-
-  sendKey(key: EmulatorKeyCode) {
-    console.log(`key pressed: ${key}`)
-    this.emulatorControlService.sendKey(this.dosCI, key).catch(error => this.reportKeyFailure(error))
-  }
-
   /**
-   * A key that could not be sent says so. Rate-limited because the usual cause (no emulator,
-   * or one that has exited) is also what makes the next tap fail, and a dialog per tap would
-   * bury the one that matters.
+   * A key from the control deck that could not be sent says so. Rate-limited because the usual
+   * cause (no emulator, or one that has exited) is also what makes the next tap fail, and a dialog
+   * per tap would bury the one that matters. The deck greys its keys for the same interval (the
+   * key queue's fault cooldown), so a held arrow raises this once.
    */
-  private reportKeyFailure(error: unknown) {
+  onKeyFailure(error: unknown) {
     const now = Date.now()
     if (now - this.lastKeyFailureAt < GamePage.KEY_FAILURE_REPORT_INTERVAL_MS) return
     this.lastKeyFailureAt = now
@@ -1993,20 +2073,12 @@ export class GamePage implements OnInit, OnDestroy {
   }
 
   /**
-   * The panel is always mounted while streaming, so opening it is a state flip plus a
-   * focus move — and, if the js-dos keyboard is up, closing that first.
+   * The panel is always mounted while streaming, so opening it is a state flip plus a focus
+   * move. Called by the chat's toggle and, on a touch device, by the control deck's Chat button.
    */
   toggleChat(force?: boolean) {
     const shouldOpen = typeof force === 'boolean' ? force : !this.isChatOpen;
     if (shouldOpen === this.isChatOpen) return;
-
-    if (shouldOpen && this.isVirtualKeyboardShowing) {
-      this.hideVirtualKeyboard();
-      void this.multiplayerUiService.showToast(
-        'Teclado virtual do jogo fechado para abrir o chat.',
-        'medium'
-      );
-    }
 
     this.isChatOpen = shouldOpen;
 
@@ -2037,16 +2109,6 @@ export class GamePage implements OnInit, OnDestroy {
   /** Accessible name for the handle, including the unread count. */
   chatToggleLabel(unread: number | null): string {
     return ChatPanelHelper.toggleAriaLabel(this.isChatOpen, unread);
-  }
-
-  /**
-   * `toggleSoftKeyboard()` flips on the div's *current inline display*, so calling it
-   * unconditionally would SHOW an already-hidden keyboard. Branch on our own flag instead.
-   */
-  private hideVirtualKeyboard() {
-    if (!this.isVirtualKeyboardShowing) return;
-    this.isVirtualKeyboardShowing = false;
-    toggleSoftKeyboard();
   }
 
   async captureGameCanvasStream(): Promise<MediaStream> {
@@ -2193,12 +2255,12 @@ export class GamePage implements OnInit, OnDestroy {
    * detector listens to that element (also `.emulator-root`) and re-runs the letterbox
    * closure from the container's offsetWidth/offsetHeight.
    *
-   * The chat no longer causes that — it is an overlay and changes no box — but these still
-   * do: a window resize, a rotation (which also drops the header in mobile landscape,
-   * changing ion-content's height), the mobile URL bar collapsing, a fullscreen change, and
-   * `isHidden` flipping `.full` on at boot. The js-dos virtual keyboard does NOT:
-   * `.emulator-keyboard` is `position:absolute; bottom:0` inside the same root, so it
-   * changes no offset box.
+   * The portrait chat and the control deck's band never cause that — the picture's box is
+   * pinned to its 4:3 height there and they only share what is left — but these do: a window
+   * resize, a rotation (which also drops the header in landscape-compact, changing ion-content's
+   * height), the mobile URL bar collapsing, a fullscreen change, a landscape chat docking beside
+   * the picture, and `isHidden` flipping `.full` on at boot. The deck's launcher sheet does NOT:
+   * it is `position:absolute` over the page and takes no space.
    *
    * Both the canvas and the container are observed. The container fires first, before
    * js-dos has rewritten the canvas geometry, so that pass aligns against the old canvas;

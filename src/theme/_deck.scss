@@ -1,0 +1,528 @@
+/*
+ * The control deck (DockComponent): the key panel that replaced the FABs, the header's keyboard /
+ * text / O Matic buttons and js-dos's own on-screen keyboard.
+ * ---------------------------------------------------------------------------
+ * LAYOUT, plus the seams. The Win9x bevels and the grey are two classes in _win9x.scss
+ * (`.deck-key` and `.deck-face`), so the choice of D3 (Win9x, not flat) is a change to those and
+ * to the few declarations here that name a `--win9x-` token (`grep -n 'win9x-' _deck.scss`: the
+ * band's face and its seam, the taskbar's seam, the sheet's title bar and border, the unread
+ * flash). This file is global rather than the component's stylesheet because of the 2 kB
+ * component budget, which a deck's worth of rules would blow (the chat's is already over it), and
+ * for the same reason the roster rules live in _win9x.scss.
+ *
+ * THE CONTRACT with the page, which is why none of this may grow a rule that sizes the picture:
+ *
+ *  - The deck is a SIBLING of `#game-container`, never a child, and in portrait it is a flex item
+ *    after `.game-stream-container`, whose basis is pinned to the 4:3 height (75vw) and which
+ *    cannot shrink, so whatever the deck does (a panel opening, the chat taking the band) cannot
+ *    change the picture's box. js-dos re-letterboxes its canvas whenever
+ *    that box changes, and every cursor overlay is measured against it.
+ *  - The launcher's sheet is `position: absolute` over the page and takes no space at all.
+ *  - Nothing here depends on the OS keyboard. The chat is the only panel with a text field, and it
+ *    lifts itself by `--kb-inset` (global.scss); the deck's own taskbar stays under the keyboard.
+ *
+ * Touch: the deck is `touch-action: none` (a drag on it must never scroll, zoom or rubber-band the
+ * page behind it), and the one panel that can overflow opts back in to vertical panning. The
+ * keycaps' own behaviour (pointerdown, no focus) is DeckKeyDirective.
+ */
+
+:root {
+  // A keycap's height: a mouse can do with an authentic one, a finger gets the 48px of the
+  // 44-48px target range (--win9x-hit-target is the floor for everything else).
+  --deck-key-h: 40px;
+  // The keycaps of "Mais teclas", which has five rows to fit in a band that is ~266px at 360x640.
+  --deck-key-dense-h: 36px;
+  --deck-gap: 5px;
+  --deck-pad: 8px;
+  // What the deck takes below the chat: a key, 4px of padding above and below, the taskbar's 2px seam
+  // and the band's own 2px seam above that (app-dock.deck-band's border-top), then with the home
+  // indicator's strip that its face continues under. Measured folded at 393x852: the dock is 60px.
+  --deck-taskbar-h: calc(var(--deck-key-h) + 12px);
+  --deck-taskbar-total: calc(var(--deck-taskbar-h) + max(env(safe-area-inset-bottom, 0px), 0px));
+}
+
+@media (pointer: coarse) {
+  :root {
+    --deck-key-h: 48px;
+    --deck-key-dense-h: 44px;
+  }
+}
+
+// ---- the host ----
+
+app-dock {
+  -webkit-user-select: none;
+  user-select: none;
+  // iOS shows a callout on a long press of anything it thinks is a link or an image.
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+
+// The launcher draws nothing in the flow: its sheet is absolutely positioned against the page.
+app-dock.deck-launcher {
+  display: contents;
+}
+
+// The band is the portrait page's own: taskbar and panel under the picture.
+app-dock.deck-band {
+  display: none;
+}
+
+@media (orientation: portrait) {
+  app-dock.deck-band {
+    display: flex;
+    flex-direction: column;
+    flex: 0 0 auto;
+    min-width: 0;
+    min-height: 0;
+    box-sizing: border-box;
+    background: var(--win9x-face, #c0c0c0);
+    // The seam against the picture's green, as the chat panel has one.
+    border-top: 2px solid var(--win9x-dark, #0a0a0a);
+    // The taskbar is where the thumbs are and it stays there: with a panel folded and the chat
+    // closed nothing else fills the band, and without this the whole deck rode up under the picture
+    // and the tabs jumped 440px on the tap that folded them.
+    margin-top: auto;
+  }
+
+  // A panel of keys is up: the deck takes the band, down to the taskbar.
+  app-dock.deck-band.deck-band--open {
+    flex: 1 1 0;
+  }
+
+  // The chat is mounted by the page above the deck, in the same band, and the taskbar below it
+  // already carries the home indicator's strip, so the chat gives that padding up. Under the OS
+  // keyboard the chat has to clear only what the taskbar does not already cover: the taskbar is
+  // in the flow below it, so `--kb-inset` less the taskbar is how far the chat must be lifted.
+  .game-stream-flex-container.has-deck-band .chat-docked-panel.chat-open {
+    padding-bottom: 0;
+    margin-bottom: max(0px, calc(var(--kb-inset, 0px) - var(--deck-taskbar-total)));
+  }
+}
+
+// ---- panels ----
+
+.deck-panel {
+  flex: 1 1 0;
+  min-height: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding:
+    var(--deck-pad)
+    max(var(--deck-pad), env(safe-area-inset-right, 0px))
+    var(--deck-pad)
+    max(var(--deck-pad), env(safe-area-inset-left, 0px));
+  // Wide screens (a tablet) must not stretch a keycap into a plank.
+  --deck-row: minmax(0, 1fr);
+}
+
+.deck-panel > * {
+  width: 100%;
+  max-width: 560px;
+  margin-left: auto;
+  margin-right: auto;
+  // Pushed to the BOTTOM when there is room, where the thumbs rest, and flush with the top when
+  // there is not. `justify-content: flex-end` cannot do the second half: it would push the top
+  // of an overflowing panel out of reach of the scroll.
+  margin-top: auto;
+  margin-bottom: 0;
+  min-height: 0;
+}
+
+// The panel that can overflow (Mais teclas; every panel in the sheet). It scrolls with a finger from
+// the gaps and from any key that presses on release; a key that presses on landing opts out of
+// panning (`.deck-key--landing`), so a drag that starts on one neither scrolls nor cancels it. Its
+// children take their natural height and DO NOT SHRINK: with the default `flex-shrink: 1` and the
+// `min-height: 0` above they squeezed into a panel shorter than the keys, the 44px rows overflowed
+// their boxes and the last grid was painted over the F-key rows (measured at 375x553 and 667x320:
+// the boxes of Num *, O Matic and Sair sat on those of F1-F12), and the scroll height was truncated
+// so the scroll could not reach what was covered.
+.deck-panel--scroll {
+  overflow-x: hidden;
+  overflow-y: auto;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  --deck-row: var(--deck-key-h);
+}
+
+.deck-panel--scroll > *,
+.deck-panel--scroll .deck-more > .deck-grid {
+  flex-shrink: 0;
+}
+
+.deck-tactics,
+.deck-arrows,
+.deck-more {
+  display: flex;
+  flex-direction: column;
+  gap: var(--deck-gap);
+}
+
+.deck-grid {
+  display: grid;
+  gap: var(--deck-gap);
+  grid-auto-rows: var(--deck-row);
+  min-height: 0;
+}
+
+.deck-grid--6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.deck-grid--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.deck-grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+// Táticas in a band that fits it: the two rows of formations get twice what the shortcuts row
+// gets, and all of it is the band's height up to a comfortable key, not a fixed 48px.
+.deck-panel:not(.deck-panel--scroll) .deck-tactics {
+  height: 100%;
+  max-height: 206px;
+}
+
+.deck-panel:not(.deck-panel--scroll) .deck-tactics .deck-grid--6 {
+  flex: 2 1 0;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+}
+
+.deck-panel:not(.deck-panel--scroll) .deck-tactics .deck-grid--2 {
+  flex: 1 1 0;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+// Mais teclas: dense keys, natural height, scrolls when the band is shorter than that. The labels
+// are a point smaller so that "Espaço" and "⇧Tab" fit a six-key row at the narrowest sheet.
+.deck-more .deck-grid {
+  grid-auto-rows: var(--deck-key-dense-h);
+}
+
+.deck-more .deck-key {
+  padding: 0 1px;
+  font-size: 13px;
+}
+
+// Setas: the cross for one thumb, Esc / Tab / Enter for the other.
+.deck-arrows {
+  display: grid;
+  gap: var(--deck-gap);
+  grid-template-columns: repeat(3, minmax(0, 1fr)) 14px repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, var(--deck-row));
+  grid-template-areas:
+    ". up . . esc tab"
+    "left down right . enter enter";
+}
+
+.deck-panel:not(.deck-panel--scroll) .deck-arrows {
+  height: 100%;
+  max-height: 150px;
+}
+
+// A tablet's band is 430-510px and its width is 820: the keys may be bigger than a phone's, which
+// is bounded by the thumb, not by the room.
+@media (min-width: 600px) {
+  .deck-panel > * {
+    max-width: 680px;
+  }
+
+  .deck-panel:not(.deck-panel--scroll) .deck-tactics {
+    max-height: 290px;
+  }
+
+  .deck-panel:not(.deck-panel--scroll) .deck-arrows {
+    max-height: 200px;
+  }
+}
+
+.deck-area-up { grid-area: up; }
+.deck-area-left { grid-area: left; }
+.deck-area-down { grid-area: down; }
+.deck-area-right { grid-area: right; }
+.deck-area-esc { grid-area: esc; }
+.deck-area-tab { grid-area: tab; }
+.deck-area-enter { grid-area: enter; }
+
+// ---- keycaps: layout of what is on one ----
+
+.deck-key {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 36px;
+  margin: 0;
+  padding: 0 2px;
+  font-size: 14px;
+  line-height: 1.1;
+  // A keycap is not text: no selection, no callout, no double-tap zoom.
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+// A key that presses on landing (DeckKeyDirective) takes no part in panning. Inside a scroll
+// container the browser stops intersecting `touch-action` at that container, so the host's `none`
+// does not reach the key and the panel's `pan-y` does: a vertical drift of ~20px (a thumb holding an
+// arrow) became a scroll, the browser cancelled the pointer and the hold stopped dead, and a drag
+// that began on Apagar typed a Backspace and then scrolled. `none` on the key itself wins the
+// intersection (reproduced in headless Chrome 143 with touch emulation: 40px of drift gave
+// pointercancel without it, never with it).
+.deck-key--landing {
+  touch-action: none;
+}
+
+.deck-key ion-icon {
+  flex: 0 0 auto;
+  font-size: 24px;
+  pointer-events: none;
+}
+
+.deck-key-label,
+.deck-key-caption {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.deck-key-caption {
+  font-size: 11px;
+  font-weight: normal;
+}
+
+.deck-key--formation .deck-key-label {
+  font-size: 15px;
+}
+
+.deck-key--shortcut .deck-key-label {
+  font-size: 18px;
+}
+
+.deck-key--wide {
+  font-size: 12px;
+}
+
+.deck-key--wide ion-icon {
+  font-size: 18px;
+}
+
+.deck-area-enter {
+  flex-direction: row;
+  gap: 6px;
+}
+
+// ---- what the next key will carry, for a screen reader ----
+//
+// Not a bar: the first version was one, and it appeared when a modifier was tapped, which moved
+// every key up 44px under the finger; the click the browser made of that tap then landed on a
+// different key (Shift sent Shift+Tab). Nothing the deck shows may change the keys' geometry
+// between a press and its release.
+
+.deck-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+// ---- the taskbar ----
+
+.deck-taskbar {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  box-sizing: border-box;
+  // The face continues under the home indicator: the bottom padding is the inset on top of the
+  // taskbar's own 4px. Left and right do the same for a notch in landscape.
+  padding:
+    4px
+    max(var(--deck-pad), env(safe-area-inset-right, 0px))
+    calc(4px + max(env(safe-area-inset-bottom, 0px), 0px))
+    max(var(--deck-pad), env(safe-area-inset-left, 0px));
+  border-top: 2px solid var(--win9x-light, #fff);
+}
+
+.deck-tab {
+  position: relative;
+  flex: 1 1 0;
+  gap: 1px;
+  height: var(--deck-key-h);
+}
+
+.deck-tab ion-icon {
+  font-size: 20px;
+}
+
+.deck-tab-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+// Squared, like the chat toggle's badge: Windows had no rounded corners.
+.deck-tab-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  padding: 1px 4px;
+  font-size: 10px;
+  line-height: 1.2;
+  background: var(--ion-color-danger, #eb445a);
+  color: #fff;
+  pointer-events: none;
+}
+
+// Unread: the taskbar button flashes, as a background window did in Windows. Finite, for the
+// reason the chat toggle's is: six flashes draw the eye once.
+.deck-tab--unread {
+  animation: deck-tab-flash 1s steps(1, end) 6;
+}
+
+@keyframes deck-tab-flash {
+  0%, 49% {
+    background: var(--win9x-titlebar-bg);
+    color: var(--win9x-titlebar-ink);
+  }
+  50%, 100% {
+    background: var(--win9x-face);
+    color: var(--win9x-ink);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .deck-tab--unread {
+    animation: none;
+  }
+}
+
+// ---- the launcher's sheet (landscape, and a portrait window with no band) ----
+
+.deck-sheet {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  // Wide enough for "Espaço" and "⇧Tab" on a six-key row at the 44px floor; a phone held sideways
+  // is 667px at its narrowest, so the sheet is just over half of it, over a picture it can leave again.
+  // The notch's inset is added: the face paints under it and the keys keep their room.
+  width: calc(360px + max(env(safe-area-inset-left, 0px), 0px));
+  max-width: 100%;
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 0px);
+  border-right: 2px solid var(--win9x-dark, #0a0a0a);
+  touch-action: none;
+}
+
+.deck-sheet-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  padding: 3px 3px 3px max(8px, env(safe-area-inset-left, 0px));
+  background: var(--win9x-titlebar-bg);
+  color: var(--win9x-titlebar-ink);
+  font-family: var(--win9x-font);
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.deck-sheet-close {
+  flex: 0 0 auto;
+  width: 28px;
+  min-height: 24px;
+  height: 24px;
+  font-size: 18px;
+  line-height: 1;
+}
+
+@media (pointer: coarse) {
+  .deck-sheet-close {
+    width: var(--win9x-hit-target, 44px);
+    height: var(--win9x-hit-target, 44px);
+  }
+}
+
+.deck-sheet-tabs {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  box-sizing: border-box;
+  padding: 4px 8px 4px max(8px, env(safe-area-inset-left, 0px));
+}
+
+.deck-sheet .deck-panel {
+  // The sheet hangs off the left edge, so only that side can meet a notch; its right edge is inside the page.
+  padding-right: var(--deck-pad);
+  padding-left: max(var(--deck-pad), env(safe-area-inset-left, 0px));
+}
+
+// A sheet reads from the top, under its tabs; only the band rests its keys at the bottom, where the
+// thumbs are.
+.deck-sheet .deck-panel > * {
+  margin-top: 0;
+}
+
+// ---- the landscape-compact gutter: the controls that replaced the FABs and the toolbar ----
+//
+// Landscape phones drop the toolbar, and the left gutter that the height-fitted picture leaves
+// (70px on the narrowest phone, 162 at 844x390) is where the menu, the room code and the launcher
+// live. It is positioned against the content area, beside the picture and never over it; the
+// room pill's own rules (global.scss) are the only ones that may overhang it.
+
+.gutter-controls {
+  position: absolute;
+  top: calc(8px + max(env(safe-area-inset-top, 0px), 0px));
+  left: calc(8px + max(env(safe-area-inset-left, 0px), 0px));
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: calc(100% - 16px);
+}
+
+// The options menu, as a round shell button: the toolbar's own look (navy, flat) for the one
+// control that is about the app and not the machine.
+.gutter-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ion-color-tertiary);
+  color: var(--ion-color-tertiary-contrast, #fff);
+  font-size: 22px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.gutter-menu-btn:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.gutter-launcher {
+  width: 56px;
+  height: var(--deck-key-h);
+  min-height: var(--win9x-hit-target, 44px);
+}

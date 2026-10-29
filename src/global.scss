@@ -13,6 +13,7 @@
    surfaces. @use must precede every other rule in the file, which is also why this
    is not a trailing @import. */
 @use './theme/win9x' as *;
+@use './theme/deck';
 
 /* Core CSS required for Ionic components to work properly */
 @import "@ionic/angular/css/core.css";
@@ -564,10 +565,11 @@ canvas {
 }
 
 /*
- * Short landscape (phones). The arrows fab is [activated]="isMobile", so its side="top"
- * list is permanently open and reaches ~226px above the bottom edge at the right. A
- * vertically centred tab would land inside that column, so park it up top — free, because
- * the header is suppressed whenever this query matches.
+ * Short landscape (phones): the tab parks at the top of the right edge, not in the middle. It was
+ * the way round the host's always-open arrows FAB, which is gone, but the rule stays: it also
+ * serves the spectator page (which shares this class and has a header of its own above), and a
+ * tab in the corner is where that page's people already look for it. The left gutter has the
+ * host's own controls (.gutter-controls), so the right edge is the chat's.
  */
 @media (orientation: landscape) and (max-height: 600px) {
     .chat-toggle-btn {
@@ -833,21 +835,17 @@ canvas {
 }
 
 /*
- * Landscape-only instance on the host, where the header is suppressed entirely. Parks in the
- * left gutter that the height-fitted canvas leaves free; .chat-toggle-btn owns the right edge
- * and the top-right in short landscape, so this corner is the free one. z-index matches the
- * toggle (20) and stays well clear of js-dos's 999 keyboard layer.
+ * Landscape-compact instance on the host, where the header is suppressed entirely. It is the top
+ * of the `.gutter-controls` column (_deck.scss) in the left gutter that the height-fitted canvas
+ * leaves free, above the options menu and the deck's launcher, so it takes no position of its own;
+ * .chat-toggle-btn owns the right edge, so the left is the free side.
  *
  * At the narrowest landscape phones (667x375 leaves ~83px per side) it will overhang the
  * canvas edge. Accepted: a few pixels of a 4:3 frame's margin, against the alternative of no
  * room code on screen at all in the one orientation that has no toolbar.
  */
 .mp-status-pill-floating {
-    position: absolute;
-    top: calc(8px + env(safe-area-inset-top, 0px));
-    left: calc(8px + env(safe-area-inset-left, 0px));
-    z-index: 20;
-    max-width: 60%;
+    max-width: 60vw;
 }
 
 .mp-status-pill-floating .mp-status-pill {
@@ -995,4 +993,50 @@ canvas {
     .save-chip[data-tone='busy'] .save-chip-dot {
         animation: none;
     }
+}
+
+/*
+ * The deck's launcher when the page has a toolbar (landscape tablets and laptops, or a portrait
+ * window with no band under the picture). Shell, flat, like everything else in the toolbar: it only
+ * opens the Win9x sheet. A native button (with DeckKeyDirective) and not an ion-button, because an
+ * ion-button takes the focus when tapped and a tablet's physical keyboard would stop reaching the
+ * game.
+ */
+.toolbar-launcher {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 44px;
+    height: 44px;
+    margin: 0 4px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.toolbar-launcher ion-icon {
+    font-size: 22px;
+}
+
+.toolbar-launcher[aria-pressed='true'],
+.toolbar-launcher.deck-key--down {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/*
+ * js-dos builds a keyboard (63 keys 19px wide, over 60% of a portrait picture) inside the picture's
+ * overlay and starts it hidden. The app never shows it: `game.js` hands Dos() a detached element
+ * to build it in, so it is not in the page at all, and this is the net under that if a js-dos
+ * update ever stops honouring the option. Its keys press through `simulateKeyPress`, which wedges
+ * the guest keyboard when two land within 16ms; the control deck replaced it.
+ */
+.emulator-keyboard {
+    display: none !important;
 }

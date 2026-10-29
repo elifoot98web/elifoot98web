@@ -251,7 +251,7 @@ describe('GuestKeyQueueService', () => {
       queue.chord(emulator.dosCI, [K.KBD_enter]).then(() => order.push('enter'));
       queue.text(emulator.dosCI, 'xyz').then(() => order.push('text 2'));
 
-      // Submitted mid-send, as a FAB tap during typing would be.
+      // Submitted mid-send, as a deck key tapped during typing would be.
       tick(GAP * 3);
       queue.chord(emulator.dosCI, [K.KBD_down]).then(() => order.push('down'));
 
@@ -530,6 +530,120 @@ describe('GuestKeyQueueService', () => {
       expect(survivor.state).toBe('resolved');
       expect(typed(emulator.events)).toEqual([K.KBD_a, K.KBD_enter]);
       expect(queue.pending).toBe(0);
+    }));
+  });
+
+  describe('faulted', () => {
+
+    const COOLDOWN = EMULATOR_CONTROL_CONFIG.KEY_FAULT_COOLDOWN_MS;
+
+    it('is false until a send fails in the emulator', strict(() => {
+      const emulator = fakeEmulator(Date.now());
+      const queue = newQueue();
+      const seen: boolean[] = [];
+      queue.faulted$.subscribe(value => seen.push(value));
+
+      queue.chord(emulator.dosCI, [K.KBD_a]);
+      tick(60 * 1000);
+
+      expect(queue.faulted).toBeFalse();
+      expect(seen).toEqual([false]);
+    }));
+
+    it('is true from the failed send, and says so to whoever is listening', strict(() => {
+      spyOn(console, 'error');
+      const emulator = fakeEmulator(Date.now(), { failOnCall: 1 });
+      const queue = newQueue();
+      const seen: boolean[] = [];
+      queue.faulted$.subscribe(value => seen.push(value));
+      outcome(queue.chord(emulator.dosCI, [K.KBD_a]));
+
+      tick(2 * GAP);
+
+      expect(queue.faulted).toBeTrue();
+      expect(seen).toEqual([false, true]);
+      tick(COOLDOWN);
+    }));
+
+    it('clears by itself after the cooldown, because nothing else can tell the deck the emulator is back', strict(() => {
+      spyOn(console, 'error');
+      const emulator = fakeEmulator(Date.now(), { failOnCall: 1 });
+      const queue = newQueue();
+      outcome(queue.chord(emulator.dosCI, [K.KBD_a]));
+      tick(2 * GAP);
+      expect(queue.faulted).toBeTrue();
+
+      // The cooldown runs from the failed send, which went out at the start of the spec.
+      tick(COOLDOWN - 2 * GAP - 1);
+      expect(queue.faulted).toBeTrue();
+      tick(2);
+      expect(queue.faulted).toBeFalse();
+    }));
+
+    it('clears at once when a submission goes out whole', strict(() => {
+      spyOn(console, 'error');
+      const emulator = fakeEmulator(Date.now(), { failOnCall: 1 });
+      const queue = newQueue();
+      outcome(queue.chord(emulator.dosCI, [K.KBD_a]));
+      tick(2 * GAP);
+      expect(queue.faulted).toBeTrue();
+
+      queue.chord(emulator.dosCI, [K.KBD_b]);
+      tick(4 * GAP);
+
+      expect(queue.faulted).toBeFalse();
+    }));
+
+    it('is a fresh cooldown for each failure, not the first one\'s remainder', strict(() => {
+      spyOn(console, 'error');
+      const emulator = fakeEmulator(Date.now(), { failOnCall: 1 });
+      const queue = newQueue();
+      outcome(queue.chord(emulator.dosCI, [K.KBD_a]));
+      tick(COOLDOWN - GAP);
+      expect(queue.faulted).toBeTrue();
+
+      // A second failure just before the first one ends: the clock starts again.
+      const broken = fakeEmulator(Date.now(), { failOnCall: 1 });
+      outcome(queue.chord(broken.dosCI, [K.KBD_b]));
+      tick(4 * GAP);
+      expect(queue.faulted).toBeTrue();
+      tick(COOLDOWN - 4 * GAP - 1);
+      expect(queue.faulted).toBeTrue();
+      tick(2);
+      expect(queue.faulted).toBeFalse();
+    }));
+
+    it('is not a fault when the caller was refused: no emulator, or a malformed task', strict(() => {
+      spyOn(console, 'error');
+      const queue = newQueue();
+      outcome(queue.chord(null, [K.KBD_a]));
+      outcome(queue.chord(fakeEmulator(Date.now()).dosCI, []));
+      tick(60 * 1000);
+
+      expect(queue.faulted).toBeFalse();
+    }));
+
+    it('is not a fault when a submission is cancelled', strict(() => {
+      const emulator = fakeEmulator(Date.now());
+      const queue = newQueue();
+      queue.text(emulator.dosCI, 'abcdef');
+      queue.cancel();
+      tick(60 * 1000);
+
+      expect(queue.faulted).toBeFalse();
+    }));
+
+    it('leaves no timer behind when the service is destroyed in the middle of one', strict(() => {
+      spyOn(console, 'error');
+      const emulator = fakeEmulator(Date.now(), { failOnCall: 1 });
+      const queue = newQueue();
+      outcome(queue.chord(emulator.dosCI, [K.KBD_a]));
+      tick(2 * GAP);
+      expect(queue.faulted).toBeTrue();
+
+      queue.ngOnDestroy();
+
+      expect(queue.faulted).toBeFalse();
     }));
   });
 

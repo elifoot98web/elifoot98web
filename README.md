@@ -24,7 +24,7 @@ O Elifoot 98 foi originalmente distribuído como software shareware, permitindo 
 - **Instalável como PWA** (celular ou desktop) e funcional offline depois da primeira carga.
 - **Jogos salvos**: exportar, importar e baixar o disco virtual inteiro.
 - **Patches de times e bandeiras**: carregue um `.zip` de patch e o jogo reinicia já com ele aplicado.
-- **Teclado virtual e input de texto**, para digitar nomes em celulares sem teclado físico.
+- **Painel de teclas e input de texto**: F1 a F12, setas e teclas especiais embaixo da imagem, e uma caixa de texto com acentos, para jogar e digitar nomes em celulares e tablets sem teclado físico.
 - **Cheat 'O Matic**: um scanner de memória no estilo Cheat Engine, direto na máquina virtual.
 - **Multiplayer para assistir junto** — *veja abaixo*.
 

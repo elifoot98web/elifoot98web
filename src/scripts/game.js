@@ -111,7 +111,15 @@ const startBoot = (pathPrefix, gameBundleURL) => {
             // Not awaited: Dos() builds the DOM layers synchronously and returns the instance, and
             // the loading text must be under watch before waitForBoot arms its first timer.
             dosInstance = Dos(container, {
-                style: "none"
+                style: "none",
+                // js-dos builds an on-screen keyboard (63 keys 19 css px wide, 185 px tall, over 60%
+                // of a portrait picture) and appends it to the picture's mouse overlay unless it is
+                // handed an element to build it in. Handing it one that is never attached means the
+                // keyboard is not in the page at all, so nothing can show it: the control deck is
+                // the keyboard now. It also takes away the one sender that bypassed GuestKeyQueue
+                // (the keyboard's keys call dosCI.simulateKeyPress, which wedges the guest when
+                // two land within 16 ms). global.scss hides `.emulator-keyboard` as the net under this.
+                layersOptions: { keyboardDiv: document.createElement("div") },
             })
             stopWatching = watchLoaderText(boot)
             console.log("DOS instance created...")
@@ -223,14 +231,5 @@ var elifootMain = (pathPrefix, gameBundleURL, onProgress) => {
 var saveGameFileSystem = async () => {
     if(dosInstance != null && dosInstance.layers != null && dosInstance.layers.save != null && typeof dosInstance.layers.save === "function") {
         return await dosInstance.layers.save()
-    }
-} 
-
-var toggleSoftKeyboard = () => {
-    let keyboardDiv = document.getElementsByClassName("emulator-keyboard")[0]
-    if(keyboardDiv.style.display == "none") {
-        keyboardDiv.style.display = "block"
-    } else {
-        keyboardDiv.style.display = "none"
     }
 }

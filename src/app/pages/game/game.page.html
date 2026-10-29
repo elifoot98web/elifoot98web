@@ -1,15 +1,22 @@
-<ion-header [translucent]="true" *ngIf="!isMobile || !isLandscape">
+<!--
+  The toolbar is dropped only in landscape-compact (a landscape phone), where the height is the
+  scarce thing; see LayoutShapeHelper. It used to go in any landscape viewport under 768px tall,
+  which took it from every laptop window and every tablet in a Safari tab as well.
+-->
+<ion-header [translucent]="true" *ngIf="layout.hasHeader">
   <ion-toolbar color="tertiary">
-    <ion-buttons class="ion-hide-md-up" slot="start">
-      <ion-button fill="solid" color="secondary" (click)="toggleKeyboard()">
-        <ion-icon slot="icon-only" src="../../assets/icon/keyboard.svg"></ion-icon>
-      </ion-button>
-      <ion-button fill="solid" color="secondary" (click)="promptInputText()">
-        <ion-icon slot="icon-only" name="terminal-outline"></ion-icon>
-      </ion-button>
-      <ion-button fill="solid" color="medium" (click)="showOmaticModal()">
-        <ion-icon slot="icon-only" src="../../assets/icon/cheese.svg"></ion-icon>
-      </ion-button>
+    <!--
+      The control deck's launcher, where the deck is a sheet (landscape with a toolbar, or a portrait
+      window with no band under the picture). Shell, flat: it is a toolbar button. A native button
+      with the keycap behaviour and not an ion-button, so tapping it does not take the focus from
+      the game and a tablet's physical keyboard keeps working.
+    -->
+    <ion-buttons slot="start" *ngIf="layout.launcherHome === 'toolbar'">
+      <button type="button" class="toolbar-launcher" appDeckKey (deckPress)="toggleDeckSheet()"
+        [attr.aria-pressed]="deckSheetOpen" aria-label="Painel de teclas">
+        <ion-icon name="keypad-outline" aria-hidden="true"></ion-icon>
+        <span>Teclas</span>
+      </button>
     </ion-buttons>
     <!--
       The pill is the ambient answer to "am I live, in which room, with how many people".
@@ -43,9 +50,8 @@
   [scrollY]="!isStreaming" is load-bearing beyond iOS. With scrollY on, `.inner-scroll` is
   the nearest scrollable ancestor of the chat input, and iOS Safari scrolls it past its
   bounds to reveal the focused field, dragging #game-container off-screen with no reliable
-  way back. It also drops `.scroll-y { z-index: 0 }`, which is what lets the chat panel
-  (1000) out-paint ion-fab (999). Nothing here scrolls: the content is `.full` plus
-  slot="fixed" FABs, and the popover carries its own ion-content.
+  way back. Nothing here scrolls: the content is `.full`, and the popover carries its own
+  ion-content.
 -->
 <ion-content [fullscreen]="true" [scrollY]="!isStreaming" class="not-selectable" color="primary">
   <ion-popover #popover [isOpen]="isPopoverOpen" triggerAction="click" class="menu-popover">
@@ -138,6 +144,22 @@
             </ion-label>
             <ion-icon slot="end" name="hand-left-outline"></ion-icon>
           </ion-item>
+          <!--
+            The key panel under the picture (the control deck). A dialog, not a toggle: there are
+            three answers (the device decides, always, never), and the subtitle says what the
+            automatic one comes to on this device.
+          -->
+          <ion-item button detail="false" (click)="promptDeckMode()">
+            <ion-label>
+              Mostrar painel de teclas
+              <p>{{ deckSummary }}</p>
+            </ion-label>
+            <ion-icon slot="end" name="keypad-outline"></ion-icon>
+          </ion-item>
+          <!-- Only where the browser can vibrate at all (Android; iOS has no vibration API). -->
+          <ion-item *ngIf="canVibrate" detail="false">
+            <ion-toggle [checked]="keyVibration" (ionChange)="toggleKeyVibration($event)">Vibração nas teclas</ion-toggle>
+          </ion-item>
           <ion-item detail="false">
             <ion-toggle [checked]="smoothFilterDisabled" (ionChange)="toggleSmoothFilter($event)">Desativar
               Suavização</ion-toggle>
@@ -189,10 +211,6 @@
           <ion-item button detail="false" (click)="promptInputText()">
             <ion-label>Input de Texto</ion-label>
             <ion-icon slot="end" name="terminal-outline"></ion-icon>
-          </ion-item>
-          <ion-item button detail="false" (click)="toggleKeyboard()">
-            <ion-label>Teclado Virtual</ion-label>
-            <ion-icon slot="end" src="../../assets/icon/keyboard.svg"></ion-icon>
           </ion-item>
           <ion-item button detail="true" id="nested-patch-options"><ion-label>Opções de Patch</ion-label></ion-item>
           <ion-popover trigger="nested-patch-options" [dismissOnSelect]="true" side="end">
@@ -256,7 +274,7 @@
     does not know .e98, so the zip type is listed as well as the extension.
   -->
   <input style="display:none;" type="file" multiple accept=".e98,.zip,application/zip" #saveGameFileInput (change)="onSaveFileSelected($event)" />
-  <div class="full game-stream-flex-container">
+  <div class="full game-stream-flex-container" [class.has-deck-band]="layout.kind === 'band'">
     <div class="game-stream-container full">
       <!--
         role="application": keystrokes in here are the game's, so a screen reader should hand
@@ -267,25 +285,39 @@
         role="application" aria-label="Elifoot 98 (emulador). As teclas que você digitar vão direto para o jogo.">
       </div>
       <!--
-        Mobile landscape only: the header above is suppressed in that range, so without this
-        the room code is unreachable without opening the menu. Parks in the free left gutter
-        of the height-fitted canvas. Async pipes rather than the synchronous getters, because
-        those only re-read on an unrelated change-detection pass and this has to appear and
-        disappear on rotation.
+        Landscape-compact only (a landscape phone): the toolbar is dropped, so what it held lives
+        in the gutter the height-fitted picture leaves beside it, never over the picture: the room
+        code (the status pill, which may overhang the picture's edge on the narrowest phones, as it
+        always could), the options menu that the old top-left FAB opened, and the deck's launcher
+        where the deck is on. The menu is here whether or not the deck is, because it is the only
+        way to Salvar agora, Voltar ao menu and the settings that turn the deck back on.
       -->
-      <div *ngIf="isStreaming && (isMobile$ | async) && (isLandscape$ | async)" class="mp-status-pill-floating">
-        <app-room-status-pill [roomCode]="hostRoomId" [locked]="!!hostPassword" [compact]="true">
-        </app-room-status-pill>
+      <div *ngIf="layout.shape === 'landscape-compact'" class="gutter-controls">
+        <div *ngIf="isStreaming" class="mp-status-pill-floating">
+          <app-room-status-pill [roomCode]="hostRoomId" [locked]="!!hostPassword" [compact]="true">
+          </app-room-status-pill>
+        </div>
+        <button type="button" class="gutter-menu-btn" (click)="showPopover($event)" aria-label="Menu de opções">
+          <ion-icon name="ellipsis-vertical-outline" aria-hidden="true"></ion-icon>
+        </button>
+        <button *ngIf="layout.launcherHome === 'gutter'" type="button" class="deck-key gutter-launcher" appDeckKey
+          (deckPress)="toggleDeckSheet()" [attr.aria-pressed]="deckSheetOpen" aria-label="Painel de teclas">
+          <ion-icon name="keypad-outline" aria-hidden="true"></ion-icon>
+          <span class="deck-tab-label">Teclas</span>
+        </button>
       </div>
       <!--
         Chat drawer handle. Lives here, NOT inside the panel: a closed panel is
-        zero-sized with overflow:hidden and would clip the only way to open it. The object-literal *ngIf is a view model, so ONE async subscription feeds
-        both the badge and the button's accessible name — an aria-label suppresses
-        descendant text, so the unread count has to live inside the label itself.
+        zero-sized with overflow:hidden and would clip the only way to open it. Where the deck is a
+        band (a touch device in portrait) the handle is the deck's Chat button instead, in the
+        taskbar and not over the picture; everywhere else this stays the one chat entry point,
+        because it is the control that exists at every breakpoint. The object-literal *ngIf is a
+        view model, so ONE async subscription feeds both the badge and the button's accessible
+        name — an aria-label suppresses descendant text, so the unread count has to live inside
+        the label itself.
       -->
       <ng-container *ngIf="{ unread: (unreadCount$ | async) || 0 } as chat">
-        <ion-button *ngIf="isStreaming" fill="clear" class="chat-toggle-btn"
-          [class.chat-toggle-btn--kb-up]="isVirtualKeyboardShowing"
+        <ion-button *ngIf="isStreaming && layout.kind !== 'band'" fill="clear" class="chat-toggle-btn"
           [class.chat-toggle-btn--unread]="!isChatOpen && chat.unread"
           (click)="toggleChat()"
           [attr.aria-label]="chatToggleLabel(chat.unread)"
@@ -309,92 +341,26 @@
       (keydown.escape)="onChatEscape($event)">
       <app-chat [visible]="isChatOpen" [roomCode]="hostRoomId"></app-chat>
     </div>
+    <!--
+      The control deck: a SIBLING of #game-container (the picture's box is not the deck's to
+      change), after the chat panel, so that in portrait the order under the picture is the chat
+      or a panel of keys, then the taskbar. Mounted wherever the layout says so (DeckLayoutHelper):
+      a touch device by default, anyone who turned it on. The chat's state stays the page's; the
+      deck mirrors it and asks for changes through (chatToggle).
+    -->
+    <app-dock *ngIf="layout.kind !== 'none'"
+      [presentation]="deckPresentation"
+      [dosCI]="dosCI"
+      [disabled]="deckDisabled"
+      [vibrate]="keyVibration"
+      [chatAvailable]="isStreaming"
+      [chatOpen]="isChatOpen"
+      [unread]="(unreadCount$ | async) || 0"
+      [(sheetOpen)]="deckSheetOpen"
+      (chatToggle)="toggleChat($event)"
+      (textRequest)="promptInputText()"
+      (omaticRequest)="showOmaticModal()"
+      (keyFailure)="onKeyFailure($event)">
+    </app-dock>
   </div>
-  <ion-fab *ngIf="!(!isMobile || !isLandscape)" slot="fixed" vertical="top" horizontal="start">
-    <ion-fab-button color="tertiary">
-      <ion-icon name="menu-outline"></ion-icon>
-    </ion-fab-button>
-    <ion-fab-list side="end">
-      <ion-fab-button color="tertiary" (click)="showPopover($event)">
-        <ion-icon name="options-outline"></ion-icon>
-      </ion-fab-button>
-      <ion-fab-button color="secondary" (click)="promptInputText()">
-        <ion-icon name="terminal-outline"></ion-icon>
-      </ion-fab-button>
-      <ion-fab-button color="secondary" (click)="toggleKeyboard()">
-        <ion-icon src="../../assets/icon/keyboard.svg"></ion-icon>
-      </ion-fab-button>
-      <ion-fab-button color="light" (click)="showOmaticModal()">
-        <ion-icon src="../../assets/icon/cheese.svg"></ion-icon>
-      </ion-fab-button>
-      <!--
-        Also here, not only in the popover: in mobile landscape the header is suppressed, so
-        this cluster is the only chrome on screen and the way out has to be in it.
-      -->
-      <ion-fab-button color="danger" (click)="confirmLeaveGame()">
-        <ion-icon name="exit-outline"></ion-icon>
-      </ion-fab-button>
-    </ion-fab-list>
-  </ion-fab>
-
-  <ng-container *ngIf="!isVirtualKeyboardShowing">
-    <ion-fab slot="fixed" vertical="bottom" horizontal="start">
-      <ion-fab-button color="tertiary">
-        <ion-icon name="game-controller-outline"></ion-icon>
-      </ion-fab-button>
-      <ion-fab-list class="labeled" [ngClass]="{ landscape: isLandscape, portrait: !isLandscape }"
-        [side]="isLandscape ? 'end' : 'top'">
-        <ng-container *ngFor="let input of gameInputs">
-          <ion-fab-button color="tertiary" (click)="sendKey(input.keyCode)">
-            {{ input.text }}
-            <ion-label>{{ input.label }}</ion-label>
-          </ion-fab-button>
-        </ng-container>
-      </ion-fab-list>
-      <ion-fab-list class="labeled" [ngClass]="{ landscape: !isLandscape, portrait: isLandscape }"
-        [side]="isLandscape ? 'top' : 'end'">
-        <ion-fab-button color="tertiary" (click)="sendKey(EmulatorKeyCode.KBD_a)">
-          A
-        </ion-fab-button>
-        <ion-fab-button color="tertiary" (click)="sendKey(EmulatorKeyCode.KBD_m)">
-          M
-        </ion-fab-button>
-        <ion-fab-button color="tertiary" (click)="promptInputText()">
-          <ion-label>Input de Texto</ion-label>
-          <ion-icon name="terminal-outline"></ion-icon>
-        </ion-fab-button>
-        <ion-fab-button color="tertiary" (click)="sendKey(EmulatorKeyCode.KBD_kpmultiply)">
-          ✱
-        </ion-fab-button>
-        <ion-fab-button color="tertiary" (click)="sendKey(EmulatorKeyCode.KBD_kpminus)">
-          —
-        </ion-fab-button>
-      </ion-fab-list>
-    </ion-fab>
-
-    <ion-fab slot="fixed" vertical="bottom" [activated]="isMobile" horizontal="end">
-      <ion-fab-button color="tertiary" closeIcon="game-controller-outline">
-        <ion-icon name="game-controller-outline"></ion-icon>
-      </ion-fab-button>
-      <ion-fab-list class="labeled" [ngClass]="{ landscape: isLandscape, portrait: !isLandscape }" side="start">
-        <ion-fab-button color="tertiary" (click)="sendKeyWithoutClosingFab($event, EmulatorKeyCode.KBD_right)">
-          <ion-icon name="caret-forward-outline"></ion-icon>
-        </ion-fab-button>
-        <ion-fab-button color="tertiary" (click)="sendKeyWithoutClosingFab($event, EmulatorKeyCode.KBD_left)">
-          <ion-icon name="caret-back-outline"></ion-icon>
-        </ion-fab-button>
-      </ion-fab-list>
-      <ion-fab-list class="labeled" [ngClass]="{ landscape: !isLandscape, portrait: isLandscape }" side="top">
-        <ion-fab-button color="tertiary" (click)="sendKeyWithoutClosingFab($event, EmulatorKeyCode.KBD_enter)">
-          <ion-icon name="return-down-back-outline"></ion-icon>
-        </ion-fab-button>
-        <ion-fab-button color="tertiary" (click)="sendKeyWithoutClosingFab($event, EmulatorKeyCode.KBD_down)">
-          <ion-icon name="caret-down-outline"></ion-icon>
-        </ion-fab-button>
-        <ion-fab-button color="tertiary" (click)="sendKeyWithoutClosingFab($event, EmulatorKeyCode.KBD_up)">
-          <ion-icon name="caret-up-outline"></ion-icon>
-        </ion-fab-button>
-      </ion-fab-list>
-    </ion-fab>
-  </ng-container>
 </ion-content>

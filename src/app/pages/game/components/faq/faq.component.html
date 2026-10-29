@@ -70,15 +70,13 @@
         No computador, o teclado pode ser utilizado normalmente, mas o Windows 3.1 que roda o jogo enxerga um teclado americano, sem teclas de acento: letras como ã, é e ç digitadas direto no teclado não saem corretas. Para escrever nomes com acento, use o <strong>Input de Texto</strong> (pelo menu <ion-icon name="ellipsis-vertical-outline"></ion-icon>), que envia cada letra acentuada ao jogo do jeito certo.
         <br>
         <p class="ion-padding-top">
-        Em celulares, há duas formas de entrada de texto: <br>
+        Em celulares e tablets, o teclado do jogo é o <strong>painel de teclas</strong> embaixo da imagem (veja a pergunta abaixo). Para escrever, há duas formas: <br>
         <ol class="ion-padding-start">
-          <li>- Utilizando o teclado virtual, que pode ser aberto e fechado ao clicar no botão de teclado <ion-icon slot="icon-only" src="../../assets/icon/keyboard.svg"></ion-icon>. Ele envia as teclas de um teclado americano, sem acentos.</li>
-          <li>- Utilizando o teclado do celular para enviar um texto, acessando a opção no menu ou clicando no botão de input <ion-icon name="terminal-outline"></ion-icon>. Os acentos funcionam, e cada quebra de linha equivale a apertar Enter, o que permite preencher vários campos de uma vez. O que o jogo não consegue mostrar (emojis, por exemplo) é enviado como "?".</li>
+          <li>- Pela aba <strong>Texto</strong> do painel, ou pela opção <strong>Input de Texto</strong> do menu <ion-icon name="ellipsis-vertical-outline"></ion-icon>. Ela abre uma caixa em que você escreve com o teclado do celular e envia tudo ao jogo. Os acentos funcionam, e cada quebra de linha equivale a apertar Enter, o que permite preencher vários campos de uma vez. O que o jogo não consegue mostrar (emojis, por exemplo) é enviado como "?".</li>
+          <li>- Pelas teclas do painel (<strong>Setas</strong> e <strong>Mais</strong>), que enviam as teclas de um teclado americano, sem acentos: Backspace, Espaço, Tab, Del e as demais.</li>
         </ol>
         <p class="ion-padding-top">
-        Em pé, os dois botões ficam na barra superior. Deitado, a barra é escondida para dar mais
-        espaço ao jogo, e eles passam a ficar no menu <ion-icon name="menu-outline"></ion-icon> no
-        canto superior esquerdo.
+        Em pé, o painel fica embaixo da imagem. Deitado não sobra espaço embaixo, então ele vira o botão <strong>Teclas</strong>, na barra superior (ou ao lado da imagem, quando a barra é escondida para dar mais espaço ao jogo), que abre o mesmo painel por cima da tela.
         </p>
       </div>
     </ion-accordion>
@@ -91,16 +89,30 @@
         <p class="ion-padding-top">
         Alguns segundos depois o aplicativo percebe e pergunta <strong>Reiniciar jogo?</strong>. Ao confirmar, ele salva os dados e recarrega a página. Se você tocar em <strong>Agora não</strong>, é só usar <strong>Salvar e recarregar</strong> no menu quando quiser voltar. Da próxima vez, marque uma das opções com o cursor antes de confirmar com Enter.
         </p>
+        <p class="ion-padding-top">
+        O mesmo vale para as teclas <strong>Enter</strong> e <strong>Esc</strong> do painel de teclas: elas são teclas de verdade do jogo. O fechamento de propósito é a tecla <strong>Sair (Alt+F4)</strong>, em <strong>Mais</strong>, que pede confirmação antes.
+        </p>
       </div>
     </ion-accordion>
-    <ion-accordion value="joystick-fab-info">
+    <ion-accordion value="key-panel-info">
       <ion-item slot="header" color="light">
-        <ion-label>O que são esses botões redondos com um joystick <ion-icon name="game-controller"></ion-icon> na parte inferior?</ion-label>
+        <ion-label>O que é o painel de teclas embaixo da imagem?</ion-label>
       </ion-item>
       <div class="ion-padding" slot="content">
-        Esses botões são ferramentas auxiliares que facilitam ações importantes no jogo, 
-        como selecionar táticas, inserir textos, usar as setas direcionais <ion-icon name="caret-back-outline"></ion-icon> <ion-icon name="caret-up-outline"></ion-icon> <ion-icon name="caret-forward-outline"></ion-icon> <ion-icon name="caret-down-outline"></ion-icon>
-        e confirmar com o botão enter <ion-icon name="return-down-back-outline"></ion-icon>. 
+        É o teclado do Elifoot no celular e no tablet. Ele fica embaixo da imagem do jogo, nunca por cima, e tem uma barra de abas:
+        <ol class="ion-padding-start">
+          <li>- <strong>Táticas</strong>: as teclas <strong>F1 a F12</strong>, cada uma com a formação que escolhe (de 3-3-4 a 6-4-0), mais <strong>A</strong> (Seleccionar &gt; Automático) e <strong>M</strong> (Seleccionar &gt; Melhores).</li>
+          <li>- <strong>Setas</strong>: as setas <ion-icon name="caret-back-outline"></ion-icon> <ion-icon name="caret-up-outline"></ion-icon> <ion-icon name="caret-forward-outline"></ion-icon> <ion-icon name="caret-down-outline"></ion-icon>, <strong>Enter</strong> <ion-icon name="return-down-back-outline"></ion-icon>, <strong>Esc</strong> e <strong>Tab</strong>. Segure uma seta para ela se repetir.</li>
+          <li>- <strong>Texto</strong>: abre a caixa para escrever com o teclado do celular, com acentos.</li>
+          <li>- <strong>Chat</strong>: aparece enquanto você hospeda uma sala, e mostra o número de mensagens não lidas.</li>
+          <li>- <strong>Mais</strong>: Shift, Ctrl e Alt, Espaço, Backspace, Del, Tab e Shift+Tab, PgUp, PgDn, Home e End, F1 a F12, as teclas <strong>Num *</strong> (Craque, a procura de jogadores craque) e <strong>Num -</strong> (Registro, onde se digita o código de registro), o O Matic e o <strong>Sair (Alt+F4)</strong>.</li>
+        </ol>
+        <p class="ion-padding-top">
+        Shift, Ctrl e Alt valem para a próxima tecla: toque uma vez, e a aba <strong>Mais</strong> mostra o nome do que está esperando. Toque duas vezes para travar, e toque de novo para soltar. Eles também se soltam sozinhos se você sair do aplicativo.
+        </p>
+        <p class="ion-padding-top">
+        O painel aparece sozinho em aparelhos de toque e fica escondido no computador. Para mudar isso, use <strong>Mostrar painel de teclas</strong> no menu <ion-icon name="ellipsis-vertical-outline"></ion-icon>. Nos aparelhos que vibram, dá para desligar a <strong>Vibração nas teclas</strong> no mesmo lugar.
+        </p>
       </div>
     </ion-accordion>
     <ion-accordion value="copyright-info">

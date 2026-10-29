@@ -5,10 +5,11 @@
  * Both of those elements resize for reasons outside Angular's change detection. On the
  * host, js-dos re-lays-out its canvas whenever `#game-container` changes size (it watches
  * that element — also `.emulator-root` — with its own resize detector): a window resize,
- * a rotation (which also drops the header in mobile landscape), the mobile URL bar
- * collapsing, a fullscreen change, or `isHidden` flipping `.full` on at boot. NOT a chat
- * toggle any more — the chat is an overlay that changes no box — and NOT the js-dos
- * virtual keyboard, which is `position:absolute; bottom:0` inside the same root.
+ * a rotation (which also drops the header in landscape-compact), the mobile URL bar
+ * collapsing, a fullscreen change, or `isHidden` flipping `.full` on at boot. NOT a portrait
+ * chat or the control deck's band — the picture's box is pinned to its 4:3 height there and they
+ * only share what is left — and NOT the deck's launcher sheet, which is `position:absolute` over
+ * the page. (js-dos's own virtual keyboard used to be in this list; it is no longer built.)
  *
  * On a guest, the video's box follows its intrinsic size (CSS letterboxing, see
  * join-game.page.scss), which changes on a DOS video-mode change or on WebRTC encoder

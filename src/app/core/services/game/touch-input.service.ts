@@ -62,8 +62,8 @@ interface Binding {
  *   `stopPropagation()` for `touch` and `pen` pointers whose target is js-dos's overlay or canvas,
  *   so js-dos's own handlers (on the overlay, bubbling) never run for a finger. A real mouse is
  *   not touched: desktop pointer lock, hybrid laptops and an iPad with a mouse behave as before.
- *   Events aimed at anything else inside the root (js-dos's virtual keyboard, its controls) are left
- *   alone. `layers.pointerDisabled` was rejected: it disables the mouse path too.
+ *   Events aimed at anything else inside the root (js-dos's own controls) are left
+ *   alone; the control deck is not inside it at all. `layers.pointerDisabled` was rejected: it disables the mouse path too.
  * - **A mouse event right after a touch is the browser's copy of it** and is dropped for
  *   {@link TOUCH_INPUT.COMPAT_MOUSE_WINDOW_MS}. Cancelling the touch events should already stop
  *   it, but on a default-UA iPad js-dos answers a stray `mousedown` with a pointer-lock request.

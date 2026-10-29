@@ -1,5 +1,5 @@
-import { Injectable, NgZone } from '@angular/core';
-import { Observable, Subject } from 'rxjs';
+import { Injectable, NgZone, OnDestroy } from '@angular/core';
+import { BehaviorSubject, distinctUntilChanged, Observable, Subject } from 'rxjs';
 import { TimeoutHelper } from '../../helpers/timeout.helper';
 import { EMULATOR_CONTROL_CONFIG } from '../../models/constants';
 import { EmulatorKeyCode, EmulatorKeyCodeHelper, KeyTask } from '../../models/game';
@@ -87,8 +87,8 @@ interface Entry {
 }
 
 /**
- * The only thing in the app that sends keys to the guest. Everything that types — a FAB tap,
- * the text dialog, a future type bar — submits here, and a single consumer sends them one at a
+ * The only thing in the app that sends keys to the guest. Everything that types — a control deck
+ * key, the text dialog, a future type bar — submits here, and a single consumer sends them one at a
  * time, so two senders can never overlap.
  *
  * Why it must be the only sender: `dosCI.simulateKeyPress` stamps its release 16 ms in the
@@ -114,16 +114,24 @@ interface Entry {
  * With diagnostics on, each submission is noted in the log (`key`): queued, started, flushed or
  * cancelled or failed. The flush line carries how long the tasks took against how long the
  * pacing says they should, which is the one number the pacing has never had from a phone.
+ *
+ * **It can say it is in trouble.** When the emulator itself throws while a task is going out (its
+ * worker is gone), the queue is `faulted` for `KEY_FAULT_COOLDOWN_MS`, or until a submission goes
+ * out whole, whichever comes first. The control deck greys its keys meanwhile, so a held arrow
+ * does not raise the same error on every tick. A refusal (no emulator yet, a malformed task) is
+ * the caller's doing and is not a fault.
  */
 @Injectable({
   providedIn: 'root'
 })
-export class GuestKeyQueueService {
+export class GuestKeyQueueService implements OnDestroy {
   private entries: Entry[] = [];
   private inFlight: Entry | null = null;
   private running = false;
   private lastJobId = 0;
   private readonly activitySubject = new Subject<void>();
+  private readonly faultedSubject = new BehaviorSubject<boolean>(false);
+  private faultTimer: ReturnType<typeof setTimeout> | null = null;
 
   /**
    * Emits once for every submission that is accepted, before any key goes out. It is how the rest
@@ -133,7 +141,18 @@ export class GuestKeyQueueService {
    */
   readonly activity$: Observable<void> = this.activitySubject.asObservable();
 
+  /** Whether the last send failed in the emulator, and not yet long enough ago (or well enough since) to try again. */
+  readonly faulted$: Observable<boolean> = this.faultedSubject.pipe(distinctUntilChanged());
+
   constructor(private zone: NgZone, private diagnostics: DiagnosticsService) { }
+
+  get faulted(): boolean {
+    return this.faultedSubject.value;
+  }
+
+  ngOnDestroy(): void {
+    this.clearFault();
+  }
 
   /** Tasks waiting to go out, the one being sent included. */
   get pending(): number {
@@ -406,6 +425,7 @@ export class GuestKeyQueueService {
   private settleIfDone(job: Job): void {
     if (job.remaining > 0 || job.settled) return;
     job.settled = true;
+    if (job.completed > 0 && !job.cancelled) this.clearFault();
     this.diagnostics.log('key', 'flush', () => ({
       job: job.id,
       completed: job.completed,
@@ -426,8 +446,22 @@ export class GuestKeyQueueService {
     this.entries = this.entries.filter(entry => entry.job !== job);
     if (job.settled) return;
     job.settled = true;
-    job.reject(error instanceof KeyQueueError
+    const failure = error instanceof KeyQueueError
       ? error
-      : new KeyQueueError('send-failed', 'Não foi possível enviar as teclas para o jogo.', error));
+      : new KeyQueueError('send-failed', 'Não foi possível enviar as teclas para o jogo.', error);
+    if (failure.code === 'send-failed') this.markFault();
+    job.reject(failure);
+  }
+
+  private markFault(): void {
+    if (this.faultTimer !== null) clearTimeout(this.faultTimer);
+    this.faultedSubject.next(true);
+    this.faultTimer = setTimeout(() => this.clearFault(), EMULATOR_CONTROL_CONFIG.KEY_FAULT_COOLDOWN_MS);
+  }
+
+  private clearFault(): void {
+    if (this.faultTimer !== null) clearTimeout(this.faultTimer);
+    this.faultTimer = null;
+    this.faultedSubject.next(false);
   }
 }

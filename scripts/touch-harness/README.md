@@ -38,6 +38,7 @@ written in lets node bind sockets but not Chrome. It picks `CHROME_BIN`, then a 
 | `ipad.mjs` | The Macintosh-user-agent iPad matrix, with the control that shows stock js-dos gives it no input. |
 | `edge-cases.mjs` | The cases a review found: a second tap 40 ms after the first lifted (it used to be cancelled), a retry after a miss outside the picture, no home with the button held, a tap asking a suspended audio context to resume. |
 | `setting-ui.mjs [portrait\|landscape]` | "Modo de toque" through the real menu: offered, live, persisted, wiped, and it fits a 390 px phone. |
+| `deck.mjs layout\|keys\|repeat\|scroll` | The control deck: the picture's box with the deck on, off and the sheet open at twenty viewports (the phones, the tablets and the short windows that once broke it), and for every panel in the presentation the page picked, each keycap's size, that no two overlap and that each is inside the viewport or reachable by scrolling; one real tap on each key that is safe to press and the codes the emulator received; a 1.5 s hold on Down (first repeat, interval, stop on release); in the scrolling sheet at 667x320, a held arrow through 40 px of vertical drift and a drag that starts on a landing key (types, no scroll) against one that starts on a release key (scrolls, types nothing). Run `keys` and `repeat` on Acerca or Registo: it never taps Enter, Esc or Sair. |
 
 `oracle.js` (injected by `nav.mjs`), `nav.mjs` (taps, keys, screenshots), `measure.mjs` and `tour.mjs` are the parts the scripts share.
 

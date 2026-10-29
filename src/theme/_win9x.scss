@@ -6,7 +6,9 @@
  * the multiplayer chat, roster and dialogs can share it.
  *
  * Scope rule (see CLAUDE.md): companion windows are Windows 95; the app shell stays
- * Elifoot green. Do not restyle the page toolbars, landing cards or FAB stack.
+ * Elifoot green. Do not restyle the page toolbars, landing cards or the options popover. The
+ * control deck is a companion window (it is the Windows 3.1 machine's keyboard), and its whole
+ * skin is the "Control deck" block below.
  *
  * Two preconditions worth knowing before using these classes:
  *  - `.win9x-button` only reads as Win9x on an `ion-button` with `fill="clear"`.
@@ -711,6 +713,81 @@ ion-alert.win9x-alert ion-ripple-effect {
  */
 ion-alert.win9x-alert .alert-button.alert-danger {
   color: #800000 !important;
+}
+
+/*
+ * Control deck skin.
+ * ---------------------------------------------------------------------------
+ * The Win9x look of the deck (DockComponent, layout in _deck.scss) lives here, on purpose: decision
+ * D3 chose Win9x for the deck's keys over a flat shell look, and asked that the choice be a
+ * CSS-only flip. `.deck-key` is every keycap and every taskbar button (a bevelled 4-layer edge,
+ * bold system font); `.deck-face` is the grey that panels, the taskbar and the sheet stand on. To
+ * go flat, rewrite these two rules and the states beneath them, AND the few declarations in
+ * _deck.scss that name a Win9x token (`grep -n 'win9x-' src/theme/_deck.scss`: the band's face and
+ * seam, the taskbar's seam, the sheet's title bar and border, the unread flash). Those stay in the
+ * layout sheet because they are seams and a title bar, not a key or a face.
+ *
+ * They are native <button>s, not ion-buttons, so the "fill=clear" precondition of .win9x-button
+ * does not apply and Ionic's shadow-encapsulated button cannot paint over them. The pressed look
+ * is the class DeckKeyDirective sets on pointerdown (`deck-key--down`), not `:active`: iOS Safari
+ * applies `:active` to a touched button only if something on the page listens for touches.
+ */
+.deck-face {
+  background: var(--win9x-face);
+  color: var(--win9x-ink);
+  font-family: var(--win9x-font);
+}
+
+.deck-key {
+  background: var(--win9x-face);
+  color: var(--win9x-ink);
+  border: none;
+  border-radius: 0;
+  box-shadow:
+    inset -1px -1px var(--win9x-dark),
+    inset 1px 1px var(--win9x-light),
+    inset -2px -2px var(--win9x-shadow),
+    inset 2px 2px var(--win9x-bevel-light);
+  box-sizing: border-box;
+  font-family: var(--win9x-font);
+  font-weight: bold;
+  cursor: pointer;
+}
+
+// Pressed, and the lit states of a toggle: the bevel inverts. A latched modifier and the open
+// panel's tab are "pressed in" the way a Windows taskbar button of the active window is.
+.deck-key--down,
+.deck-key[aria-pressed='true'],
+.deck-tab--on {
+  background: var(--win9x-bevel-light);
+  box-shadow:
+    inset -1px -1px var(--win9x-light),
+    inset 1px 1px var(--win9x-dark),
+    inset -2px -2px var(--win9x-bevel-light),
+    inset 2px 2px var(--win9x-shadow);
+}
+
+// A locked modifier is told from a one-shot by the dotted ring Win9x used for focus: shape, not colour.
+.deck-key--locked {
+  outline: 1px dotted var(--win9x-ink);
+  outline-offset: -5px;
+}
+
+// The "Mais" tab says there is a modifier waiting while its panel is not the one on screen.
+.deck-tab--latched {
+  background: var(--win9x-titlebar-bg);
+  color: var(--win9x-titlebar-ink);
+}
+
+// Maroon, as .alert-danger inside .win9x-alert: the red of Ionic's danger is 2.1:1 on this face.
+.deck-key--danger {
+  color: #800000;
+}
+
+.deck-key:disabled {
+  color: var(--win9x-ink-disabled);
+  text-shadow: 1px 1px 0 var(--win9x-light);
+  cursor: default;
 }
 
 /*

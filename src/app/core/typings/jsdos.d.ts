@@ -34,7 +34,8 @@ export interface DosCI {
     //
     // NEVER CALL THIS. It stamps the release 16 ms in the future, so a second call within 16 ms
     // permanently wedges the guest keyboard. Send through GuestKeyQueueService, which uses only
-    // `sendKeyEvent`. (js-dos's own virtual keyboard still calls this internally; see CLAUDE.md.)
+    // `sendKeyEvent`. The only other caller was js-dos's own on-screen keyboard, which is no longer
+    // in the page (game.js), and ESLint now rejects any reference to this name (eslint.config.mjs).
     /** @deprecated wedges the guest keyboard if two calls land within 16 ms; use GuestKeyQueueService. */
     simulateKeyPress: (...keyCodes: number[]) => void;
 

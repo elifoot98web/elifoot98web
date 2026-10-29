@@ -17,17 +17,13 @@ const centre = selector => c.ev(`JSON.stringify((() => { const b = document.quer
 
 check(await c.ev('__g.touchInputService.attached'), 'direct touch is attached after boot (the default)')
 
-// A real tap on the options button: the toolbar in portrait; in landscape the toolbar is gone and the FAB at the top-left opens a
-// list whose first button is the same menu. (Ionic moves the aria-label to the inner <button>, so the host cannot be found by it.)
+// A real tap on the options button: the toolbar in portrait; in landscape the toolbar is gone and the round button in the left gutter
+// (.gutter-menu-btn, where the control deck's "Teclas" launcher also lives) opens the same menu.
 const toolbar = await centre('ion-header ion-buttons[slot="end"] ion-button')
-if (toolbar) {
-  await c.tap(toolbar.x, toolbar.y, 60)
-} else {
-  const fab = await centre('ion-fab[vertical="top"] ion-fab-button')
-  await c.tap(fab.x, fab.y, 60); await sleep(700)
-  const options = await centre('ion-fab[vertical="top"] ion-fab-list ion-fab-button')
-  await c.tap(options.x, options.y, 60)
-}
+const gutter = toolbar ? null : await centre('.gutter-menu-btn')
+const menuButton = toolbar ?? gutter
+check(!!menuButton, 'the options button is on screen', toolbar ? 'toolbar' : 'gutter')
+await c.tap(menuButton.x, menuButton.y, 60)
 await sleep(900)
 await c.shot(path.join(OUT, 'shots', `ui-${tag}-menu.png`))
 const items = await c.ev(`[...document.querySelectorAll('ion-popover ion-item ion-label')].map(l => l.textContent.trim().replace(/\\s+/g, ' '))`)

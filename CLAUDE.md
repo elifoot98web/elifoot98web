@@ -30,7 +30,7 @@ node scripts/frame-fixtures/make-fixtures.mjs <out.ts> name=frame.png::note ... 
 Specs are karma + jasmine. The builder globs `**/*.spec.ts` (its `include` option, which is also
 what `--include` overrides); [src/test.ts](src/test.ts) only initialises the TestBed and
 `tsconfig.spec.json` type-checks `src/**/*.spec.ts`, so a spec needs no registration but must live
-under `src/` to be type-checked. Nothing in a spec reaches the bundle. There are **forty spec files so
+under `src/` to be type-checked. Nothing in a spec reaches the bundle. There are **forty-seven spec files so
 far**. [room-code.helper.spec.ts](src/app/core/helpers/room-code.helper.spec.ts) is there as
 much to prove the harness as to cover `RoomCodeHelper`: `ng test` with **zero** specs
 prints `Executed 0 of 0 SUCCESS` and still exits 1, so a `test:ci` could never pass before the
@@ -85,6 +85,13 @@ is the model for "real pixel data as a fixture": the frames in [game-exit.fixtur
 are captures of the live guest (`dosCI.screenshot()` via the touch harness), stored as a palette plus one deflated
 index per pixel (1 to 9 KB a frame, 54 KB for ten) by [scripts/frame-fixtures/](scripts/frame-fixtures/make-fixtures.mjs)
 and inflated in the spec with `DecompressionStream`; the specs then paint on copies of them (a cursor over the icon, a second icon).
+[key-repeat.helper.spec.ts](src/app/core/helpers/key-repeat.helper.spec.ts) is the model for "a timer-driven helper that must
+leave nothing scheduled": zone.js's fake timers, a queue depth the spec moves, `{ flush: false }` on the cases that assert it.
+[deck-key.directive.spec.ts](src/app/core/components/dock/deck-key.directive.spec.ts) is the model for "a directive whose worst bug
+only shows with real events": a host component with real buttons, real `PointerEvent`s and a spied `performance.now` that is
+**never reset between specs**, because the guard it tests keeps its clock in a static. One trap there: this repo's TestBed is
+zoneless, where `fixture.detectChanges()` refreshes only a view that was marked dirty and a plain field a spec writes is not a
+signal, so the change is never applied and the dev-mode check throws NG0100 (mark the fixture, then detect).
 [storage-keys.spec.ts](src/app/core/services/shared/storage-keys.spec.ts) writes every `STORAGE_KEY` to every place the
 registry says it lives, runs the real wipe against the real Ionic Storage and fails if anything is left. One trap in a
 service spec: a synthetic `beforeunload` on the real `window` reaches Karma's own handler and fails the whole run
@@ -191,7 +198,7 @@ loaded by plain `<script>` tags in [index.html](src/index.html), which also load
 the bundle name `angular.json` gives [src/scripts/game.js](src/scripts/game.js) (`inject: false`, so
 the tag is hand-written).
 
-`game.js` exposes five browser globals, typed for TypeScript in
+`game.js` exposes four browser globals, typed for TypeScript in
 [src/scripts/game.d.ts](src/scripts/game.d.ts) and called directly from Angular services:
 
 - `elifootMain(pathPrefix, gameBundleURL, onProgress?)` — creates the DOS instance in
@@ -201,9 +208,12 @@ the tag is hand-written).
   name and message untouched (a non-Error rejection keeps whatever `name`/`message` it carries),
   or with an Error named `JsdosTimeoutError` (carrying `lastProgress`) when js-dos goes 20 s
   without changing that text (60 s after the download completes) or one wait passes 120 s. A
-  timeout ends the *wait*, not the boot: see *Booting the emulator* below.
+  timeout ends the *wait*, not the boot: see *Booting the emulator* below. It also hands `Dos()`
+  `layersOptions: { keyboardDiv: <a div that is never attached> }`, so js-dos builds its on-screen
+  keyboard (63 keys 19 css px wide, over 60% of a portrait picture) where nothing can see it;
+  `toggleSoftKeyboard` is gone, and `global.scss` hides `.emulator-keyboard` as the net under the
+  option in case a js-dos update stops honouring it. Checked in the app: no `.emulator-keyboard` in the page.
 - `saveGameFileSystem()` — `dosInstance.layers.save()`, i.e. flush changed FS to IndexedDB.
-- `toggleSoftKeyboard()` — shows/hides the js-dos `.emulator-keyboard` div.
 - `dosInstance` — the raw js-dos instance, needed by `PatchService` for `emulatorsUi.persist` and by `GamePage`
   for `layers` (`root`, `mouseOverlay`, `canvas`), the elements direct touch attaches to.
 - `getDosAudioNode()` — js-dos's own `ScriptProcessorNode`, or `null`. js-dos builds its
@@ -214,8 +224,8 @@ the tag is hand-written).
 
 [src/app/core/typings/jsdos.d.ts](src/app/core/typings/jsdos.d.ts) is a hand-maintained typing of the js-dos
 command interface (`DosCI`) — screenshot, key/mouse injection, `persist()`, `readMemory`,
-`writeMemory`. `GamePage.dosCI` is `any` and gets threaded into every service as a parameter; no
-singleton owns it. Four root services touch it for longer than a call: the key queue (see *Typing into the
+`writeMemory`. `GamePage.dosCI` is `any` and gets threaded into every service as a parameter, and into the control deck as an `@Input` (which
+sends through the key queue and keeps nothing); no singleton owns it. Four root services touch it for longer than a call: the key queue (see *Typing into the
 guest*), which keeps it only for the length of a job, `TouchInputService` (see *Touching the guest*), which
 holds it from `attach()` to `detach()`, and `SaveSafetyService` and `GameExitWatcherService` (see *Save safety
 nets*), which hold it from `GamePage.loadConfig()` to `stopSafetyNets()`. `GamePage.ngOnDestroy` cancels whatever
@@ -538,10 +548,10 @@ patch zips are flattened/validated in `processPatchFile()` (needs ≥34 `.EFT` t
 ### Typing into the guest
 
 [guest-key-queue.service.ts](src/app/core/services/game/guest-key-queue.service.ts) is the
-**only** thing that sends keys to the guest. A FAB tap, the text dialog and anything added later
+**only** thing that sends keys to the guest. A control deck key, the text dialog and anything added later
 submit tasks (`chord`, `altCode`, or a whole text planned by `EmulatorKeyCodeHelper`) to one FIFO
-with one consumer, so two senders can never overlap. `GamePage.sendKey` and
-`EmulatorControlService.sendKey` / `sendString` are thin wrappers over it.
+with one consumer, so two senders can never overlap. `EmulatorControlService.sendKey` / `sendString` are the thin
+wrappers over it that the control deck (`DockComponent.press`) and the text dialog call; the page has no `sendKey` of its own.
 
 Load-bearing invariants — each of these was a bug, or a measured trap:
 
@@ -551,12 +561,13 @@ Load-bearing invariants — each of these was a bug, or a measured trap:
   easy to hit: the old `sendString` was not awaited, so a FAB tap mid-text did it. The queue sends
   only `sendKeyEvent` down then up, `EMULATOR_CONTROL_CONFIG.KEY_PACING_MS` (10 ms) between groups,
   and never more than `MAX_SYNC_KEY_EVENTS` (14) events without a gap, because DOSBox's keyboard
-  buffer drops the rest without an error (129 characters in one burst delivered 14). **This cannot
-  be fully enforced yet:** js-dos's own on-screen keyboard (`toggleSoftKeyboard`) binds its key
-  presses to `simulateKeyPress` internally, so a tap on it within 16 ms of another press, or while
-  the queue is typing, can still wedge the guest until the planned control deck replaces that
-  keyboard. `grep -rn simulateKeyPress src/app` must keep finding only comments and the
-  `@deprecated` declaration in [jsdos.d.ts](src/app/core/typings/jsdos.d.ts), never a call.
+  buffer drops the rest without an error (129 characters in one burst delivered 14). **It is enforced, not just
+  documented:** js-dos's own on-screen keyboard was the last other caller (its keys bind to `simulateKeyPress`
+  internally) and it is no longer built, so `no-restricted-syntax` in [eslint.config.mjs](eslint.config.mjs) rejects
+  any member access, destructuring or object property named `simulateKeyPress` in app code (checked: `dosCI.simulateKeyPress(1)`,
+  `dosCI['simulateKeyPress']`, `const { simulateKeyPress } = x` and `{ simulateKeyPress: … }` each fail). The one declaration
+  that has to exist, `@deprecated` in [jsdos.d.ts](src/app/core/typings/jsdos.d.ts), is a property *signature*, which the
+  selectors do not match. A spec that needs a fake emulator must not give it that method.
 - **A task is atomic.** Once its first key is down it is carried through to the release, so
   neither `cancel()` nor a failure can leave Alt or Shift held in the guest; `cancel()` drops only
   tasks that have not started, and `GamePage.ngOnDestroy` calls it.
@@ -589,7 +600,9 @@ Load-bearing invariants — each of these was a bug, or a measured trap:
 - **Guest hazard to know before sending any Enter.** On Elifoot's first dialog, Enter before a
   radio is chosen raises "List index out of bounds", and Esc or Cancelar quits; either way the game
   exits to Program Manager (the FAQ says so). Anything that sends Enter on its own — a future type
-  bar, a "next field" button — must not do it on that screen.
+  bar, a "next field" button — must not do it on that screen. The control deck's **Enter** and **Esc** keycaps are one
+  tap on exactly that hazard (reproduced on the real game: Enter twice from Acerca left Program Manager and the
+  recovery dialog came up 3 s later), which is why Alt+F4 has a confirm and these two have P5's recovery.
 
 ### Touching the guest (direct touch)
 
@@ -639,7 +652,8 @@ Load-bearing invariants, each measured or a bug waiting:
 - **The listeners are on `layers.root`, in the capture phase, and chosen by `pointerType`, never by user agent.** They
   `stopPropagation()` for `touch` and `pen` pointers aimed at js-dos's overlay or canvas, so its own handlers (on the
   overlay, bubbling) never see a finger. A real mouse is not touched (desktop pointer lock, a hybrid laptop, an iPad
-  with a mouse all behave as before), and neither is anything else inside the root (js-dos's virtual keyboard).
+  with a mouse all behave as before), and neither is anything else inside the root (js-dos's own controls; the control deck is
+  outside it, a sibling of `#game-container`).
   `layers.pointerDisabled` was rejected: it disables the mouse path too. A mouse event within 500 ms of a touch is the
   browser's copy of it and is dropped (on a default-UA iPad js-dos would answer a stray `mousedown` with a pointer
   lock). Touch events are cancelled too, `gesturestart` as well; `touch-action`, `user-select` and `-webkit-touch-callout`
@@ -711,6 +725,146 @@ itself is installed everywhere, because it only reacts to fingers and pens.
 (recalled), so the thresholds are untested where they matter; iOS Safari (compat events, `touch-action`, edge swipes,
 pull-to-refresh, callouts), a phone's emulator speed (which could sum sends the desktop never did), the real lifecycle
 and a hosting phone with a spectator watching the cursor are not. The PR carries the device checklist.
+
+### The control deck (the keys of a phone)
+
+One docked panel of keycaps replaced three `ion-fab` clusters, the header's keyboard / text / O Matic buttons, the options
+menu's "Teclado Virtual" and js-dos's own keyboard: four copies of the same dozen actions that collided with each other, the
+header and the chat. It is `app-dock` ([dock.component.ts](src/app/core/components/dock/dock.component.ts)), with
+[deck-key.directive.ts](src/app/core/components/dock/deck-key.directive.ts) for the keycaps, the pure helpers
+[deck-keys](src/app/core/helpers/deck-keys.helper.ts), [deck-layout](src/app/core/helpers/deck-layout.helper.ts),
+[deck-panel](src/app/core/helpers/deck-panel.helper.ts), [key-repeat](src/app/core/helpers/key-repeat.helper.ts),
+[modifier-latch](src/app/core/helpers/modifier-latch.helper.ts) and [layout-shape](src/app/core/helpers/layout-shape.helper.ts)
+(all specced), `DECK` in [constants.ts](src/app/core/models/constants.ts), the layout in [_deck.scss](src/theme/_deck.scss) and
+the skin in the "Control deck" block of [_win9x.scss](src/theme/_win9x.scss): `.deck-key` (every keycap and taskbar button) and
+`.deck-face` (the grey the panels stand on) with their states. Decision D3's Win9x look is a **CSS-only flip** to flat, but not a
+two-rule one: `_deck.scss` also names Win9x tokens in a handful of declarations (the band's face and its seam, the taskbar's seam, the
+sheet's title bar and border, the unread flash), and `grep -n 'win9x-' src/theme/_deck.scss` lists every one a flip must touch. The
+design record is [docs/mobile-ux-study.md](docs/mobile-ux-study.md) (P10).
+
+**The layout contract, which no new control may break: the deck is a SIBLING of `#game-container`, never a child, never over
+the picture, and the picture's box does not depend on it.** js-dos re-lays-out its canvas whenever that element changes size,
+and the cursor overlay and every remote cursor are measured against it. In portrait the picture is already pinned to its 4:3
+height (75vw, `flex: 0 0`) and the band under it is free, so the deck is a flex item after it. `DeckLayoutHelper.presentation`
+is a pure function of the viewport, the primary pointer and the player's setting, and it returns one of three things:
+
+- `none`: no deck. A desktop with a mouse and a keyboard is not cluttered by default, and a touch laptop (touch is only its
+  `any-pointer`) is the same. The floating chat toggle is untouched there.
+- `band`: portrait only, and only where the band under the picture is at least `DECK.MIN_BAND_HEIGHT` (225 px: Táticas needs about
+  220 for its two rows of formation keys to be 44 px, and `deck-layout.helper.spec.ts` derives that from the constant. A 360x640
+  phone has 314, but the same phone in a Chrome tab with its URL and navigation bars is ~512 tall and has ~186, and an iPhone SE
+  in a Safari tab has 216: both got 32-42 px formation keys under the first threshold of 150 and now get the launcher). A **taskbar** that
+  stays at the bottom (it is pushed there with `margin-top: auto`; without it a folded deck rode up under the picture and the
+  tabs jumped 440 px on the tap that folded them) and **one panel at a time** above it: Táticas, Setas, Mais teclas, or the
+  page's chat. Texto is a taskbar button that opens the P1 compose dialog, and Chat appears only while hosting. A second tap on
+  the open tab folds the panel; the picture does not grow into the band.
+- `launcher`: every other shape. Landscape has no free band (the picture takes the height), so the same panels open as a
+  **sheet** over the page from a "Teclas" button: in the toolbar where there is one (a landscape tablet or laptop window), in the
+  left gutter beside the picture when the toolbar is dropped (`landscape-compact`: a landscape phone), under the round options
+  button and the room pill, all three in `.gutter-controls`. The sheet is `position: absolute` and takes no space, so it never
+  resizes the container; it does cover the left part of the picture while it is open. Until the later stage-layout phase builds
+  rails this is the whole landscape deck.
+
+**Tablets** follow the shape: a portrait iPad (768x1024, 820x1180) gets the band, which fits all three panels with room to spare
+(the keys are capped at 290 px of height there, and rest at the bottom where the thumbs are); a landscape one has no band and
+gets the launcher. Both were compared on screenshots; a sheet in portrait would have thrown away a 450-510 px band for nothing.
+
+**The picture's box was measured with and without the deck, and with the sheet open, at 13 viewports** (360x640, 375x667,
+393x852, 412x915, 430x932, 844x390, 932x430, 667x375, 820x1180, 1180x820, 1024x768, 768x1024, 1280x800; touch emulation;
+chrome-headless-shell 143): `#game-container` and the canvas inside it had the same rectangle every time. In portrait every
+keycap of every panel is at least 44x44 css px under `(pointer: coarse)`, none is over the picture and none is outside the
+viewport, and "Mais teclas" (five rows) fits the 254 px panel of a 360x640 phone without scrolling. **The short windows are
+measured too** (375x553, 360x512, 320x460 in portrait: the launcher; 667x340, 667x320, 852x340, 800x290 in landscape: the
+sheet, whose "Mais teclas" scrolls): no two keycaps overlap in any panel and every key is inside the viewport or reachable by
+scrolling. A scroll panel's children must not shrink (`flex-shrink: 0` in `_deck.scss`): with the default they squeezed into a panel
+shorter than the keys, the 44 px rows overflowed their boxes and `Num *`, O Matic and Sair were painted over the F keys, so a tap
+aimed at F7 would have landed on one of them (measured as overlapping boxes, not tapped). `deck.mjs layout` asserts the overlap,
+and fails with that rule undone.
+
+**What the keycap promises** ([DeckKeyDirective](src/app/core/components/dock/deck-key.directive.ts)):
+
+- **It presses on `pointerdown`**, not `click`, with `preventDefault()` on the pointerdown and the mousedown and
+  `tabindex="-1"`, so the focus stays in `.emulator-root` (checked: after five taps on keys and tabs the active element was
+  still `.emulator-root`) and the OS keyboard never opens. The pressed look is the `deck-key--down` class, not `:active`.
+- **It releases exactly once, however the press ends**: `pointerup`, `pointercancel`, `lostpointercapture`, the window losing
+  focus, the page being hidden, the key being disabled or destroyed under the finger. A held arrow hangs its stop on that.
+- **A key inside a panel that can scroll presses on release** (`deckKeyOn="up"`), because the scroll gesture starts as a touch
+  on a key. Keys that repeat cannot do this and keep the landing, so they take no part in panning instead: `.deck-key--landing`
+  is `touch-action: none` on the key itself. *Why:* the browser stops intersecting `touch-action` at the nearest scroll container,
+  so the deck's `none` never reaches a key inside "Mais teclas" or the sheet and the panel's `pan-y` did: 40 px of vertical
+  drift (a thumb holding an arrow in the sheet) became a scroll, the browser sent `pointercancel` and the hold stopped, and a drag
+  that began on Apagar typed a Backspace and then scrolled (reproduced in headless Chrome 143 with touch emulation: `pointercancel`
+  at 40 px without the class, never with it). The panel still scrolls from its gaps and from every key that presses on release.
+- **A `click` is only trusted when no keycap's pointer released in the last `CLICK_AFTER_POINTER_MS` (700 ms).** TalkBack,
+  VoiceOver, a switch and a keyboard activate a button with a click and no pointer at all, so a click with nothing before it is a
+  press and a release. But the browser makes the click of a tap *after the lift and aims it at whatever is under the finger then*.
+  **The first version showed a bar when a modifier was tapped, which moved every key up 44 px; the click landed on Tab and Shift
+  sent Shift+Tab** (reproduced on the real game: a stray plain Tab 500 ms after every modifier tap). Two fixes, both needed: the
+  guard's clock is shared by every keycap (a static), and **nothing the deck shows may change the keys' geometry between a
+  press and its release**. That is why a latched modifier is a lit key and a label on the "Mais" tab, with a
+  screen-reader-only live region, and not a bar.
+- **The keys are disabled until an emulator exists, while the page is leaving, and while the key queue is faulted**
+  (`GuestKeyQueueService.faulted$`: the emulator itself threw while a task went out; for `KEY_FAULT_COOLDOWN_MS` or until a
+  submission goes out whole). A held arrow therefore does not raise the same error on every tick; `GamePage.onKeyFailure`
+  still rate-limits the alert.
+
+**The key table is one place** ([DeckKeyHelper](src/app/core/helpers/deck-keys.helper.ts)): F1-F12 with the formation caption of
+each from `GAME_INPUT_FN_BTNS` (the only table; the reversed copy for the old portrait FAB column died with the FABs), `A`
+Automático, `M` Melhores, the cross, Enter, Esc, Tab, Shift+Tab, Backspace, Space, Del, PgUp/PgDn, Home/End, and the keypad `*`
+and `-`. **Decision D8: `*` is the player search for the "craque" attribute and `-` is where the serial registration key is
+typed, and they are labelled "Craque" and "Registro"**; the key codes are right (332, 333) but no visible effect was seen on the
+screen they were pressed on (the squad selection), so what they do in the game is on the device checklist. Every key was pressed
+on the real game: the codes reach the guest (F1-F12 are 290-301; F5, F6 and F8-F12 each give a different formation screen, F1-F4 and F7 repeat the
+previous frame, which was not investigated), Enter closes Acerca, Tab moves the focus between Registo's fields, the arrows move the
+squad and country lists, `A` selects the automatic squad, Backspace deletes, and "Texto" typed "Zé" and "João". **Alt+F4 ("Sair") is
+the only guarded key**: a `win9x-alert` says it leaves for the Program Manager and that the app offers the restart, Cancelar sends
+nothing, "Fechar o jogo" sends Alt+F4 and the recovery dialog was up within 3.5 s.
+
+**Hold-to-repeat** ([KeyRepeatScheduler](src/app/core/helpers/key-repeat.helper.ts); the arrows, Backspace, Del, PgUp, PgDn): the
+press as the finger lands, `REPEAT_DELAY_MS` 380, then every `REPEAT_INTERVAL_MS` 55. **A tick that finds the queue holding
+`REPEAT_MAX_PENDING` (2) tasks is skipped, not queued**, so a slow device never keeps typing after the finger lifts; `maxHoldMs`
+(30 s) ends a hold nobody released; `stop()` is the only thing that has to be called and it clears every timer. The timers run
+outside Angular's zone. Measured on the country list: a 1.5 s hold sent 22 presses, the first repeat 380 ms after the landing and
+the rest 55-57 ms apart, each one landed (24 countries after 2 + 22), and the repeat stopped on a release, `touchcancel`, a
+window `blur`, the page being hidden, a panel switched under the finger, the page leaving and the queue faulting (9 presses at
+800 ms and 9 at 1.5 s, in every case).
+
+**Sticky modifiers** ([ModifierLatch](src/app/core/helpers/modifier-latch.helper.ts)): a tap latches Shift, Ctrl or Alt for the next
+key (and the next key lets it go); a second tap within `LATCH_DOUBLE_TAP_MS` locks it; a tap on a lock lets it go. **Nothing is
+ever held down in the guest**: the latch is put round the next key's chord, which the queue presses and releases whole, so a
+latch the page forgets can only be a lit button, never a stuck Shift in the game. It is cleared by a window blur, the page being
+hidden, the layout changing and the deck being destroyed. Checked on the real game: Shift then Tab sent Shift+Tab once; a Ctrl lock
+sent Ctrl+Home and Ctrl+End and stayed lit, the "Mais" tab named it from another panel, and a `blur` cleared it (Ctrl+Esc opened
+Windows 3.1's Task List, which is also the proof that a chord reaches the guest).
+
+**The chat stays the page's.** The page mounts `#chat-panel` above the deck and keeps its open/closed state, unread count and
+focus; the deck mirrors them and asks for changes through `(chatToggle)`, so a chat opened from the options menu shows in the
+taskbar too. Opening a panel of keys closes the chat and the chat opens over whatever panel was up (`DeckPanelHelper`). Under the
+OS keyboard the chat lifts by `--kb-inset` less the taskbar (`.has-deck-band` in `_deck.scss`), because the taskbar sits in the
+flow below it. Checked in a real two-peer session (the host a 393x852 phone emulation, the spectator a desktop browser, public
+nostr relays): the spectator's video was live and 640x480 for 248 s, its chat message arrived (the Chat tab showed 1 unread),
+opening it docked the chat above the taskbar, and the host's picture rectangle did not move. The OS keyboard over the chat is
+**not** verified (headless has none).
+
+**Settings** (both `STORAGE_KEY`s, both wiped by "Apagar todos os dados"): `DECK_MODE`, "Mostrar painel de teclas" in the options
+menu (Automático, Sempre mostrar, Nunca mostrar; it applies at once, and its subtitle says what Automático comes to on this
+device, including the touch laptop whose mouse is the primary pointer), and `DISABLE_KEY_VIBRATION`, "Vibração nas teclas"
+(stored as the OFF flag so that every existing install means on; offered only where `navigator.vibrate` exists, so not on iOS; a
+buzz is 8 ms on the landing of a key, and a repeat does not buzz). Both are read before the boot, so the deck does not come and go
+behind the loader.
+
+**Safe areas:** the taskbar's face continues under the home indicator (bottom padding is `env(safe-area-inset-bottom)` on top
+of its own 4 px), and the sheet adds the left inset to its width so a notch does not eat the keys. Emulated at 430x932 (59 px top,
+34 px bottom) and 932x430 (59 px left and right, 21 px bottom); real insets are on the device checklist.
+
+**Diagnostics:** `key` / `deck press` (key id, latched modifiers, queue depth, tap or repeat or confirmed), `deck modifier`,
+`deck modifiers cleared` (with the reason), `deck repeat stopped` (reason, repeats, skipped) and `deck guarded key asked`; `page` /
+`deck panel`, `deck layout`, `deck sheet`, `deck chat`, `deck text` and `deck setting chosen`.
+
+**Not verified:** any phone or finger (mis-taps, thumb reach, the 380/55 ms feel), haptics, iOS Safari (callout on a long press of a
+keycap, double-tap zoom, `:active`), real safe-area insets, the OS keyboard over the chat, a low-end CPU, TalkBack and VoiceOver on
+the keycaps, and scrolling "Mais teclas" with a thumb on a short landscape screen (the synthetic drag is graded, a real one is not).
+All of them are on the device checklist of the PR.
 
 ### Screen-scraping instead of emulator events
 
@@ -893,7 +1047,7 @@ guest position and whether the cursor was sent ahead; every decision: tap, doubl
 and end, cancel with its reason, a palm or an extra finger ignored; the first compat mouse event dropped) and `pointer`
 (each move with its from, to, sends, units, duration and the smallest and largest gap between sends, which is the
 number that says whether a device stretches the spacing; each home with its reason; each click with how long it waited
-behind the cursor and how long it held; each abort with what it dropped; a refused send). IME is NOT hooked: the
+behind the cursor and how long it held; each abort with what it dropped; a refused send). `DockComponent` logs the control deck's presses, modifiers, repeats and panel changes into `key` and `page` (see *The control deck*). IME is NOT hooked: the
 type-bar phase logs into it.
 
 ### Multiplayer (watch-together, not play-together)
@@ -995,7 +1149,10 @@ joining outright, including recent rooms), `multiplayer-panel` (the room's own w
 roster, share, leave; it absorbed a former participants modal), `participant-list` (shared by the
 panel and the chat's contact strip), `room-status-pill` (the ambient code/lock/count indicator;
 flat, not Win9x — see the scope rule below). The chat toggle floating over the game surface is
-the **only** chat entry point, because it is the one control that exists at every breakpoint.
+the **only** chat entry point wherever the control deck is not a band, because it is the one control that exists at every
+breakpoint. Where the deck is a band (a touch device in portrait) the toggle is the taskbar's **Chat** tab instead, with
+the same `aria-controls`/`aria-label` from `ChatPanelHelper`, the unread badge and the taskbar flash, and the panel it opens is
+still the page's own `#chat-panel`, docked above the taskbar. A desktop without the deck keeps the floating toggle.
 
 
 - [cheat-omatic.service.ts](src/app/core/services/game/cheat-omatic.service.ts) — a Cheat-Engine-style memory
@@ -1008,11 +1165,20 @@ the **only** chat entry point, because it is the one control that exists at ever
 - [local-storage.service.ts](src/app/core/services/shared/local-storage.service.ts) — thin wrapper over
   `@ionic/storage-angular`; all keys in `STORAGE_KEY`.
 - [layout-helper.service.ts](src/app/core/services/shared/layout-helper.service.ts) — two APIs
-  for the same facts: synchronous `window.innerWidth/Height` getters (used by templates that are
-  re-evaluated for other reasons, e.g. the F1–F12 formation buttons reversed in portrait), and
-  `matchMedia`-backed observables (`isMobile$`, `isLandscape$`, `matches$(query)`) for anything
-  that must appear or disappear *on rotation*, which the getters cannot do because nothing
+  for the same facts: synchronous `window.innerWidth/Height` getters (for templates that are
+  re-evaluated anyway), and `matchMedia`-backed observables (`isMobile$`, `isLandscape$`, `matches$(query)`) for
+  anything that must appear or disappear *on rotation*, which the getters cannot do because nothing
   re-reads them. Observables are cached per query string, so one listener serves all subscribers.
+  **`isMobile` answered three questions with one number and is now only for modal content** (a viewport under
+  768 px, or a landscape one under 768 tall): a 1366x768 laptop window was "mobile landscape" and lost its header, and an
+  iPad was a phone or a desktop depending on Safari's own toolbar. The page's layout asks the two separate
+  questions: the **shape** (`shape`, `shape$`, `viewport$`: `portrait`, `landscape-compact` for a viewport at most
+  500 px tall, which is where the header is dropped, or `landscape-regular`; pure, in [layout-shape.helper.ts](src/app/core/helpers/layout-shape.helper.ts))
+  and the **input** (`isTouchPrimary$` is `(pointer: coarse)`, the pointer the device is used with, and `anyCoarse$` is
+  `(any-pointer: coarse)`: a touch laptop is the second and not the first, a convertible changes as its keyboard folds
+  away, which is why they are streams). `viewport$` does not follow the OS keyboard: on a touch device a window that shrank to
+  80% of its height or less at the same width, while a field has the focus, is the keyboard on a browser that resizes the
+  layout viewport for it, and the shape does not move for it (`LayoutShapeHelper.settle`).
 
 ### Retro visual identity (scope rule)
 
@@ -1028,10 +1194,12 @@ below the Ionic imports.
 **The boundary: companion windows are Windows 95; the app shell stays Elifoot green.**
 Retro treatment applies to the multiplayer chat panel, the room-setup dialog, the
 multiplayer panel, the roster rows, the chat toggle, the spectator's sound toggle (which shares
-the chat toggle's rules in `global.scss`), the Cheat 'O Matic modal, the diagnostics window, and
-every `AlertController` dialog. It does
+the chat toggle's rules in `global.scss`), the Cheat 'O Matic modal, the diagnostics window, the
+**control deck** (keycaps, taskbar, panels and the launcher's sheet: it is the Windows 3.1 machine's keyboard, so it
+is a companion window, decision D3) and every `AlertController` dialog. It does
 **not** apply to the page toolbars (`ion-toolbar color="tertiary"`), the landing cards, the
-FAB clusters or the options popover — the navy `#092469` in
+toolbar's "Teclas" button and the landscape gutter's round menu button (they are app chrome, and the first only
+opens the Win9x sheet) or the options popover — the navy `#092469` in
 [variables.scss](src/theme/variables.scss) is close enough to `#000080` that shell and retro
 windows read as deliberately related. A retro treatment without an explicit boundary reads
 as a mistake rather than a choice.
@@ -1069,7 +1237,7 @@ funnels — `GamePage.showErrorAlert` and `MultiplayerUiService.showError` — a
 so route new error dialogs through those rather than hand-rolling another `create()`.
 `alert-danger` is a *button*-level class and is unaffected. Before opening a PR, check that
 `grep -rc 'alertController.create' src/` and `grep -rc "cssClass: 'win9x-alert" src/app`
-still agree (34 today) — a manual check, because `npm run lint` covers only `.ts`/`.html`
+still agree (36 today) — a manual check, because `npm run lint` covers only `.ts`/`.html`
 and there is no stylelint setup to hang it on.
 
 The save status chip (`.save-chip`, see *Save safety nets*) is on the shell side too, for the same

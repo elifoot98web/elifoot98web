@@ -47,6 +47,12 @@ export const STORAGE_KEY = {
   LAST_BACKUP_AT: 'lastBackupAt',
   // The "faça um backup" nudge was answered. Once, ever: see SavePolicyHelper.backupNudgeDue.
   BACKUP_NUDGE_DISMISSED: 'backupNudgeDismissed',
+  // Whether the control deck (the key panel under the picture) is shown: 'auto' (where a finger is
+  // the primary pointer), 'on' or 'off'. Absent means auto; see DeckLayoutHelper.
+  DECK_MODE: 'deckMode',
+  // The deck's keys buzz the phone by default where the browser can (Android; iOS has no
+  // vibration API). Stored as the OFF flag so that an absent key, every existing install, means on.
+  DISABLE_KEY_VIBRATION: 'disableKeyVibration',
 }
 
 /** Where a STORAGE_KEY lives. Ionic Storage is the default; the others are written around it. */
@@ -88,6 +94,8 @@ export const STORAGE_KEY_HOMES: Readonly<Record<keyof typeof STORAGE_KEY, readon
   FIRST_PERSISTED_AT: ['ionic'],
   LAST_BACKUP_AT: ['ionic'],
   BACKUP_NUDGE_DISMISSED: ['ionic'],
+  DECK_MODE: ['ionic'],
+  DISABLE_KEY_VIBRATION: ['ionic'],
 };
 
 /**
@@ -203,6 +211,13 @@ export const DIAGNOSTICS = {
   HEADER_PROBE_TIMEOUT_MS: 1500,
 }
 
+/**
+ * Elifoot's twelve formations, one per function key, and the caption each key carries in the
+ * control deck (defenders-midfielders-attackers; every one adds up to the ten outfield players).
+ * This is the one table: DeckKeyHelper builds the "Táticas" panel and the "Mais teclas" F-key grid
+ * from it, so a caption cannot drift from the key it is printed on. There used to be a second,
+ * reversed copy of it for the portrait FAB column, which died with the FABs.
+ */
 export const GAME_INPUT_FN_BTNS = [
   { keyCode: EmulatorKeyCode.KBD_f1, label: '3-3-4', text: 'F1' },
   { keyCode: EmulatorKeyCode.KBD_f2, label: '3-4-3', text: 'F2' },
@@ -216,21 +231,6 @@ export const GAME_INPUT_FN_BTNS = [
   { keyCode: EmulatorKeyCode.KBD_f10, label: '5-5-0', text: 'F10' },
   { keyCode: EmulatorKeyCode.KBD_f11, label: '6-3-1', text: 'F11' },
   { keyCode: EmulatorKeyCode.KBD_f12, label: '6-4-0', text: 'F12' },
-];
-
-export const GAME_INPUT_FN_BTNS_REVERSED = [
-  { keyCode: EmulatorKeyCode.KBD_f12, label: '6-4-0', text: 'F12' },
-  { keyCode: EmulatorKeyCode.KBD_f11, label: '6-3-1', text: 'F11' },
-  { keyCode: EmulatorKeyCode.KBD_f10, label: '5-5-0', text: 'F10' },
-  { keyCode: EmulatorKeyCode.KBD_f9, label: '5-4-1', text: 'F9' },
-  { keyCode: EmulatorKeyCode.KBD_f8, label: '5-3-2', text: 'F8' },
-  { keyCode: EmulatorKeyCode.KBD_f7, label: '5-2-3', text: 'F7' },
-  { keyCode: EmulatorKeyCode.KBD_f6, label: '4-5-1', text: 'F6' },
-  { keyCode: EmulatorKeyCode.KBD_f5, label: '4-4-2', text: 'F5' },
-  { keyCode: EmulatorKeyCode.KBD_f4, label: '4-3-3', text: 'F4' },
-  { keyCode: EmulatorKeyCode.KBD_f3, label: '4-2-4', text: 'F3' },
-  { keyCode: EmulatorKeyCode.KBD_f2, label: '3-4-3', text: 'F2' },
-  { keyCode: EmulatorKeyCode.KBD_f1, label: '3-3-4', text: 'F1' },
 ];
 
 export const AUTO_SAVER = {
@@ -397,6 +397,71 @@ export const EMULATOR_CONTROL_CONFIG = {
   // character it is done before the toast has finished sliding in, and the typing showing up
   // in the game is feedback enough.
   PROGRESS_MIN_CHARACTERS: 24,
+  // After a key could not be handed to the emulator (the call threw: the worker is gone) the
+  // queue reports itself faulted for this long, and the control deck greys its keys. A key that
+  // cannot be sent says so once (the page rate-limits that alert to the same interval); without
+  // the pause a held arrow would raise it and retry on every tick. It is a pause, not a
+  // verdict: nothing else can tell the deck the emulator is back, so the keys try again.
+  KEY_FAULT_COOLDOWN_MS: 5 * 1000,
+}
+
+/**
+ * The control deck (DockComponent): the key panel that replaced the FABs, the header buttons
+ * and js-dos's own keyboard. Layout numbers are in css px and are the deck's, not the guest's.
+ */
+export const DECK = {
+  // ---- hold-to-repeat (KeyRepeatScheduler) ----
+  // How long a key is held before it starts repeating, and the gap between repeats after that.
+  // 380 ms is a keyboard's own delay and 55 ms (18 a second) is below it: a list scrolls briskly
+  // without a long press running away from the finger. The queue spends ~20 ms on a chord, so
+  // there is room for the interval on a desktop; on a slower device the pending guard below is
+  // what keeps the deck from outrunning the guest.
+  REPEAT_DELAY_MS: 380,
+  REPEAT_INTERVAL_MS: 55,
+  // A repeat tick is skipped when the key queue already holds this many tasks. A held key must
+  // never build a backlog that keeps typing after the finger has lifted.
+  REPEAT_MAX_PENDING: 2,
+  // A key held this long without a release was lost (pointerup stolen by the OS, say) and stops:
+  // a held arrow is the one deck input that repeats without anyone touching it.
+  REPEAT_MAX_HOLD_MS: 30 * 1000,
+
+  // ---- sticky modifiers (ModifierLatch) ----
+  // A second tap on a one-shot modifier this soon after the first locks it.
+  LATCH_DOUBLE_TAP_MS: 400,
+
+  // ---- keycaps (DeckKeyDirective) ----
+  // A `click` this soon after a pointer's release is the browser's copy of it. One that arrives
+  // with no pointer before it is assistive technology (TalkBack, VoiceOver, a switch) or a
+  // keyboard activating the button, and is a press of its own.
+  CLICK_AFTER_POINTER_MS: 700,
+  // navigator.vibrate() on a press, where the browser has it and the setting is on.
+  VIBRATE_MS: 8,
+
+  // ---- layout (DeckLayoutHelper, LayoutShapeHelper) ----
+  // A landscape viewport this short or shorter has no room for a toolbar: the header is dropped
+  // and the picture takes the height. Every landscape phone is under it (the tallest measured is
+  // 430), every tablet and laptop window over it.
+  LANDSCAPE_COMPACT_MAX_HEIGHT: 500,
+  // The toolbar's height, and the 4:3 picture's share of the width, to estimate the band the
+  // portrait page leaves under the picture. The estimate ignores the safe areas on purpose: it
+  // only has to tell a band from a pathologically short one.
+  HEADER_HEIGHT: 56,
+  PICTURE_HEIGHT_PER_WIDTH: 0.75,
+  // Under this the portrait band cannot give Táticas, the panel that needs the most, its 44 px
+  // keycaps (the 44-48 px target floor of a coarse pointer), and the deck falls back to the launcher,
+  // as a landscape page does: the sheet's panels scroll at their natural 48 px rows. The arithmetic
+  // (_deck.scss; deck-layout.helper.spec.ts derives it from this constant and fails if it drifts):
+  // the band less the dock's 2 px seam and the 58 px taskbar is the panel, less its 8 px padding
+  // twice is what the keys have; the 5 px gaps leave two thirds of the rest to the two formation
+  // rows, so a row is 44 px from an inner height of 144.5 px, which is a band of 220.5. A 360x640
+  // viewport has 314, but the same phone in a Chrome tab with the URL bar and the navigation bar
+  // is ~512 tall and has ~186: that one used to get 32 px formation keys that overlapped.
+  MIN_BAND_HEIGHT: 225,
+  // The OS keyboard shrinks innerHeight on browsers that resize the layout viewport for it. A
+  // drop to this fraction of the previous height or less, at the same width and with a field
+  // focused, is the keyboard, and the layout must not move for it (the contract: it depends on
+  // the viewport and the orientation, not on the OS keyboard).
+  KEYBOARD_HEIGHT_RATIO: 0.8,
 }
 
 /**

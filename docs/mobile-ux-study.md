@@ -581,6 +581,83 @@ build, and a CLAUDE.md update.
    asynchronous goodbye would not flush, and the reload was always abrupt for a host).
 9. **P10 — control deck replacing the FABs**, **without** the P8 dependency (its "Texto" panel
    opens the P1 dialog). Needs D3 and D8.
+   **As built:** `app-dock` (taskbar plus one panel in the band under the picture in portrait; the same panels as a sheet from a
+   "Teclas" button in landscape), `DeckKeyDirective` (the keycap), and six pure helpers with specs (`DeckKeyHelper` the key
+   table, `DeckLayoutHelper` the presentation, `DeckPanelHelper`, `KeyRepeatScheduler`, `ModifierLatch`, `LayoutShapeHelper`).
+   Deleted: the three `ion-fab` clusters, the header's keyboard / text / O Matic buttons, `GAME_INPUT_FN_BTNS_REVERSED`, the
+   `--kb-up` chat toggle variant, `isVirtualKeyboardShowing`, the "Teclado Virtual" menu entry, `toggleSoftKeyboard` and, by a
+   `layersOptions.keyboardDiv` that is never attached, the js-dos keyboard itself. ESLint now rejects any reference to
+   `simulateKeyPress` in app code. `LayoutHelperService` gained `isTouchPrimary$`, `anyCoarse$` and the shape
+   (`portrait` / `landscape-compact` / `landscape-regular`); two settings were added ("Mostrar painel de teclas", "Vibração nas
+   teclas"). FAQ, manual and the first-run text were rewritten. Details and the invariants are in CLAUDE.md, *The control
+   deck*. Measured in headless Chrome 143 (chrome-headless-shell, touch emulation) against the dev server, plus one two-peer
+   session in full Chrome 156:
+   - **The picture does not move.** `#game-container` and the canvas inside it had the same rectangle with the deck on, with it
+     off and with the sheet open at all 13 viewports (360x640, 375x667, 393x852, 412x915, 430x932, 844x390, 932x430, 667x375,
+     820x1180, 1180x820, 1024x768, 768x1024, 1280x800). In portrait the band is 314 px at 360x640, 330 at 375x667, 501 at
+     393x852, 550 at 412x915, 554 at 430x932 and 509 at 820x1180.
+   - **Sizes.** Under a coarse pointer every keycap of the three panels is at least 44x44 (rows are 48 px; "Mais" is 44), none
+     overlaps the picture, none leaves the viewport; "Mais teclas" (five rows) fits the 360x640 panel (254 px) with no scroll, and
+     the 667x375 sheet (five rows under a title and the tabs) with room to spare. With a mouse the keys are the authentic ~40 px.
+   - **Every key on the real game** (the new-game flow driven only through the deck and the touch layer): see CLAUDE.md for the
+     list. Highlights: F5, F6 and F8-F12 each give a different formation screen; the arrows move the country and squad lists; `A` selects the
+     automatic squad; Tab walks Registo's fields; "Texto" typed "QA10", "Zé" and "João" into Elifoot's fields; a 1.5 s hold on
+     Down sent 22 presses at 380 ms then 55-57 ms; Shift then Tab sent Shift+Tab once; a Ctrl lock sent Ctrl+Home and Ctrl+End and
+     a blur cleared it; Alt+F4 asked first and then left for the Program Manager, with the recovery dialog up within 3.5 s.
+   - **Hold-to-repeat stops** on release, `touchcancel`, window `blur`, the page being hidden, a panel switched under the finger,
+     the page leaving and the key queue faulting.
+   - **A bug the measurement found and fixed:** the first cut showed a "next key carries Shift" bar when a modifier was tapped.
+     The bar moved the keys up by its own height, the browser aimed the click of the tap at whatever was now under the finger
+     (the Tab key) and the keycap's accessibility path ("a click with no pointer before it is a press") took it as a press: Shift
+     sent Shift+Tab, Ctrl sent Ctrl+Shift+Tab. The latch is now a lit key and a label on the "Mais" tab (plus a live region for
+     screen readers), the click guard's clock is shared by every keycap, and a spec dispatches a click on a *different* key after a
+     tap. The same pass found a folded deck riding up under the picture (the tabs jumped 440 px on the tap that folded them; it is
+     pinned to the bottom now), a first press of a held arrow that never buzzed, an O Matic keycap that stayed enabled with no
+     emulator, and the sheet counting the notch's right inset twice (keys 36 px wide at 932x430 with 59 px insets).
+   - **Hosting phone, two peers** (the host a 393x852 phone emulation, the spectator a desktop browser, the public nostr relays,
+     which the earlier phases' sandbox could not reach): the spectator's video was 640x480 and advancing for 248 s, a deck press
+     on the host (Enter) changed the spectator's picture, a spectator chat message made the host's Chat tab show 1 unread, and
+     opening it docked the chat above the taskbar with the host's picture rectangle unchanged.
+   - **What the review of the first cut found, measured and fixed** (headless Chrome 143, the same harness, now with an overlap
+     assertion in `deck.mjs layout` and a `scroll` mode): (1) **The band threshold was wrong.** `DECK.MIN_BAND_HEIGHT` was 150
+     but Táticas needs ~220 px of band for its two rows of formation keys to be 44 px: a 360x640 phone in a Chrome tab (~512 tall,
+     186 px of band) got 32 px keys, an iPhone SE in a Safari tab (216 px) 42 px. It is 225 now, and those windows get the launcher,
+     whose panels scroll at 48 px rows; a spec derives the 44 px row from the constant so it cannot drift. (2) **"Mais teclas"
+     collapsed into overlapping rows whenever its panel was shorter than its 256 px** (375x553 in the sheet, 667x340, 667x320,
+     852x340, 800x290 in landscape): the scroll panel's children shrank, the 44 px rows overflowed their boxes and the bottom row
+     (`Num *`, O Matic, Sair) sat on the F-key rows. `flex-shrink: 0`; the harness fails with the rule undone and passes with it, at
+     all 20 viewports. (3) **A hold or a drag inside a scrolling panel was cancelled by the browser.** `touch-action` stops
+     intersecting at the nearest scroll container, so the deck's `none` never reached the keys and the panel's `pan-y` did: a held
+     arrow in the sheet stopped after 5 presses and one `pointercancel` when the thumb drifted 40 px, and a drag that began on
+     Apagar or Del typed a key and then scrolled. Keys that press on landing now carry `touch-action: none` themselves
+     (`.deck-key--landing`): the same drift gave 19 presses and no cancel, a drag from Del typed and did not scroll, a drag from
+     Home (presses on release) scrolled the panel and typed nothing. (4) The Backspace keycap is the word "Apagar", not an icon
+     that only a panel nobody has opened would ever fetch (the offline icon cache fills on first use). (5) "Vibração ao tocar nas
+     teclas" was cut to "Vibração ao tocar nas te…" in the options menu on a phone; it reads "Vibração nas teclas" now. (6) The
+     folded dock is 60 px, not 58: `--deck-taskbar-h` counts the band's own 2 px seam, so the chat's lift under the OS keyboard
+     matches the layout it compensates. (7) The decision-D3 promise was overstated: the Win9x skin is `.deck-key` and `.deck-face`
+     in `_win9x.scss` **plus** a few seams and the sheet's title bar in `_deck.scss`, and the docs now say so and how to find them.
+     Stale text fixed: `GamePage.sendKey` (gone) in CLAUDE.md, js-dos's virtual keyboard in the touch-layer paragraph, the latch's
+     docblock (a panel switch keeps a latch on purpose) and the README's feature list.
+   Where it differs from the plan above, on evidence or by decision: **Texto is a taskbar button, not a panel** (it opens the
+   P1 dialog; the live bar is P8's, behind a flag). **No separate type of state for hiding it**: "Mostrar painel de teclas" has
+   three answers (Automático / Sempre mostrar / Nunca mostrar) so the player can hide the deck on a tablet and force it on a laptop.
+   **Tablets follow the shape**: portrait gets the band, landscape the launcher (a landscape tablet has no band; compared on
+   screenshots at 820x1180, 768x1024, 1180x820, 1024x768 and 1280x800). **Landscape phones get a launcher, not rails** (that is
+   P12): a column in the left gutter holds the room pill, a round options button and "Teclas"; the sheet covers the left part of the
+   picture while it is open. **D12 (chat replaces the right rail in landscape) is not done**: landscape keeps today's right-edge chat
+   handle and docked panel, and the short-landscape placement of that handle (top of the right edge) was kept because the spectator
+   page shares it. **`isMobile` stays, for modal content only**; the page's layout reads the shape and `(pointer: coarse)`. The
+   O Matic lives in the options menu and in "Mais" (two places), "Input de Texto" in the menu and the Texto tab (two), and
+   leaving the game only in the menu. **Found on the way, not fixed:** (1) Elifoot answers "Nome do ficheiro inválido" to a game
+   name with an accented letter ("ZÉ"), although P1's dialog types it faithfully: the 8-letter name field takes only plain
+   letters, so P1's note that it "accepts the accents" is true of typing and false of saving; a hint in the Texto dialog or a
+   fold for that one field is a P8 question. (2) Esc does nothing on the Registo dialog (only its Cancelar closes it). (3) The keypad
+   `*` had no visible effect on the squad-selection screen; where the "craque" search is reached was not found. (4) Esc and Enter
+   are one tap each on the hazard CLAUDE.md describes (Enter on the first dialog before a choice quits the game), reproduced
+   by accident while driving it; P5's recovery brought the game back every time. **Not verified:** any phone or finger, haptics,
+   iOS Safari, the real safe areas, the OS keyboard over the chat, TalkBack/VoiceOver, a low-end CPU, and what `*` and `-` do in
+   the game beyond the owner's word. The checklist for the device pass is in the PR.
 10. Then P8 (live type bar), P9 (idle pause), P11 (zoom/pan camera), P12 (stage layout, landscape
     rails, spectator parity — re-run the multiplayer harness), P13 (menu IA, first-run coach),
     P14 (wake lock, fullscreen, audio health, install), P15 (desktop mouse, gamepad).

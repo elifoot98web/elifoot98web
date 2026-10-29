@@ -8,6 +8,8 @@ import { ParticipantListComponent } from './multiplayer/participant-list/partici
 import { MultiplayerPanelComponent } from './multiplayer/multiplayer-panel/multiplayer-panel.component';
 import { RoomStatusPillComponent } from './multiplayer/room-status-pill/room-status-pill.component';
 import { RoomSetupModalComponent } from './multiplayer/room-setup-modal/room-setup-modal.component';
+import { DockComponent } from './dock/dock.component';
+import { DeckKeyDirective } from './dock/deck-key.directive';
 
 @NgModule({
   imports: [
@@ -21,7 +23,9 @@ import { RoomSetupModalComponent } from './multiplayer/room-setup-modal/room-set
     ParticipantListComponent,
     MultiplayerPanelComponent,
     RoomSetupModalComponent,
-    RoomStatusPillComponent
+    RoomStatusPillComponent,
+    DockComponent,
+    DeckKeyDirective
   ],
   exports: [
     ChatComponent,
@@ -29,7 +33,11 @@ import { RoomSetupModalComponent } from './multiplayer/room-setup-modal/room-set
     ParticipantListComponent,
     MultiplayerPanelComponent,
     RoomSetupModalComponent,
-    RoomStatusPillComponent
+    RoomStatusPillComponent,
+    // The control deck: the page mounts it beside the game, as a sibling of #game-container, and
+    // gives its own launcher buttons the keycap behaviour (no focus taken, one release).
+    DockComponent,
+    DeckKeyDirective
   ],
 })
 export class CoreComponentsModule { }
