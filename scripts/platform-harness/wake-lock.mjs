@@ -17,8 +17,9 @@ check('requests the screen when the game starts', s.requests === 1 && s.live ===
 const openMenu = async () => {
   const rect = await c.ev(`(() => { const b = [...document.querySelectorAll('ion-header ion-buttons[slot=end] ion-button')].pop(); const r = b.getBoundingClientRect(); return {x: r.x + r.width/2, y: r.y + r.height/2} })()`)
   await c.tap(rect.x, rect.y); await sleep(1000)
+  await c.ev(`document.querySelector('ion-modal.menu-sheet')?.setCurrentBreakpoint?.(1)`); await sleep(600)   // a sheet opens at 60% on a phone; its lower rows are only reachable once it is expanded
 }
-const toggleRect = () => c.ev(`(() => { const t = [...document.querySelectorAll('ion-popover.menu-popover ion-toggle')].find(t => t.getAttribute('aria-label') === 'Manter a tela ligada'); t.scrollIntoView({block:'center'}); const r = t.getBoundingClientRect(); return {x: r.x + r.width/2, y: r.y + r.height/2, checked: t.checked} })()`)
+const toggleRect = () => c.ev(`(() => { const t = [...document.querySelectorAll('app-options-menu ion-toggle')].find(t => t.getAttribute('aria-label') === 'Manter a tela ligada'); t.scrollIntoView({block:'center'}); const r = t.getBoundingClientRect(); return {x: r.x + r.width/2, y: r.y + r.height/2, checked: t.checked} })()`)
 await openMenu()
 let t = await toggleRect(); await sleep(300); t = await toggleRect()
 await c.tap(t.x, t.y); await sleep(700)
@@ -32,7 +33,7 @@ s = await wl()
 check('switching it on asks again', s.live === 1 && s.requests === 2 && s.holding, JSON.stringify(s))
 
 // close the menu
-await c.evBody(`__g.hidePopover()`); await sleep(500)
+await c.evBody(`__g.closeMenu()`); await sleep(500)
 
 // page hidden: the browser takes the lock back; the page returns: asked again
 await c.evBody(`__setVisibility('hidden')`); await sleep(200)

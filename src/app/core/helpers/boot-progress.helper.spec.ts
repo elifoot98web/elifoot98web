@@ -47,6 +47,25 @@ describe('BootProgressHelper.describe', () => {
     expect(BootProgressHelper.describe('Downloading bundle 250%')).toBe('Baixando o jogo… 100%');
   });
 
+  describe('status', () => {
+
+    it('keeps the phase and the percentage apart', () => {
+      expect(BootProgressHelper.status('Downloading bundle 43.21%')).toEqual({ phase: 'download', message: 'Baixando o jogo… 43%', percent: 43 });
+      expect(BootProgressHelper.status('Extracting 61% (hdd.img)')).toEqual({ phase: 'extract', message: 'Descompactando o jogo… 61%', percent: 61 });
+    });
+
+    it('has no percentage before js-dos reports one, and none for starting the emulator', () => {
+      expect(BootProgressHelper.status('Downloading bundle ...')).toEqual({ phase: 'download', message: 'Baixando o jogo…', percent: null });
+      expect(BootProgressHelper.status('Starting...')).toEqual({ phase: 'emulator', message: 'Iniciando o emulador…', percent: null });
+    });
+
+    it('is null for text that is not progress, and describe() agrees with it for every input', () => {
+      for (const text of ['Ready', 'Unexpected error occured...', 'Connecting...', '', null, undefined, 'Downloading bundle 5%', 'Extracting 100% (A.B)', 'Starting...']) {
+        expect(BootProgressHelper.describe(text)).toBe(BootProgressHelper.status(text)?.message ?? null);
+      }
+    });
+  });
+
   describe('logStep', () => {
 
     it('puts every percentage of a ten-percent band on the same step', () => {

@@ -695,6 +695,11 @@ canvas {
         --height: min(88vh, 600px);
     }
 
+    // "Dados e avançado": six groups of rows, taller than the dialogs and scrolling inside.
+    .advanced-modal {
+        --height: min(88vh, 680px);
+    }
+
     // Same treatment for the multiplayer dialogs: a Win9x dialog is a small fixed box,
     // not a full-bleed sheet.
     .win9x-modal {
@@ -719,6 +724,24 @@ canvas {
     .omatic-modal {
         --height: 520px;
     }
+}
+
+// The first-run coach: a dialog that is as tall as its card, on every screen. An Ionic modal is a full page on a phone; this one is
+// a small window in the middle of it (`--height: auto`, which needs the content to be in flow: the coach is made of divs for that).
+// On a short landscape phone the card is taller than the screen: the window's body scrolls between its title bar and its buttons.
+ion-modal.first-run-modal {
+    --width: 92vw;
+    --max-width: 420px;
+    --height: auto;
+    --max-height: 92vh;
+}
+
+ion-modal.first-run-modal .ion-page {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    contain: content;
+    max-height: 92vh;
 }
 
 // The Win9x window paints its own chrome, so the Ionic modal shell must not add rounded

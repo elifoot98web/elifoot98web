@@ -17,16 +17,18 @@ const stored = (c, key) => c.ev(`(async () => await __g.storageService.get(${JSO
 const openMenu = async c => {
   const rect = await c.ev(`(() => { const b = [...document.querySelectorAll('ion-header ion-buttons[slot=end] ion-button')].pop(); const r = b.getBoundingClientRect(); return {x: r.x + r.width/2, y: r.y + r.height/2} })()`)
   await c.tap(rect.x, rect.y); await sleep(1000)
+  await c.ev(`document.querySelector('ion-modal.menu-sheet')?.setCurrentBreakpoint?.(1)`); await sleep(600)   // a sheet opens at 60% on a phone; its lower rows are only reachable once it is expanded
 }
 const tapItem = async (c, re) => {
-  const it = await c.ev(`(() => { const i = [...document.querySelectorAll('ion-popover.menu-popover ion-item')].find(i => ${re}.test(i.innerText)); if (!i) return null; i.scrollIntoView({block:'center'}); return true })()`)
+  const it = await c.ev(`(() => { const i = [...document.querySelectorAll('app-options-menu ion-item')].find(i => ${re}.test(i.innerText)); if (!i) return null; i.scrollIntoView({block:'center'}); return true })()`)
   if (!it) return false
   await sleep(300)
-  const r = await c.ev(`(() => { const i = [...document.querySelectorAll('ion-popover.menu-popover ion-item')].find(i => ${re}.test(i.innerText)); const b = i.getBoundingClientRect(); return { x: b.x + b.width/2, y: b.y + b.height/2 } })()`)
+  const r = await c.ev(`(() => { const i = [...document.querySelectorAll('app-options-menu ion-item')].find(i => ${re}.test(i.innerText)); const b = i.getBoundingClientRect(); return { x: b.x + b.width/2, y: b.y + b.height/2 } })()`)
   await c.tap(r.x, r.y); await sleep(900)
   return true
 }
-const labels = c => c.ev(`(() => [...document.querySelectorAll('ion-popover.menu-popover ion-item')].map(i => (i.querySelector('ion-label')?.innerText ?? '').replace(/\\n+/g, ' | ')))()`)
+// A switch row has its text inside the ion-toggle (the whole row is the target), so the row's own text is what to read.
+const labels = c => c.ev(`(() => [...document.querySelectorAll('app-options-menu ion-item')].map(i => i.innerText.replace(/\\n+/g, ' | ')))()`)
 
 // ---- iPhone in Safari ----
 let c = await boot({ ua: 'ios', width: 430, height: 932, init: IOS_INIT })
@@ -41,9 +43,9 @@ check('menu: no "Tela cheia"', !l.some(x => /Tela cheia/.test(x)))
 check('menu: "Instalar o app | Adicionar à Tela de Início"', l.some(x => x === 'Instalar o app | Adicionar à Tela de Início'), l.filter(x => /Instalar/.test(x)).join())
 check('menu: "Som no modo silencioso"', l.some(x => /^Som no modo silencioso/.test(x)))
 // the audioSession switch
-const sw = await c.ev(`(() => { const t = [...document.querySelectorAll('ion-popover.menu-popover ion-toggle')].find(t => t.getAttribute('aria-label') === 'Som no modo silencioso'); t.scrollIntoView({block:'center'}); return true })()`)
+const sw = await c.ev(`(() => { const t = [...document.querySelectorAll('app-options-menu ion-toggle')].find(t => t.getAttribute('aria-label') === 'Som no modo silencioso'); t.scrollIntoView({block:'center'}); return true })()`)
 await sleep(300)
-const r = await c.ev(`(() => { const t = [...document.querySelectorAll('ion-popover.menu-popover ion-toggle')].find(t => t.getAttribute('aria-label') === 'Som no modo silencioso'); const b = t.getBoundingClientRect(); return { x: b.x + b.width/2, y: b.y + b.height/2 } })()`)
+const r = await c.ev(`(() => { const t = [...document.querySelectorAll('app-options-menu ion-toggle')].find(t => t.getAttribute('aria-label') === 'Som no modo silencioso'); const b = t.getBoundingClientRect(); return { x: b.x + b.width/2, y: b.y + b.height/2 } })()`)
 await c.tap(r.x, r.y); await sleep(700)
 check('turning it on sets audioSession.type = playback', await c.ev('navigator.audioSession.type') === 'playback')
 check('and stores the choice', await stored(c, 'audioPlayback') === true)

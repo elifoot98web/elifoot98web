@@ -3,7 +3,7 @@ import { PixelFrame } from './ocr-region.helper';
 
 /**
  * Where the guest is on its way to the game, in the order it gets there. `game` is the only one
- * that ends the wait; the rest only decide what the loader says.
+ * that ends the wait; the rest only decide what the boot screen says.
  */
 export type BootStage = 'dos' | 'windows' | 'elifoot' | 'game';
 
@@ -60,7 +60,7 @@ export class BootStageHelper {
 
   /**
    * The stage to show given the one shown and the one just seen. It never goes back: a black
-   * frame between the desktop and the game's splash would otherwise flip the loader from
+   * frame between the desktop and the game's splash would otherwise flip the boot screen from
    * "Carregando o Elifoot…" back to "Abrindo o Windows 3.1…" for a moment.
    */
   static advance(shown: BootStage | null, seen: BootStage): BootStage {

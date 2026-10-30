@@ -37,7 +37,7 @@ export class BootFailureHelper {
     return 'other';
   }
 
-  /** Whether the dialog may offer "Limpar todos os dados" after this many failures in a row. */
+  /** Whether the dialog may offer "Apagar todos os dados…" after this many failures in a row. */
   static offersWipe(kind: BootFailureKind, failures: number): boolean {
     return kind === 'other' && failures >= GAME_BOOT.WIPE_OFFER_AFTER_FAILURES;
   }

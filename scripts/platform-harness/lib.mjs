@@ -19,7 +19,7 @@ export const PLATFORMS = { android: 'Linux armv8l', ios: 'iPhone', mac: 'MacInte
 
 /**
  * Fresh load of /#/game with a device emulated. `init` is a script run BEFORE any page script (to fake navigator members);
- * `wipe` clears the site data first; `welcome` dismisses the welcome dialog.
+ * `wipe` clears the site data first; `welcome` dismisses the first-run coach.
  */
 export async function boot({ ua = 'android', width = 393, height = 852, dpr = 3, init = '', wipe = true, welcome = true, hash = '#/game', media = null } = {}) {
   const c = await connect()
@@ -50,7 +50,8 @@ export async function boot({ ua = 'android', width = 393, height = 852, dpr = 3,
   console.log(`game page up after ${Date.now() - began} ms: ${up}`)
   await sleep(1000)
   if (welcome) {
-    await c.ev(`(() => { const b = [...document.querySelectorAll('ion-alert button')].find(x => /Entendi/.test(x.textContent)); b && b.click(); return !!b })()`)
+    // The first-run coach (P13) replaced the welcome alert: "Pular" answers it for good, like "Entendi" did.
+    await c.ev(`(() => { const b = [...document.querySelectorAll('app-first-run-coach .coach-actions button')].find(x => /Pular/.test(x.textContent)); b && b.click(); return !!b })()`)
     await sleep(800)
   }
   await c.ev(`(() => { window.__g = ng.getComponent(document.querySelector('app-game')); window.dosCI = __g.dosCI; return !!window.dosCI })()`)

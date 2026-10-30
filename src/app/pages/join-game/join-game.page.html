@@ -42,6 +42,25 @@
   recent-rooms row) was unreachable.
 -->
 <ion-content [scrollX]="false" [scrollY]="!isSpectating" [fullscreen]="true" color="primary" class="page-background ion-align-items-center ion-justify-content-center">
+  @if (waitingForRoom) {
+    <!--
+      The wait for the host's picture (up to 20 s), as a card with a way out. It was an `ion-loading` over the whole page, and a spectator who
+      had mistyped the code, or whose network was slow, could only stare at it. Shell, flat, like the cards beside it. The hint appears once the
+      wait is long; "Cancelar" starts again from a fresh page (see cancelJoin).
+    -->
+    <div class="info-card-container ion-padding ion-text-center">
+      <ion-card class="join-game-card join-game-card--onboarding">
+        <ion-card-content class="ion-text-center">
+          <ion-spinner name="crescent"></ion-spinner>
+          <p class="onboarding-text" role="status" aria-live="polite">{{ joinTitle }}</p>
+          @if (joinHint) {
+            <p class="onboarding-text join-hint">{{ joinHint }}</p>
+          }
+          <ion-button class="join-cancel" fill="outline" expand="block" (click)="cancelJoin()">Cancelar</ion-button>
+        </ion-card-content>
+      </ion-card>
+    </div>
+  } @else {
   @switch (gameState) {
     @case (GameState.NOT_IN_ROOM) {
       <!--
@@ -62,26 +81,6 @@
             <ion-button expand="block" (click)="promptJoinInfo()">
               Entrar em uma sala
             </ion-button>
-          </ion-card-content>
-        </ion-card>
-      </div>
-    }
-    @case (GameState.JOINING_ROOM) {
-      <div class="info-card-container ion-padding ion-text-center">
-        <ion-card class="join-game-card">
-          <ion-card-content class="ion-text-center full centered">
-            <ion-spinner name="crescent"></ion-spinner>
-            <p>Conectando à sala...</p>
-          </ion-card-content>
-        </ion-card>
-      </div>
-    }
-    @case (GameState.WAITING_STREAM) {
-      <div class="info-card-container ion-padding ion-text-center">
-        <ion-card class="join-game-card">
-          <ion-card-content class="ion-text-center full centered">
-            <ion-spinner name="crescent"></ion-spinner>
-            <p>Aguardando a transmissão do anfitrião...</p>
           </ion-card-content>
         </ion-card>
       </div>
@@ -122,6 +121,7 @@
         </ion-card>
       </div>
     }
+  }
   }
 
   <!--

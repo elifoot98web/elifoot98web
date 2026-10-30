@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, Input } from '@angular/core';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 
 /**
@@ -15,6 +15,12 @@ const OMATIC_VIDEO_URL = 'https://www.youtube-nocookie.com/embed/m5QaqyveP6U?aut
   standalone: false
 })
 export class ManualComponent {
+  /**
+   * The chapter to open, when a "?" sent the player here (HelpTopicHelper): an accordion `value` of the outer group, and `sub` the one
+   * inside it, for the chapters that have a group of their own (the menu's). Without one the first chapter is open.
+   */
+  @Input() open: string | null | undefined = null;
+  @Input() sub: string | null | undefined = null;
 
   /** False until the tap: nothing from YouTube is requested before that. */
   videoRequested = false;

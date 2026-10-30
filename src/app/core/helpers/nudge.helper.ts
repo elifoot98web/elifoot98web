@@ -2,7 +2,7 @@ import { InstallMode } from './install.helper';
 
 /**
  * When the one-time banner and hint on the game page are due. The page may show three things once
- * its welcome is out of the way: the backup reminder (SaveStatusService), the install banner and the
+ * its first-run coach is out of the way: the backup reminder (SaveStatusService), the install banner and the
  * "Gire o aparelho" hint. Each is shown once in the life of the install, and **no more than one of
  * them per page load**, in this order: the one that protects the person's saves first, then the one
  * that offers the app, then the hint that costs nothing to miss. That order is the order of the

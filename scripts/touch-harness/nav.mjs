@@ -34,5 +34,46 @@ export async function session() {
     return c.ev('ORACLE.calibrate()', 120000)
   }
   const truth = () => c.ev('ORACLE.read()')
-  return { c, rect, frame, toCss, toCssC, tapG, tapC, key, type, shot, insp, loadOracle, truth }
+
+  // ---- the options menu (P13): a sheet on a touch screen, a popover under a mouse; the same `app-options-menu` inside either ----
+  /** Open the menu with a real tap on its button: the toolbar's, or the round one at the top of a landscape phone's left rail. */
+  const openMenu = async () => {
+    // A fresh profile on a portrait phone gets the one-time "Gire o aparelho" toast, which covers the toolbar until it goes.
+    await c.ev(`(async () => { for (const toast of document.querySelectorAll('ion-toast')) await toast.dismiss(); return 1 })()`)
+    await sleep(300)
+    const at = await c.ev(`(() => { const b = document.querySelector('ion-header ion-buttons[slot="end"] > ion-button') ?? document.querySelector('.rail-menu-btn'); if (!b) return null; const r = b.getBoundingClientRect(); return JSON.stringify({ x: r.x + r.width / 2, y: r.y + r.height / 2 }) })()`)
+    if (!at) throw new Error('there is no options button on the page')
+    const { x, y } = JSON.parse(at)
+    await c.tap(x, y, 60)
+    await sleep(1300)
+  }
+  /** A real tap on the row of the open menu whose text matches (scrolled into view first: the sheet opens at 60% of a portrait phone). */
+  const tapMenuRow = async text => {
+    // A sheet opens at 60% of a portrait phone and the rows below the fold are only reachable once it is expanded, as a thumb would drag it.
+    await c.ev(`document.querySelector('ion-modal.menu-sheet')?.setCurrentBreakpoint?.(1)`)
+    await sleep(600)
+    const at = await c.ev(`(() => { const i = [...document.querySelectorAll('app-options-menu ion-item')].find(i => new RegExp(${JSON.stringify(text)}).test(i.innerText)); if (!i) return null; i.scrollIntoView({ block: 'center' }); const r = i.getBoundingClientRect(); return JSON.stringify({ x: r.x + r.width / 2, y: r.y + r.height / 2 }) })()`)
+    if (!at) throw new Error(`the menu has no row ${text}`)
+    await sleep(300)
+    const { x, y } = JSON.parse(await c.ev(`(() => { const i = [...document.querySelectorAll('app-options-menu ion-item')].find(i => new RegExp(${JSON.stringify(text)}).test(i.innerText)); const r = i.getBoundingClientRect(); return JSON.stringify({ x: r.x + r.width / 2, y: r.y + r.height / 2 }) })()`))
+    await c.tap(x, y, 60)
+    await sleep(900)
+  }
+  /** Open "Dados e avançado" through the menu, with real taps. */
+  const openAdvanced = async () => { await openMenu(); await tapMenuRow('Dados e avançado'); await sleep(900) }
+  /** Where a switch of the open "Dados e avançado" window is, and whether it is on. */
+  const advancedSwitch = async label => {
+    const at = await c.ev(`(() => { const row = [...document.querySelectorAll('app-advanced-modal label.win9x-switch')].find(l => l.innerText.includes(${JSON.stringify(label)})); if (!row) return null; row.scrollIntoView({ block: 'center' }); return 'ok' })()`)
+    if (!at) throw new Error(`the window has no switch ${label}`)
+    await sleep(300)
+    return JSON.parse(await c.ev(`(() => { const row = [...document.querySelectorAll('app-advanced-modal label.win9x-switch')].find(l => l.innerText.includes(${JSON.stringify(label)})); const i = row.querySelector('input'); const r = i.getBoundingClientRect(); return JSON.stringify({ x: r.x + r.width / 2, y: r.y + r.height / 2, checked: i.checked, text: row.innerText.replace(/\\s+/g, ' ') }) })()`))
+  }
+  /** Close the open window with a real tap on its "Fechar" button. */
+  const closeAdvanced = async () => {
+    const { x, y } = JSON.parse(await c.ev(`(() => { const b = [...document.querySelectorAll('app-advanced-modal .win9x-close')].pop(); b.scrollIntoView({ block: 'center' }); const r = b.getBoundingClientRect(); return JSON.stringify({ x: r.x + r.width / 2, y: r.y + r.height / 2 }) })()`))
+    await sleep(300)
+    await c.tap(x, y, 60)
+    await sleep(900)
+  }
+  return { c, rect, frame, toCss, toCssC, tapG, tapC, key, type, shot, insp, loadOracle, truth, openMenu, tapMenuRow, openAdvanced, advancedSwitch, closeAdvanced }
 }

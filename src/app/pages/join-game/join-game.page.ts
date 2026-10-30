@@ -1,6 +1,5 @@
 import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
-import { LoadingController } from '@ionic/angular/lazy';
 import {
   GameState,
   CursorPositionMessage,
@@ -27,6 +26,7 @@ import { MULTIPLAYER, STORAGE_KEY } from 'src/app/core/models/constants';
 import { LayoutHelperService, LocalStorageService, StageLayoutService, WakeLockService } from '../../core/services/shared';
 import { LayoutShape, LayoutShapeHelper } from 'src/app/core/helpers/layout-shape.helper';
 import { StagePlan } from 'src/app/core/helpers/stage.helper';
+import { JoinWaitHelper } from 'src/app/core/helpers/join-wait.helper';
 
 @Component({
   selector: 'app-join-game',
@@ -58,6 +58,16 @@ export class JoinGamePage implements OnInit, AfterViewInit, OnDestroy {
 
   /** True only inside the host grace period, while the last frame is still on screen. */
   isReconnecting = false;
+
+  /**
+   * A join is in flight: from the moment the setup dialog is confirmed until the host's picture has arrived or the attempt has failed.
+   * The waiting card is shown for it (it replaced an `ion-loading` that covered the page for up to 20 s and could not be dismissed), and
+   * the card has a "Cancelar".
+   */
+  joining = false;
+  /** How long this attempt has been waiting, refreshed once a second while it does: what the card's hint is decided from. */
+  private joinElapsedMs = 0;
+  private joinClock?: ReturnType<typeof setInterval>;
 
   /**
    * Whether the host's stream carries a sound track at all. Track presence is the whole
@@ -115,7 +125,6 @@ export class JoinGamePage implements OnInit, AfterViewInit, OnDestroy {
   private stopObservingOverlay?: () => void;
 
   constructor(
-    private loadingController: LoadingController,
     private route: ActivatedRoute,
     private multiplayerService: MultiplayerService,
     private multiplayerCursorService: MultiplayerCursorService,
@@ -193,6 +202,7 @@ export class JoinGamePage implements OnInit, AfterViewInit, OnDestroy {
 
   ngOnDestroy() {
     this.destroyed = true;
+    this.stopJoinClock();
     this.stageLayout.stop();
     this.wakeLock.stop();
     this.detachStream();
@@ -288,11 +298,8 @@ export class JoinGamePage implements OnInit, AfterViewInit, OnDestroy {
     }
 
     this.joinError = '';
-    const loading = await this.loadingController.create({
-      message: this.multiplayerService.isDraining ? 'Encerrando a sala anterior...' : 'Entrando na sala...',
-    });
-    await loading.present();
-
+    this.joining = true;
+    this.startJoinClock();
     try {
       await this.multiplayerService.joinGameRoom(this.playerName, this.roomId, this.password, this.cursorColor);
       // Awaited for its timeout and fail-fast behaviour only; the subscription in ngOnInit
@@ -305,8 +312,53 @@ export class JoinGamePage implements OnInit, AfterViewInit, OnDestroy {
     } catch (err: any) {
       this.handleJoinFailure(err);
     } finally {
-      await loading.dismiss();
+      this.joining = false;
+      this.stopJoinClock();
     }
+  }
+
+  /** The waiting card's first line: the room being entered, or the previous one still leaving (the one wait nothing can shorten). */
+  get joinTitle(): string {
+    if (this.gameState === GameState.WAITING_STREAM && !this.multiplayerService.isDraining) {
+      return 'Aguardando a transmissão do anfitrião…';
+    }
+    return JoinWaitHelper.title({ roomCode: this.roomId, draining: this.multiplayerService.isDraining });
+  }
+
+  /** The waiting card's second line, once the wait is long (JoinWaitHelper). */
+  get joinHint(): string | null {
+    return JoinWaitHelper.hint(this.joinElapsedMs);
+  }
+
+  /** The card shows for a join in flight and for the states that mean one is (the room is entered before the picture arrives). */
+  get waitingForRoom(): boolean {
+    // Not once the picture is there: the attempt is still finishing for a few milliseconds after it arrived.
+    if (this.isSpectating) return false;
+    return this.joining || this.gameState === GameState.JOINING_ROOM || this.gameState === GameState.WAITING_STREAM;
+  }
+
+  /**
+   * "Cancelar" on the waiting card. A join that is in flight cannot be undone in place: trystero keeps its connection to the host in a
+   * registry that outlives the room, so joining again within this page load can reach the data channel and never the picture (see
+   * reloadSpectator). The spectator has no emulator and no save state, so the way back is the same as for a failed join, a fresh page
+   * load, with the code on the address so the dialog comes back filled in. The room is left first, so the host's roster updates at once.
+   */
+  cancelJoin() {
+    this.stopJoinClock();
+    this.resetRoomState();
+    this.reloadSpectator(this.roomId);
+  }
+
+  private startJoinClock() {
+    this.stopJoinClock();
+    const began = performance.now();
+    this.joinElapsedMs = 0;
+    this.joinClock = setInterval(() => { this.joinElapsedMs = performance.now() - began; }, 1000);
+  }
+
+  private stopJoinClock() {
+    clearInterval(this.joinClock);
+    this.joinClock = undefined;
   }
 
   /**

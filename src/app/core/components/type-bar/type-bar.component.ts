@@ -35,7 +35,7 @@ export interface TypeBarNotice {
  * into a dialog and hope. EXPERIMENTAL: it is behind the "Teclado ao vivo (experimental)" setting
  * (STORAGE_KEY.LIVE_KEYBOARD, off by default) and the deck's Texto button opens it only when that is
  * on. The compose dialog is still what Texto opens otherwise and still the way to paste a list
- * ("Lista" here, "Input de Texto" in the menu): a list of names is several lines, and this is a
+ * ("Lista" here, "Digitar texto" in the menu): a list of names is several lines, and this is a
  * line. Decision D7: ship the hardened dialog, build this behind a flag, decide after the device
  * pass. **The mirroring has run only against synthetic IME events in desktop Chrome**; what a real
  * Gboard, Samsung Keyboard and iOS keyboard send is recalled, which is why every event the field

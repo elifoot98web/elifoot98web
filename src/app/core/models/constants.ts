@@ -350,9 +350,19 @@ export const GAME_BOOT = {
   // that never answers must cost a look, not the whole window.
   SCREENSHOT_TIMEOUT_MS: 5 * 1000,
   // The wipe is offered from the Nth failure in a row (a timeout is never one). Earlier than
-  // this a failure is most likely a bad connection, and "Limpar todos os dados" is the one
+  // this a failure is most likely a bad connection, and "Apagar todos os dados…" is the one
   // button on the dialog that cannot be taken back.
   WIPE_OFFER_AFTER_FAILURES: 3,
+}
+
+/**
+ * What the boot screen says about a wait that is longer than usual (BootScreenHelper). Nothing here is a measurement of a phone:
+ * the first number is a desktop's whole boot (4 to 6 s) doubled and doubled again, the second is where a person who has watched a
+ * screen for a minute deserves to hear they may leave. The wait itself is bounded by GAME_BOOT and `elifootMain`, not by these.
+ */
+export const BOOT_SCREEN = {
+  SLOW_AFTER_MS: 15 * 1000,
+  LONG_AFTER_MS: 60 * 1000,
 }
 
 // What the framebuffer must look like for BootStageHelper to call a frame "the game's screen".
@@ -978,6 +988,10 @@ export const MULTIPLAYER = {
   // Failures trystero *can* report (a wrong password, a dead relay) arrive via
   // onJoinError and cut this short.
   STREAM_WAIT_TIMEOUT: 20000, // 20 seconds
+  // What the spectator's waiting card says while it waits (JoinWaitHelper): after the first it admits that a mobile network may be
+  // slow, after the second (the timeout is 20 s) that it is worth cancelling and trying again.
+  JOIN_HINT_AFTER_MS: 8000, // 8 seconds
+  JOIN_LONG_HINT_AFTER_MS: 15000, // 15 seconds
   // Minimum interval between outgoing cursor position broadcasts (~20/s).
   CURSOR_SEND_THROTTLE_MS: 50,
   // How long a cursor may sit still before its name label fades out, leaving the arrow.

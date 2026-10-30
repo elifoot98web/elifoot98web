@@ -31,10 +31,10 @@ check(!!menuButton, 'the options button is on screen', toolbar ? 'toolbar' : 'ra
 await c.tap(menuButton.x, menuButton.y, 60)
 await sleep(1500)   // the menu has twenty-odd entries now; 900 ms was not always enough for the popover to render them
 await c.shot(path.join(OUT, 'shots', `ui-${tag}-menu.png`))
-const items = await c.ev(`[...document.querySelectorAll('ion-popover ion-item ion-label')].map(l => l.textContent.trim().replace(/\\s+/g, ' '))`)
+const items = await c.ev(`[...document.querySelectorAll('app-options-menu ion-item ion-label')].map(l => l.textContent.trim().replace(/\\s+/g, ' '))`)
 check(items.some(t => t.startsWith('Modo de toque')), 'the menu lists "Modo de toque" with its subtitle', JSON.stringify(items.find(t => t.startsWith('Modo de toque'))))
 
-await click({ css: 'ion-popover ion-item', text: 'Modo de toque' }); await sleep(900)
+await click({ css: 'app-options-menu ion-item', text: 'Modo de toque' }); await sleep(900)
 await c.shot(path.join(OUT, 'shots', `ui-${tag}-dialog.png`))
 const dialog = await c.ev(`(() => { const a = document.querySelector('ion-alert'); return a ? { radios: [...a.querySelectorAll('.alert-radio-label')].map(x => x.textContent.trim()), checked: [...a.querySelectorAll('button.alert-radio-button[aria-checked=true] .alert-radio-label')].map(x => x.textContent.trim()), cls: a.className } : null })()`)
 check(!!dialog && dialog.cls.includes('win9x-alert') && dialog.radios.length === 2 && dialog.checked[0] === 'Direto (padrão)', 'the dialog is a win9x alert with the two modes, Direto checked', JSON.stringify(dialog))
@@ -60,7 +60,7 @@ for (let i = 0; i < 90; i++) {
   if (await c.ev(`(() => { const el = document.querySelector('app-game'); const g = el && window.ng && ng.getComponent(el); return !!(g && g.dosCI && !g.isHidden) })()`).catch(() => false)) break
 }
 await sleep(1500)
-await c.ev(`(() => { const b = [...document.querySelectorAll('ion-alert button')].find(x => /Entendi/.test(x.textContent)); b && b.click(); return 1 })()`)
+await c.ev(`(() => { const b = [...document.querySelectorAll('app-first-run-coach .coach-actions button')].find(x => /Pular/.test(x.textContent)); b && b.click(); return !!b })()`)
 await sleep(800)
 await c.ev(`(() => { window.__g = ng.getComponent(document.querySelector('app-game')); window.dosCI = __g.dosCI; return 1 })()`)
 check((await c.ev('__g.touchInputService.attached')) === false && (await c.ev('__g.touchMode')) === 'classic', 'after a reload the game boots in classic and the layer stays off', `menu says: ${await c.ev('__g.touchModeSummary')}`)

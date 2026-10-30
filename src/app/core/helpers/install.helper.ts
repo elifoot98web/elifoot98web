@@ -81,7 +81,7 @@ export class InstallHelper {
         '3. Toque em Adicionar.\n' +
         '\n' +
         'Atenção: o app da Tela de Início guarda os jogos salvos separado do navegador, e os que estão aqui não aparecem lá. ' +
-        'Antes de instalar, use Exportar jogos salvos. Depois de abrir o app, use Importar jogos salvos.',
+        'Antes de instalar, use Exportar jogos salvos. Depois de abrir o app, use Importar jogos salvos. Os dois ficam em Dados e avançado, no menu.',
     };
   }
 }

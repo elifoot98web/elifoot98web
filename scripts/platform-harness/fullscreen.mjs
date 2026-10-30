@@ -25,7 +25,9 @@ check('overlay exists and covers the canvas before', before.overlay && Math.abs(
 // a real tap on the menu entry (a real gesture)
 const menu = await c.ev(`(() => { const b = [...document.querySelectorAll('ion-header ion-buttons[slot=end] ion-button')].pop(); const r = b.getBoundingClientRect(); return {x: r.x + r.width/2, y: r.y + r.height/2} })()`)
 await c.tap(menu.x, menu.y); await sleep(1000)
-const item = await c.ev(`(() => { const i = [...document.querySelectorAll('ion-popover.menu-popover ion-item')].find(i => /Tela cheia/.test(i.innerText)); const r = i.getBoundingClientRect(); return { x: r.x + r.width/2, y: r.y + r.height/2, text: i.innerText.replace(/\\n+/g,' | ') } })()`)
+await c.ev(`document.querySelector('ion-modal.menu-sheet')?.setCurrentBreakpoint?.(1)`); await sleep(600)   // a sheet opens at 60% on a phone; its lower rows are only reachable once it is expanded
+await c.ev(`[...document.querySelectorAll('app-options-menu ion-item')].find(i => /Tela cheia/.test(i.innerText)).scrollIntoView({block:'center'})`); await sleep(400)
+const item = await c.ev(`(() => { const i = [...document.querySelectorAll('app-options-menu ion-item')].find(i => /Tela cheia/.test(i.innerText)); const r = i.getBoundingClientRect(); return { x: r.x + r.width/2, y: r.y + r.height/2, text: i.innerText.replace(/\\n+/g,' | ') } })()`)
 console.log('entry:', item.text)
 await c.tap(item.x, item.y)
 await sleep(1500)

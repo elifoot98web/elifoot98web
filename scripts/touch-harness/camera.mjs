@@ -589,19 +589,31 @@ if (mode === 'deck') {
   await tapAt(await tab(/2x|Zoom/))
   await c.evBody(`__g.camera.fit()`); await settle(300)
 
-  // the options menu entry
-  // Ionic moves aria-label to the inner button (the harness README, trap 8): the options button is the last of the toolbar's end slot.
-  const menu = await c.ev(`(() => { const b = [...document.querySelectorAll('ion-header ion-buttons[slot="end"] ion-button')].pop(); const r = b.getBoundingClientRect(); return { x: r.left + r.width/2, y: r.top + r.height/2 } })()`)
-  await tapAt(menu); await sleep(600)
-  const entry = await c.ev(`(() => { const label = [...document.querySelectorAll('ion-popover ion-label')].find(x => /Zoom e movimento/.test(x.textContent)); if (!label) return null; const item = label.closest('ion-item'); item.scrollIntoView({ block: 'center' }); const t = item.querySelector('ion-toggle'); const r = t.getBoundingClientRect(); return { x: r.left + r.width/2, y: r.top + r.height/2, checked: t.checked, text: label.textContent.trim().replace(/\\s+/g, ' ').slice(0, 220) } })()`)
-  check(!!entry, 'the options menu offers "Zoom e movimento"', entry && entry.text)
-  await sleep(300)
-  const entry2 = await c.ev(`(() => { const label = [...document.querySelectorAll('ion-popover ion-label')].find(x => /Zoom e movimento/.test(x.textContent)); const t = label.closest('ion-item').querySelector('ion-toggle'); const r = t.getBoundingClientRect(); return { x: r.left + r.width/2, y: r.top + r.height/2, checked: t.checked } })()`)
-  check(entry2.checked === true, 'with the toggle on')
+  // The switch is in "Dados e avançado" (Recursos experimentais); the menu's Exibição section has the Zoom row while it is on.
+  await s.openMenu()
+  const zoomRow = await c.ev(`(() => { const r = [...document.querySelectorAll('app-options-menu ion-item.options-zoom')][0]; return r ? r.innerText.replace(/\\s+/g, ' ') : null })()`)
+  check(!!zoomRow && /Ajustar/.test(zoomRow), 'with the camera on, the menu\'s Exibição section has the Zoom row (Ajustar, - and +), reachable with the key panel off', zoomRow ?? '')
+  const plus = async () => {
+    const at = await c.ev(`(() => { const r = document.querySelector('app-options-menu ion-item.options-zoom'); r?.scrollIntoView({ block: 'center' }); const b = [...(r?.querySelectorAll('ion-button') ?? [])].find(x => x.innerText.trim() === '+'); if (!b) return null; const q = b.getBoundingClientRect(); return JSON.stringify({ x: q.x + q.width / 2, y: q.y + q.height / 2 }) })()`)
+    return at ? JSON.parse(at) : null
+  }
+  if (await plus()) {
+    await sleep(300)
+    const before = await state()
+    const { x, y } = await plus()
+    await c.tap(x, y, 60); await sleep(600)
+    const after = await state()
+    check(after.scale > before.scale, 'a real tap on "+" in the menu zooms in one rung and leaves the menu open', `${round(before.scale)} -> ${round(after.scale)}`)
+    check(await c.ev(`!!document.querySelector('app-options-menu')`), 'the menu is still open after it')
+  }
+  await c.evBody(`__g.isPopoverOpen = false; __g.isSheetOpen = false`); await settle(500)
+  await s.openAdvanced()
+  const entry = await s.advancedSwitch('Zoom e movimento')
+  check(entry.checked === true, 'with the toggle on', entry.text.slice(0, 160))
   await shot('menu-entry')
-  await tapAt(entry2); await sleep(500)
-  check((await c.ev(`__g.cameraEnabled`)) === false && (await c.ev(`!![...document.querySelectorAll('app-dock .deck-taskbar .deck-tab')].find(x => /Zoom/.test(x.textContent))`)) === false, 'a real tap on the switch turns it off: the camera and the Zoom tab are gone')
-  await c.evBody(`__g.isPopoverOpen = false`); await settle(300)
+  await c.tap(entry.x, entry.y, 60); await sleep(600)
+  check((await c.ev(`__g.cameraEnabled`)) === false && (await c.ev(`!![...document.querySelectorAll('app-dock .deck-taskbar .deck-tab')].find(x => /Zoom/.test(x.textContent))`)) === false, 'a real tap on the switch in "Dados e avançado" turns it off: the camera and the Zoom tab are gone')
+  await s.closeAdvanced(); await settle(300)
   await c.evBody(`await __g.toggleCamera({ detail: { checked: true } })`); await settle(300)
   await c.evBody(`__g.camera.fit()`)
 }

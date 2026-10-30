@@ -6,7 +6,7 @@
  * the multiplayer chat, roster and dialogs can share it.
  *
  * Scope rule (see CLAUDE.md): companion windows are Windows 95; the app shell stays
- * Elifoot green. Do not restyle the page toolbars, landing cards or the options popover. The
+ * Elifoot green. Do not restyle the page toolbars, landing cards or the options menu (sheet and popover). The
  * control deck is a companion window (it is the Windows 3.1 machine's keyboard), and its whole
  * skin is the "Control deck" block below.
  *
@@ -791,6 +791,348 @@ ion-alert.win9x-alert .alert-button.alert-danger {
 }
 
 /*
+ * Windows made of rows: "Dados e avançado" and the first-run coach.
+ * ---------------------------------------------------------------------------
+ * A window of group boxes (`fieldset.win9x-group`, sunken, with a legend), each row a button or a switch and a sentence about what
+ * it does. The last group may be the danger zone (`.win9x-group--danger`): the same box in maroon with a dashed edge, so that what cannot
+ * be taken back is a different SHAPE as well as a different colour. Native elements, like the room dialog's: an `ion-button` here would
+ * need the `fill="clear"` precondition above and a shadow part to fight. The 44px floor for a finger is the coarse block at the end.
+ */
+.win9x-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  font-family: var(--win9x-font);
+  font-size: 13px;
+  color: var(--win9x-ink);
+}
+
+.win9x-group {
+  min-width: 0;
+  margin: 0;
+  padding: 6px 8px 10px;
+  background: var(--win9x-face);
+}
+
+.win9x-legend {
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.win9x-group.win9x-group--danger {
+  border-style: dashed;
+  border-color: #800000;
+}
+
+.win9x-group--danger .win9x-legend {
+  color: #800000;
+}
+
+.win9x-row {
+  margin-top: 10px;
+}
+
+.win9x-row:first-of-type {
+  margin-top: 4px;
+}
+
+.win9x-label {
+  display: block;
+  font-weight: bold;
+}
+
+.win9x-desc {
+  display: block;
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--win9x-ink-muted);
+}
+
+.win9x-action {
+  display: block;
+  width: 100%;
+  padding: 4px 12px;
+  text-align: center;
+}
+
+.win9x-action--danger {
+  color: #800000;
+}
+
+button.win9x-button:disabled {
+  color: var(--win9x-ink-disabled);
+  text-shadow: 1px 1px 0 var(--win9x-light);
+  cursor: default;
+}
+
+.win9x-switch {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.win9x-switch input {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 1px 0 0;
+  accent-color: #000080;
+}
+
+.win9x-close {
+  align-self: flex-end;
+  min-width: 96px;
+}
+
+/* The "?" of a group: a small square button, authentic to a Win9x dialog's help, beside the group's title. */
+.win9x-help {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  margin-inline-start: 6px;
+  padding: 0;
+  border: none;
+  background: var(--win9x-face);
+  color: var(--win9x-ink);
+  font: bold 11px/16px var(--win9x-font);
+  text-align: center;
+  cursor: pointer;
+  box-shadow:
+    inset -1px -1px var(--win9x-dark),
+    inset 1px 1px var(--win9x-light),
+    inset -2px -2px var(--win9x-shadow),
+    inset 2px 2px var(--win9x-bevel-light);
+}
+
+.win9x-help:active {
+  box-shadow:
+    inset -1px -1px var(--win9x-light),
+    inset 1px 1px var(--win9x-dark),
+    inset -2px -2px var(--win9x-bevel-light),
+    inset 2px 2px var(--win9x-shadow);
+}
+
+.win9x-help:focus-visible {
+  outline: 1px dotted var(--win9x-ink);
+  outline-offset: 1px;
+}
+
+/* A line of summary under a dialog's title (the host's "ELI-XK3P · sem senha · até 6 espectadores"), as a sunken read-out. */
+.win9x-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-family: var(--win9x-font);
+  font-size: 13px;
+  color: var(--win9x-ink);
+}
+
+.win9x-summary--room {
+  padding: 6px 8px;
+  border: 2px solid;
+  border-color: var(--win9x-shadow) var(--win9x-light) var(--win9x-light) var(--win9x-shadow);
+  background: var(--win9x-field);
+  font-weight: bold;
+  line-height: 1.35;
+}
+
+.win9x-summary-swatch {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--win9x-shadow);
+  box-shadow: inset -1px -1px var(--win9x-shadow), inset 1px 1px var(--win9x-light);
+}
+
+/* An expander that reads as a button: "Alterar" under the host's summary. */
+.win9x-expander--box {
+  margin: 0 0 12px;
+  padding: 6px 10px;
+  box-shadow:
+    inset -1px -1px var(--win9x-dark),
+    inset 1px 1px var(--win9x-light),
+    inset -2px -2px var(--win9x-shadow),
+    inset 2px 2px var(--win9x-bevel-light);
+  font-weight: bold;
+}
+
+.win9x-expander--box ion-icon {
+  font-size: 12px;
+}
+
+/*
+ * The first-run coach (FirstRunCoachComponent): three cards in a small Win9x dialog. Auto-height, so it is made of divs, and the modal
+ * sizes itself to the card (`.first-run-modal` in global.scss).
+ */
+.coach {
+  display: flex;
+  flex-direction: column;
+  height: auto;
+  max-height: inherit;
+}
+
+/*
+ * The title and the buttons stay where they are and the card between them scrolls: on a landscape phone (390px tall) the card is taller
+ * than the window, and "Próximo" is the one control that must never be off the screen.
+ */
+.coach-frame {
+  align-items: stretch;
+  justify-content: flex-start;
+  min-height: 0;
+  height: auto;
+  max-height: inherit;
+  overflow: hidden;
+}
+
+.coach-titlebar-end {
+  padding-right: 4px;
+}
+
+.coach-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 14px 14px 6px;
+  overflow-y: auto;
+  font-family: var(--win9x-font);
+  font-size: 14px;
+  color: var(--win9x-ink);
+  text-align: center;
+}
+
+.coach-steps,
+.coach-actions {
+  flex: 0 0 auto;
+}
+
+.coach-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  background: var(--win9x-field);
+  font-size: 40px;
+  color: #000080;
+}
+
+/* The tap card's ring, the same one the touch layer draws where a tap landed: a looping hint of "touch here". */
+.coach-icon--tap::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 36px;
+  height: 36px;
+  margin: -18px 0 0 -18px;
+  border: 3px solid #000080;
+  border-radius: 50%;
+  opacity: 0;
+  animation: coach-tap 1.6s ease-out infinite;
+}
+
+@keyframes coach-tap {
+  from { transform: scale(0.3); opacity: 0.9; }
+  to { transform: scale(1.5); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coach-icon--tap::after {
+    animation: none;
+  }
+}
+
+.coach-title {
+  margin: 10px 0 8px;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.coach-line {
+  margin: 0 0 8px;
+  line-height: 1.4;
+  text-align: start;
+}
+
+.coach-more {
+  justify-content: center;
+  width: auto;
+  margin: 2px auto 4px;
+  text-decoration: underline;
+  color: #000080;
+}
+
+.coach-footer {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--win9x-ink-muted);
+}
+
+.coach-steps {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.coach-step {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--win9x-shadow);
+  background: var(--win9x-face);
+}
+
+.coach-step--on {
+  border-color: #000080;
+  background: #000080;
+}
+
+.coach-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 6px 12px 12px;
+}
+
+.coach-actions .win9x-button {
+  min-width: 84px;
+}
+
+.coach-next {
+  min-width: 96px;
+}
+
+/* A short window: the same card, tighter. */
+@media (max-height: 460px) {
+  .coach-body {
+    padding-top: 8px;
+  }
+
+  .coach-icon {
+    width: 48px;
+    height: 48px;
+    font-size: 28px;
+  }
+
+  .coach-title {
+    margin: 6px 0;
+    font-size: 15px;
+  }
+
+  .coach-line {
+    font-size: 13px;
+  }
+
+  .coach-actions {
+    padding-bottom: 8px;
+  }
+}
+
+/*
  * Coarse pointers: a finger gets thumb-sized controls, a mouse keeps the authentic ones.
  * ---------------------------------------------------------------------------
  * Keyed to the input device, not the viewport. A 1024px iPad needs the floor and a narrow
@@ -841,5 +1183,25 @@ ion-alert.win9x-alert .alert-button.alert-danger {
   // comes straight out of the transcript.
   .win9x-roster:not(.win9x-roster--compact) .win9x-roster-row {
     min-height: 40px;
+  }
+
+  // A switch row is a 44px target and its box is one a thumb can hit. The "?" of a group stays a small square to look at and takes a
+  // 44px square to touch, by a pseudo-element: the legend does not clip, unlike the title the room pill sits in.
+  .win9x-switch {
+    min-height: var(--win9x-hit-target);
+  }
+
+  .win9x-switch input {
+    width: 24px;
+    height: 24px;
+  }
+
+  .win9x-help::after {
+    content: '';
+    position: absolute;
+    top: -13px;
+    right: -13px;
+    bottom: -13px;
+    left: -13px;
   }
 }

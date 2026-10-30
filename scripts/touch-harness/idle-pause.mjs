@@ -6,7 +6,7 @@
 //   node scripts/touch-harness/idle-pause.mjs hidden            the page hidden and shown while the guest sleeps (js-dos owns the hidden page)
 //   node scripts/touch-harness/idle-pause.mjs save              the first kickoff of a NEW game: the game's own save dialog, with the idle time cut to 150 ms
 //   node scripts/touch-harness/idle-pause.mjs wake              taps and keys sent to a guest that is ASLEEP: accuracy against the RAM oracle, order, spacing, nothing lost
-//   node scripts/touch-harness/idle-pause.mjs inert             auto-save off: the saver never sleeps the guest, asks less and less often, and sleeps again once auto-save is back
+//   node scripts/touch-harness/idle-pause.mjs inert             auto-save off: the saver never sleeps the guest, asks less and less often, and sleeps again once auto-save is back (from a still screen: not Acerca, which boot.mjs leaves up)
 //   node scripts/touch-harness/idle-pause.mjs ui [portrait|landscape]   the menu entry, a real tap on it, persisted across a reload, wiped with the data
 //   MODE=off|on|alt [FIRST=off|PATTERN=0110] ROUNDS=4 RETUNE='{"idleMs":2000,"inputQuietMs":2000}' LABEL=name node scripts/touch-harness/idle-pause.mjs season
 //
@@ -313,7 +313,7 @@ async function modeInert() {
   await L.restore()
   await L.setting(false)
   await L.retune({ idleMs: 1500, inputQuietMs: 1500 })
-  await c.ev(`__g.toggleDisableAutoSave({ detail: { checked: true } })`)
+  await c.ev(`__g.setAutoSaveOnGame(false)`)
   await sleep(500)
   const t0 = await L.now()
   const sleeps0 = (await L.power()).stats.sleeps   // the counters live as long as the page does
@@ -328,7 +328,7 @@ async function modeInert() {
   check(gaps.every((g, i) => i === 0 || g >= gaps[i - 1] - 0.4), 'each wait is at least the one before (1, 2, 4, 8 s, then the cap)', gaps.join(' '))
   const cpu = await L.cpu(10)
   check(cpu.rendererPct > 60, 'and the emulator was running as it does without the saver', `${cpu.rendererPct}%`)
-  await c.ev(`__g.toggleDisableAutoSave({ detail: { checked: false } })`)
+  await c.ev(`__g.setAutoSaveOnGame(true)`)
   const back = Date.now()
   let asleepAfter = null
   for (let i = 0; i < 120 && asleepAfter === null; i++) { if ((await L.power()).state === 'asleep') asleepAfter = (Date.now() - back) / 1000; else await sleep(500) }
@@ -341,26 +341,21 @@ async function modeInert() {
 
 async function modeUi() {
   const tag = process.argv[3] || 'portrait'
-  const { c } = await lab()
-  const click = ({ css, text }) => c.ev(`(() => { const el = [...document.querySelectorAll(${JSON.stringify(css)})].find(e => ${text ? `e.textContent.includes(${JSON.stringify(text)})` : 'true'}); if (!el) return false; el.click(); return true })()`)
-  const centre = selector => c.ev(`JSON.stringify((() => { const b = document.querySelector(${JSON.stringify(selector)}); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 } })())`).then(JSON.parse)
-  // The slot's own button: the save chip and the sound chip hold ion-buttons too, and a tap on the first of those saves the game.
-  const toolbar = await centre('ion-header ion-buttons[slot="end"] > ion-button')
-  const menuButton = toolbar ?? await centre('.rail-menu-btn')
-  check(!!menuButton, 'the options button is on screen', toolbar ? 'toolbar' : 'rail')
-  await c.tap(menuButton.x, menuButton.y, 60)
-  await sleep(900)
-  const entry = await c.ev(`(() => { const label = [...document.querySelectorAll('ion-popover ion-item ion-label')].find(l => l.textContent.includes('Economizar bateria quando parado')); if (!label) return null; label.scrollIntoView({ block: 'center' }); const t = label.parentElement.querySelector('ion-toggle'); const r = t.getBoundingClientRect(); return JSON.stringify({ x: r.x + r.width / 2, y: r.y + r.height / 2, checked: t.checked, text: label.textContent.trim().replace(/\\s+/g, ' ') }) })()`)
-  check(!!entry, 'the menu lists "Economizar bateria quando parado"', entry ? JSON.parse(entry).text.slice(0, 60) : '')
+  const s = await session()
+  const { c } = s
+  // The switch is in "Dados e avançado" (Recursos experimentais), two real taps from the menu's button.
+  await s.openAdvanced()
+  check(await c.ev(`!!document.querySelector('app-advanced-modal')`), 'the options sheet opens "Dados e avançado"')
+  const entry = await s.advancedSwitch('Economizar bateria quando parado')
+  check(!!entry, 'the window lists "Economizar bateria quando parado"', entry ? entry.text.slice(0, 60) : '')
   if (!entry) return
-  const before = JSON.parse(entry)
   await c.shot(path.join(OUT, 'shots', `idle-ui-${tag}-menu.png`))
-  const fits = await c.ev(`(() => { const l = [...document.querySelectorAll('ion-popover ion-item')].find(e => e.textContent.includes('Economizar bateria quando parado')); const r = l.getBoundingClientRect(); const p = document.querySelector('ion-popover').shadowRoot.querySelector('.popover-content').getBoundingClientRect(); return JSON.stringify({ itemWidth: Math.round(r.width), popoverWidth: Math.round(p.width), itemHeight: Math.round(r.height), overflowsX: l.scrollWidth > l.clientWidth + 1 }) })()`).then(JSON.parse)
-  check(!fits.overflowsX, 'the explanation wraps inside the item', JSON.stringify(fits))
-  await c.tap(before.x, before.y, 60)
+  const fits = await c.ev(`(() => { const l = [...document.querySelectorAll('app-advanced-modal label.win9x-switch')].find(e => e.innerText.includes('Economizar bateria quando parado')); const r = l.getBoundingClientRect(); const p = l.closest('ion-content').getBoundingClientRect(); return JSON.stringify({ itemWidth: Math.round(r.width), windowWidth: Math.round(p.width), itemHeight: Math.round(r.height), overflowsX: l.scrollWidth > l.clientWidth + 1 }) })()`).then(JSON.parse)
+  check(!fits.overflowsX, 'the explanation wraps inside the row', JSON.stringify(fits))
+  await c.tap(entry.x, entry.y, 60)
   await sleep(1200)
   const after = await c.ev(`JSON.stringify({ setting: __g.idlePause, running: __g.power.running, stored: await __g.storageService.get('idlePause') })`).then(JSON.parse)
-  check(after.setting === !before.checked && after.running === after.setting && after.stored === after.setting, 'a real tap flips the setting, starts or stops the service and stores the choice', JSON.stringify(after))
+  check(after.setting === !entry.checked && after.running === after.setting && after.stored === after.setting, 'a real tap flips the setting, starts or stops the service and stores the choice', JSON.stringify(after))
   console.log('reload the page (boot.mjs with KEEP=1) to see it persist; "Apagar todos os dados" removes it (storage-keys.spec.ts proves the wipe)')
 }
 

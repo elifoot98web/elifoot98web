@@ -1,0 +1,29 @@
+<!--
+  The boot screen. A fixed overlay on the game's green: it takes no space from the page, so the picture's box under it is the box it
+  will have. The message is a live region (the stage changes every few seconds and a screen reader should hear it), and the bar is a
+  real progressbar that gives no value when it has none to give.
+-->
+<section class="boot-screen" aria-label="Carregando o jogo">
+  <div class="boot-card">
+    <img class="boot-logo" src="assets/pwaicons/android/android-launchericon-96-96.png" alt="" width="64" height="64">
+    <h1 class="boot-title">{{ view.title }}</h1>
+
+    <div class="boot-bar" role="progressbar" aria-label="Progresso do carregamento" aria-valuemin="0" aria-valuemax="100"
+      [attr.aria-valuenow]="view.bar.determinate ? view.bar.percent : null"
+      [attr.aria-valuetext]="view.bar.determinate ? percentText : view.message"
+      [class.boot-bar--moving]="!view.bar.determinate">
+      <div class="boot-bar-fill" [style.width.%]="view.bar.determinate ? view.bar.percent : null"></div>
+    </div>
+    <p class="boot-message" role="status" aria-live="polite">{{ view.message }}</p>
+
+    <ol class="boot-steps" aria-label="Etapas">
+      <li *ngFor="let step of view.steps" class="boot-step" [attr.data-state]="step.state"
+        [attr.aria-current]="step.state === 'active' ? 'step' : null">{{ step.label }}</li>
+    </ol>
+
+    <p *ngIf="hostWaiting" class="boot-note">Sua sala entra no ar assim que o jogo carregar.</p>
+    <p *ngIf="view.hint as hint" class="boot-hint">{{ hint }}</p>
+
+    <button type="button" class="boot-leave" (click)="leave.emit()">Voltar ao menu</button>
+  </div>
+</section>

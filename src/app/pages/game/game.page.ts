@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, NgZone, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AlertController, LoadingController, ModalController, ToastController } from '@ionic/angular/lazy';
 import { AlertButton } from '@ionic/core';
@@ -11,18 +11,21 @@ import { UserGuideComponent } from './components/user-guide/user-guide.component
 import { AboutComponent } from './components/about/about.component';
 import { OmaticModalComponent } from './components/omatic-modal/omatic-modal.component';
 import { DiagnosticsModalComponent } from './components/diagnostics-modal/diagnostics-modal.component';
-import { DiagnosticsReportHelper } from 'src/app/core/helpers/diagnostics-report.helper';
+import { AdvancedEvent, AdvancedHost, AdvancedModalComponent } from './components/advanced-modal/advanced-modal.component';
+import { FirstRunCoachComponent } from './components/first-run-coach/first-run-coach.component';
+import { MenuEvent } from './components/options-menu/options-menu.component';
 import { BehaviorSubject, combineLatest, distinctUntilChanged, filter, map, Observable, Subscription, take } from 'rxjs';
 import { EmulatorKeyCodeHelper } from '../../core/models/game';
 import { CursorClickMessage, CursorPositionMessage, MultiplayerJoinErrorKind, PlayerInfo } from '../../core/models/multiplayer';
 import { AudioHealthService, AutoSaverService, CameraService, CameraSurface, CameraView, EmulatorControlService, EmulatorPowerService, FieldHintService, GameExitWatcherService, PatchService, SaveBeforeReloadResult, SaveGameService, SaveImportPlan, SaveSafetyService, SavesBackup, TouchInputService } from '../../core/services/game';
-import { DiagnosticsService, FullscreenService, InstallService, LayoutHelperService, LocalStorageService, NudgeStateService, SaveStatusService, StageLayoutService, StorageHealthService, WakeLockService } from '../../core/services/shared';
+import { DiagnosticsService, FullscreenService, InstallService, LayoutHelperService, LocalStorageService, NudgeStateService, SaveStatusService, StageLayoutService, WakeLockService } from '../../core/services/shared';
 import { MultiplayerAudioService, MultiplayerChatService, MultiplayerCursorService, MultiplayerPlayerInfoService, MultiplayerRelayHealthService, MultiplayerService, MultiplayerUiService } from '../../core/services/multiplayer';
 import { CursorRendererHelper } from 'src/app/core/helpers/cursor-renderer.helper';
 import { OverlaySyncHelper } from 'src/app/core/helpers/overlay-sync.helper';
 import { ChatPanelHelper } from 'src/app/core/helpers/chat-panel.helper';
 import { BootFailureHelper, BootFailureKind } from 'src/app/core/helpers/boot-failure.helper';
-import { BootProgressHelper } from 'src/app/core/helpers/boot-progress.helper';
+import { BootProgressHelper, BootStatus } from 'src/app/core/helpers/boot-progress.helper';
+import { BootScreenHelper } from 'src/app/core/helpers/boot-screen.helper';
 import { BootStage, BootStageHelper } from 'src/app/core/helpers/boot-stage.helper';
 import { TimeoutHelper } from 'src/app/core/helpers/timeout.helper';
 import { DisplayMode, DisplayModeHelper } from 'src/app/core/helpers/display-mode.helper';
@@ -40,7 +43,12 @@ import { FullscreenHelper } from 'src/app/core/helpers/fullscreen.helper';
 import { InstallHelper, InstallMode } from 'src/app/core/helpers/install.helper';
 import { NudgeHelper } from 'src/app/core/helpers/nudge.helper';
 import { GameVolumeHelper } from 'src/app/core/helpers/audio-health.helper';
-import { StorageHealthHelper } from 'src/app/core/helpers/storage-health.helper';
+import { InvertedSettingHelper } from 'src/app/core/helpers/inverted-setting.helper';
+import { MenuContext, MenuHelper, MenuSection } from 'src/app/core/helpers/menu.helper';
+import { HelpTopic } from 'src/app/core/helpers/help-topic.helper';
+import { FirstRunHelper } from 'src/app/core/helpers/first-run.helper';
+import { WipeFlowHelper } from 'src/app/core/helpers/wipe-flow.helper';
+import { RoomSetupResult } from 'src/app/core/components/multiplayer/room-setup-modal/room-setup-modal.component';
 
 
 @Component({
@@ -51,18 +59,33 @@ import { StorageHealthHelper } from 'src/app/core/helpers/storage-health.helper'
 })
 export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('popover') popover: any;
+  /** The two pickers of "Dados e avançado": they live in the page, because a picker opens only from the tap that asked for it. */
+  @ViewChild('patchFileInput', { static: true }) patchFileInput!: ElementRef<HTMLInputElement>;
+  @ViewChild('saveGameFileInput', { static: true }) saveGameFileInput!: ElementRef<HTMLInputElement>;
   /** The page's row: what StageLayoutService measures, and the parent of the picture's container, the rails and the chat. */
   @ViewChild('stageHost', { static: true }) stageHost!: ElementRef<HTMLElement>;
   /** The live type bar, while it is mounted (the setting is on and the deck is shown). */
   @ViewChild(TypeBarComponent) typeBar?: TypeBarComponent;
   // UI state properties
-  smoothFilterDisabled = false;
+  /**
+   * "Suavizar a imagem": what the screen says, in the positive. The key it is kept under (STORAGE_KEY.DISABLE_SMOOTH_FILTER) is
+   * the OFF flag it always was, so a player who upgrades keeps the choice; InvertedSettingHelper is the one place that converts.
+   */
+  smoothing = true;
   spectatorCursorsHidden = false;
   spectatorAudioDisabled = false;
   private latestCursors: { [peerId: string]: CursorPositionMessage } = {};
-  autoSaveDisabled = false;
+  /** "Salvar ao gravar o jogo", in the positive; the key is STORAGE_KEY.DISABLE_AUTO_SAVE, stored as the OFF flag (see above). */
+  autoSaveOnGame = true;
+  /** "Salvar a cada 5 min" (STORAGE_KEY.PERIODIC_SAVE, stored as it reads). */
   periodicSave = false;
+  /** The desktop's popover is open. */
   isPopoverOpen = false;
+  /** The touch screen's bottom sheet is open. */
+  isSheetOpen = false;
+  /** How tall the sheet opens (MenuHelper.initialBreakpoint), chosen each time it is opened: a rotation changes the answer. */
+  sheetInitialBreakpoint = 0.6;
+  readonly sheetBreakpoints = [0, 0.6, 1];
   isHidden = true;
   dosCI: any = null;
   versionConfig = environment.versionConfig;
@@ -139,16 +162,14 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   fullscreenActive = false;
   /** What the app can offer about being installed (InstallService); the menu entry and the banner follow it. */
   installMode: InstallMode = 'none';
-  /** The "Armazenamento" line under "Dados e Backups", read each time the menu opens. */
-  storageSummary = '';
-  storageWarning: string | null = null;
-
   /**
    * Whether the options menu offers "Modo de toque": a finger is the primary pointer AND the
    * classic touchpad would work on this device (see TouchModeHelper). Reactive, because a
    * convertible changes its primary pointer when the keyboard is detached.
    */
   touchModeChoice$: Observable<boolean>;
+  /** The last answer of {@link touchModeChoice$}, for the menu model (a pure function of plain values). */
+  touchModeOffered = false;
   /** The person's choice. What is actually in force is {@link TouchModeHelper.effective}. */
   touchMode: TouchMode = 'direct';
 
@@ -161,8 +182,14 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   cameraView: CameraView = { attached: false, enabled: false, scale: 1, zoomed: false, label: 'Ajustar', canZoomIn: false, canZoomOut: false };
   /** The panel the deck has up in its band (null when folded): the camera takes the band under the picture only while there is none. */
   deckShown: DeckPanel | null = null;
-  /** Whether the menu offers "Zoom e movimento": the same test as "Modo de toque", a finger is the pointer. */
+  /** Whether "Dados e avançado" offers "Zoom e movimento": the same test as "Modo de toque", a finger is the pointer. */
   cameraChoice$: Observable<boolean>;
+  cameraOffered = false;
+  /** Unread chat messages and the roster's size, kept as numbers for the menu model (the template's async pipes cannot feed it). */
+  private unreadMessages = 0;
+  private participantCount = 0;
+  private menuKey = '';
+  private menuCache: MenuSection[] = [];
 
   private static readonly KEY_FAILURE_REPORT_INTERVAL_MS = 5000;
   private lastKeyFailureAt = 0;
@@ -172,8 +199,19 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   private pageSubscriptions = new Subscription();
   private stopObservingOverlay?: () => void;
 
-  /** The boot overlay while it is up, so leaving the page mid-boot does not strand it. */
-  private bootLoading?: Awaited<ReturnType<LoadingController['create']>>;
+  /**
+   * The boot screen is up: the emulator is starting and the game's own screen has not been seen. A flag the template reads, and not an
+   * overlay to dismiss, so leaving the page mid-boot strands nothing.
+   */
+  booting = false;
+  bootStatus: BootStatus = BootScreenHelper.initial();
+  /**
+   * The room dialog `?host=1` opens while the emulator boots, and what it answered. The dialog needs no emulator and hosting needs
+   * one, so the dialog goes first and the room starts when the game is up (bootGame): never a reload, which would end the room.
+   */
+  private hostDialog?: Promise<RoomSetupResult | null>;
+  /** The person answered the dialog and the game is still starting: the boot screen says the room is waiting for it. */
+  hostWaitingForBoot = false;
   /**
    * The timeout or failure dialog while it is up. Alerts are app-level overlays that outlive the
    * route, so one left open when the person presses Back would float over the landing page
@@ -231,14 +269,17 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     private fullscreen: FullscreenService,
     private install: InstallService,
     private nudges: NudgeStateService,
-    private storageHealth: StorageHealthService,
     private stageLayout: StageLayoutService,
     private camera: CameraService,
+    private zone: NgZone,
     chatService: MultiplayerChatService
   ) {
     this.unreadCount$ = chatService.unreadCount$;
     this.fullscreenSupported = this.fullscreen.supported;
     this.participantCount$ = this.playerInfoService.playerList$.pipe(map(players => players.length));
+    // The menu model is a pure function of plain values, so what the template reads through async pipes is kept as numbers as well.
+    this.pageSubscriptions.add(this.unreadCount$.subscribe(count => { this.unreadMessages = count; }));
+    this.pageSubscriptions.add(this.participantCount$.subscribe(count => { this.participantCount = count; }));
     this.layout = DeckLayoutHelper.presentation({
       viewport: { width: window.innerWidth, height: window.innerHeight },
       touchPrimary: this.layoutHelperService.isTouchPrimary,
@@ -274,11 +315,13 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
       map(coarse => TouchModeHelper.offersChoice(coarse, navigator.userAgent))
     );
     this.cameraChoice$ = this.layoutHelperService.matches$('(pointer: coarse)');
+    this.pageSubscriptions.add(this.touchModeChoice$.subscribe(offered => { this.touchModeOffered = offered; }));
+    this.pageSubscriptions.add(this.cameraChoice$.subscribe(offered => { this.cameraOffered = offered; }));
   }
 
   /**
    * The one "debug" switch: the diagnostics log. This used to be a field that was always
-   * `false` and that nothing could set; it gates the menu's "Baixar Disco Virtual" item, which
+   * `false` and that nothing could set; it gates "Baixar disco virtual" in "Dados e avançado", which
    * is a developer's tool, and turning the diagnostics on is the same kind of decision.
    */
   get debugMode(): boolean {
@@ -288,13 +331,6 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   /** The subtitle of the "Salvar agora" menu entry: what the toolbar chip says, for the layouts that have no toolbar. */
   get saveSummary(): string {
     return SaveStatusHelper.describe(this.saveStatus.snapshot, Date.now()).text
-  }
-
-  /** The subtitle of the "Diagnóstico" menu entry. */
-  get diagnosticsSummary(): string {
-    if (!this.diagnostics.enabled) return 'Desligado'
-    const events = DiagnosticsReportHelper.events(this.diagnostics.entryCount)
-    return this.diagnostics.sessionOnly ? `Ligado nesta visita · ${events}` : `Ligado · ${events}`
   }
 
   ngAfterViewInit(): void {
@@ -315,8 +351,14 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     // boot has nothing to wait for.
     void this.saveStatus.load()
     // Before the boot and not with the other settings after it: the deck is on screen behind the
-    // loader, and a player who switched it off should not see it come and go.
+    // boot screen, and a player who switched it off should not see it come and go.
     void this.setupDeck()
+    // The landing page's "Jogar e transmitir para amigos" (and the PWA's "Hospedar" shortcut): the room dialog needs no emulator, so it
+    // is asked for now, while the game boots, and the room starts when the game is up (bootGame). Not awaited: the boot must not wait
+    // for a person to fill in a form.
+    if (this.route.snapshot.queryParamMap.get('host') === '1') {
+      this.hostDialog = this.askForRoomWhileBooting()
+    }
     await this.bootGame()
   }
 
@@ -325,40 +367,33 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
    * load: "Continuar esperando" after a timeout comes back here, and `elifootMain` re-attaches to
    * the boot that is still running.
    *
-   * Only a failure to START the emulator is a boot failure. What follows (settings, the welcome
-   * dialog, the host intent) runs with a working game behind it, so an exception there is
+   * Only a failure to START the emulator is a boot failure. What follows (settings, the room asked
+   * for with `?host=1`, the first-run coach) runs with a working game behind it, so an exception there is
    * logged and reported but never reloads the page, which is what the old catch-all did to a
    * game that was running fine.
    */
   private async bootGame() {
-    const loading = await this.loadingController.create({
-      message: 'Carregando o jogo…',
-      backdropDismiss: false
-    });
-    this.bootLoading = loading;
-    await loading.present();
+    this.booting = true
+    this.bootStatus = BootScreenHelper.initial()
     this.diagnostics.log('boot', 'boot start')
 
     let detected: boolean;
     try {
-      ({ detected } = await this.loadGame(message => {
-        // Stencil re-renders on the property write; nothing here needs a change-detection pass.
-        if (loading.message !== message) loading.message = message;
-      }));
+      ({ detected } = await this.loadGame(status => this.showBootStatus(status)));
     } catch (e) {
-      await this.dismissBootLoading(loading);
+      this.endBoot()
       await this.handleBootFailure(e);
       return;
     }
 
     if (this.destroyed) {
-      await this.dismissBootLoading(loading);
+      this.endBoot()
       return;
     }
 
     // The emulator started, so the failures in a row are over, whether or not its screen showed.
     // Its own try: with site data blocked every Ionic Storage write rejects while js-dos itself
-    // boots fine, and that must not leave the overlay over a running game.
+    // boots fine, and that must not leave the boot screen over a running game.
     try {
       await this.storageService.set(STORAGE_KEY.FAIL_COUNT, 0)
     } catch (e) {
@@ -372,7 +407,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
       console.error('Could not apply the saved settings', e)
     }
     this.isHidden = false
-    await this.dismissBootLoading(loading)
+    this.endBoot()
     // After the picture has its box (the game was hidden, and without `.full` the container has no size to put a camera on).
     try {
       await this.setupCamera()
@@ -381,26 +416,50 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     }
 
     try {
+      // The room first when the person came to host (its dialog has been open, or answered, since the boot began); the coach is for
+      // the visit that was not about something else. A coach over a room that has just gone on the air would be noise.
+      const hosted = await this.startRoomAskedForWhileBooting()
       if (detected) {
-        await this.handleShowTutorial()
+        await this.handleShowFirstRun(hosted)
       } else {
-        // A wall of welcome text over a screen that never rendered is worse than silence, but
+        // A coach over a screen that never rendered is worse than silence, but
         // silence is not an answer either: the guest may just be slow.
-        console.warn('Game screen was never detected; skipping the welcome dialog.')
+        console.warn('Game screen was never detected; skipping the first-run coach.')
         await this.multiplayerUiService.showToast('O jogo ainda está iniciando…', 'warning', 6000)
       }
-      await this.consumeHostIntent()
     } catch (e) {
       console.error(e)
       await this.showErrorAlert(e instanceof Error ? e : new Error(String(e)))
     }
-    // After the welcome dialog and the room dialog, and not awaited: it waits for the player.
+    // After the first-run coach and the room, and not awaited: it waits for the player.
     void this.maybeNudge()
   }
 
-  private async dismissBootLoading(loading: Awaited<ReturnType<LoadingController['create']>>) {
-    if (this.bootLoading === loading) this.bootLoading = undefined;
-    await loading.dismiss();
+  /**
+   * What js-dos and then the guest said about the boot, for the boot screen. The callbacks come from a MutationObserver on js-dos's
+   * loading text and from the polling loop; either way the page's view has to hear of it, hence the zone.
+   */
+  private showBootStatus(status: BootStatus) {
+    this.zone.run(() => { this.bootStatus = status })
+  }
+
+  /** Take the boot screen down. The game is up, or the boot failed and a dialog is about to say so. */
+  private endBoot() {
+    this.booting = false
+    this.hostWaitingForBoot = false
+  }
+
+  /**
+   * "Voltar ao menu" on the boot screen. The emulator has not been played, so there is nothing to save, and a download or a boot in
+   * flight cannot be cancelled from here (`stop()` does not reach it): the reload is what actually stops them. The route guard has
+   * nothing to ask either, because `leaving` says the navigation is this one.
+   */
+  leaveBoot() {
+    this.diagnostics.log('boot', 'left during the boot')
+    this.leaving = true
+    this.saveStatus.allowExit()
+    window.location.hash = '#/main'
+    window.location.reload()
   }
 
   /**
@@ -447,8 +506,8 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     const { role } = await alert.onDidDismiss();
     this.diagnostics.log('boot', 'timeout dialog answered', () => ({ role: role ?? 'reload' }))
     if (this.bootAlert === alert) this.bootAlert = undefined;
-    // Not once the page is gone: bootGame() would put a loader nothing dismisses over whatever
-    // page is showing now, for as long as the boot stays pending.
+    // Not once the page is gone: bootGame() would start a boot (and its polling) that nothing on a
+    // destroyed page is watching.
     if (role === 'wait' && !this.destroyed) {
       await this.bootGame()
     }
@@ -474,10 +533,13 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     ]
     if (BootFailureHelper.offersWipe(kind, failures)) {
       buttons.push({
-        text: 'Limpar todos os dados',
+        text: 'Apagar todos os dados…',
         cssClass: 'alert-danger',
-        handler: async () => {
-          await this.clearAllData()
+        // The same two questions as the menu's: a boot that failed is not a reason to skip the backup. This dialog stays up under
+        // them (false), so that "Cancelar" at either question brings the person back to "Tentar de novo".
+        handler: () => {
+          void this.confirmWipe()
+          return false
         }
       })
     }
@@ -508,9 +570,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroyed = true;
     this.stopSafetyNets();
-    // Ends the detection loop in waitForGameScreen(); a boot overlay still up would otherwise
-    // cover whatever page comes next.
-    void this.bootLoading?.dismiss().catch(() => undefined);
+    // Ends the detection loop in waitForGameScreen(). The boot screen is this page's own template, so it goes with it.
     void this.bootAlert?.dismiss(undefined, 'destroyed').catch(() => undefined);
     // The queue is a root service and outlives this page; whatever it still holds is typing
     // meant for this page's emulator.
@@ -545,14 +605,14 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
    *
    * Returns whether it was actually seen: the polling loop exits both on success and when the
    * window closes, and resolving identically for both meant a failed boot went on to show the
-   * welcome dialog over a black screen.
+   * first-run coach over a black screen.
    *
-   * `onStatus` hears what the loader should say, in Portuguese: first the download and the
+   * `onStatus` hears what the boot screen should say, in Portuguese: first the download and the
    * unpacking (js-dos's own text, through BootProgressHelper), then the stage the guest is in.
    * A rejection is `elifootMain`'s own: the real error, or a JsdosTimeoutError that is only the
    * end of one wait (see bootGame).
    */
-  async loadGame(onStatus?: (message: string) => void): Promise<{ detected: boolean }> {
+  async loadGame(onStatus?: (status: BootStatus) => void): Promise<{ detected: boolean }> {
     const began = performance.now()
     this.dosCI = await elifootMain(environment.prefixPath, environment.gameBundleURL, loaderText => {
       const step = BootProgressHelper.logStep(loaderText)
@@ -560,8 +620,8 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
         this.lastLoaderStep = step
         this.diagnostics.log('boot', 'js-dos says', () => ({ text: loaderText }))
       }
-      const message = BootProgressHelper.describe(loaderText)
-      if (message) onStatus?.(message)
+      const status = BootProgressHelper.status(loaderText)
+      if (status) onStatus?.(status)
     })
     this.diagnostics.log('boot', 'emulator ready', () => ({ ms: Math.round(performance.now() - began) }))
 
@@ -574,13 +634,13 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
    * most of a minute to get here, and this window is where the person would otherwise be
    * looking at nothing.
    */
-  private async waitForGameScreen(onStatus?: (message: string) => void): Promise<boolean> {
+  private async waitForGameScreen(onStatus?: (status: BootStatus) => void): Promise<boolean> {
     const deadline = Date.now() + GAME_BOOT.DETECTION_TIMEOUT_MS
     const began = performance.now()
     const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
     let stage: BootStage = 'dos'
-    onStatus?.(BootStageHelper.message(stage))
+    onStatus?.(BootScreenHelper.fromStage(stage))
 
     // wait for the js-dos to settle
     await pause(GAME_BOOT.DETECTION_SETTLE_MS)
@@ -601,7 +661,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
         if (next !== stage) {
           stage = next
           this.diagnostics.log('boot', 'stage', () => ({ stage, size: `${frame.width}x${frame.height}`, afterMs: Math.round(performance.now() - began) }))
-          onStatus?.(BootStageHelper.message(stage))
+          onStatus?.(BootScreenHelper.fromStage(stage))
         }
       } catch (e) {
         console.warn("Error checking green screen", { reason: e })
@@ -628,75 +688,62 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     this.startSafetyNets()
   }
 
-  async handleShowTutorial() {
-    const hideTutorial = await this.storageService.get<boolean>(STORAGE_KEY.HIDE_TUTORIAL)
-
-    if (!hideTutorial) {
-      await this.showTutorial()
+  /**
+   * The first-run coach, once. `hosted` is whether the person came to host and the room is now on the air (startRoomAskedForWhileBooting):
+   * that visit has already done what it was for. The flag is the one the old welcome alert wrote (`HIDE_TUTORIAL`), so a player who
+   * had answered that one has answered this one. An unreadable store counts as answered: a coach that cannot remember it was
+   * shown would greet the person on every visit.
+   */
+  private async handleShowFirstRun(hosted: boolean) {
+    let stored: unknown
+    let readable = true
+    try {
+      stored = await this.storageService.get<boolean>(STORAGE_KEY.HIDE_TUTORIAL)
+    } catch (e) {
+      readable = false
+      console.warn('Could not read whether the first-run coach was answered; not showing it', e)
+    }
+    if (FirstRunHelper.due({ stored, readable, gameSeen: true, hostedThisVisit: hosted })) {
+      await this.showFirstRunCoach()
     }
   }
 
   /**
-   * The welcome dialog. Reachable from the menu as "Primeiros passos" as well, so retiring it
-   * is not a one-way door.
+   * The first-run coach: tap, type, save and back up, in three cards. Reachable from the menu as "Primeiros passos" as well, so retiring
+   * it is not a one-way door. Closing it any way is the answer: the flag is written when it goes, so "Pular" is as final as "Entendi".
    *
-   * Resolves only once the user is done with it — including the guide, if they went there —
-   * because `ngOnInit` runs `consumeHostIntent()` next: awaiting `present()` alone opened the
-   * room dialog on top of this alert on every `?host=1` arrival, which is the entry point the
-   * landing page's "Jogar e transmitir para amigos" uses.
+   * Resolves only once the person is done with it, because the caller carries on to the next thing the page may say (the nudges).
    */
-  async showTutorial() {
-    this.hidePopover()
-    // Assigned by the FAQ button so this method can wait for that path too.
-    let followUp: Promise<void> = Promise.resolve()
-    const alert = await this.alertController.create({
-      header: 'Informações Importantes',
-      message:
-        'Este é um projeto gratuito e de código aberto, sem cobranças ou coleta de dados dos usuários.\n' +
-        '\nPara aprender a jogar, consulte o FAQ e o Manual do Usuário disponíveis no menu de opções.\n' +
-        '\nSobre os jogos salvos:\n' +
-        '- Os dados são armazenados localmente no navegador. Se você estiver usando uma janela anônima ou se os dados de navegação forem apagados, os jogos salvos serão perdidos.\n' +
-        '\n' +
-        'Dicas de uso:\n' +
-        '- No computador, pressione ESC para liberar o mouse da janela do jogo.\n' +
-        '- No celular, toque direto no que quiser clicar. Toque duas vezes para um clique duplo, arraste para mover barras e janelas, e segure o dedo por meio segundo para mirar com precisão: o cursor aparece acima do dedo e o clique acontece quando você solta.\n' +
-        '- No celular e no tablet, as teclas do jogo ficam no painel embaixo da imagem: Táticas (F1 a F12), Setas, Texto (para escrever com acento) e Mais. Com o aparelho deitado, o botão Teclas abre o mesmo painel.\n' +
-        '\nAproveite para reviver a nostalgia do clássico Elifoot 98 diretamente no seu navegador!\n',
+  async showFirstRunCoach() {
+    this.closeMenu()
+    const modal = await this.modalController.create({
+      component: FirstRunCoachComponent,
+      componentProps: {
+        touch: this.layoutHelperService.isTouchPrimary,
+        help: (topic: HelpTopic) => { void this.openGuide(topic) },
+      },
+      cssClass: 'win9x-modal first-run-modal',
       backdropDismiss: false,
-      cssClass: 'win9x-alert alert-whitespace wide-alert',
-      buttons: [
-        {
-          text: 'FAQ e Manual',
-          handler: () => {
-            // `false` because we dismiss it ourselves, in order, before the guide opens.
-            followUp = (async () => {
-              await alert.dismiss()
-              await this.showFAQAndManualModal()
-            })()
-            return false
-          }
-        },
-        {
-          // Acknowledging it IS the "don't show again". The old checkbox only wrote the flag
-          // when toggled, so anyone who read the dialog and pressed Entendi got it again on
-          // every single launch.
-          text: 'Entendi',
-          handler: async () => {
-            await this.storageService.set(STORAGE_KEY.HIDE_TUTORIAL, true)
-          }
-        }
-      ]
-    });
-    await alert.present();
-    await alert.onDidDismiss();
-    await followUp;
+    })
+    await modal.present()
+    const { role } = await modal.onDidDismiss()
+    this.diagnostics.log('page', 'first-run coach closed', () => ({ role }))
+    try {
+      await this.storageService.set(STORAGE_KEY.HIDE_TUTORIAL, true)
+    } catch (e) {
+      console.warn('Could not store that the first-run coach was answered', e)
+    }
   }
 
-  /** Resolves when the guide is closed, so callers can queue something after it. */
-  async showFAQAndManualModal() {
-    this.hidePopover()
+  /**
+   * The guide (FAQ and manual), opened at a topic when a "?" asked for one. The accordion that holds the topic is open and in view
+   * when the window is. Resolves when the guide is closed, so callers can queue something after it.
+   */
+  async openGuide(topic?: HelpTopic) {
+    this.closeMenu()
     const modal = await this.modalController.create({
       component: UserGuideComponent,
+      componentProps: { topic },
       backdropDismiss: false
     })
     await modal.present()
@@ -704,7 +751,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   async showAboutModal() {
-    this.hidePopover()
+    this.closeMenu()
     const modal = await this.modalController.create({
       component: AboutComponent,
       backdropDismiss: false
@@ -714,7 +761,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
 
   /** The diagnostics window: switch, last lines, and the ways to get the report off the device. */
   async showDiagnosticsModal() {
-    this.hidePopover()
+    this.closeMenu()
     const modal = await this.modalController.create({
       component: DiagnosticsModalComponent,
       // The command interface is threaded through, as to every service: the report reads the
@@ -727,7 +774,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   async showOmaticModal() {
-    this.hidePopover()
+    this.closeMenu()
     const modal = await this.modalController.create({
       component: OmaticModalComponent,
       cssClass: 'omatic-modal',
@@ -766,7 +813,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
    * the auto-saver takes the copy as soon as it closes, so the answer then is to say so.
    */
   async saveNow() {
-    this.hidePopover()
+    this.closeMenu()
     const result = await this.saveSafety.saveNow('manual')
     switch (result.outcome) {
       case 'saved':
@@ -797,7 +844,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
    * than a gesture lasts. A desktop, or a browser that cannot share a file, downloads at once.
    */
   async exportGameSaves() {
-    this.hidePopover()
+    this.closeMenu()
     if (await this.saveSafety.isGameWriting()) {
       await this.multiplayerUiService.showToast('O jogo está gravando agora. Tente exportar de novo em alguns segundos.', 'warning', 4000)
       return
@@ -903,7 +950,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /**
-   * What the page may say once the welcome is out of the way, at most ONE thing per page load and each
+   * What the page may say once the first-run coach is out of the way, at most ONE thing per page load and each
    * of them once in the life of the install: the backup reminder, then the offer to install the app,
    * then the hint to turn the phone. The order is the order of what it protects, and it is this
    * sequence (NudgeHelper decides only whether each is due).
@@ -1002,7 +1049,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
 
   async downloadFullDiskChanges() {
     const hasSaved = await this.saveGameService.downloadFullDiskChanges(this.dosCI)
-    this.hidePopover()
+    this.closeMenu()
     if (!hasSaved) {
       const alert = await this.alertController.create({
         header: 'Aviso',
@@ -1015,47 +1062,107 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  async clearAllData() {
-    const alert = await this.alertController.create({
-      header: 'Aviso',
-      message: 'Tem certeza que deseja limpar todos os dados? Isso irá apagar todos os jogos salvos e configurações.',
+  /**
+   * "Apagar todos os dados": two questions, because the wipe cannot be taken back. The first offers the backup (and says why), the
+   * second needs a box ticked. See WipeFlowHelper for the words and the rule. Reached from "Dados e avançado", where it is the only
+   * thing in the danger zone, and from the boot-failure dialog, where there is no emulator: the backup it offers is then the copy
+   * read straight out of IndexedDB.
+   */
+  async confirmWipe() {
+    const first = WipeFlowHelper.first()
+    const ask = await this.alertController.create({
+      header: first.header,
+      message: first.message,
       backdropDismiss: false,
       cssClass: 'win9x-alert alert-whitespace',
-      buttons: [{
-        text: 'Não',
-        role: 'cancel'
-      }, {
-        text: 'Sim',
-        handler: async () => {
-          // show loading
-          const loading = await this.loadingController.create({
-            message: 'Limpando dados...',
-            backdropDismiss: false
-          })
-          await loading.present()
+      buttons: [
+        { text: first.cancel, role: 'cancel' },
+        {
+          // Leaves the dialog up: the backup is one thing the person does on the way to the next question, and when it is done this
+          // is where they are.
+          text: first.backup,
+          handler: () => {
+            void this.backupBeforeWipe()
+            return false
+          }
+        },
+        { text: first.next, role: 'continue' },
+      ]
+    })
+    await ask.present()
+    const { role } = await ask.onDidDismiss()
+    this.diagnostics.log('page', 'wipe: first question answered', () => ({ role }))
+    if (role !== 'continue') return
+    await this.confirmWipeLastStep()
+  }
 
-          // Before anything is deleted. The auto-saver would persist the layer that is being
-          // deleted, the page-hidden save would do it again when the reload fires `visibilitychange`,
-          // and a status write that lands after the wipe would claim a save the disk no longer has.
-          this.autoSaverService.stop()
-          this.autoSaverService.stopPeriodicSave()
-          this.stopSafetyNets()
-          this.saveStatus.freeze()
-          // The camera's debounced write of where it was left must not land after the wipe either: detaching flushes it now, before the storage is emptied.
-          this.camera.detach('data wipe')
+  private async backupBeforeWipe() {
+    // With an emulator the backup is the saves, as everywhere else; without one (the boot failed) it is the disk copy read from IndexedDB.
+    if (this.dosCI) await this.exportGameSaves()
+    else await this.downloadStoredBackup()
+  }
 
-          // clear all data
-          await this.saveGameService.clearAllData(this.dosCI)
-          // Before the storage is emptied, not after: with the log still on, the reload below
-          // fires pagehide, which writes the log's tail back into the storage that was just wiped.
-          await this.diagnostics.disable({ persist: false })
-          await this.storageService.clearAllData()
-          await loading.dismiss()
-          this.reloadPage()
-        }
-      }]
+  private async confirmWipeLastStep() {
+    const last = WipeFlowHelper.second()
+    const alert = await this.alertController.create({
+      header: last.header,
+      message: last.message,
+      backdropDismiss: false,
+      cssClass: 'win9x-alert alert-whitespace',
+      inputs: [{
+        type: 'checkbox',
+        label: last.checkbox,
+        value: WipeFlowHelper.CONFIRM_VALUE,
+        checked: false,
+      }],
+      buttons: [
+        { text: last.cancel, role: 'cancel' },
+        {
+          text: last.confirm,
+          cssClass: 'alert-danger',
+          handler: async (values: unknown) => {
+            if (!WipeFlowHelper.confirmed(values)) {
+              // Nothing happens, and the dialog says why: a destructive button that does nothing silently reads as broken.
+              alert.message = last.reminder
+              return false
+            }
+            this.diagnostics.log('page', 'wipe: confirmed')
+            await this.wipeEverything()
+            return true
+          }
+        },
+      ]
     })
     await alert.present()
+  }
+
+  /** The wipe itself, behind a loader; only `confirmWipeLastStep` calls it. */
+  private async wipeEverything() {
+    // show loading
+    const loading = await this.loadingController.create({
+      message: 'Apagando dados...',
+      backdropDismiss: false
+    })
+    await loading.present()
+
+    // Before anything is deleted. The auto-saver would persist the layer that is being
+    // deleted, the page-hidden save would do it again when the reload fires `visibilitychange`,
+    // and a status write that lands after the wipe would claim a save the disk no longer has.
+    this.autoSaverService.stop()
+    this.autoSaverService.stopPeriodicSave()
+    this.stopSafetyNets()
+    this.saveStatus.freeze()
+    // The camera's debounced write of where it was left must not land after the wipe either: detaching flushes it now, before the storage is emptied.
+    this.camera.detach('data wipe')
+
+    // clear all data
+    await this.saveGameService.clearAllData(this.dosCI)
+    // Before the storage is emptied, not after: with the log still on, the reload below
+    // fires pagehide, which writes the log's tail back into the storage that was just wiped.
+    await this.diagnostics.disable({ persist: false })
+    await this.storageService.clearAllData()
+    await loading.dismiss()
+    this.reloadPage()
   }
 
   /** Read the player's choice, or the default for one who never made it. An unreadable store is the default. */
@@ -1187,7 +1294,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
    */
   async toggleFullscreen() {
     const pending = this.fullscreen.toggle()
-    this.hidePopover()
+    this.closeMenu()
     if (await pending === 'refused') {
       await this.multiplayerUiService.showToast('Não foi possível entrar em tela cheia neste navegador.', 'warning', 4000)
     }
@@ -1247,7 +1354,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
    * share sheet is the only way. Called from a tap, and the prompt is asked before anything is awaited.
    */
   async promptInstall() {
-    this.hidePopover()
+    this.closeMenu()
     if (this.install.mode === 'prompt') {
       const outcome = await this.install.prompt()
       if (outcome === 'accepted') {
@@ -1281,35 +1388,28 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     if (role === 'export') await this.exportGameSaves()
   }
 
-  /** The "Armazenamento" line under "Dados e Backups". Read each time the menu opens; the browser may take a moment. */
-  private async refreshStorageSummary() {
-    try {
-      const health = await this.storageHealth.read()
-      this.storageSummary = StorageHealthHelper.summary(health)
-      this.storageWarning = StorageHealthHelper.warning(health.persisted)
-    } catch (e) {
-      console.warn('Could not read the storage figures', e)
-    }
-  }
-
+  /** Read "Salvar ao gravar o jogo" (stored as the OFF flag it always was) and put the auto-saver in step. Writes nothing. */
   async setupAutoSave() {
-    const disableAutoSave = await this.storageService.get<boolean>(STORAGE_KEY.DISABLE_AUTO_SAVE)
-    this.toggleDisableAutoSave({ detail: { checked: disableAutoSave } })
+    this.applyAutoSaveOnGame(InvertedSettingHelper.isOn(await this.storageService.get<boolean>(STORAGE_KEY.DISABLE_AUTO_SAVE)))
   }
 
-  async toggleDisableAutoSave(e: any) {
-    const autoSaveDisabled = e.detail.checked
-    this.autoSaveDisabled = autoSaveDisabled
-    console.log(`autosave: ${!autoSaveDisabled ? 'on' : 'off'}`)
-    await this.storageService.set<boolean>(STORAGE_KEY.DISABLE_AUTO_SAVE, autoSaveDisabled)
+  /** "Salvar ao gravar o jogo". Applies at once and is kept as the OFF flag, so an upgrade keeps what the player chose. */
+  async setAutoSaveOnGame(on: boolean) {
+    this.applyAutoSaveOnGame(on)
+    await this.storageService.set<boolean>(STORAGE_KEY.DISABLE_AUTO_SAVE, InvertedSettingHelper.toStored(on))
+  }
 
-    if (autoSaveDisabled) {
-      this.autoSaverService.stop()
-    } else {
+  private applyAutoSaveOnGame(on: boolean) {
+    this.autoSaveOnGame = on
+    console.log(`autosave: ${on ? 'on' : 'off'}`)
+
+    if (on) {
       // A hosting browser keeps playing, and streaming, from a hidden tab, so its ticks go on.
       this.autoSaverService.start(this.dosCI, {
         keepRunningWhileHidden: () => this.multiplayerService.isHosting,
       })
+    } else {
+      this.autoSaverService.stop()
     }
   }
 
@@ -1331,9 +1431,22 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
+  /** Read "Suavizar a imagem" (stored as the OFF flag it always was) and put the canvas in step. Writes nothing. */
   async setupSmoothFilter() {
-    const disableSmoothFilter = await this.storageService.get<boolean>(STORAGE_KEY.DISABLE_SMOOTH_FILTER)
-    this.toggleSmoothFilter({ detail: { checked: disableSmoothFilter } })
+    this.applySmoothing(InvertedSettingHelper.isOn(await this.storageService.get<boolean>(STORAGE_KEY.DISABLE_SMOOTH_FILTER)))
+  }
+
+  /** "Suavizar a imagem". Applies at once and is kept as the OFF flag, so an upgrade keeps what the player chose. */
+  async setSmoothing(on: boolean) {
+    this.applySmoothing(on)
+    await this.storageService.set<boolean>(STORAGE_KEY.DISABLE_SMOOTH_FILTER, InvertedSettingHelper.toStored(on))
+  }
+
+  private applySmoothing(on: boolean) {
+    this.smoothing = on
+    console.log(`smooth filter: ${on ? 'on' : 'off'}`)
+    const canvas = document.getElementsByClassName('emulator-canvas')[0] as HTMLCanvasElement | undefined
+    canvas?.classList.toggle('smooth-canvas', on)
   }
 
   async setupSpectatorCursors() {
@@ -1343,7 +1456,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
 
   async setupSpectatorAudio() {
     const disabled = await this.storageService.get<boolean>(STORAGE_KEY.DISABLE_SPECTATOR_AUDIO)
-    this.spectatorAudioDisabled = !!disabled
+    this.spectatorAudioDisabled = !InvertedSettingHelper.isOn(disabled)
   }
 
   /**
@@ -1358,7 +1471,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     // key (every existing install) means the default, which is to send it.
     this.spectatorAudioDisabled = !e.detail.checked
     this.multiplayerAudioService.setEnabled(!this.spectatorAudioDisabled)
-    await this.storageService.set<boolean>(STORAGE_KEY.DISABLE_SPECTATOR_AUDIO, this.spectatorAudioDisabled)
+    await this.storageService.set<boolean>(STORAGE_KEY.DISABLE_SPECTATOR_AUDIO, InvertedSettingHelper.toStored(!this.spectatorAudioDisabled))
   }
 
   /**
@@ -1376,20 +1489,6 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     await this.storageService.set<boolean>(STORAGE_KEY.HIDE_SPECTATOR_CURSORS, this.spectatorCursorsHidden)
     // Repaint from the last known positions rather than waiting for movement.
     this.renderCursors(this.latestCursors)
-  }
-
-  async toggleSmoothFilter(e: any) {
-    const disableSmoothFilter = e.detail.checked
-    this.smoothFilterDisabled = disableSmoothFilter
-    console.log(`smooth filter: ${!disableSmoothFilter ? 'on' : 'off'}`)
-
-    const canvas = document.getElementsByClassName('emulator-canvas')[0] as HTMLCanvasElement
-    if (disableSmoothFilter) {
-      canvas.classList.remove('smooth-canvas')
-    } else {
-      canvas.classList.add('smooth-canvas')
-    }
-    await this.storageService.set<boolean>(STORAGE_KEY.DISABLE_SMOOTH_FILTER, disableSmoothFilter)
   }
 
   /**
@@ -1416,7 +1515,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
    * disabled while one is live and this refuses on its own for any other way in.
    */
   async promptDisplayMode() {
-    this.hidePopover()
+    this.closeMenu()
     if (this.isStreaming || this.isHosting) return
 
     const current = this.currentDisplayMode
@@ -1619,16 +1718,6 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     })
   }
 
-  /**
-   * Where the camera's single-pointer controls are, for the menu entry and the toast. They are the deck's Zoom tab (CameraPanelComponent), so
-   * with the deck off there are none and the two-finger gesture is all there is: the copy must not name a tab that is not there.
-   */
-  get cameraButtonsHint(): string {
-    return this.layout.kind === 'none'
-      ? 'O painel de teclas está desligado, então não há botões de zoom: só os dois dedos. Ligue o painel para ter os botões.'
-      : 'Os botões de zoom ficam na aba Zoom do painel de teclas.'
-  }
-
   /** "Zoom e movimento". Applies at once: off puts the picture back as it was, and the camera that was left is kept for when it is on again. */
   async toggleCamera(e: any) {
     this.cameraEnabled = !!e.detail.checked
@@ -1641,11 +1730,10 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
       console.warn('Could not store the camera setting', error)
     }
     if (this.cameraEnabled) {
-      // At the top, like the live keyboard's: the bottom is where the Zoom tab it mentions is.
+      // At the top, like the live keyboard's: the bottom is where the Zoom tab it mentions is. The buttons are in the menu as well as in
+      // the deck's tab, so the key panel being off no longer leaves a pinch as the only way in.
       const toast = await this.toastController.create({
-        message: this.layout.kind === 'none'
-          ? 'Zoom ligado. Pince com dois dedos na imagem. Sem o painel de teclas não há botões de zoom.'
-          : 'Zoom ligado. Pince com dois dedos na imagem, ou use a aba Zoom do painel de teclas.',
+        message: 'Zoom ligado. Pince com dois dedos na imagem, ou use o Zoom do menu ⋮ (Exibição).',
         duration: 4000,
         position: 'top',
         color: 'success',
@@ -1661,7 +1749,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
 
   /** Direct (a tap lands under the finger) or classic (js-dos's touchpad). Applies at once. */
   async promptTouchMode() {
-    this.hidePopover()
+    this.closeMenu()
 
     const current = TouchModeHelper.effective(this.touchMode, navigator.userAgent)
     let chosen: TouchMode | undefined
@@ -1711,7 +1799,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   private async setupDeck() {
     try {
       this.applyDeckSetting(DeckLayoutHelper.normalise(await this.storageService.get<string>(STORAGE_KEY.DECK_MODE)))
-      this.keyVibration = !(await this.storageService.get<boolean>(STORAGE_KEY.DISABLE_KEY_VIBRATION))
+      this.keyVibration = InvertedSettingHelper.isOn(await this.storageService.get<boolean>(STORAGE_KEY.DISABLE_KEY_VIBRATION))
       this.liveKeyboard = !!(await this.storageService.get<boolean>(STORAGE_KEY.LIVE_KEYBOARD))
       this.applyStageView(StageHelper.normaliseView(await this.storageService.get<string>(STORAGE_KEY.STAGE_VIEW)))
     } catch (e) {
@@ -1734,7 +1822,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
    * the picture box changes only when the player flips it: nothing else moves it between the two.
    */
   async promptStageView() {
-    this.hidePopover()
+    this.closeMenu()
 
     const current = this.stageView
     let chosen: StageView | undefined
@@ -1790,7 +1878,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
 
   /** "Painel de teclas": show it, hide it, or let the device decide. Applies at once. */
   async promptDeckMode() {
-    this.hidePopover()
+    this.closeMenu()
 
     const current = this.deckSetting
     let chosen: DeckSetting | undefined
@@ -1833,7 +1921,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   async toggleKeyVibration(e: any) {
     this.keyVibration = !!e.detail.checked
     try {
-      await this.storageService.set<boolean>(STORAGE_KEY.DISABLE_KEY_VIBRATION, !this.keyVibration)
+      await this.storageService.set<boolean>(STORAGE_KEY.DISABLE_KEY_VIBRATION, InvertedSettingHelper.toStored(this.keyVibration))
     } catch (error) {
       console.warn('Could not store the key vibration setting', error)
     }
@@ -1901,15 +1989,179 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     this.diagnostics.log('page', 'deck sheet', () => ({ open: this.deckSheetOpen }))
   }
 
-  showPopover(e: Event) {
+  /**
+   * The options menu: a bottom sheet where a finger is the pointer, the popover anchored to the button where a mouse is
+   * (MenuHelper.presentation). Both draw the same sections (`menuSections`), and the sheet is an overlay of the app, so opening it moves
+   * nothing in the page: the picture's box is the same with it open and closed (CLAUDE.md, *The stage*).
+   */
+  openMenu(e?: Event) {
+    if (MenuHelper.presentation(this.layoutHelperService.isTouchPrimary) === 'sheet') {
+      this.sheetInitialBreakpoint = MenuHelper.initialBreakpoint(this.layout.shape)
+      this.isSheetOpen = true
+      this.diagnostics.log('page', 'menu opened', () => ({ presentation: 'sheet', shape: this.layout.shape }))
+      return
+    }
     this.popover.event = null
     this.popover.event = e;
-    // The "Armazenamento" line: asked when the menu opens, answered a moment later.
-    void this.refreshStorageSummary()
-    this.hidePopover()
+    this.closeMenu()
+    this.diagnostics.log('page', 'menu opened', () => ({ presentation: 'popover' }))
     setTimeout(() => {
       this.isPopoverOpen = true;
     }, 50);
+  }
+
+  /**
+   * The sections of the menu, as MenuHelper makes them from what the page knows. Rebuilt only when that changes, by content: a new array
+   * from every change-detection pass would be a new identity for the template to compare, and a dev-mode NG0100.
+   */
+  get menuSections(): MenuSection[] {
+    const context = this.menuContext()
+    const key = JSON.stringify(context)
+    if (key !== this.menuKey) {
+      this.menuKey = key
+      this.menuCache = MenuHelper.sections(context)
+    }
+    return this.menuCache
+  }
+
+  private menuContext(): MenuContext {
+    const camera = this.cameraView
+    return {
+      inRoom: this.isStreaming,
+      hostStarting: this.isHosting,
+      unreadMessages: this.unreadMessages,
+      fullscreenSupported: this.fullscreenSupported,
+      install: this.installEntry,
+      touchModeOffered: this.touchModeOffered,
+      canVibrate: this.canVibrate,
+      wakeLockSupported: this.wakeLockSupported,
+      silentModeSupported: this.audioPlaybackSupported,
+      railsOffered: this.layout.rails,
+      camera: { on: camera.enabled, label: camera.label, zoomed: camera.zoomed, canZoomIn: camera.canZoomIn, canZoomOut: camera.canZoomOut },
+      smoothing: this.smoothing,
+      keyVibration: this.keyVibration,
+      keepAwake: this.keepAwake,
+      gameMuted: this.gameMuted,
+      audioPlayback: this.audioPlayback,
+      volumePercent: this.volumePercent,
+      hideSpectatorCursors: this.spectatorCursorsHidden,
+      sendSoundToSpectators: !this.spectatorAudioDisabled,
+      fullscreenActive: this.fullscreenActive,
+      summary: {
+        save: this.saveSummary,
+        volume: this.volumeSummary,
+        room: `${this.hostRoomId} · ${this.participantCount || 1} na sala`,
+        touchMode: this.touchModeSummary,
+        deck: this.deckSummary,
+        resolution: this.displayModeSummary,
+        stageView: this.stageViewSummary,
+        fullscreen: this.fullscreenSummary,
+        keepAwake: this.wakeLockSummary,
+      },
+    }
+  }
+
+  /**
+   * A row of the menu was pressed. An action closes the menu (it opens a dialog or a window, or leaves); a switch, the slider and the zoom
+   * keys change a setting where it stands and leave it open, because the person is usually about to change the next one. The handlers
+   * close the menu themselves where they need to: the fullscreen's and the install prompt's requests must be made before anything is
+   * awaited, inside the tap, and the switch statement below calls them synchronously for that reason.
+   */
+  onMenuAction(event: MenuEvent): void | Promise<void> {
+    switch (event.id) {
+      case 'save-now': return this.saveNow()
+      case 'data': return this.showAdvancedModal()
+      case 'volume':
+        return event.phase === 'change'
+          ? this.onVolumeChange({ detail: { value: event.value } })
+          : this.onVolumeInput({ detail: { value: event.value } })
+      case 'mute': return this.toggleGameMuted({ detail: { checked: event.value } })
+      case 'silent-mode': return this.toggleAudioPlayback({ detail: { checked: event.value } })
+      case 'reload': return this.confirmRefresh()
+      case 'leave': return this.confirmLeaveGame()
+      case 'host': return this.promptHostRoom()
+      case 'room': return this.openMultiplayerPanel()
+      case 'hide-cursors': return this.toggleSpectatorCursors({ detail: { checked: event.value } })
+      case 'send-sound': return this.toggleSpectatorAudio({ detail: { checked: event.value } })
+      case 'type-text': this.closeMenu(); return this.promptInputText()
+      case 'touch-mode': return this.promptTouchMode()
+      case 'deck-mode': return this.promptDeckMode()
+      case 'key-vibration': return this.toggleKeyVibration({ detail: { checked: event.value } })
+      case 'smoothing': return this.setSmoothing(!!event.value)
+      case 'fullscreen': return this.toggleFullscreen()
+      case 'install': return this.promptInstall()
+      case 'resolution': return this.promptDisplayMode()
+      case 'stage-view': return this.promptStageView()
+      case 'zoom': this.zoomFromMenu(event.zoom); return
+      case 'keep-awake': return this.toggleKeepAwake({ detail: { checked: event.value } })
+      case 'first-steps': return this.showFirstRunCoach()
+      case 'guide': return this.openGuide()
+      case 'about': return this.showAboutModal()
+    }
+  }
+
+  /** The menu's Zoom row: the same effects as the deck's tab, reachable with the key panel off. */
+  private zoomFromMenu(zoom: MenuEvent['zoom']) {
+    switch (zoom) {
+      case 'fit': this.camera.fit(); break
+      case 'in': this.camera.zoomStep(1); break
+      case 'out': this.camera.zoomStep(-1); break
+    }
+  }
+
+  /** "Dados e avançado": backup, patches, the O Matic and the rest of what is not needed on most visits, and the wipe. */
+  async showAdvancedModal() {
+    this.closeMenu()
+    const modal = await this.modalController.create({
+      component: AdvancedModalComponent,
+      componentProps: { host: this.advancedHost() },
+      cssClass: 'win9x-modal advanced-modal',
+      backdropDismiss: false,
+    })
+    await modal.present()
+  }
+
+  private advancedHost(): AdvancedHost {
+    return {
+      context: {
+        inRoom: this.isStreaming || this.isHosting,
+        debug: this.debugMode,
+        cameraOffered: this.cameraOffered,
+        values: {
+          autosaveGame: this.autoSaveOnGame,
+          autosavePeriodic: this.periodicSave,
+          liveKeyboard: this.liveKeyboard,
+          idlePause: this.idlePause,
+          camera: this.cameraEnabled,
+        },
+        idleSeconds: this.idleSeconds,
+      },
+      handle: event => this.onAdvancedAction(event),
+      help: topic => { void this.openGuide(topic) },
+    }
+  }
+
+  /**
+   * A row of "Dados e avançado". Called with the tap's own call stack: the two file pickers below open only from the gesture that asked
+   * for them, so nothing is awaited before them.
+   */
+  private onAdvancedAction(event: AdvancedEvent): void | Promise<void> {
+    switch (event.id) {
+      case 'storage': return
+      case 'export': return this.exportGameSaves()
+      case 'import': this.saveGameFileInput.nativeElement.click(); return
+      case 'autosave-game': return this.setAutoSaveOnGame(!!event.value)
+      case 'autosave-periodic': return this.togglePeriodicSave({ detail: { checked: !!event.value } })
+      case 'patch-load': this.patchFileInput.nativeElement.click(); return
+      case 'patch-remove': return this.promptClearCustomPatch()
+      case 'omatic': return this.showOmaticModal()
+      case 'diagnostics': return this.showDiagnosticsModal()
+      case 'disk-copy': return this.downloadFullDiskChanges()
+      case 'live-keyboard': return this.toggleLiveKeyboard({ detail: { checked: !!event.value } })
+      case 'idle-pause': return this.toggleIdlePause({ detail: { checked: !!event.value } })
+      case 'camera': return this.toggleCamera({ detail: { checked: !!event.value } })
+      case 'wipe': return this.confirmWipe()
+    }
   }
 
   /**
@@ -2000,7 +2252,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   async onSaveFileSelected(e: Event) {
     const input = e.target as HTMLInputElement
     const files = Array.from(input.files ?? [])
-    this.hidePopover()
+    this.closeMenu()
 
     try {
       if (files.length === 0) return
@@ -2049,7 +2301,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   async onPatchFileSelected(e: Event) {
     const input = e.target as HTMLInputElement
     const file: File | undefined = input.files?.[0]
-    this.hidePopover()
+    this.closeMenu()
 
     try {
       if (!file) return
@@ -2097,7 +2349,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
    * cannot be made does not become permission, it becomes a question.
    */
   async confirmRefresh() {
-    this.hidePopover()
+    this.closeMenu()
     const alert = await this.alertController.create({
       header: 'Salvar e recarregar?',
       message: 'O jogo será salvo no navegador e a página recarregada.\n\nO que você não gravou dentro do próprio jogo será perdido.'
@@ -2182,20 +2434,33 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
 
   /**
    * The route guard's question (see NavigationGuardHelper): Back, the Android Back button and an
-   * iOS edge swipe leave the game without passing through "Voltar ao menu". They get that
-   * menu's own dialog instead, once.
+   * iOS edge swipe leave the game without passing through "Voltar ao menu". A window that is open
+   * (the options sheet, "Dados e avançado", the guide) is closed first and the page stays; after
+   * that they get that menu's own dialog instead, once.
    */
-  canLeave(currentUrl: string, nextUrl: string): boolean {
+  async canLeave(currentUrl: string, nextUrl: string): Promise<boolean> {
+    const top = await this.topWindow()
     const verdict = NavigationGuardHelper.verdict({
       currentUrl,
       nextUrl,
       leaving: this.leaving || this.destroyed,
       hasEmulator: !!this.dosCI,
       promptOpen: this.leavePromptOpen,
+      windowOpen: !!top,
     })
     this.diagnostics.log('page', 'leave guard', () => ({ verdict, to: NavigationGuardHelper.pathOf(nextUrl) }))
+    if (verdict === 'close-window') void top?.dismiss(undefined, 'back')
     if (verdict === 'prompt') void this.confirmLeaveGame()
     return verdict === 'allow'
+  }
+
+  /**
+   * The modal on top, when nothing is over it. An alert or a loader over a window is not the window's to close (the dialog is the
+   * thing the person is looking at, and a loader cannot be dismissed at all), so then there is none and the guard answers as it did.
+   */
+  private async topWindow(): Promise<HTMLIonModalElement | null> {
+    if (await this.alertController.getTop() || await this.loadingController.getTop()) return null
+    return (await this.modalController.getTop()) ?? null
   }
 
   /** Everything that watches the running game for the length of this page. */
@@ -2297,7 +2562,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
    * mode: it opened straight into the emulator and stayed there.
    */
   async confirmLeaveGame() {
-    this.hidePopover()
+    this.closeMenu()
     if (this.leavePromptOpen) return
     this.leavePromptOpen = true
     const alert = await this.alertController.create({
@@ -2379,24 +2644,59 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /**
-   * Open the room dialog when arrival asked for it — the landing page's "Jogar e transmitir
-   * para amigos" action and the PWA's "Hospedar" shortcut both arrive as `?host=1`.
+   * The room dialog for an arrival that asked to host (the landing page's "Jogar e transmitir para amigos" and the PWA's "Hospedar"
+   * shortcut both arrive as `?host=1`), asked for while the emulator boots. The dialog needs no emulator, and the 4 to 20 seconds
+   * the game takes to come up are the best time there is to fill in a form; hosting itself needs the canvas, so it waits for the game
+   * (`startRoomAskedForWhileBooting`) and the page is never reloaded for it, which would end the room.
    *
-   * Stripping it is load-bearing, not tidiness: PatchService applies a patch by rewriting the
-   * IndexedDB disk image and forcing `window.location.reload()`. With the flag still on the
-   * URL, every patch reload — and every failure retry, which also reloads — would re-open this
-   * dialog, forever. `replaceUrl` keeps it out of the history too, so Back does not resurrect
-   * it either.
+   * Stripping `?host=1` is load-bearing, not tidiness: PatchService applies a patch by rewriting the IndexedDB disk image and forcing
+   * `window.location.reload()`. With the flag still on the URL, every patch reload, and every failure retry, which also reloads, would
+   * open this dialog again, forever. `replaceUrl` keeps it out of the history too, so Back does not resurrect it either.
+   *
+   * Resolves with the answer, or null for a cancelled dialog. It never rejects: a failure here must not stop the game from starting.
    */
-  private async consumeHostIntent() {
-    if (this.route.snapshot.queryParamMap.get('host') !== '1') return
+  private async askForRoomWhileBooting(): Promise<RoomSetupResult | null> {
+    try {
+      await this.router.navigate([], {
+        relativeTo: this.route,
+        queryParams: {},
+        replaceUrl: true
+      })
+      const setup = await this.multiplayerUiService.promptRoomSetup('host', this.hostRoomId, {
+        help: () => { void this.openGuide('multiplayer') },
+      })
+      this.diagnostics.log('page', 'host intent answered', () => ({ confirmed: !!setup, gameUp: !this.booting }))
+      // The game is still starting: the boot screen says the room is waiting for it (and a room that is not wanted says nothing).
+      this.hostWaitingForBoot = !!setup && this.booting
+      return setup
+    } catch (e) {
+      console.error('Could not ask for the room while the game starts', e)
+      return null
+    }
+  }
 
-    await this.router.navigate([], {
-      relativeTo: this.route,
-      queryParams: {},
-      replaceUrl: true
-    })
-    await this.promptHostRoom()
+  /**
+   * Once the game is up: put on the air the room the person asked for while it started. Waits for the dialog if it is still open, so the
+   * first-run coach never lands on top of it. Returns whether a room is now live, which tells the caller that this visit has done what it was for.
+   */
+  private async startRoomAskedForWhileBooting(): Promise<boolean> {
+    const dialog = this.hostDialog
+    if (!dialog) return false
+    this.hostDialog = undefined
+    const setup = await dialog
+    this.hostWaitingForBoot = false
+    if (!setup || this.destroyed) return false
+    this.applyHostSetup(setup)
+    await this.startHosting()
+    return this.isStreaming
+  }
+
+  private applyHostSetup(setup: RoomSetupResult) {
+    this.hostName = setup.playerName;
+    this.hostRoomId = setup.roomCode;
+    this.hostPassword = setup.password;
+    this.hostColor = setup.playerColor;
+    this.hostMaxSpectators = setup.maxSpectators ?? MULTIPLAYER.DEFAULT_MAX_SPECTATORS;
   }
 
   /**
@@ -2538,16 +2838,13 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   async promptHostRoom() {
-    this.hidePopover();
-    const setup = await this.multiplayerUiService.promptRoomSetup('host', this.hostRoomId);
+    this.closeMenu();
+    const setup = await this.multiplayerUiService.promptRoomSetup('host', this.hostRoomId, {
+      help: () => { void this.openGuide('multiplayer') },
+    });
     if (!setup) return;
 
-    this.hostName = setup.playerName;
-    this.hostRoomId = setup.roomCode;
-    this.hostPassword = setup.password;
-    this.hostColor = setup.playerColor;
-    this.hostMaxSpectators = setup.maxSpectators ?? MULTIPLAYER.DEFAULT_MAX_SPECTATORS;
-
+    this.applyHostSetup(setup);
     await this.startHosting();
   }
 
@@ -2638,7 +2935,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   async promptStopHosting() {
-    this.hidePopover();
+    this.closeMenu();
     const confirmed = await this.multiplayerUiService.confirmLeave(
       'Os espectadores serão desconectados e a transmissão será encerrada.'
     );
@@ -2754,7 +3051,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
    * that used to sit in the menu; the panel reports back what the user picked.
    */
   async openMultiplayerPanel() {
-    this.hidePopover();
+    this.closeMenu();
     const action = await this.multiplayerUiService.showMultiplayerPanel(
       'host', this.hostRoomId, !!this.hostPassword, this.hostMaxSpectators
     );
@@ -2815,7 +3112,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
 
   /** Redundant entry point: the drawer must not be reachable only from the handle. */
   openChatFromMenu() {
-    this.hidePopover();
+    this.closeMenu();
     this.toggleChat(true);
   }
 
@@ -2839,8 +3136,10 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     return canvasStream
   }
 
-  private hidePopover() {
+  /** Close the menu, in whichever form it is open. */
+  private closeMenu() {
     this.isPopoverOpen = false;
+    this.isSheetOpen = false;
   }
 
   /** The shared funnel for generic errors — keep `win9x-alert` here so every caller inherits it. */
@@ -2856,7 +3155,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private async clearCustomPatch() {
-    this.hidePopover()
+    this.closeMenu()
     this.stopSafetyNets()
     const loading = await this.loadingController.create({
       message: 'Limpando patch...',

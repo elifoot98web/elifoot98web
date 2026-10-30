@@ -12,6 +12,10 @@ import { OmaticModalComponent } from './components/omatic-modal/omatic-modal.com
 import { DiagnosticsModalComponent } from './components/diagnostics-modal/diagnostics-modal.component';
 import { SaveStatusChipComponent } from './components/save-status-chip/save-status-chip.component';
 import { SoundChipComponent } from './components/sound-chip/sound-chip.component';
+import { OptionsMenuComponent } from './components/options-menu/options-menu.component';
+import { AdvancedModalComponent } from './components/advanced-modal/advanced-modal.component';
+import { FirstRunCoachComponent } from './components/first-run-coach/first-run-coach.component';
+import { BootScreenComponent } from './components/boot-screen/boot-screen.component';
 import { CoreComponentsModule } from 'src/app/core/components/core-components.module';
 
 @NgModule({
@@ -31,7 +35,11 @@ import { CoreComponentsModule } from 'src/app/core/components/core-components.mo
     OmaticModalComponent,
     DiagnosticsModalComponent,
     SaveStatusChipComponent,
-    SoundChipComponent
+    SoundChipComponent,
+    OptionsMenuComponent,
+    AdvancedModalComponent,
+    FirstRunCoachComponent,
+    BootScreenComponent
   ]
 })
 export class GamePageModule {}

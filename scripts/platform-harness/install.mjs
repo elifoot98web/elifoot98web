@@ -11,8 +11,9 @@ const stored = (c, key) => c.ev(`(async () => await __g.storageService.get(${JSO
 const openMenu = async c => {
   const rect = await c.ev(`(() => { const b = [...document.querySelectorAll('ion-header ion-buttons[slot=end] ion-button')].pop(); const r = b.getBoundingClientRect(); return {x: r.x + r.width/2, y: r.y + r.height/2} })()`)
   await c.tap(rect.x, rect.y); await sleep(1000)
+  await c.ev(`document.querySelector('ion-modal.menu-sheet')?.setCurrentBreakpoint?.(1)`); await sleep(600)   // a sheet opens at 60% on a phone; its lower rows are only reachable once it is expanded
 }
-const entries = c => c.ev(`(() => [...document.querySelectorAll('ion-popover.menu-popover ion-item')].map(i => (i.querySelector('ion-label')?.innerText ?? '').replace(/\\n+/g, ' | ')).filter(t => /Instalar|Tela cheia|silencioso|Armazenamento/.test(t)))()`)
+const entries = c => c.ev(`(() => [...document.querySelectorAll('app-options-menu ion-item')].map(i => (i.querySelector('ion-label')?.innerText ?? '').replace(/\\n+/g, ' | ')).filter(t => /Instalar|Tela cheia|silencioso|Armazenamento/.test(t)))()`)
 
 // ---- 1: Android, first visit: no install banner, the rotate hint; menu entry; prompt through the menu ----
 let c = await boot({ init: FAKE_INSTALL_PROMPT_AFTER(1500) })
@@ -29,11 +30,11 @@ await openMenu(c)
 const list = await entries(c)
 console.log(list.join('\n'))
 check('menu has "Instalar o app"', list.some(e => /Instalar o app \| Abre em tela cheia/.test(e)))
-check('menu has "Armazenamento" in Dados e Backups only after opening it (not here)', !list.some(e => /Armazenamento/.test(e)))
+check('menu does not list "Armazenamento": the storage line is in the "Dados e avançado" window (menu.mjs)', !list.some(e => /Armazenamento/.test(e)))
 await shot(c, 'install-menu')
-const item = await c.ev(`(() => { const i = [...document.querySelectorAll('ion-popover.menu-popover ion-item')].find(i => /Instalar o app/.test(i.innerText)); i.scrollIntoView({block:'center'}); const r = i.getBoundingClientRect(); return { x: r.x + r.width/2, y: r.y + r.height/2 } })()`)
+const item = await c.ev(`(() => { const i = [...document.querySelectorAll('app-options-menu ion-item')].find(i => /Instalar o app/.test(i.innerText)); i.scrollIntoView({block:'center'}); const r = i.getBoundingClientRect(); return { x: r.x + r.width/2, y: r.y + r.height/2 } })()`)
 await sleep(300)
-const it2 = await c.ev(`(() => { const i = [...document.querySelectorAll('ion-popover.menu-popover ion-item')].find(i => /Instalar o app/.test(i.innerText)); const r = i.getBoundingClientRect(); return { x: r.x + r.width/2, y: r.y + r.height/2 } })()`)
+const it2 = await c.ev(`(() => { const i = [...document.querySelectorAll('app-options-menu ion-item')].find(i => /Instalar o app/.test(i.innerText)); const r = i.getBoundingClientRect(); return { x: r.x + r.width/2, y: r.y + r.height/2 } })()`)
 await c.tap(it2.x, it2.y); await sleep(1000)
 check('tapping the entry shows the browser prompt once', await c.ev('window.__installPrompts') === 1)
 check('and the spent prompt takes the entry away', await c.ev('__g.installMode') === 'none')

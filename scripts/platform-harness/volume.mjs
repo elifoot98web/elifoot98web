@@ -13,6 +13,7 @@ const INIT = `(() => {
 const openMenu = async c => {
   const rect = await c.ev(`(() => { const b = [...document.querySelectorAll('ion-header ion-buttons[slot=end] ion-button')].pop(); const r = b.getBoundingClientRect(); return {x: r.x + r.width/2, y: r.y + r.height/2} })()`)
   await c.tap(rect.x, rect.y); await sleep(1000)
+  await c.ev(`document.querySelector('ion-modal.menu-sheet')?.setCurrentBreakpoint?.(1)`); await sleep(600)   // a sheet opens at 60% on a phone; its lower rows are only reachable once it is expanded
 }
 const stored = (c, key) => c.ev(`(async () => await __g.storageService.get(${JSON.stringify(key)}))()`)
 const lastGain = c => c.ev('__gain[__gain.length - 1]')
@@ -22,8 +23,8 @@ await c.ev(`document.querySelector('ion-toast')?.dismiss()`); await sleep(500)
 check('js-dos has a gain of 1 at the start', (await lastGain(c)) === 1, String(await lastGain(c)))
 
 await openMenu(c)
-await c.evBody(`[...document.querySelectorAll('ion-popover.menu-popover ion-range')][0].scrollIntoView({block:'center'})`); await sleep(400)
-const range = await c.ev(`(() => { const r = document.querySelector('ion-popover.menu-popover ion-range').getBoundingClientRect(); return { x: r.x, y: r.y + r.height/2, w: r.width } })()`)
+await c.evBody(`[...document.querySelectorAll('app-options-menu ion-range')][0].scrollIntoView({block:'center'})`); await sleep(400)
+const range = await c.ev(`(() => { const r = document.querySelector('app-options-menu ion-range').getBoundingClientRect(); return { x: r.x, y: r.y + r.height/2, w: r.width } })()`)
 await shot(c, 'vol-menu')
 await c.tap(range.x + range.w * 0.5, range.y)
 await sleep(800)
@@ -34,9 +35,9 @@ check('the choice is stored by the app', Math.abs((await stored(c, 'gameVolume')
 console.log('js-dos own copy:', await c.ev(`localStorage.getItem('emulators.ui.volume')`))
 
 // mute through the real toggle
-const mute = await c.ev(`(() => { const t = [...document.querySelectorAll('ion-popover.menu-popover ion-toggle')].find(t => /Silenciar/.test(t.innerText)); t.scrollIntoView({block:'center'}); return true })()`)
+const mute = await c.ev(`(() => { const t = [...document.querySelectorAll('app-options-menu ion-toggle')].find(t => /Silenciar/.test(t.innerText)); t.scrollIntoView({block:'center'}); return true })()`)
 await sleep(300)
-const mr = await c.ev(`(() => { const t = [...document.querySelectorAll('ion-popover.menu-popover ion-toggle')].find(t => /Silenciar/.test(t.innerText)); const b = t.getBoundingClientRect(); return { x: b.x + b.width/2, y: b.y + b.height/2 } })()`)
+const mr = await c.ev(`(() => { const t = [...document.querySelectorAll('app-options-menu ion-toggle')].find(t => /Silenciar/.test(t.innerText)); const b = t.getBoundingClientRect(); return { x: b.x + b.width/2, y: b.y + b.height/2 } })()`)
 await c.tap(mr.x, mr.y); await sleep(700)
 check('Silenciar sets the gain to 0', (await lastGain(c)) === 0, String(await lastGain(c)))
 check('the slider keeps its place', await c.ev('__g.volumePercent') === pct)

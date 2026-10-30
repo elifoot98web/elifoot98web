@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Fresh load of the app at /#/game with a device emulated: wait for the game page, dismiss the welcome dialog, expose dosCI.
+// Fresh load of the app at /#/game with a device emulated: wait for the game page, dismiss the first-run coach, expose dosCI.
 //
 //   node scripts/touch-harness/boot.mjs [label] [ua] [width] [height] [dpr]
 //     ua: android (default; js-dos gives it its touchpad) | ios | mac (an iPad's default user agent) | default
@@ -48,7 +48,8 @@ for (let attempt = 1; attempt <= 3 && !graphics; attempt++) {
   if (!graphics) console.log('the guest is not in a graphics mode (still at the DOS prompt?)', attempt < 3 ? '- loading again' : '- giving up')
 }
 await sleep(800)
-await c.ev(`(() => { const b = [...document.querySelectorAll('ion-alert button')].find(x => /Entendi/.test(x.textContent)); b && b.click(); return !!b })()`)
+// The first-run coach (P13) replaced the welcome alert: "Pular" answers it for good, like "Entendi" did.
+await c.ev(`(() => { const b = [...document.querySelectorAll('app-first-run-coach .coach-actions button')].find(x => /Pular/.test(x.textContent)); b && b.click(); return !!b })()`)
 await sleep(800)
 await c.ev(`(() => { window.__g = ng.getComponent(document.querySelector('app-game')); window.dosCI = __g.dosCI; return !!window.dosCI })()`)
 console.log('frame', await c.ev('dosCI.width() + "x" + dosCI.height()'), '| coarse pointer:', await c.ev(`matchMedia('(pointer: coarse)').matches`))

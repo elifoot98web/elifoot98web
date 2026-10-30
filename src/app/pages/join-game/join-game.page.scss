@@ -55,6 +55,23 @@
   text-align: start;
 }
 
+/* The waiting card's lines are centred, unlike the explainer's, and the hint is the quieter of the two. */
+.join-game-card--onboarding .onboarding-text[role='status'],
+.join-hint {
+  text-align: center;
+}
+
+.join-hint {
+  margin-top: -0.5rem;
+  font-size: 0.8rem;
+  color: var(--ion-color-step-600, #666);
+}
+
+/* The only way out for a spectator whose wait is not going well, so it gets a finger-sized target (Ionic's own button is 36 px). */
+.join-cancel {
+  height: 44px;
+}
+
 .onboarding-form ion-input {
   text-transform: uppercase;
 }

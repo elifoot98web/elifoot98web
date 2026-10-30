@@ -30,7 +30,7 @@ BEFORE the page's own, to fake `navigator` members), `check()` and `shot()`.
 | `ios.mjs` | An iPhone: no fullscreen entry, the silent-mode switch, the how-to dialog and its backup button, the "Como instalar" banner, an installed app offered nothing. |
 | `howto-landscape.mjs` | The iOS dialog on a landscape phone. |
 | `rotate-hint.mjs` | "Gire o aparelho": once on a phone upright, gone when it is turned, not repeated, not on a landscape phone or a tablet. |
-| `menu.mjs` | Screenshots of the menu's volume group and of the "Armazenamento" line. |
+| `menu.mjs` | Screenshots of the menu's volume group, and the "Armazenamento" line in the "Dados e avançado" window. |
 | `manifest.mjs` | The manifest as Chrome reads it, installability errors, and the maskable icons under circle, squircle and square masks. |
 | `content-hint.mjs` | What `contentHint` does to an animated canvas under a 120 kbps cap (measurement; the app sets none). |
 

@@ -24,8 +24,8 @@ export type DiagnosticsReason = 'url' | 'stored' | 'user';
  * anyone is looking, and cannot be exported from a phone.
  *
  * **How it is switched on**, and why there is no second mechanism next to `GamePage.debugMode`:
- * that flag was a hard-coded `false` nobody could reach, gating the "Baixar Disco Virtual" item.
- * It now reads `enabled`, so one switch is the only switch. The menu's "Diagnóstico" panel turns
+ * that flag was a hard-coded `false` nobody could reach, gating the "Baixar disco virtual" row of "Dados e avançado".
+ * It now reads `enabled`, so one switch is the only switch. The "Diagnóstico" window ("Dados e avançado" > "Ferramentas") turns
  * it on and persists the choice (`STORAGE_KEY.DIAGNOSTICS`, wiped with the rest by "Apagar todos
  * os dados"), and `?diag=1` on the address turns it on for the rest of that tab's session
  * (`?diag=0` forces it off for the session). The address wins over the stored choice and never

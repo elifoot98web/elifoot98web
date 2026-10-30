@@ -2,6 +2,7 @@ import { Component, Input, OnInit } from '@angular/core';
 import { ModalController } from '@ionic/angular/lazy';
 import { MULTIPLAYER } from 'src/app/core/models/constants';
 import { RoomCodeHelper } from 'src/app/core/helpers/room-code.helper';
+import { QuickHostHelper } from 'src/app/core/helpers/quick-host.helper';
 import { MultiplayerIdentityService } from 'src/app/core/services/multiplayer';
 
 export interface RoomSetupResult {
@@ -28,6 +29,8 @@ export class RoomSetupModalComponent implements OnInit {
   @Input() mode: 'host' | 'guest' = 'guest';
   /** Room code prefilled from a share link, when the guest arrived via one. */
   @Input() presetRoomCode = '';
+  /** Opens the guide at the multiplayer chapter. Lent by the page that carries the guide; without it the title bar has no "?". */
+  @Input() help?: () => void;
 
   colors = MULTIPLAYER.PLAYER_COLORS;
 
@@ -37,6 +40,19 @@ export class RoomSetupModalComponent implements OnInit {
     (_, i) => MULTIPLAYER.MIN_SPECTATORS + i
   );
   maxSpectators = MULTIPLAYER.DEFAULT_MAX_SPECTATORS;
+
+  /**
+   * The host's short form is showing: "Transmitir agora" and a line that says what it will do. "Alterar" opens the whole form, and
+   * a guest has it from the start.
+   */
+  expanded = false;
+  /**
+   * The name is asked for on the short form: the host has none remembered. Decided once, when the dialog opens, and not from what
+   * is typed, or the field would vanish under the first letter.
+   */
+  askName = false;
+  /** The remembered name, colour and limit have been read: until then the short form would flash an empty identity. */
+  loaded = false;
 
   playerName = '';
   roomCode = '';
@@ -61,6 +77,7 @@ export class RoomSetupModalComponent implements OnInit {
   async ngOnInit() {
     this.playerName = await this.identityService.getPlayerName();
     this.playerColor = await this.identityService.getPlayerColor();
+    this.askName = QuickHostHelper.needsName(this.playerName);
     // A host gets a fresh code to hand out; a guest gets whatever the share link carried.
     this.roomCode = this.presetRoomCode
       ? RoomCodeHelper.sanitize(this.presetRoomCode)
@@ -71,6 +88,7 @@ export class RoomSetupModalComponent implements OnInit {
     } else {
       this.recentRooms = await this.identityService.getRecentRooms();
     }
+    this.loaded = true;
   }
 
   get isHost(): boolean {
@@ -79,6 +97,23 @@ export class RoomSetupModalComponent implements OnInit {
 
   get title(): string {
     return this.isHost ? 'Criar Sala Multiplayer' : 'Entrar em Sala Multiplayer';
+  }
+
+  /** What "Transmitir agora" will do: the code, whether there is a password, how many may watch. Never the password. */
+  get summary(): string {
+    return QuickHostHelper.summary({ roomCode: this.roomCode, hasPassword: this.password.length > 0, maxSpectators: this.maxSpectators });
+  }
+
+  get identity(): string {
+    return QuickHostHelper.identity(this.playerName);
+  }
+
+  expand() {
+    this.expanded = true;
+  }
+
+  showHelp() {
+    this.help?.();
   }
 
   get isValid(): boolean {

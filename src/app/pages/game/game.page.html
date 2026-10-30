@@ -45,7 +45,7 @@
         the room pill to protect.
       -->
       <app-sound-chip [hosting]="isStreaming"></app-sound-chip>
-      <ion-button (click)="showPopover($event)" aria-label="Menu de opções">
+      <ion-button (click)="openMenu($event)" aria-label="Menu de opções">
         <ion-icon slot="icon-only" name="ellipsis-vertical-outline"></ion-icon>
       </ion-button>
     </ion-buttons>
@@ -56,357 +56,44 @@
   [scrollY]="!isStreaming" is load-bearing beyond iOS. With scrollY on, `.inner-scroll` is
   the nearest scrollable ancestor of the chat input, and iOS Safari scrolls it past its
   bounds to reveal the focused field, dragging #game-container off-screen with no reliable
-  way back. Nothing here scrolls: the content is `.full`, and the popover carries its own
+  way back. Nothing here scrolls: the content is `.full`, and the menu carries its own
   ion-content.
 -->
 <ion-content [fullscreen]="true" [scrollY]="!isStreaming" class="not-selectable" color="primary">
-  <ion-popover #popover [isOpen]="isPopoverOpen" triggerAction="click" class="menu-popover">
+  <!--
+    The options menu, in two forms that draw the same sections (app-options-menu, from MenuHelper): the popover under the mouse's button on a
+    desktop, and on a touch screen a bottom sheet (an ion-modal with breakpoints). Both are overlays of the app, so opening one moves
+    nothing in the page: the picture's box is the same with the menu open and closed. The sheet is shell, flat, like the toolbar that opens it.
+  -->
+  <ion-popover #popover [isOpen]="isPopoverOpen" triggerAction="click" class="menu-popover" (didDismiss)="isPopoverOpen = false">
     <ng-template>
       <ion-content>
-        <ion-list class="ion-no-padding">
-          <ion-list-header class="ion-no-padding ion-padding-start" color="light">
-            <ion-label>Opções</ion-label>
-          </ion-list-header>
-          <!--
-            First, because it is the thing a player wants when the chip says nothing has been
-            saved; the subtitle is the chip's text, for mobile landscape where there is no toolbar.
-          -->
-          <ion-item button detail="false" (click)="saveNow()">
-            <ion-label>
-              Salvar agora
-              <p>{{ saveSummary }}</p>
-            </ion-label>
-            <ion-icon slot="end" name="save-outline"></ion-icon>
-          </ion-item>
-          <ion-item button detail="false" (click)="showOmaticModal()">
-            <ion-label>Abrir 'O Matic</ion-label>
-            <ion-icon slot="end" color="warning" src="../../assets/icon/cheese.svg"></ion-icon>
-          </ion-item>
-          <!--
-            [disabled] on isHosting, which used to be set and never read: room creation
-            captures the canvas and can take a couple of seconds, and a second tap in that
-            window would start a competing claim on the same code.
-          -->
-          <ion-item *ngIf="!isStreaming" button detail="false" [disabled]="isHosting" (click)="promptHostRoom()">
-            <ion-label>{{ isHosting ? 'Criando sala…' : 'Hospedar Jogo Multiplayer' }}</ion-label>
-            <ion-icon slot="end" name="people-outline"></ion-icon>
-          </ion-item>
-          <ng-container *ngIf="isStreaming">
-            <!--
-              One entry for the whole room, replacing four (Compartilhar sala / Participantes /
-              Chat / Encerrar sala). The subtitle carries the state, so the menu answers
-              "which room, how many people" without being opened twice.
-            -->
-            <ion-item button detail="true" (click)="openMultiplayerPanel()">
-              <ion-label>
-                Sala multiplayer
-                <p>{{ hostRoomId }} &middot; {{ (participantCount$ | async) || 1 }} na sala</p>
-              </ion-label>
-              <ion-badge *ngIf="(unreadCount$ | async) as unread" slot="end" color="danger"
-                class="chat-menu-badge">{{ unread }}</ion-badge>
-              <ion-icon slot="end" name="people-outline"></ion-icon>
-            </ion-item>
-            <!--
-              The host's escape hatch for a code that travelled further than intended.
-              Local and silent — guests are not told, because there is nothing for them to
-              do about it — and it stays inside the isStreaming block because there are no
-              spectator cursors to hide without a room.
-            -->
-            <ion-item detail="false">
-              <ion-toggle [checked]="spectatorCursorsHidden" (ionChange)="toggleSpectatorCursors($event)">Ocultar
-                cursores dos espectadores</ion-toggle>
-            </ion-item>
-            <!--
-              The game's sound goes to spectators by default. Local and silent like the toggle
-              above: it flips the outgoing track, so nobody is told and nothing renegotiates.
-            -->
-            <ion-item detail="false">
-              <ion-toggle [checked]="!spectatorAudioDisabled" (ionChange)="toggleSpectatorAudio($event)">Enviar o som
-                do jogo aos espectadores</ion-toggle>
-            </ion-item>
-          </ng-container>
-          <!--
-            Only where the browser has a Fullscreen API: iPhone Safari does not, and the install entry
-            below is the way to chrome-free play there. It is the whole page that goes fullscreen, not
-            the game, so the dialogs, the chat and the key panel stay. On a phone it also turns the
-            screen to landscape (see FullscreenService); the subtitle says so.
-          -->
-          <ion-item *ngIf="fullscreenSupported" button detail="false" (click)="toggleFullscreen()">
-            <ion-label>
-              {{ fullscreenActive ? 'Sair da tela cheia' : 'Tela cheia' }}
-              <p>{{ fullscreenSummary }}</p>
-            </ion-label>
-            <ion-icon slot="end" [name]="fullscreenActive ? 'contract-outline' : 'expand-outline'"></ion-icon>
-          </ion-item>
-          <!--
-            Chromium's own prompt where it offered one, the how-to dialog on iOS, and nothing at all in an
-            app that is already installed (InstallService). The one-time banner points here.
-          -->
-          <ion-item *ngIf="installEntry as install" button detail="false" (click)="promptInstall()">
-            <ion-label>
-              {{ install.title }}
-              <p>{{ install.subtitle }}</p>
-            </ion-label>
-            <ion-icon slot="end" name="download-outline"></ion-icon>
-          </ion-item>
-          <!--
-            A dialog, not a toggle: the answer takes a reload. Disabled in a room, because the
-            reload would end it for everyone watching. The subtitle is the size of the frame the
-            guest is drawing now, not a stored setting.
-          -->
-          <ion-item button detail="false" [disabled]="isStreaming || isHosting" (click)="promptDisplayMode()">
-            <ion-label>
-              Resolução do jogo
-              <p>{{ displayModeSummary }}</p>
-            </ion-label>
-            <ion-icon slot="end" name="resize-outline"></ion-icon>
-          </ion-item>
-          <!--
-            Only where a finger is how the game is played AND the classic touchpad would work
-            there (TouchModeHelper.offersChoice): on a default-UA iPad js-dos gives the classic
-            path no touch input at all, so offering it would only offer a dead screen. The
-            subtitle is the mode in force, which is not always the stored choice.
-          -->
-          <ion-item *ngIf="touchModeChoice$ | async" button detail="false" (click)="promptTouchMode()">
-            <ion-label>
-              Modo de toque
-              <p>{{ touchModeSummary }}</p>
-            </ion-label>
-            <ion-icon slot="end" name="hand-left-outline"></ion-icon>
-          </ion-item>
-          <!--
-            The in-app camera (CameraService), offered where a finger is the pointer. Local to this screen: the copy says so,
-            because a host who zooms might think the room sees it. Off as shipped, and honest about it like the other
-            experiments; the label sits outside the toggle so the explanation can wrap under it on a narrow phone.
-          -->
-          <ion-item *ngIf="cameraChoice$ | async" detail="false">
-            <ion-label class="ion-text-wrap">
-              Zoom e movimento
-              <p>Pince com dois dedos na imagem para ampliar e arraste com dois dedos para mover. {{ cameraButtonsHint }} Só você vê isso: quem assiste à sala sempre vê o jogo inteiro. Ainda não foi testado em celulares de verdade: se algo sair errado, desligue.</p>
-            </ion-label>
-            <ion-toggle slot="end" [checked]="cameraEnabled" (ionChange)="toggleCamera($event)"
-              aria-label="Zoom e movimento"></ion-toggle>
-          </ion-item>
-          <!--
-            The key panel under the picture (the control deck). A dialog, not a toggle: there are
-            three answers (the device decides, always, never), and the subtitle says what the
-            automatic one comes to on this device.
-          -->
-          <ion-item button detail="false" (click)="promptDeckMode()">
-            <ion-label>
-              Mostrar painel de teclas
-              <p>{{ deckSummary }}</p>
-            </ion-label>
-            <ion-icon slot="end" name="keypad-outline"></ion-icon>
-          </ion-item>
-          <!--
-            Only where there are rails to change: a landscape phone. Ajustar keeps two columns of keys in each rail where they
-            fit without costing the picture, Ampliar always one. The picture's size changes only when this is flipped.
-          -->
-          <ion-item *ngIf="layout.rails" button detail="false" (click)="promptStageView()">
-            <ion-label>
-              Tamanho da imagem
-              <p>{{ stageViewSummary }}</p>
-            </ion-label>
-            <ion-icon slot="end" name="scan-outline"></ion-icon>
-          </ion-item>
-          <!-- Only where the browser can vibrate at all (Android; iOS has no vibration API). -->
-          <ion-item *ngIf="canVibrate" detail="false">
-            <ion-toggle [checked]="keyVibration" (ionChange)="toggleKeyVibration($event)">Vibração nas teclas</ion-toggle>
-          </ion-item>
-          <!--
-            Only where the browser can hold the screen at all (Screen Wake Lock: Chrome 84+, Safari 16.4+,
-            Firefox 126+). On by default; a room holds the screen whatever this says. The subtitle is what
-            the browser actually did, which is not always what was asked (the battery saver says no).
-          -->
-          <ion-item *ngIf="wakeLockSupported" detail="false">
-            <ion-label class="ion-text-wrap">
-              Manter a tela ligada
-              <p>{{ wakeLockSummary }}</p>
-            </ion-label>
-            <ion-toggle slot="end" [checked]="keepAwake" (ionChange)="toggleKeepAwake($event)"
-              aria-label="Manter a tela ligada"></ion-toggle>
-          </ion-item>
-          <!--
-            The game's volume on this device. It is a gain on js-dos's audio, and the sound that goes to a
-            room is taken before it (MultiplayerAudioService), so it never changes what spectators hear:
-            "Enviar o som do jogo aos espectadores" is the switch for that.
-          -->
-          <ion-item detail="false" lines="none">
-            <ion-label class="ion-text-wrap">
-              Volume do jogo
-              <p>{{ volumeSummary }}</p>
-            </ion-label>
-          </ion-item>
-          <ion-item detail="false">
-            <ion-range aria-label="Volume do jogo" min="0" max="100" [step]="volumeStep" [value]="volumePercent"
-              (ionInput)="onVolumeInput($event)" (ionChange)="onVolumeChange($event)">
-              <ion-icon slot="start" name="volume-low-outline" aria-hidden="true"></ion-icon>
-              <ion-icon slot="end" name="volume-high-outline" aria-hidden="true"></ion-icon>
-            </ion-range>
-          </ion-item>
-          <ion-item detail="false">
-            <ion-toggle [checked]="gameMuted" (ionChange)="toggleGameMuted($event)">Silenciar o jogo</ion-toggle>
-          </ion-item>
-          <!--
-            iPhone's ringer switch mutes web audio unless the page asks to be heard like a media player
-            (navigator.audioSession, Safari 16.4+). Off unless chosen: it interrupts other apps' audio.
-          -->
-          <ion-item *ngIf="audioPlaybackSupported" detail="false">
-            <ion-label class="ion-text-wrap">
-              Som no modo silencioso
-              <p>Toca o jogo mesmo com a chave de toque do iPhone no silencioso. Pode interromper a música de outros apps.</p>
-            </ion-label>
-            <ion-toggle slot="end" [checked]="audioPlayback" (ionChange)="toggleAudioPlayback($event)"
-              aria-label="Som no modo silencioso"></ion-toggle>
-          </ion-item>
-          <!--
-            EXPERIMENTAL, and honest about it: the live type bar has only run against simulated keyboards.
-            Off (the default) the Texto button opens the compose dialog it always opened. The label is
-            outside the toggle so the explanation can wrap under it on a narrow phone.
-          -->
-          <ion-item detail="false">
-            <ion-label class="ion-text-wrap">
-              Teclado ao vivo (experimental)
-              <p>O botão Texto abre um campo acima do teclado do celular, e o que você digita aparece no jogo na hora. Ainda não foi testado em celulares de verdade: se algo sair errado, desligue.</p>
-            </ion-label>
-            <ion-toggle slot="end" [checked]="liveKeyboard" (ionChange)="toggleLiveKeyboard($event)"
-              aria-label="Teclado ao vivo (experimental)"></ion-toggle>
-          </ion-item>
-          <!--
-            The emulator sleeps while the picture does not change (EmulatorPowerService). The description
-            says what it costs and what it has not been tried on: it is off until the device pass says
-            otherwise, and the menu is where a player who sees a slowdown turns it off. The label sits
-            outside the toggle so the explanation can wrap under it on a narrow phone.
-          -->
-          <ion-item detail="false">
-            <ion-label class="ion-text-wrap">
-              Economizar bateria quando parado
-              <p>Se a tela do jogo fica parada por {{ idleSeconds }} segundos ou mais, o emulador descansa e usa bem menos bateria. Ele acorda ao tocar ou digitar. Não age durante uma sala multiplayer, nem com o Auto-Save desligado. Ainda não foi testado em celulares de verdade: se algum cálculo do jogo ficar mais lento sem a tela se mexer, desligue.</p>
-            </ion-label>
-            <ion-toggle slot="end" [checked]="idlePause" (ionChange)="toggleIdlePause($event)"
-              aria-label="Economizar bateria quando parado"></ion-toggle>
-          </ion-item>
-          <ion-item detail="false">
-            <ion-toggle [checked]="smoothFilterDisabled" (ionChange)="toggleSmoothFilter($event)">Desativar
-              Suavização</ion-toggle>
-          </ion-item>
-          <ion-item button detail="true" id="nested-autosave-options">
-            <ion-label>Auto-Save</ion-label>
-          </ion-item>
-          <ion-popover trigger="nested-autosave-options" [dismissOnSelect]="true" side="end">
-            <ng-template>
-              <ion-content>
-                <ion-list>
-                  <ion-item detail="false">
-                    <ion-toggle [checked]="autoSaveDisabled" (ionChange)="toggleDisableAutoSave($event)">Desativar Sync
-                      Save</ion-toggle>
-                  </ion-item>
-                  <ion-item detail="false">
-                    <ion-toggle [checked]="periodicSave" (ionChange)="togglePeriodicSave($event)">Save Periódico
-                      (5min)</ion-toggle>
-                  </ion-item>
-                </ion-list>
-              </ion-content>
-            </ng-template>
-          </ion-popover>
-          <ion-item button detail="true" id="nested-save-options"><ion-label>Dados e Backups</ion-label></ion-item>
-          <ion-popover trigger="nested-save-options" [dismissOnSelect]="true" side="end">
-            <ng-template>
-              <ion-content>
-                <ion-list>
-                  <!--
-                    What the browser says about this site's storage, read when the menu opened. It never
-                    promises protection: "Protegido" is the browser's answer, nothing more.
-                  -->
-                  <ion-item detail="false">
-                    <ion-label class="ion-text-wrap">
-                      Armazenamento
-                      <p>{{ storageSummary || 'Verificando…' }}</p>
-                      <p *ngIf="storageWarning">{{ storageWarning }}</p>
-                    </ion-label>
-                    <ion-icon slot="end" name="server-outline" aria-hidden="true"></ion-icon>
-                  </ion-item>
-                  <ion-item button detail="false" (click)="exportGameSaves()">
-                    <ion-label>Exportar jogos salvos</ion-label>
-                    <ion-icon slot="end" name="share-outline"></ion-icon>
-                  </ion-item>
-                  <ion-item button detail="false" (click)="saveGameFileInput.click()">
-                    <ion-label>Importar jogos salvos</ion-label>
-                    <ion-icon slot="end" name="download-outline"></ion-icon>
-                  </ion-item>
-                  <ion-item *ngIf="debugMode" button detail="false" (click)="downloadFullDiskChanges()">
-                    <ion-label>Baixar Disco Virtual</ion-label>
-                    <ion-icon slot="end" name="code-download-outline"></ion-icon>
-                  </ion-item>
-                  <ion-item button detail="false" (click)="clearAllData()">
-                    <ion-label color="danger">Apagar todos os dados</ion-label>
-                    <ion-icon slot="end" name="trash-outline" color="danger"></ion-icon>
-                  </ion-item>
-                </ion-list>
-              </ion-content>
-            </ng-template>
-          </ion-popover>
-          <ion-item button detail="false" (click)="promptInputText()">
-            <ion-label>Input de Texto</ion-label>
-            <ion-icon slot="end" name="terminal-outline"></ion-icon>
-          </ion-item>
-          <ion-item button detail="true" id="nested-patch-options"><ion-label>Opções de Patch</ion-label></ion-item>
-          <ion-popover trigger="nested-patch-options" [dismissOnSelect]="true" side="end">
-            <ng-template>
-              <ion-content>
-                <ion-list>
-                  <ion-item button detail="false" (click)="patchFileInput.click()">
-                    <ion-label>Carregar Patch</ion-label>
-                    <ion-icon slot="end" name="cloud-upload-outline"></ion-icon>
-                  </ion-item>
-                  <ion-item button detail="false" (click)="promptClearCustomPatch()">
-                    <ion-label>Remover Patch</ion-label>
-                    <ion-icon slot="end" name="cloud-offline-outline"></ion-icon>
-                  </ion-item>
-                </ion-list>
-              </ion-content>
-            </ng-template>
-          </ion-popover>
-          <!--
-            The diagnostics log for a real-device pass: off until switched on in the window this
-            opens. The subtitle says which, so the menu answers it without opening anything.
-          -->
-          <ion-item button detail="false" (click)="showDiagnosticsModal()">
-            <ion-label>
-              Diagnóstico
-              <p>{{ diagnosticsSummary }}</p>
-            </ion-label>
-            <ion-icon slot="end" name="bug-outline"></ion-icon>
-          </ion-item>
-          <ion-item button detail="false" (click)="showFAQAndManualModal()">
-            <ion-label>FAQ e Manual</ion-label>
-            <ion-icon slot="end" name="help-circle-outline"></ion-icon>
-          </ion-item>
-          <!-- The welcome dialog, back on demand: "Entendi" now retires it permanently. -->
-          <ion-item button detail="false" (click)="showTutorial()">
-            <ion-label>Primeiros passos</ion-label>
-            <ion-icon slot="end" name="footsteps-outline"></ion-icon>
-          </ion-item>
-          <ion-item button detail="false" (click)="showAboutModal()">
-            <ion-label>Sobre e Créditos</ion-label>
-            <ion-icon slot="end" name="information-circle-outline"></ion-icon>
-          </ion-item>
-          <ion-item button detail="false" (click)="confirmRefresh()">
-            <ion-label>Salvar e recarregar</ion-label>
-            <ion-icon slot="end" name="refresh-outline"></ion-icon>
-          </ion-item>
-          <ion-item button detail="false" (click)="confirmLeaveGame()">
-            <ion-label>Voltar ao menu</ion-label>
-            <ion-icon slot="end" name="exit-outline"></ion-icon>
-          </ion-item>
-        </ion-list>
+        <app-options-menu [sections]="menuSections" (act)="onMenuAction($event)" (help)="openGuide($event)"></app-options-menu>
       </ion-content>
       <ion-footer class="ion-no-padding ion-no-margin ion-text-center">
-            <ion-note class="ion-no-padding ion-no-margin not-selectable">v{{ versionConfig.versionName }}</ion-note>
+        <ion-note class="ion-no-padding ion-no-margin not-selectable">v{{ versionConfig.versionName }}</ion-note>
       </ion-footer>
     </ng-template>
   </ion-popover>
+  <ion-modal class="menu-sheet" [isOpen]="isSheetOpen" [breakpoints]="sheetBreakpoints" [initialBreakpoint]="sheetInitialBreakpoint"
+    [handle]="true" (didDismiss)="isSheetOpen = false">
+    <ng-template>
+      <ion-header>
+        <ion-toolbar color="tertiary">
+          <ion-title>Opções</ion-title>
+          <ion-buttons slot="end">
+            <ion-button (click)="isSheetOpen = false" aria-label="Fechar o menu">
+              <ion-icon slot="icon-only" name="close"></ion-icon>
+            </ion-button>
+          </ion-buttons>
+        </ion-toolbar>
+      </ion-header>
+      <ion-content>
+        <app-options-menu [sections]="menuSections" (act)="onMenuAction($event)" (help)="openGuide($event)"></app-options-menu>
+        <p class="menu-version not-selectable">v{{ versionConfig.versionName }}</p>
+      </ion-content>
+    </ng-template>
+  </ion-modal>
   <input style="display:none;" type="file" accept=".zip" #patchFileInput (change)="onPatchFileSelected($event)" />
   <!--
     Saves (.e98) or a backup (.zip), several at once. Android's picker filters by MIME type and
@@ -497,7 +184,7 @@
       (omaticRequest)="showOmaticModal()"
       (keyFailure)="onKeyFailure($event)">
       <!-- Projected into the left rail of a landscape phone (see the dock): the toolbar's menu, "Ativar som" and the room. -->
-      <button railMenu type="button" class="rail-menu-btn" (click)="showPopover($event)" aria-label="Menu de opções">
+      <button railMenu type="button" class="rail-menu-btn" (click)="openMenu($event)" aria-label="Menu de opções">
         <ion-icon name="ellipsis-vertical-outline" aria-hidden="true"></ion-icon>
       </button>
       <app-sound-chip railSound variant="rail" [hosting]="isStreaming"></app-sound-chip>
@@ -520,3 +207,10 @@
     </app-type-bar>
   </div>
 </ion-content>
+
+<!--
+  The boot screen, for as long as the emulator starts and the game's own screen has not been seen. A fixed overlay out of the page's
+  layout (the picture's container under it is hidden, as it was under the loader), at the root of the template and not inside
+  ion-content, which contains its descendants. It is the loader that used to be an ion-loading: see BootScreenComponent.
+-->
+<app-boot-screen *ngIf="booting" [status]="bootStatus" [hostWaiting]="hostWaitingForBoot" (leave)="leaveBoot()"></app-boot-screen>

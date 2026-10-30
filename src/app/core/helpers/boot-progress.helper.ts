@@ -1,5 +1,20 @@
 /**
- * Turns js-dos's own loading text into the line the loader shows.
+ * Where the boot is, as the boot screen needs it: the line to show and, while js-dos reports one, how far along that step is.
+ * The first three phases are js-dos's own (it downloads the bundle, unpacks it, starts the emulator); the last four are the guest
+ * on its way to the game, labelled from the polled frames (BootStageHelper), which is why a percentage exists only for the first two.
+ */
+export type BootPhase = 'download' | 'extract' | 'emulator' | 'dos' | 'windows' | 'elifoot' | 'game';
+
+export interface BootStatus {
+  phase: BootPhase;
+  /** The line to show, in Portuguese. */
+  message: string;
+  /** 0 to 100 while js-dos reports one for this step, otherwise null: the screen does not invent a figure. */
+  percent: number | null;
+}
+
+/**
+ * Turns js-dos's own loading text into the line the boot screen shows.
  *
  * `elifootMain`'s `onProgress` hands over whatever js-dos last wrote to `.emulator-loading-pre-2`,
  * in English, and that text is not all progress: js-dos also writes "Ready", "Connecting..." and,
@@ -10,21 +25,27 @@
 export class BootProgressHelper {
 
   static describe(loaderText: string | null | undefined): string | null {
+    return BootProgressHelper.status(loaderText)?.message ?? null;
+  }
+
+  /** {@link describe} with the phase and the percentage kept apart, or null for text that is not progress. */
+  static status(loaderText: string | null | undefined): BootStatus | null {
     const text = (loaderText ?? '').trim();
 
     const download = /^Downloading bundle\s*(?:(\d+(?:\.\d+)?)\s*%)?/.exec(text);
     if (download) {
-      return download[1] === undefined
-        ? 'Baixando o jogo…'
-        : `Baixando o jogo… ${BootProgressHelper.percent(download[1])}%`;
+      if (download[1] === undefined) return { phase: 'download', message: 'Baixando o jogo…', percent: null };
+      const percent = BootProgressHelper.percent(download[1]);
+      return { phase: 'download', message: `Baixando o jogo… ${percent}%`, percent };
     }
 
     const extract = /^Extracting\s*(\d+(?:\.\d+)?)\s*%/.exec(text);
     if (extract) {
-      return `Descompactando o jogo… ${BootProgressHelper.percent(extract[1])}%`;
+      const percent = BootProgressHelper.percent(extract[1]);
+      return { phase: 'extract', message: `Descompactando o jogo… ${percent}%`, percent };
     }
 
-    if (/^Starting/.test(text)) return 'Iniciando o emulador…';
+    if (/^Starting/.test(text)) return { phase: 'emulator', message: 'Iniciando o emulador…', percent: null };
     return null;
   }
 

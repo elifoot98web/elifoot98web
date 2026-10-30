@@ -7,6 +7,7 @@ describe('NavigationGuardHelper', () => {
     leaving: false,
     hasEmulator: true,
     promptOpen: false,
+    windowOpen: false,
   };
 
   it('asks before the game is left through Back', () => {
@@ -38,6 +39,37 @@ describe('NavigationGuardHelper', () => {
 
   it('still lets a leave through while the dialog is open, if the leave is the page\'s own', () => {
     expect(NavigationGuardHelper.verdict({ ...back, promptOpen: true, leaving: true })).toBe('allow');
+  });
+
+  describe('a window of the page is open', () => {
+    it('closes the window first instead of asking about leaving: Back means "close what is in front of me"', () => {
+      expect(NavigationGuardHelper.verdict({ ...back, windowOpen: true })).toBe('close-window');
+    });
+
+    it('asks about leaving on the next Back, once the window is gone', () => {
+      expect(NavigationGuardHelper.verdict({ ...back, windowOpen: false })).toBe('prompt');
+    });
+
+    it('does not close it for a navigation that stays on the page, or for a leave the page started itself', () => {
+      expect(NavigationGuardHelper.verdict({ ...back, windowOpen: true, nextUrl: '/game?x=1' })).toBe('allow');
+      expect(NavigationGuardHelper.verdict({ ...back, windowOpen: true, leaving: true })).toBe('allow');
+    });
+
+    it('closes it during the boot too: ?host=1 has the room dialog up before the emulator exists, and a Back that left would strand it', () => {
+      expect(NavigationGuardHelper.verdict({ ...back, windowOpen: true, hasEmulator: false })).toBe('close-window');
+    });
+
+    it('lets Back leave during the boot when no window is open: there is no emulator to lose and nothing to close first', () => {
+      expect(NavigationGuardHelper.verdict({ ...back, windowOpen: false, hasEmulator: false })).toBe('allow');
+    });
+
+    it('still lets the page\'s own leave through with a window open and no emulator', () => {
+      expect(NavigationGuardHelper.verdict({ ...back, windowOpen: true, hasEmulator: false, leaving: true })).toBe('allow');
+    });
+
+    it('holds when the leave dialog is the thing on screen, even with a window under it', () => {
+      expect(NavigationGuardHelper.verdict({ ...back, windowOpen: true, promptOpen: true })).toBe('hold');
+    });
   });
 
   describe('pathOf', () => {

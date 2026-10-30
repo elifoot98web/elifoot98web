@@ -1,0 +1,56 @@
+<div class="win9x-element-border win9x-outer-window">
+  <div class="win9x-modal-container">
+    <ion-header class="ion-no-border">
+      <ion-toolbar class="win9x-titlebar">
+        <ion-title><ion-icon name="construct-outline" aria-hidden="true"></ion-icon> Dados e avançado</ion-title>
+        <ion-buttons slot="end" class="buttons-padding-end">
+          <ion-button fill="clear" class="win9x-button win9x-titlebar-close" (click)="openHelp('menu-backup')" aria-label="Ajuda sobre dados e avançado">
+            <ion-icon name="help" slot="icon-only"></ion-icon>
+          </ion-button>
+          <ion-button fill="clear" class="win9x-button win9x-titlebar-close" (click)="close()" aria-label="Fechar">
+            <ion-icon name="close" slot="icon-only"></ion-icon>
+          </ion-button>
+        </ion-buttons>
+      </ion-toolbar>
+    </ion-header>
+
+    <ion-content class="win9x-modal-content ion-padding">
+      <div class="win9x-groups">
+        <!--
+          One group box per kind of thing, ordered from what is safe to what is not. The last one is the danger zone: a box of its own,
+          in maroon, with the one button that cannot be taken back and nothing beside it.
+        -->
+        <fieldset *ngFor="let group of groups; trackBy: trackGroup" class="win9x-group win9x-element-bevel" [class.win9x-group--danger]="group.danger">
+          <legend class="win9x-legend">
+            {{ group.title }}
+            <button type="button" class="win9x-help" (click)="openHelp(group.help)" [attr.aria-label]="'Ajuda: ' + group.title">?</button>
+          </legend>
+          <p *ngIf="group.intro" class="win9x-desc">{{ group.intro }}</p>
+
+          <div *ngFor="let entry of group.entries; trackBy: trackEntry" class="win9x-row" [ngSwitch]="entry.kind">
+            <ng-container *ngSwitchCase="'info'">
+              <span class="win9x-label">{{ entry.label }}</span>
+              <p class="win9x-desc" role="status">{{ entry.description }}</p>
+            </ng-container>
+
+            <ng-container *ngSwitchCase="'action'">
+              <button type="button" class="win9x-button win9x-button--touch win9x-action" [class.win9x-action--danger]="entry.danger"
+                [disabled]="!!entry.disabled" (click)="press(entry)">{{ entry.label }}</button>
+              <p class="win9x-desc">{{ entry.reason || entry.description }}</p>
+            </ng-container>
+
+            <label *ngSwitchCase="'toggle'" class="win9x-switch">
+              <input type="checkbox" [checked]="!!entry.checked" (change)="flip(entry, $any($event.target).checked)">
+              <span>
+                <span class="win9x-label">{{ entry.label }}</span>
+                <span class="win9x-desc">{{ entry.description }}</span>
+              </span>
+            </label>
+          </div>
+        </fieldset>
+
+        <button type="button" class="win9x-button win9x-button--touch win9x-close" (click)="close()">Fechar</button>
+      </div>
+    </ion-content>
+  </div>
+</div>

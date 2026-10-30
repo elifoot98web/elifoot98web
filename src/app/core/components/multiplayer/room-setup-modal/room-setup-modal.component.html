@@ -5,6 +5,10 @@
       <ion-toolbar class="win9x-titlebar">
         <ion-title>{{ title }}</ion-title>
         <ion-buttons slot="end" class="buttons-padding-end">
+          <!-- Only where the opener lent the guide (the spectator's page does not carry it). -->
+          <ion-button *ngIf="help" fill="clear" class="win9x-button win9x-titlebar-close" (click)="showHelp()" aria-label="Ajuda sobre salas multiplayer">
+            <ion-icon name="help"></ion-icon>
+          </ion-button>
           <ion-button fill="clear" class="win9x-button win9x-titlebar-close" (click)="cancel()" aria-label="Fechar">
             <ion-icon name="close"></ion-icon>
           </ion-button>
@@ -16,6 +20,30 @@
       <!-- Native inputs with real <label>s, not ion-input: this is a Win9x dialog, and
            ion-input's shadow-encapsulated internals cannot take the sunken bevel. -->
       <form (ngSubmit)="confirm()">
+        <!--
+          The host's short form (QuickHostHelper): what pressing "Transmitir agora" will do, in a line, and "Alterar" for the rest. The
+          name is asked for here only by a host who has none yet (the first time), because everything else is remembered or generated.
+          A guest, and a host who pressed "Alterar", get the whole form below.
+        -->
+        <ng-container *ngIf="isHost && !expanded && loaded">
+          <label *ngIf="askName" class="field">
+            <span class="field-label">Seu nome</span>
+            <input class="win9x-input win9x-element-bevel" type="text" name="playerName"
+              [(ngModel)]="playerName" maxlength="20" required autocomplete="off"
+              placeholder="Como os outros vão te ver">
+          </label>
+          <p *ngIf="!askName" class="win9x-summary">
+            <span class="win9x-summary-swatch" [style.background-color]="playerColor" aria-hidden="true"></span>
+            {{ identity }}
+          </p>
+          <p class="win9x-summary win9x-summary--room" role="status">{{ summary }}</p>
+          <button type="button" class="win9x-expander win9x-expander--box" (click)="expand()" aria-expanded="false" aria-controls="host-fields">
+            <ion-icon name="chevron-forward" aria-hidden="true"></ion-icon>
+            <span>Alterar nome, código, senha, limite e cor</span>
+          </button>
+        </ng-container>
+
+        <div id="host-fields" *ngIf="!isHost || (expanded && loaded)">
         <label class="field">
           <span class="field-label">Seu nome</span>
           <input class="win9x-input win9x-element-bevel" type="text" name="playerName"
@@ -103,10 +131,11 @@
               (click)="selectColor(color)"></button>
           </div>
         </fieldset>
+        </div>
 
         <div class="dialog-actions">
           <button type="submit" class="win9x-button win9x-button--touch" [disabled]="!isValid">
-            {{ isHost ? 'Criar sala' : 'Entrar' }}
+            {{ isHost ? 'Transmitir agora' : 'Entrar' }}
           </button>
           <button type="button" class="win9x-button win9x-button--touch" (click)="cancel()">
             Cancelar

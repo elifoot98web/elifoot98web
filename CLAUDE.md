@@ -31,7 +31,7 @@ node scripts/pwa-icons/make-maskable.mjs <source.png> <out.png> --size 512 --che
 Specs are karma + jasmine. The builder globs `**/*.spec.ts` (its `include` option, which is also
 what `--include` overrides); [src/test.ts](src/test.ts) only initialises the TestBed and
 `tsconfig.spec.json` type-checks `src/**/*.spec.ts`, so a spec needs no registration but must live
-under `src/` to be type-checked. Nothing in a spec reaches the bundle. There are **seventy-eight spec files so
+under `src/` to be type-checked. Nothing in a spec reaches the bundle. There are **eighty-eight spec files so
 far**. [room-code.helper.spec.ts](src/app/core/helpers/room-code.helper.spec.ts) is there as
 much to prove the harness as to cover `RoomCodeHelper`: `ng test` with **zero** specs
 prints `Executed 0 of 0 SUCCESS` and still exits 1, so a `test:ci` could never pass before the
@@ -155,7 +155,8 @@ events; and `idle-pause.mjs`, the battery saver on the real game: CPU on a still
 and taps and keys sent to a sleeping guest, see *Letting the guest sleep*; and `stage.mjs`, the picture's box at 19 windows with every input the contract names and every one it
 does not, the rails' keys, and a spectator's picture against the host's in a real two-browser room, see *The stage*; and `camera.mjs`, the in-app camera on the real game:
 the picture's box at 12 windows and 4 zooms, the unzoomed page byte for byte, real two-finger touches, tap accuracy at each zoom against the RAM oracle, the host's overlay and
-stream, the deck while zoomed, rotation and the battery saver, see *The camera*), with the tables the constants rest on. **Re-run it after any change to the video mode, the
+stream, the deck while zoomed, rotation and the battery saver, see *The camera*; and `menu.mjs`, the options sheet at 8 windows, "Dados e avançado", the old stored switches, the wipe, Back, the first-run
+coach, the boot screen, `?host=1` and the spectator's waiting card, see *The options menu*), with the tables the constants rest on. **Re-run it after any change to the video mode, the
 Windows mouse settings, js-dos or the disk image.** It needs a dev build (`window.ng`) served with `--live-reload=false`.
 
 The phone-platform work (the screen lock, fullscreen, the game's sound, installing) is checked the same way in
@@ -361,7 +362,7 @@ fills the frame, which is a free 1.25x on every glyph. `use800.flg` returns a pl
 
 ### Booting the emulator
 
-`GamePage.bootGame()` starts js-dos through `elifootMain`, keeps the loader in step with it and
+`GamePage.bootGame()` starts js-dos through `elifootMain`, keeps the boot screen (*The boot screen*) in step with it and
 decides what a failure means. The pure parts are specced
 ([boot-progress](src/app/core/helpers/boot-progress.helper.ts),
 [boot-stage](src/app/core/helpers/boot-stage.helper.ts) and
@@ -381,13 +382,13 @@ decides what a failure means. The pure parts are specced
   longer the element it was started in**. *Why:* `Dos()` builds the canvas, mouse layer and
   keyboard inside the element it is given, and `GamePage` is destroyed and rebuilt within one
   document (browser Back to the landing page, then Jogar). Re-attaching there handed the new page
-  a `dosCI` whose picture and input sat in a detached tree (a welcome dialog over an empty game
+  a `dosCI` whose picture and input sat in a detached tree (a dialog over an empty game
   area), or replayed the old failure as if it were a new attempt: three round trips counted
   three failures and reached the wipe offer without one real try. The abandoned boot is not
   stopped (`stop()` cannot cancel a download in flight): the same ghost emulator the code had
   before any of this. Because alerts outlive the route,
   `GamePage.ngOnDestroy` also dismisses its timeout/failure dialog, and "Continuar esperando"
-  does nothing for a destroyed page (it would raise a loader that nothing dismisses). Without an
+  does nothing for a destroyed page (it would start a boot nothing is watching). Without an
   element to watch the stall clock is meaningless, so the hard cap is the only deadline.
 - **The progress is js-dos's own text, so the bundle URL must never change.** "Downloading bundle
   N%" appears only when the server sends a length, "Extracting N%" is cumulative over the whole
@@ -406,8 +407,8 @@ decides what a failure means. The pure parts are specced
   Windows' desktop with the game loading ("Carregando o Elifoot…"), the game's green ends the
   wait. The label never goes back (a black frame between desktop and splash would flip it).
   The green test is the old one moved verbatim: same four pixels, same two greens, tolerance 25.
-  A window that closes without green is not an error: the page carries on without the welcome
-  dialog and says "O jogo ainda está iniciando…" in a toast. Measured on a desktop dev server
+  A window that closes without green is not an error: the page carries on without the first-run
+  coach and says "O jogo ainda está iniciando…" in a toast. Measured on a desktop dev server
   (frames every 250 ms): DOS text at 0.5 s, black graphics at 1.8 s, the desktop at 2.0 s and the
   game's green at 4.1 s after navigation, 3.5 s after `run()` resolved; a phone's numbers are
   unknown, which is what the 45 s is a ceiling for.
@@ -416,9 +417,9 @@ decides what a failure means. The pure parts are specced
   `network` (js-dos's "Network error, can't download", which is *any* non-200 including a 404, or
   `js-dos.js` never loaded): counted, but a wipe cannot fix a missing download, so it is never
   offered. `other` (the emulator itself threw, e.g. "Broken bundle"): counted, and from the third
-  in a row the dialog adds "Limpar todos os dados", always beside "Baixar cópia dos meus dados".
+  in a row the dialog adds "Apagar todos os dados…", always beside "Baixar cópia dos meus dados".
   Nothing is shown from js-dos's English: it goes to the console. Only a failure to *start* the
-  emulator is a boot failure; an exception in the settings, welcome dialog or host intent after
+  emulator is a boot failure; an exception in the settings, the first-run coach or the room asked for after
   it is logged and alerted, never a reload (the old catch-all reloaded a game that was running).
 - **The backup and the wipe work without an emulator.** `SaveGameService.readStoredChanges()` reads
   the layer straight out of IndexedDB (database `js-dos-cache (emulators-ui-saves)`, store
@@ -791,7 +792,7 @@ todos os dados"). Classic means the layer is not installed, so stock js-dos, who
 finger; it switches live, with no reload. **It is only real where js-dos itself calls the device a phone** (its UA test,
 copied into `TouchModeHelper.stockTouchWorks`): on a default-UA iPad, or a phone asked for its "desktop site", classic
 would be a dead screen (the harness has the control), so `effective()` turns a stored `classic` into `direct` there and
-the entry is not offered. It is offered only under `(pointer: coarse)` (the options popover, `touchModeChoice$`); the layer
+the entry is not offered. It is offered only under `(pointer: coarse)` (the options menu, `touchModeChoice$`); the layer
 itself is installed everywhere, because it only reacts to fingers and pens.
 
 **Verified only in headless Chromium with synthetic touches on a desktop CPU.** Real fingers err by 25-40 css px
@@ -927,7 +928,7 @@ menu (Automático, Sempre mostrar, Nunca mostrar; it applies at once, and its su
 device, including the touch laptop whose mouse is the primary pointer), and `DISABLE_KEY_VIBRATION`, "Vibração nas teclas"
 (stored as the OFF flag so that every existing install means on; offered only where `navigator.vibrate` exists, so not on iOS; a
 buzz is 8 ms on the landing of a key, and a repeat does not buzz). Both are read before the boot, so the deck does not come and go
-behind the loader.
+behind the boot screen.
 
 **Safe areas:** the taskbar's face continues under the home indicator (bottom padding is `env(safe-area-inset-bottom)` on top
 of its own 4 px), a rail's face paints to the screen's edge with the notch's inset in its width and its padding, and the launcher's sheet adds the left inset to its
@@ -1041,8 +1042,8 @@ parent-level binding read it; it was there before this phase and does not exist 
 
 A transform on the picture's root that magnifies and moves it inside the stage, so that the game's 8 to 12 px text and 6 to 11 px targets can be read and hit on a phone: about 1.67x brings
 a 640x480 frame to the 12 px equivalent that P4's 1.25x left short (phase P11; the design record, the as-built numbers and the conflict it settled are in
-[docs/mobile-ux-study.md](docs/mobile-ux-study.md)). **It is behind a setting and off as shipped**: `STORAGE_KEY.CAMERA_ENABLED`, "Zoom e movimento" in the options menu (offered where
-`(pointer: coarse)` holds, like "Modo de toque"), stored as an explicit boolean so that flipping `CAMERA.DEFAULT_ENABLED` reaches only people who never chose; the menu's text and the FAQ say it has not been tried on a phone.
+[docs/mobile-ux-study.md](docs/mobile-ux-study.md)). **It is behind a setting and off as shipped**: `STORAGE_KEY.CAMERA_ENABLED`, "Zoom e movimento" in "Dados e avançado" > "Recursos experimentais" (offered where
+`(pointer: coarse)` holds, like "Modo de toque"; once on, the menu's Exibição section gains a **Zoom row**: Ajustar, "-" and "+"), stored as an explicit boolean so that flipping `CAMERA.DEFAULT_ENABLED` reaches only people who never chose; the menu's text and the FAQ say it has not been tried on a phone.
 *Why off:* **every measurement below is Chromium's**, and WebKit's behaviour with a transform on a WebGL canvas, with two-finger gestures and with edge swipes is unseen (decision D9: the
 device pass first). Files: `ViewportTransform` ([viewport-transform.helper.ts](src/app/core/helpers/viewport-transform.helper.ts): the maths, pure), `CameraGesture`
 ([camera-gesture.helper.ts](src/app/core/helpers/camera-gesture.helper.ts): two fingers to steps, pure), `CameraService` (the element, the observers, what is remembered), `CameraPanelComponent`
@@ -1126,18 +1127,19 @@ pull-to-refresh), **a transform on the WebGL canvas in WebKit** (tearing, blur, 
 LAY-3 design, a *preview* transform while the fingers are down that is committed on the lift by resizing the container to `z*W x z*H` and moving it with a pure translate (js-dos re-letterboxes once per commit; the stage plan,
 the overlay and the type bar's bottom would then have to learn that the container is bigger than the picture). It was not built: two mechanisms is one too many for something nobody has seen on a phone, and this one's evidence is Chromium's.
 **Known and left:** a browser that resizes the LAYOUT viewport for the OS keyboard (older Android WebViews) shrinks the tall clip with it and re-clamps the camera when it grows back (the P12 clause "not the OS keyboard" has the same limit in
-portrait); with the deck forced off ("Nunca mostrar", the one configuration where `layout.kind` is `none` on a touch device) there is no Zoom tab, so the buttons are unreachable and a pinch in is the way back to the fit: **the single-pointer twin of the gesture is missing there** (WCAG 2.5.1).
-The menu entry and the toast say so (`GamePage.cameraButtonsHint`) instead of naming a tab that is not there. The fix belongs to the options menu rework (P13: a Zoom section of Ajustar, "-" and "+" in the sheet, which is reachable with the deck off), and the camera should not become the default before it exists; the hardware mouse and the trackpad have no zoom; `Ampliar` is unchanged.
+portrait). With the deck forced off ("Nunca mostrar", the one configuration where `layout.kind` is `none` on a touch device) there is no Zoom tab, which left a pinch as the only way and **the single-pointer twin of the gesture missing** (WCAG 2.5.1);
+P13 closed it: the options sheet's Exibição section has a **Zoom row** (Ajustar, "-" and "+", the same `CameraService` calls as the tab, leaving the menu open) whenever the camera is on, with the deck shown or not (`menu.mjs`/`camera.mjs deck`: a real tap on "+" zooms one rung). It has no pad, so *moving* a magnified picture is still two fingers, or the tab's pad when the deck is on.
+The hardware mouse and the trackpad have no zoom; `Ampliar` is unchanged.
 **Lifting `user-scalable=no` is a separate, later commit that needs an iOS test (D11).** The viewport meta was not touched by this phase.
 
 ### The live type bar (experimental)
 
 A real, visible, one-line field above the OS keyboard whose text appears in the guest as it is typed: the player
 sees what they write instead of typing blind into a dialog (phase P8). **It is behind a setting and off by default**:
-`STORAGE_KEY.LIVE_KEYBOARD`, the options menu's "Teclado ao vivo (experimental)", whose description says that it has not been
+`STORAGE_KEY.LIVE_KEYBOARD`, "Dados e avançado" > "Recursos experimentais" > "Teclado ao vivo (experimental)", whose description says that it has not been
 tried on real phones; wiped by "Apagar todos os dados" like every key. Off, the deck's Texto button opens the P1 compose dialog
 exactly as before and nothing of this is mounted or running. On, Texto opens the bar, and the dialog is still the way to
-paste a list ("Lista" on the bar, "Input de Texto" in the menu): a list of names is several lines and the bar is one. Decision
+paste a list ("Lista" on the bar, "Digitar texto" in the menu): a list of names is several lines and the bar is one. Decision
 D7: the dialog is the default, the bar is built behind a flag, and the owner decides after the device pass. **The mirroring
 has been run only against synthetic IME events in desktop Chrome** (what exactly is under *Not verified* below).
 
@@ -1311,9 +1313,8 @@ enough and `resume()` the moment anything wants the guest. It is phase P9 (decis
 (no clock, no timer, no emulator: every call carries the time), the numbers are `EMULATOR_POWER` in [constants.ts](src/app/core/models/constants.ts),
 and everything outside the service reaches the guest through [`GuestAccessHelper`](src/app/core/helpers/guest-access.helper.ts).
 
-**Off by default, and one constant from on.** The setting is `STORAGE_KEY.IDLE_PAUSE` ("Economizar bateria quando parado" in the options
-menu), stored as an explicit boolean so that changing `EMULATOR_POWER.DEFAULT_ENABLED` reaches only people who never touched the switch;
-the menu says it has not been tried on real phones, and the FAQ has an entry. *Why off:* the rule the roadmap proposed, asleep after 2 s
+**Off by default, and one constant from on.** The setting is `STORAGE_KEY.IDLE_PAUSE` ("Economizar bateria quando parado" in "Dados e avançado" > "Recursos experimentais"), stored as an explicit boolean so that changing `EMULATOR_POWER.DEFAULT_ENABLED` reaches only people who never touched the switch;
+the window says it has not been tried on real phones, and the FAQ has an entry. *Why off:* the rule the roadmap proposed, asleep after 2 s
 without a frame or an input, was played on real Elifoot rounds and it made the game's own computations **1.8 times slower on average and 2.7 in the worst round**, because
 Elifoot spends whole seconds with the picture untouched while it works (on this desktop a 6 to 7.4 s stretch two seconds after the key that
 starts a round, and a 9 to 10.3 s one 38 s after the last key, the end of the match) and a guest put to sleep in the middle of that runs the
@@ -1321,7 +1322,7 @@ rest at the probe's duty cycle (about a ninth of its speed). With the idle time 
 the same with it off), and with the learning below it costs one stretched computation at most, but every number here is a desktop's: the
 feature exists for a phone whose silent stretches are unmeasured, and a computation that outlasts the idle time on a slow phone is stretched
 for as long as it takes to be seen once. The owner flips `DEFAULT_ENABLED` after the Galaxy A07 pass, or does not; the FAQ entry follows the constant (and `IDLE_MS`) by binding, but the
-menu's "Ainda não foi testado em celulares de verdade" is prose about that pass and is revised by hand in the same commit.
+experimental group's "Ainda não foram testados em celulares de verdade" (`AdvancedMenuHelper`) is prose about that pass and is revised by hand in the same commit.
 
 **The invariant: anything that talks to the guest calls `wake()` first** (or `hold()` for the length of a job; both are no-ops when the
 service is not running, which is the case whenever the setting is off). *Why:* `pause()` is a flag and the guest's clock stops with it.
@@ -1511,7 +1512,7 @@ listeners; `WAKE_LOCK`, `AUDIO_HEALTH`, `FULLSCREEN`, `PLATFORM_NUDGES` and `JSD
 - **One-time nudges** ([`NudgeStateService`](src/app/core/services/shared/nudge-state.service.ts), [`NudgeHelper`](src/app/core/helpers/nudge.helper.ts); the install
   banner and the "Gire o aparelho" hint, beside the backup reminder, which keeps its own answer in `SaveStatusService`). **Each is shown once in the life of the install, and
   at most one per page load, in this order: backup, install, rotate** (the order of the calls in `GamePage.maybeNudge`, each of which returns true when it showed
-  something; no list of kinds is kept elsewhere to drift from it), after the welcome dialog and the room dialog. **"Never again after it was
+  something; no list of kinds is kept elsewhere to drift from it), after the first-run coach and the room dialog. **"Never again after it was
   on screen" is the rule, and it holds when storage fails**: the answer is kept in memory before the write is tried, and a store that cannot be READ counts as answered (a
   nudge that cannot remember it was shown would nag on every visit). Showing is answering: unlike the backup reminder (a dialog the player must answer), a toast that runs
   out by itself is spent; the menu entries are the permanent way. The install banner is never due on a first visit (`firstPersistedAt` must exist: an earlier session saved something), in an
@@ -1519,7 +1520,7 @@ listeners; `WAKE_LOCK`, `AUDIO_HEALTH`, `FULLSCREEN`, `PLATFORM_NUDGES` and `JSD
   backup reminder), and its button calls the prompt from its own tap. The rotate hint is for a phone held upright (`FullscreenHelper.phoneInPortrait`: a finger is the
   primary pointer, short side under `PHONE_MAX_SHORT_SIDE_PX`, taller than wide); it goes away by itself when the phone is turned, and a tablet, a landscape phone and
   a desktop never get it. Both toasts are `position: 'top'` and cover the toolbar until they go; neither resizes `#game-container`.
-- **Storage** ("Armazenamento", first line of "Dados e Backups", read each time the menu opens; [`StorageHealthService`](src/app/core/services/shared/storage-health.service.ts)).
+- **Storage** ("Armazenamento", first line of the "Backup" group of "Dados e avançado", read when the window opens; [`StorageHealthService`](src/app/core/services/shared/storage-health.service.ts)).
   **It only reads** `navigator.storage.persisted()` and `estimate()`, each raced against a deadline and "unknown" when it fails: the one request to protect the storage is
   `SaveStatusService`'s, made once after the first save that worked, and `saveStatus.durable` stands in when `persisted()` is missing. The line never promises protection:
   "Protegido" is the browser's answer to `persist()`, "Não protegido" adds that the browser may clear the data if space runs short and the backup is the copy that survives.
@@ -1537,6 +1538,86 @@ its battery saver; the orientation lock on Android, and what the Back gesture do
 resolves for an already-installed copy (`Page.getAppId` answers nothing in the shell); the maskable icon in a real launcher; `storage.persist()` outcomes; and the level of the spectators' stream
 while the host is muted.
 
+### The options menu, "Dados e avançado", and the first minute
+
+Phase P13 (decision D13; the design record is [docs/mobile-ux-study.md](docs/mobile-ux-study.md)). What it replaced: one popover of 13 rows (15 while hosting) with three
+nested popovers behind it, the same action in up to four places, the rare beside the common and "Apagar todos os dados" one row under "Importar jogos salvos"; a 643-character
+welcome alert that sent people to a FAQ that does not teach the game; an `ion-loading` that said "Carregando game…" for the whole boot; a room form that appeared only after
+the game had booted; and a spectator's wait behind a loader nobody could dismiss.
+
+**The menu is a model, drawn twice.** [`MenuHelper`](src/app/core/helpers/menu.helper.ts) (pure, specced) turns what the page knows (`MenuContext`: a room, what the browser can do, each
+setting's state and the summary lines) into five sections, in the order they are needed — **Jogo, Multiplayer, Entrada, Exibição, Ajuda** — of `MenuEntry` rows;
+[`OptionsMenuComponent`](src/app/pages/game/components/options-menu/options-menu.component.ts) draws them and tells the page which row was pressed (`MenuEvent`), and `GamePage.onMenuAction` is the one switch
+that acts on them. Where a finger is the primary pointer (`MenuHelper.presentation`) the menu is a **bottom sheet** (an `ion-modal` with breakpoints), anywhere else it is the popover
+under the mouse's button. `GamePage.menuSections` is memoised by the *content* of the context (a fresh array each pass would be a dev-mode NG0100 and a re-render per pass), so it is
+only evaluated, and only changes, while the menu is open. The rules `menu.helper.spec.ts` pins:
+
+- **"Salvar agora" is the first row of the first section.** "Voltar ao menu" is in that section too, so it comes before every other section's rows; it is the sixth row (the seventh where the iPhone's silent-mode switch is offered), so on a 390 px tall
+  landscape phone (where the sheet opens at the top and shows about four rows) it needs a scroll (`menu.mjs layout`, 844x390).
+- **No row is in two places in the menu, and nothing of "Dados e avançado" is in it** (its window is one row, the second of Jogo). The deck may repeat "Digitar texto" and the O Matic key; the menu repeats neither
+  (the O Matic is in the window and the deck's "Mais": two places).
+- **A row that cannot work on this browser is not there** (fullscreen, install, the touch mode, vibration, the wake lock, the iPhone's silent-mode sound, the rails' size, the zoom row), **and a row that cannot work *now* says why**
+  ("Resolução do jogo": "Encerre a sala para trocar"). Nothing in it is destructive; "Salvar e recarregar" and "Voltar ao menu" ask first, in the page.
+- **Only an `action` row closes the menu**; a switch, the volume slider and the zoom keys change a setting where it stands, because the person is usually about to change the next one.
+  A switch is the **whole row** (the label is inside the `ion-toggle`), so the target is 48 px and not the 36 px switch at its end; every row is at least 44 px under a finger, and so is each section's "?"
+  (`menu.mjs layout`, 8 windows).
+- **The Zoom row is the camera's single-pointer twin** (WCAG 2.5.1): Ajustar, "-" and "+", whenever the camera is on, whether or not the key panel is. See *The camera*.
+
+**The sheet is an overlay of the app, so it moves nothing: `#game-container`'s rectangle is identical with it open and closed** (`menu.mjs layout`, 8 windows from a 360x640 phone to a 1280x800 laptop; `stage.mjs layout` still 0 failures at 19). The
+sheet is shell, flat, in the toolbar's family (decision D3: the retro boundary is *companion windows*, and a menu is the app's own); on a tablet it is a 560 px column, not full width. It opens at 60% of a portrait phone (the picture,
+a quarter to a third of the screen, stays in view) and at the top on a landscape one (`MenuHelper.initialBreakpoint`), where it covers the whole picture: a zoom rung or the smoothing switch (which keep the sheet open on purpose) show their result only once
+the sheet is dragged down or closed. Left as is: a sheet that left part of a 390 px tall picture visible would show one row (why it opens at the top). **The rows below the fold are only reachable once it is expanded**: a thumb drags it up (Ionic's `expandToScroll`),
+but `scrollIntoView` from a script cannot, so the harness calls `setCurrentBreakpoint(1)` first (`nav.mjs tapMenuRow`). **Back closes the window first**: the route guard (`NavigationGuardHelper`, verdict `close-window`) dismisses the top modal
+and cancels the navigation, so the Android Back button and an iOS edge swipe close the sheet, "Dados e avançado" or the guide before the *next* Back asks about leaving (also while the game is still booting, when the only window is the room dialog `?host=1` opens: with no emulator there is no question to ask, but a Back that left with that dialog up stranded it over the landing page, where it starts nothing); nothing is pushed on the history (the `'computed'` restoration the dialog already
+relies on does the rest: `history.length` and the address were constant across the whole sequence), and an alert or a loader over the window is not the window's to close, so then the guard answers as it always did. Checked with `history.back()`
+after arriving through the landing page's own link — a hash set by hand gives the router no page ids and cannot be restored (the harness trap).
+
+**"Dados e avançado" is the second tier** ([`AdvancedMenuHelper`](src/app/core/helpers/advanced-menu.helper.ts), [`AdvancedModalComponent`](src/app/pages/game/components/advanced-modal/advanced-modal.component.ts)), a **Win9x companion window**
+(the first place the player leaves the shell for a window with its own look): six groups, from what is safe to what is not — Backup (the storage line, export, import), Salvamento automático, Patches, Ferramentas (the O Matic, the diagnostics,
+and the disk copy while the diagnostics are on), Recursos experimentais (the live keyboard, the battery saver, the camera) and, last, alone, the **Zona de perigo** (a dashed maroon box, so the wipe is a different *shape* as well as a colour). Every row has a sentence
+about what it does. What ends in a reload (import, both patch rows, the wipe) is disabled while a room is live, with the reason: a host's reload ends the room for everyone (the page did not guard these before; only the resolution was). The file pickers live in the
+page and open from the tap's own call stack (`onAdvancedAction` awaits nothing before `input.click()`); the O Matic and the diagnostics close the window first. Each group has a "?" that opens the guide (below).
+
+**Three settings changed their words and not their keys** ([`InvertedSettingHelper`](src/app/core/helpers/inverted-setting.helper.ts), specced): "Suavizar a imagem" (was "Desativar Suavização"), "Salvar ao gravar o jogo" (was "Desativar Sync Save") and "Salvar a cada 5 min" (was "Save
+Periódico (5min)"; this one was never inverted). `STORAGE_KEY.DISABLE_SMOOTH_FILTER` and `DISABLE_AUTO_SAVE` still store the OFF flag under the same names, because a migration (read the old key, write a new one, delete the old) leaves a window where a failed write reverses a
+player's choice, and an upgrade that changes nothing on disk cannot. A stored `true` reads as "off", an absent key as "on" (the default every install has); `menu.mjs data` seeds the two old flags, reloads, and sees both switches off, the canvas unsmoothed and the auto-saver not running, then
+flips them with real taps and reads the stored flags back. Vibration and the spectators' sound read through the same helper (they were already worded as a positive over an inverted key).
+
+**The wipe asks twice** ([`WipeFlowHelper`](src/app/core/helpers/wipe-flow.helper.ts)). The first dialog offers **"Baixar backup agora"** before **"Continuar"** and says why (the button leaves the dialog up: the backup is one thing done on the way); the last has an `alert-danger` button that
+does nothing until **"Entendo que vou perder meus jogos salvos"** is ticked, and says so when pressed without (a checkbox and not a typed word: a soft keyboard is the hardest thing on the device this is for). The boot-failure dialog's "Apagar todos os dados…" (named like the menu's row; it was "Limpar todos os dados") goes through the same two
+questions and stays up under them; with no emulator its backup is the disk copy read straight out of IndexedDB. `menu.mjs data` stops at the last question without confirming it; `menu.mjs wipe` goes all the way and sees the data gone after the reload.
+
+**The first-run coach** ([`FirstRunCoachComponent`](src/app/pages/game/components/first-run-coach/first-run-coach.component.ts), [`FirstRunHelper`](src/app/core/helpers/first-run.helper.ts)) replaced the welcome alert: three cards — tap, type, save and back up — of two
+sentences each, written for the device (a finger is told "Toque" and "Texto", a mouse "Clique", Esc and the menu), in a small **Win9x** dialog whose title bar and buttons stay put while the card between them scrolls (a 390 px tall phone). It says nothing about "learning to play" and
+describes the real controls (direct tap, the key panel, "Digitar texto", the backup). It is **shown once, after the game's own screen is seen** and reuses `STORAGE_KEY.HIDE_TUTORIAL` (so a player who answered the old welcome has answered this), written when the coach goes by any way
+("Pular", "Entendi", the X, Back); an unreadable store counts as answered, the nudges' rule. "Primeiros passos" in Ajuda brings it back. A visit that came to host and now has a room on the air does not get it (it is still due next time).
+
+**Contextual help is a name table** ([`HelpTopicHelper`](src/app/core/helpers/help-topic.helper.ts)): the "?" beside a section of the menu, a group of "Dados e avançado", the room dialog and a coach card's "Saiba mais" open the guide **at a topic** — the right tab, the accordion open
+through its `value`, and scrolled to its `id` (`guide-<tab>-<value>`) **at the modal's `ionModalDidPresent`, not after a delay**: `ion-segment-view` pans to a tab by `index * offsetWidth` once, as it loads, and Ionic removes the modal's `display: none` only after that, so on every open but the first of a page
+load the width it measured was 0 and the Manual button was lit over the FAQ's text; the guide asks the view again (`setContent`, instant) once the window has a width (`menu.mjs coach` opens a Manual topic twice and checks the pan). `guide-topics.spec.ts` renders the FAQ and the manual and fails when a topic names an accordion that does not exist (or a label is quoted that the menu no longer has). The room dialog's "?" is lent by the caller, because the
+guide is a window of the game page's module and the spectator's page does not carry it.
+
+**The boot screen** ([`BootScreenComponent`](src/app/pages/game/components/boot-screen/boot-screen.component.ts), [`BootScreenHelper`](src/app/core/helpers/boot-screen.helper.ts)) replaced the `ion-loading`: the app's name on the game's green, **four steps** (Baixar, Preparar, Windows 3.1, Elifoot) marked
+done, active or to do, the P6 stage text unchanged under the title, and "Voltar ao menu". **The bar does not make up a number**: it is determinate only while js-dos reports a percentage (the download and the unpacking) and moves without a length otherwise; weighting four steps into one figure would
+have looked better and been wrong. After 15 s it says that slow phones and networks take longer, after 60 s that leaving is allowed; it promises no time (how long Windows 3.1 takes on a phone is unknown). It is `position: fixed` and out of the layout, at the root of the page's template (not inside
+`ion-content`, which contains its descendants); the picture's container behind it is as hidden and as boxless as it was behind the loader (`menu.mjs boot` asserts that its rectangle is the same before and after). "Voltar ao menu" reloads to the landing page — nothing has been played, and a download or a boot in flight cannot be
+cancelled from outside, so the reload is what stops them. Its elapsed-time hints run on a 1 s interval **inside the component, outside the zone**, cleared on destroy.
+
+**`?host=1` shows the room dialog while the game boots** (`GamePage.askForRoomWhileBooting`, `startRoomAskedForWhileBooting`): the dialog needs no emulator and hosting does, so the dialog goes first (the address is stripped of the flag at once, as before: a patch reload must not reopen it) and the room goes
+on the air when the game is up — **never by reloading the host page**. A dialog answered before the game is up leaves a line on the boot screen ("Sua sala entra no ar assim que o jogo carregar"); one still open when the game is up is waited for, so nothing stacks on it. **Quick host**
+([`QuickHostHelper`](src/app/core/helpers/quick-host.helper.ts)): the room dialog's host form is **"Transmitir agora"** and one line (`ELI-XK3P · sem senha · até 6 espectadores`; "Você aparece como Leu" above it, or just the name field for a host who has none); **"Alterar nome, código, senha, limite e cor"** opens the
+name, code, password, limit and colour. The password is a flag in the summary and is never stored, here or anywhere (a share link leaves it out on purpose).
+
+**A spectator's wait is a card, not a loader** (`JoinGamePage.waitingForRoom`): the room being entered, a hint at 8 s ("Redes móveis podem demorar um pouco mais") and at 15 s (it points at Cancelar; the timeout is 20 s), and **"Cancelar"** (44 px tall: the only way out of a bad wait; Ionic's own button is 36), which leaves the room and **reloads** to the join page with the code on
+the address — the same fresh page load every other way back into a room needs (*A spectator only ever joins from a fresh page load*), so the dialog comes back filled in.
+
+**Loaders are shell.** The question (WIN9X-1) was whether `ion-loading` joins the Win9x list. It does not: the rule is that *companion windows* are Win95 and the shell stays Elifoot green, and a loader is neither window nor companion, it is the app saying it is busy (nothing to operate, nothing to dismiss);
+skinning it would also need a `loadingController.create` parity check beside the alert one, for no gain a player can feel. The boot screen and the spectator's waiting card are shell too (the first is the app's splash on the app's green before there is a game for a companion to accompany, the second a card of the join page, which is a shell page);
+the one boot-time surface that asks something, the room dialog, is the Win9x dialog it always was. The seam WIN9X-1 noted (a Material loader then a Win9x alert) is accepted and written down here instead of fixed.
+
+**Not verified (the device checklist of the PR):** thumb reach of the sheet on both phones and its drag handle's discoverability; accidental taps near the danger zone; whether a person who has never seen the app understands the three cards; Android Back and an iOS edge swipe with the sheet open (checked only as `history.back()` in
+headless Chrome); iOS swipe-to-dismiss of the sheet; the sheet and the boot screen over a real notch and home indicator; a real keyboard in the room dialog's name field; and that an upgrading player's old switches survive on a real device (checked by seeding the old keys in headless Chrome).
+
 ### Screen-scraping instead of emulator events
 
 Two flows read the framebuffer because js-dos exposes no game-level state (and the guest is a 16-bit
@@ -1546,7 +1627,7 @@ Windows app, so there is nothing to hook):
   to 45 s (each look raced against 5 s, because `screenshot()` has no deadline) and
   `BootStageHelper.isGameScreen` samples four hardcoded pixels for the game's green background
   (tolerance 25). Note this waits for the *game's* screen, i.e. it also covers the DOS + Windows 3.1
-  boot time, and the same frames label the loader's stage (see *Booting the emulator*). Failures
+  boot time, and the same frames label the boot screen's stage (see *Booting the emulator*). Failures
   increment `STORAGE_KEY.FAIL_COUNT`, timeouts and an undetected screen do not; the wipe is
   offered from the third failure of the emulator itself.
 - **Auto-save** — [auto-saver.service.ts](src/app/core/services/game/auto-saver.service.ts) samples
@@ -1568,7 +1649,7 @@ frame and sits on the backdrop, and "green lost" is the normal state afterwards.
 `waitForGameScreen`, which runs only at boot; anything built on "the green went away" must use
 Windows' desktop blue `(0, 64, 128)` and the Program Manager icon instead, which is what the exit watcher
 does (see *Save safety nets*).
-Confirmed on a real boot at 640x480 in the app: `Green check passed`, and the loader reads "Iniciando
+Confirmed on a real boot at 640x480 in the app: `Green check passed`, and the boot screen reads "Iniciando
 o DOS…" then "Carregando o Elifoot…" ("Abrindo o Windows 3.1…" is shorter than the 500 ms between
 looks, as in P6). The OCR strip is **centre-relative** (`OcrRegionHelper.savingDialogRegion`:
 left = round(W/2 − 68), top = round(H/2 − 25), 132x20, so (332, 275) at 800x600 and (252, 215) at
@@ -1648,7 +1729,7 @@ guest sleep*) `platform` (what the browser and the operating system did that the
 context put to sleep, fullscreen, the install prompt, a one-time banner; see *Mobile platform polish*) and `layout` (the stage plan each time it changes: the window
 it was made from, the columns of keys, the width of each side, the picture's box and place, and what the chat cost it; see *The stage*). **Off by default.**
 
-**How to turn it on:** the options menu's "Diagnóstico" entry opens the window
+**How to turn it on:** "Dados e avançado" > "Ferramentas" > "Diagnóstico" opens the window
 ([diagnostics-modal](src/app/pages/game/components/diagnostics-modal/diagnostics-modal.component.ts));
 its switch persists the choice in `STORAGE_KEY.DIAGNOSTICS`. Or put `?diag=1` on the address (before
 or after the `#`), which turns it on for that **tab's session** (`?diag=0` forces it off for one).
@@ -1880,12 +1961,13 @@ below the Ionic imports.
 **The boundary: companion windows are Windows 95; the app shell stays Elifoot green.**
 Retro treatment applies to the multiplayer chat panel, the room-setup dialog, the
 multiplayer panel, the roster rows, the chat toggle, the spectator's sound toggle (which shares
-the chat toggle's rules in `global.scss`), the Cheat 'O Matic modal, the diagnostics window, the
-**control deck** (keycaps, taskbar, panels, a landscape phone's rails and the launcher's sheet: it is the Windows 3.1 machine's keyboard, so it
+the chat toggle's rules in `global.scss`), the Cheat 'O Matic modal, the diagnostics window, **"Dados e avançado"** and the **first-run coach** (companion
+windows, P13), the **control deck** (keycaps, taskbar, panels, a landscape phone's rails and the launcher's sheet: it is the Windows 3.1 machine's keyboard, so it
 is a companion window, decision D3), the live type bar (the deck's keys and face under a title bar, same decision) and every `AlertController` dialog. It does
 **not** apply to the page toolbars (`ion-toolbar color="tertiary"`), the landing cards, the
 toolbar's "Teclas" button and the round menu button in a landscape phone's rail (they are app chrome, and the first only
-opens the Win9x sheet) or the options popover — the navy `#092469` in
+opens the Win9x sheet), the options menu (the bottom sheet and the desktop popover: the app's own menu), the boot screen, the spectator's waiting card and the
+loaders (`ion-loading`: a state indicator, not a window; see *The options menu, "Dados e avançado", and the first minute*) — the navy `#092469` in
 [variables.scss](src/theme/variables.scss) is close enough to `#000080` that shell and retro
 windows read as deliberately related. A retro treatment without an explicit boundary reads
 as a mistake rather than a choice.
@@ -1923,7 +2005,7 @@ funnels — `GamePage.showErrorAlert` and `MultiplayerUiService.showError` — a
 so route new error dialogs through those rather than hand-rolling another `create()`.
 `alert-danger` is a *button*-level class and is unaffected. Before opening a PR, check that
 `grep -rc 'alertController.create' src/` and `grep -rc "cssClass: 'win9x-alert" src/app`
-still agree (38 today) — a manual check, because `npm run lint` covers only `.ts`/`.html`
+still agree (38 today; P13 removed two — the welcome and the one-step wipe — and added two, the wipe's questions) — a manual check, because `npm run lint` covers only `.ts`/`.html`
 and there is no stylelint setup to hang it on.
 
 The save status chip (`.save-chip`, see *Save safety nets*) is on the shell side too, for the same

@@ -33,8 +33,10 @@ Quem hospeda transmite a própria tela por WebRTC; quem entra **assiste**. O esp
 emulador e não controla o jogo — mas ouve o som do jogo, conversa no chat, aponta com um cursor
 compartilhado e vê quem mais está na sala.
 
-- Hospedar: `Jogar e transmitir para amigos` na tela inicial, ou `Hospedar Jogo Multiplayer`
-  no menu de dentro do jogo. A sala ganha um código no formato `ELI-XXXX` e uma senha opcional.
+- Hospedar: `Jogar e transmitir para amigos` na tela inicial (a janela da sala abre enquanto o jogo
+  carrega), ou `Hospedar jogo multiplayer` na seção Multiplayer do menu de dentro do jogo. A janela
+  mostra o que vai acontecer numa linha e tem um botão `Transmitir agora`; `Alterar nome, código, senha, limite e cor`
+  abre o resto. A sala ganha um código no formato `ELI-XXXX` e uma senha opcional.
 - Assistir: `Assistir a uma Partida` na tela inicial, com o código ou o link compartilhado.
 - Limite de espectadores: o anfitrião escolhe de 1 a 6 ao criar a sala (6 é o limite de jogadores
   do próprio Elifoot; o anfitrião não conta). Quem tenta entrar numa sala cheia é avisado em poucos

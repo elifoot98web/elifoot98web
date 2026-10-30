@@ -5,6 +5,7 @@ import { boot, shot, check, sleep } from './lib.mjs'
 const openMenu = async c => {
   const rect = await c.ev(`(() => { const b = [...document.querySelectorAll('ion-header ion-buttons[slot=end] ion-button')].pop(); const r = b.getBoundingClientRect(); return {x: r.x + r.width/2, y: r.y + r.height/2} })()`)
   await c.tap(rect.x, rect.y); await sleep(1000)
+  await c.ev(`document.querySelector('ion-modal.menu-sheet')?.setCurrentBreakpoint?.(1)`); await sleep(600)   // a sheet opens at 60% on a phone; its lower rows are only reachable once it is expanded
 }
 
 // ---- the rotate hint goes away by itself when the phone is turned, and is not shown again ----
