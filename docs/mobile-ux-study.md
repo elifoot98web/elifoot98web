@@ -83,7 +83,9 @@ buttons, English error strings, an eager YouTube iframe that overflows phones.
 - **D9 — yes**, real-device pass on a Galaxy A07 (low-end Android) and an iPhone 15 Pro Max.
   P2, P8 and P11 stay behind settings until that pass.
 - D4-D7 and D10-D14 were not answered; the recommendations below stand as defaults. D6 was built as recommended (the
-  duty-cycle probe, not while hosting) except for "on by default" (see P9 as built).
+  duty-cycle probe, not while hosting) except for "on by default" (see P9 as built). D4 (a hint and a "Tela cheia" button, no
+  lock) and D10 (the wake lock on while hosting and by default in solo play with a toggle, one-time dismissible banners) were built
+  as recommended (see P14 as built).
 
 ### Original questions and recommendations
 
@@ -820,9 +822,62 @@ build, and a CLAUDE.md update.
     pause's three points here and a cost that grows on a slow core where the probe's fixed duty cycle does not; a cheap `asleep` getter for them to
     consult is the fix, and the A07 reading of the worker plus main thread, asleep, auto-save on against off, says whether it is worth doing.
     The checklist for the device pass is in the PR.
-12. Then P11 (zoom/pan camera), P12 (stage layout, landscape
+12. **P14 — mobile platform polish: screen lock, fullscreen, sound, install, storage** (decisions D4 and D10). **As built:** `WakeLockService` ("Manter a tela
+    ligada", on by default, a room overrides it, the spectator page holds the screen too), `FullscreenService` ("Tela cheia" and the landscape lock that goes with it),
+    `AudioHealthService` + the "Ativar som" chip + the volume slider, "Silenciar o jogo" and "Som no modo silencioso", `InstallService` (main bundle) + the iOS how-to
+    dialog + the "Instalar o app" entry, `NudgeStateService` (the install banner and the "Gire o aparelho" hint, once each, at most one per page load),
+    `StorageHealthService` (the "Armazenamento" line), the manifest and `index.html` clean-up with two maskable icons made by `scripts/pwa-icons/make-maskable.mjs`, six pure
+    helpers, six new `STORAGE_KEY`s, a `platform` diagnostics category, three FAQ entries, 12 new spec files (192 new cases, the suite is 1,391 from 1,199; 13 deliberate breaks
+    of the new rules each failed at least one case when the phase was built, before review removed the unused nudge-ordering helper) and `scripts/platform-harness/`. The contract is in CLAUDE.md, *Mobile platform polish*.
+    Measured in headless Chrome 143 (chrome-headless-shell, touch emulation, 393x852 unless noted) against the dev server, **with the APIs the shell lacks or refuses
+    faked** (the harness README lists them and the traps):
+    - **Wake lock.** With a fake `navigator.wakeLock`: asked once when the game came up; the menu switch (a real tap) let it go and stored an explicit `false`, and
+      switching on asked again; a hidden page was not asked, the page returning was; a lock taken back while visible was asked for once more, a battery-saver refusal
+      was not retried (no new request in 3 s), a tap right after it did not ask, the page returning did and was granted. A real host (`startHosting`, no peer needed)
+      held the screen with the switch OFF and let go when the room closed; `leaveGameToMenu` released before the reload; the spectator page held it from the moment
+      a room existed, let go when it was gone (also on the `HOST_LEFT` path) and when the page was left. The real API was refused in the shell ("Wake Lock permission request
+      denied"), and the page said so in the menu.
+    - **Fullscreen**, with the real API (the shell grants it): a real tap on the entry made `document.documentElement` fullscreen, locked the orientation to landscape (the
+      screen's type changed to `landscape-primary`), and the exit unlocked it. After a viewport change to 852x393 the container, the canvas (524x393 at x = 164) and the
+      cursor overlay of a live room agreed to the pixel; leaving fullscreen brought the portrait rectangle back exactly. **Found on the way, fixed:** the first cut of
+      `InstallHelper.isStandalone` also asked `(display-mode: fullscreen)`, which matches the Fullscreen API too, so pressing "Tela cheia" in a tab switched the install mode
+      to `installed` and took the entry away until the player left.
+    - **Sound.** With the context's state forced (`interrupted`, a resume that never answers, as WebKit does without a gesture): the page asked for a resume when it came back,
+      no chip for the 1.2 s grace, then the chip; a tap on the chip resumed inside the tap and removed it; a tap anywhere on the game did the same through the page's gesture
+      listener; a hidden page showed no chip and asked for nothing. The chip is 54x44 and the speaker alone under 600 px; with a live room at 360 and 402 px the pill was 159 px
+      wide and not clipped; at 844x390 it is a 44 px round button in the gutter, left of the picture. **Volume:** a tap in the middle of the slider set 50% and js-dos's gain
+      was written 0.5, "Silenciar" wrote 0 and left the slider where it was, the slider unmuted, a reload came back muted with the slider at 30 and the gain 0, and the wipe removed
+      `emulators.ui.volume`. **Not measured:** the level of the spectators' stream while the host is muted. The shell has no audio device, the context suspends itself a few seconds
+      after it runs and its clock does not advance (`currentTime` 0.0058), so nothing is pulled through the graph; what was observed is that `capture()` connects exactly one node,
+      the stream destination, to the script processor itself, which is the node js-dos puts BEFORE its gain.
+    - **Install.** With a fake `beforeinstallprompt`: the first visit (a phone upright) showed the rotate hint and no install banner; the menu entry called the prompt once and
+      the spent prompt took the entry away; after a session that saved something, the second visit showed the stacked banner ("Agora não" / "Instalar"), its button called the
+      prompt from the tap, and a third visit showed nothing at all; "Agora não" answered it too. On an iPhone user agent (with the Fullscreen API hidden and `audioSession`
+      faked): no "Tela cheia", the entry reads "Adicionar à Tela de Início", the dialog is a `win9x-alert` with the storage warning and a button to the export, the banner's
+      button reads "Como instalar" and opens it, and the dialog fits a 932x430 phone (buttons inside the box). An installed app (`navigator.standalone`) is offered nothing.
+    - **Manifest.** Chrome reads it with no errors and no installability errors; `id`, `lang`, the colours, `scope`, `start_url` as intended and no `orientation` or
+      `display_override`; the maskable icon's lettering lies inside the 40% circle (0.387 of the width at its farthest; the old icon cut under a circular mask), seen
+      under a circle, a squircle and a square. `Page.getAppId` answers nothing in the shell, so the app id Chrome resolves for an installed copy could not be compared.
+    - **Rotate hint.** Shown once on a portrait phone, dismissed by turning the phone (and counted as shown), not shown on the next visit, not on a landscape phone or on a tablet.
+    Where it differs from the plan, on evidence or by decision: **the chip is shell and flat** (as asked), in the toolbar's end slot and not the title slot; **the
+    wake-lock default is a constant, not a literal**; **the spectator page holds the screen with no setting** (it has no menu; the roadmap listed the file); **"Tela
+    cheia" takes the landscape lock as part of its own action, without a separate setting** (the entry's words say so; a lock the manifest or the app took unasked is what D4
+    rejected); **`contentHint` is not set**: measured, it trades fps for resolution under a weak link (`detail` 640x480 at 5-6 fps against `motion` 320x240 at 12 fps at
+    120 kbps), a call about every spectator's picture that no two-device session has informed; **the icon list was not pruned** (the Windows tile sizes are Edge's, and the plan
+    asked only for the maskable icon and the fields); the audio chip does not wait for the game to make sound (a context that Chrome suspends by itself in a device-less environment
+    would make the chip flicker there, but not on a device with an output, which is on the checklist). **Found on the way, not fixed:** the "Sala … no ar" toast of
+    `MultiplayerUiService.showRoomCreated` squeezes its text into a column one letter wide at 360 px (three buttons beside the sentence: the same problem the backup reminder
+    and this phase's banner solved with a dialog and `layout: 'stacked'`); the landing page has no install offer; the harness's `Page.addScriptToEvaluateOnNewDocument` scripts
+    outlive the process that registered them and had made later runs "installed apps" until `boot()` learned to forget them. **Not verified:** any phone, iOS Safari in any form,
+    a real lock, a call, a Bluetooth change, an installed app, a real launcher, a low-end CPU. The checklist for the device pass is in the PR.
+    **Changed in review:** `InstallHelper.isStandalone` no longer reads the `android-app://` referrer (it marks a trusted web activity, which this app is not, and Chrome
+    on Android also sets it on an ordinary tab opened from the Google app, Gmail or a messenger, for the life of the document: the install offer was hidden from exactly
+    the people arriving by a link); `NudgeHelper.next`/`ORDER`/`NudgeKind` were removed (nothing ran them: the order is the call order in `GamePage.maybeNudge`, and a
+    spec on a list nothing read guarded nothing); the host's "Volume do jogo" subtitle stops saying that spectators keep hearing the game while "Enviar o som do jogo aos
+    espectadores" is off. None of the three changes touched what the browser pass measured.
+13. Then P11 (zoom/pan camera), P12 (stage layout, landscape
     rails, spectator parity — re-run the multiplayer harness), P13 (menu IA, first-run coach),
-    P14 (wake lock, fullscreen, audio health, install), P15 (desktop mouse, gamepad).
+    P15 (desktop mouse, gamepad).
 
 Also add early: a **debug-only diagnostics flag** (pointer/touch/key/IME events plus frame timing,
 exportable from a phone) to feed the device pass, and decide whether specs are real. **T0 made

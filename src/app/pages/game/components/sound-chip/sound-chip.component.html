@@ -1,0 +1,5 @@
+<button *ngIf="blocked$ | async" type="button" class="sound-chip" [class.sound-chip--gutter]="variant === 'gutter'"
+  [attr.aria-label]="label" title="Ativar som" (click)="onTap()">
+  <ion-icon name="volume-mute-outline" aria-hidden="true"></ion-icon>
+  <span class="sound-chip-text">Ativar som</span>
+</button>

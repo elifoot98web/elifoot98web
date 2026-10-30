@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Storage } from '@ionic/storage-angular';
-import { STORAGE_KEY, STORAGE_KEY_HOMES } from '../../models/constants';
+import { JSDOS_STORAGE, STORAGE_KEY, STORAGE_KEY_HOMES } from '../../models/constants';
 
 @Injectable({
   providedIn: 'root'
@@ -30,6 +30,10 @@ export class LocalStorageService {
    * because a page that is going away cannot be trusted to finish an IndexedDB write) is removed
    * from there too. Declaring the home in that table is what makes the wipe reach a key, and
    * storage-keys.spec.ts proves it for every one.
+   *
+   * The entries js-dos keeps for itself (JSDOS_STORAGE) are removed as well: the app's own setting is
+   * what makes js-dos write them, and the next boot would play the first seconds at a volume the
+   * person had just erased.
    */
   async clearAllData(): Promise<void> {
     await this.storage.clear()
@@ -37,6 +41,13 @@ export class LocalStorageService {
       if (!STORAGE_KEY_HOMES[name].includes('localStorage')) continue
       try {
         localStorage.removeItem(STORAGE_KEY[name])
+      } catch {
+        // Site data is blocked: there is nothing stored to remove.
+      }
+    }
+    for (const key of Object.values(JSDOS_STORAGE)) {
+      try {
+        localStorage.removeItem(key)
       } catch {
         // Site data is blocked: there is nothing stored to remove.
       }

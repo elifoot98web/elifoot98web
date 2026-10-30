@@ -4,7 +4,7 @@ import { AlertController, LoadingController, ModalController, ToastController } 
 import { AlertButton } from '@ionic/core';
 import JSZip from 'jszip';
 import { environment } from 'src/environments/environment';
-import { AUTO_SAVER, DISPLAY_MODE, EMULATOR_CONTROL_CONFIG, EMULATOR_POWER, GAME_BOOT, GAME_EXIT_WATCH, MULTIPLAYER, SAVE_SAFETY, STORAGE_KEY } from '../../core/models/constants';
+import { AUDIO_HEALTH, AUTO_SAVER, DISPLAY_MODE, EMULATOR_CONTROL_CONFIG, EMULATOR_POWER, GAME_BOOT, GAME_EXIT_WATCH, MULTIPLAYER, PLATFORM_NUDGES, SAVE_SAFETY, STORAGE_KEY, WAKE_LOCK } from '../../core/models/constants';
 import { TypeBarComponent, TypeBarNotice } from '../../core/components/type-bar/type-bar.component';
 import { FieldHint } from '../../core/helpers/field-hint.helper';
 import { UserGuideComponent } from './components/user-guide/user-guide.component';
@@ -15,8 +15,8 @@ import { DiagnosticsReportHelper } from 'src/app/core/helpers/diagnostics-report
 import { BehaviorSubject, combineLatest, distinctUntilChanged, filter, map, Observable, Subscription, take } from 'rxjs';
 import { EmulatorKeyCodeHelper } from '../../core/models/game';
 import { CursorClickMessage, CursorPositionMessage, MultiplayerJoinErrorKind, PlayerInfo } from '../../core/models/multiplayer';
-import { AutoSaverService, EmulatorControlService, EmulatorPowerService, FieldHintService, GameExitWatcherService, PatchService, SaveBeforeReloadResult, SaveGameService, SaveImportPlan, SaveSafetyService, SavesBackup, TouchInputService } from '../../core/services/game';
-import { DiagnosticsService, LayoutHelperService, LocalStorageService, SaveStatusService } from '../../core/services/shared';
+import { AudioHealthService, AutoSaverService, EmulatorControlService, EmulatorPowerService, FieldHintService, GameExitWatcherService, PatchService, SaveBeforeReloadResult, SaveGameService, SaveImportPlan, SaveSafetyService, SavesBackup, TouchInputService } from '../../core/services/game';
+import { DiagnosticsService, FullscreenService, InstallService, LayoutHelperService, LocalStorageService, NudgeStateService, SaveStatusService, StorageHealthService, WakeLockService } from '../../core/services/shared';
 import { MultiplayerAudioService, MultiplayerChatService, MultiplayerCursorService, MultiplayerPlayerInfoService, MultiplayerRelayHealthService, MultiplayerService, MultiplayerUiService } from '../../core/services/multiplayer';
 import { CursorRendererHelper } from 'src/app/core/helpers/cursor-renderer.helper';
 import { OverlaySyncHelper } from 'src/app/core/helpers/overlay-sync.helper';
@@ -32,6 +32,12 @@ import { SaveBackupHelper } from 'src/app/core/helpers/save-backup.helper';
 import { SaveStatusHelper } from 'src/app/core/helpers/save-status.helper';
 import { NavigationGuardHelper } from 'src/app/core/helpers/navigation-guard.helper';
 import { EmulatorPowerHelper } from 'src/app/core/helpers/emulator-power.helper';
+import { WakeLockHelper } from 'src/app/core/helpers/wake-lock.helper';
+import { FullscreenHelper } from 'src/app/core/helpers/fullscreen.helper';
+import { InstallHelper, InstallMode } from 'src/app/core/helpers/install.helper';
+import { NudgeHelper } from 'src/app/core/helpers/nudge.helper';
+import { GameVolumeHelper } from 'src/app/core/helpers/audio-health.helper';
+import { StorageHealthHelper } from 'src/app/core/helpers/storage-health.helper';
 
 
 @Component({
@@ -106,6 +112,26 @@ export class GamePage implements OnInit, OnDestroy {
   readonly idleSeconds = Math.round(EMULATOR_POWER.IDLE_MS / 1000);
 
   /**
+   * "Manter a tela ligada" (STORAGE_KEY.KEEP_AWAKE): the screen does not lock while the game runs. What
+   * the person chose, or {@link WAKE_LOCK.DEFAULT_ENABLED} for one who never did; a room holds it anyway.
+   */
+  keepAwake: boolean = WAKE_LOCK.DEFAULT_ENABLED;
+  /** The game's volume in percent and whether it is muted: the host's headphones, which spectators do not hear. */
+  volumePercent = Math.round(AUDIO_HEALTH.DEFAULT_VOLUME * 100);
+  gameMuted = false;
+  readonly volumeStep = AUDIO_HEALTH.VOLUME_STEP_PERCENT;
+  /** "Som no modo silencioso" (STORAGE_KEY.AUDIO_PLAYBACK): `navigator.audioSession.type = 'playback'`, off unless chosen. */
+  audioPlayback = false;
+  /** Whether this browser can go fullscreen at all; iPhone Safari cannot, and the entry is not offered there. */
+  fullscreenSupported = false;
+  fullscreenActive = false;
+  /** What the app can offer about being installed (InstallService); the menu entry and the banner follow it. */
+  installMode: InstallMode = 'none';
+  /** The "Armazenamento" line under "Dados e Backups", read each time the menu opens. */
+  storageSummary = '';
+  storageWarning: string | null = null;
+
+  /**
    * Whether the options menu offers "Modo de toque": a finger is the primary pointer AND the
    * classic touchpad would work on this device (see TouchModeHelper). Reactive, because a
    * convertible changes its primary pointer when the keyboard is detached.
@@ -147,6 +173,8 @@ export class GamePage implements OnInit, OnDestroy {
   private exitSubscription?: Subscription;
   /** `startSafetyNets` has run and `stopSafetyNets` has not: the idle pause is one of the nets. */
   private netsUp = false;
+  /** The one-time toast while it is up (the install banner or the rotate hint), so leaving the page does not strand it. */
+  private nudgeToast?: Awaited<ReturnType<ToastController['create']>>;
 
   constructor(
     private loadingController: LoadingController,
@@ -174,9 +202,16 @@ export class GamePage implements OnInit, OnDestroy {
     private exitWatcher: GameExitWatcherService,
     private fieldHintService: FieldHintService,
     private power: EmulatorPowerService,
+    private wakeLock: WakeLockService,
+    private audioHealth: AudioHealthService,
+    private fullscreen: FullscreenService,
+    private install: InstallService,
+    private nudges: NudgeStateService,
+    private storageHealth: StorageHealthService,
     chatService: MultiplayerChatService
   ) {
     this.unreadCount$ = chatService.unreadCount$;
+    this.fullscreenSupported = this.fullscreen.supported;
     this.participantCount$ = this.playerInfoService.playerList$.pipe(map(players => players.length));
     this.layout = DeckLayoutHelper.presentation({
       viewport: { width: window.innerWidth, height: window.innerHeight },
@@ -198,6 +233,11 @@ export class GamePage implements OnInit, OnDestroy {
     }));
     this.pageSubscriptions.add(this.layoutHelperService.anyCoarse$.subscribe(coarse => { this.anyCoarse = coarse; }));
     this.pageSubscriptions.add(this.fieldHintService.hint$.subscribe(hint => { this.fieldHint = hint; }));
+    this.pageSubscriptions.add(this.install.mode$.subscribe(mode => { this.installMode = mode; }));
+    this.pageSubscriptions.add(this.fullscreen.active$.subscribe(active => { this.fullscreenActive = active; }));
+    // A room opening or closing changes whether the screen is held whatever the switch says. The state
+    // is announced after the room exists (and, on leaving, after it is gone), so refresh() reads the truth.
+    this.pageSubscriptions.add(this.multiplayerService.gameStateSubject.subscribe(() => this.wakeLock.refresh()));
     this.touchModeChoice$ = this.layoutHelperService.matches$('(pointer: coarse)').pipe(
       map(coarse => TouchModeHelper.offersChoice(coarse, navigator.userAgent))
     );
@@ -304,7 +344,7 @@ export class GamePage implements OnInit, OnDestroy {
       await this.showErrorAlert(e instanceof Error ? e : new Error(String(e)))
     }
     // After the welcome dialog and the room dialog, and not awaited: it waits for the player.
-    void this.maybeNudgeBackup()
+    void this.maybeNudge()
   }
 
   private async dismissBootLoading(loading: Awaited<ReturnType<LoadingController['create']>>) {
@@ -433,6 +473,12 @@ export class GamePage implements OnInit, OnDestroy {
     this.touchInputService.detach('page destroyed');
     this.fieldHintService.stop();
     this.stopObservingOverlay?.();
+    // Root services too, and each holds something of the browser: the screen lock, a document
+    // listener for the audio context, the fullscreen (and the orientation lock that came with it).
+    this.wakeLock.stop();
+    this.audioHealth.stop();
+    this.fullscreen.stop();
+    void this.nudgeToast?.dismiss(undefined, 'destroyed').catch(() => undefined);
     this.pageSubscriptions.unsubscribe();
     this.multiplayerSubscriptions.unsubscribe();
     // Without this the room, its ping interval and the canvas capture outlive the page.
@@ -522,6 +568,7 @@ export class GamePage implements OnInit, OnDestroy {
     await this.setupTouchInput()
     this.syncFieldHint()
     await this.setupIdlePause()
+    await this.setupPlatform()
     this.gameDetected = gameDetected
     this.startSafetyNets()
   }
@@ -758,12 +805,12 @@ export class GamePage implements OnInit, OnDestroy {
    * column a few words wide. Either button answers it for good; closing the page without pressing
    * one does not count, so it is still there next visit.
    */
-  private async maybeNudgeBackup() {
+  private async maybeNudgeBackup(): Promise<boolean> {
     try {
-      if (this.destroyed || !(await this.saveStatus.backupNudgeDue())) return
+      if (this.destroyed || !(await this.saveStatus.backupNudgeDue())) return false
       // "Dos seus jogos salvos" has to be true: a visit that only looked around persists the layer
       // too, and a reminder answered with nothing to back up would be spent for good.
-      if ((await this.patchService.existingSaveNames(this.dosCI)).length === 0) return
+      if ((await this.patchService.existingSaveNames(this.dosCI)).length === 0) return false
       const alert = await this.alertController.create({
         header: 'Faça um backup',
         message: 'Já faz mais de 7 dias sem um backup dos seus jogos salvos. O navegador pode apagar os dados de sites que ficam muito tempo sem uso, e o backup é a cópia que sobrevive.\n\nExportar uma cópia agora?',
@@ -779,8 +826,108 @@ export class GamePage implements OnInit, OnDestroy {
       const { role } = await alert.onDidDismiss()
       this.saveStatus.dismissBackupNudge()
       if (role === 'confirm') await this.exportGameSaves()
+      return true
     } catch (e) {
       console.warn('Could not show the backup reminder', e)
+      return false
+    }
+  }
+
+  /**
+   * What the page may say once the welcome is out of the way, at most ONE thing per page load and each
+   * of them once in the life of the install: the backup reminder, then the offer to install the app,
+   * then the hint to turn the phone. The order is the order of what it protects, and it is this
+   * sequence (NudgeHelper decides only whether each is due).
+   */
+  private async maybeNudge() {
+    if (await this.maybeNudgeBackup()) return
+    if (await this.maybeNudgeInstall()) return
+    await this.maybeHintRotation()
+  }
+
+  /**
+   * The one-time install banner: a toast with two buttons, never on a first visit (NudgeHelper.installDue:
+   * an earlier session has to have saved something) and never again once it has been on screen. Either
+   * button, or the toast running out, answers it for good; the menu entry stays as the permanent way.
+   * The button calls the install prompt from its own tap, because the browser's prompt needs the tap's
+   * user activation and the toast's dismissal is too late to carry it.
+   */
+  private async maybeNudgeInstall(): Promise<boolean> {
+    try {
+      if (this.destroyed || this.leaving) return false
+      await this.saveStatus.load()
+      const mode = this.install.mode
+      const due = NudgeHelper.installDue({
+        mode,
+        dismissed: await this.nudges.answered('install'),
+        firstPersistedAt: this.saveStatus.snapshot.firstPersistedAt,
+        inRoom: this.multiplayerService.isInRoom,
+      })
+      if (!due || this.destroyed) return false
+
+      const toast = await this.toastController.create({
+        message: InstallHelper.bannerMessage(mode),
+        cssClass: 'platform-toast',
+        position: 'top',
+        // Two buttons beside a sentence squeeze it into a column a few words wide; stacked puts them under it.
+        layout: 'stacked',
+        duration: PLATFORM_NUDGES.INSTALL_TOAST_MS,
+        buttons: [
+          { text: 'Agora não', role: 'cancel' },
+          { text: mode === 'ios' ? 'Como instalar' : 'Instalar', role: 'confirm', handler: () => { void this.promptInstall() } },
+        ],
+      })
+      this.nudgeToast = toast
+      await toast.present()
+      this.diagnostics.log('platform', 'nudge: install banner shown', () => ({ mode }))
+      const { role } = await toast.onDidDismiss()
+      if (this.nudgeToast === toast) this.nudgeToast = undefined
+      this.diagnostics.log('platform', 'nudge: install banner closed', () => ({ role: role ?? 'timeout' }))
+      await this.nudges.answer('install')
+      return true
+    } catch (e) {
+      console.warn('Could not show the install banner', e)
+      return false
+    }
+  }
+
+  /**
+   * The one-time "Gire o aparelho" hint, on a phone held upright (decision D4: a hint and a button,
+   * no lock). It goes away by itself the moment the phone is turned, and is never shown again after
+   * it was on screen.
+   */
+  private async maybeHintRotation(): Promise<boolean> {
+    try {
+      if (this.destroyed || this.leaving) return false
+      const due = NudgeHelper.rotateDue({
+        answered: await this.nudges.answered('rotate'),
+        phoneInPortrait: FullscreenHelper.phoneInPortrait({ width: window.innerWidth, height: window.innerHeight }, this.layoutHelperService.isTouchPrimary),
+        inRoom: this.multiplayerService.isInRoom,
+      })
+      if (!due || this.destroyed) return false
+
+      const toast = await this.toastController.create({
+        message: 'Gire o aparelho: deitado, o jogo fica bem maior na tela.',
+        cssClass: 'platform-toast',
+        position: 'top',
+        duration: PLATFORM_NUDGES.ROTATE_TOAST_MS,
+        buttons: [{ text: 'Entendi', role: 'cancel' }],
+      })
+      this.nudgeToast = toast
+      const turned = this.layoutHelperService.shape$.pipe(filter(shape => shape !== 'portrait'), take(1))
+        .subscribe(() => void toast.dismiss(undefined, 'turned'))
+      this.pageSubscriptions.add(turned)
+      await toast.present()
+      this.diagnostics.log('platform', 'nudge: rotate hint shown')
+      const { role } = await toast.onDidDismiss()
+      turned.unsubscribe()
+      if (this.nudgeToast === toast) this.nudgeToast = undefined
+      this.diagnostics.log('platform', 'nudge: rotate hint closed', () => ({ role: role ?? 'timeout' }))
+      await this.nudges.answer('rotate')
+      return true
+    } catch (e) {
+      console.warn('Could not show the rotate hint', e)
+      return false
     }
   }
 
@@ -879,6 +1026,199 @@ export class GamePage implements OnInit, OnDestroy {
       isBusy: () => this.emulatorControlService.pendingKeys > 0 || this.touchInputService.busy,
       isGameSaving: () => this.saveSafety.gameSavingVerdict(),
     })
+  }
+
+  /**
+   * The platform's side of a phone: the screen lock, the game's sound and the fullscreen. Runs once the
+   * game is up (loadConfig). Each read is its own try, because with site data blocked every Ionic
+   * Storage read rejects while the game itself boots, and a setting nobody can read is its default.
+   */
+  private async setupPlatform() {
+    const read = async <T>(key: string): Promise<T | undefined> => {
+      try {
+        return (await this.storageService.get<T>(key)) ?? undefined
+      } catch (e) {
+        console.warn(`Could not read ${key}; using the default`, e)
+        return undefined
+      }
+    }
+    this.keepAwake = WakeLockHelper.setting(await read<boolean>(STORAGE_KEY.KEEP_AWAKE))
+    const volume = await read<number>(STORAGE_KEY.GAME_VOLUME)
+    const muted = await read<boolean>(STORAGE_KEY.GAME_MUTED)
+    this.volumePercent = GameVolumeHelper.toPercent(GameVolumeHelper.normalise(volume))
+    this.gameMuted = muted === true
+    this.audioPlayback = (await read<boolean>(STORAGE_KEY.AUDIO_PLAYBACK)) === true
+    if (this.destroyed) return
+
+    // A room (hosting) holds the screen whatever the switch says; refresh() is told when one opens or closes.
+    this.wakeLock.start({ setting: this.keepAwake, inRoom: () => this.multiplayerService.isInRoom })
+    this.fullscreen.start()
+    this.audioHealth.start()
+    // js-dos applied the volume it had kept at run(); this is the page's copy, the one a wipe erases. A player who
+    // never touched the volume has neither, and js-dos is left alone (setVolume would write its entry for nothing).
+    if (volume !== undefined || muted !== undefined) {
+      this.audioHealth.applyVolume(GameVolumeHelper.fromPercent(this.volumePercent), this.gameMuted)
+    }
+    if (this.audioPlayback) this.audioHealth.setPlayback(true)
+  }
+
+  /**
+   * The subtitle of the "Volume do jogo" entry. A host is told that the volume is theirs alone, and
+   * what spectators get is decided by the other switch ("Enviar o som do jogo aos espectadores"), so
+   * the line must not claim they still hear the game while that one is off.
+   */
+  get volumeSummary(): string {
+    const label = GameVolumeHelper.label(GameVolumeHelper.fromPercent(this.volumePercent), this.gameMuted)
+    if (!this.isStreaming) return label
+    return this.spectatorAudioDisabled
+      ? `${label} · só para você; o som da sala está desligado`
+      : `${label} · só para você; quem assiste continua ouvindo`
+  }
+
+  get audioPlaybackSupported(): boolean {
+    return this.audioHealth.playbackSupported
+  }
+
+  get wakeLockSupported(): boolean {
+    return this.wakeLock.supported
+  }
+
+  /** The subtitle of "Manter a tela ligada": what the browser actually did. */
+  get wakeLockSummary(): string {
+    return this.wakeLock.summary
+  }
+
+  /** The subtitle of "Tela cheia". */
+  get fullscreenSummary(): string {
+    return this.fullscreen.summary
+  }
+
+  /** The "Instalar o app" entry, or null where there is nothing to install (installed, or no way to). */
+  get installEntry(): { title: string; subtitle: string } | null {
+    return InstallHelper.menuLabel(this.installMode)
+  }
+
+  /** "Manter a tela ligada". Applies at once; a room holds the screen anyway. */
+  async toggleKeepAwake(e: any) {
+    this.keepAwake = !!e.detail.checked
+    this.wakeLock.setSetting(this.keepAwake)
+    try {
+      await this.storageService.set<boolean>(STORAGE_KEY.KEEP_AWAKE, this.keepAwake)
+    } catch (error) {
+      // It applies for this visit either way.
+      console.warn('Could not store the keep-awake setting', error)
+    }
+  }
+
+  /**
+   * "Tela cheia". The request is made before anything is awaited and before the menu closes, because the
+   * browser grants fullscreen only to the tap that asked (user activation).
+   */
+  async toggleFullscreen() {
+    const pending = this.fullscreen.toggle()
+    this.hidePopover()
+    if (await pending === 'refused') {
+      await this.multiplayerUiService.showToast('Não foi possível entrar em tela cheia neste navegador.', 'warning', 4000)
+    }
+  }
+
+  /** The slider while it is dragged: heard at once, stored when it is let go (onVolumeChange). */
+  onVolumeInput(e: any) {
+    this.applyVolumeFromSlider(Number(e.detail.value))
+  }
+
+  async onVolumeChange(e: any) {
+    this.applyVolumeFromSlider(Number(e.detail.value))
+    await this.storeVolume()
+  }
+
+  /** "Silenciar o jogo": a gain of 0 on a running audio context, so it is never mistaken for a blocked one. */
+  async toggleGameMuted(e: any) {
+    const muted = !!e.detail.checked
+    if (muted === this.gameMuted) return
+    this.gameMuted = muted
+    this.diagnostics.log('platform', 'audio: mute chosen', () => ({ muted }))
+    this.audioHealth.applyVolume(GameVolumeHelper.fromPercent(this.volumePercent), this.gameMuted)
+    await this.storeVolume()
+  }
+
+  /** "Som no modo silencioso". */
+  async toggleAudioPlayback(e: any) {
+    this.audioPlayback = !!e.detail.checked
+    this.audioHealth.setPlayback(this.audioPlayback)
+    try {
+      await this.storageService.set<boolean>(STORAGE_KEY.AUDIO_PLAYBACK, this.audioPlayback)
+    } catch (error) {
+      console.warn('Could not store the silent-mode sound setting', error)
+    }
+  }
+
+  private applyVolumeFromSlider(percent: number) {
+    if (!Number.isFinite(percent)) return
+    const next = GameVolumeHelper.afterSlider({ volume: GameVolumeHelper.fromPercent(this.volumePercent), muted: this.gameMuted }, percent)
+    this.volumePercent = GameVolumeHelper.toPercent(next.volume)
+    this.gameMuted = next.muted
+    this.audioHealth.applyVolume(next.volume, next.muted)
+  }
+
+  private async storeVolume() {
+    try {
+      await this.storageService.set<number>(STORAGE_KEY.GAME_VOLUME, GameVolumeHelper.fromPercent(this.volumePercent))
+      await this.storageService.set<boolean>(STORAGE_KEY.GAME_MUTED, this.gameMuted)
+    } catch (error) {
+      // It applies for this visit either way.
+      console.warn('Could not store the volume', error)
+    }
+  }
+
+  /**
+   * "Instalar o app": the browser's own prompt where there is one, the how-to dialog on iOS, where the
+   * share sheet is the only way. Called from a tap, and the prompt is asked before anything is awaited.
+   */
+  async promptInstall() {
+    this.hidePopover()
+    if (this.install.mode === 'prompt') {
+      const outcome = await this.install.prompt()
+      if (outcome === 'accepted') {
+        await this.multiplayerUiService.showToast('Instalando o Elifoot 98…', 'success', 3000)
+      }
+    } else if (this.install.mode === 'ios') {
+      await this.showInstallHowTo()
+    }
+  }
+
+  /**
+   * iOS has no install prompt. The steps are the short part; the warning is the one that matters: an
+   * app on the Home Screen keeps its own storage, apart from Safari's, so the saves made here are not in
+   * it. The way across is the backup, one button away.
+   */
+  private async showInstallHowTo() {
+    const howTo = InstallHelper.iosHowTo()
+    const alert = await this.alertController.create({
+      header: howTo.header,
+      message: howTo.message,
+      cssClass: 'win9x-alert alert-whitespace wide-alert',
+      backdropDismiss: false,
+      buttons: [
+        { text: 'Fechar', role: 'cancel' },
+        { text: 'Exportar jogos salvos', role: 'export' },
+      ],
+    })
+    await alert.present()
+    const { role } = await alert.onDidDismiss()
+    this.diagnostics.log('platform', 'install: how-to answered', () => ({ role: role ?? 'dismissed' }))
+    if (role === 'export') await this.exportGameSaves()
+  }
+
+  /** The "Armazenamento" line under "Dados e Backups". Read each time the menu opens; the browser may take a moment. */
+  private async refreshStorageSummary() {
+    try {
+      const health = await this.storageHealth.read()
+      this.storageSummary = StorageHealthHelper.summary(health)
+      this.storageWarning = StorageHealthHelper.warning(health.persisted)
+    } catch (e) {
+      console.warn('Could not read the storage figures', e)
+    }
   }
 
   async setupAutoSave() {
@@ -1347,6 +1687,8 @@ export class GamePage implements OnInit, OnDestroy {
   showPopover(e: Event) {
     this.popover.event = null
     this.popover.event = e;
+    // The "Armazenamento" line: asked when the menu opens, answered a moment later.
+    void this.refreshStorageSummary()
     this.hidePopover()
     setTimeout(() => {
       this.isPopoverOpen = true;
@@ -1800,6 +2142,8 @@ export class GamePage implements OnInit, OnDestroy {
       this.autoSaverService.stop()
       this.autoSaverService.stopPeriodicSave()
       this.stopSafetyNets()
+      // After the save, not before: the screen stays on for as long as the flush takes.
+      this.wakeLock.stop()
       await this.dosCI?.exit()
     } catch (e: any) {
       // Never strand the user in the emulator over a failed save: report and leave anyway.

@@ -61,6 +61,23 @@ export const STORAGE_KEY = {
   // happening on screen. Stored as an explicit boolean when the player chooses, so that a change
   // of EMULATOR_POWER.DEFAULT_ENABLED reaches only the people who never touched the switch.
   IDLE_PAUSE: 'idlePause',
+  // "Manter a tela ligada" (WakeLockService): the screen stays on while the game runs. Stored as an
+  // explicit boolean when the player chooses, like IDLE_PAUSE, so that a change of
+  // WAKE_LOCK.DEFAULT_ENABLED reaches only the people who never touched the switch. A room overrides it.
+  KEEP_AWAKE: 'keepAwake',
+  // The game's own volume on THIS device (0 to 1) and whether it is muted. They are the host's
+  // headphones and nobody else's: the stream a spectator gets is tapped before js-dos's gain node
+  // (MultiplayerAudioService). Applied through dosInstance.setVolume, which js-dos also keeps in its
+  // own `emulators.ui.volume` entry; the wipe removes that one too (JSDOS_STORAGE).
+  GAME_VOLUME: 'gameVolume',
+  GAME_MUTED: 'gameMuted',
+  // "Som no modo silencioso": `navigator.audioSession.type = 'playback'`, so the game is heard with the
+  // iPhone's ringer switch on silent. Off unless chosen: it makes the page interrupt other apps' audio.
+  AUDIO_PLAYBACK: 'audioPlayback',
+  // The two one-time nudges of the platform polish (NudgeStateService). Each is shown once, ever, and
+  // an answer is a stored `true`; the menu entries stay as the permanent way to the same things.
+  ROTATE_HINT_SHOWN: 'rotateHintShown',
+  INSTALL_NUDGE_DISMISSED: 'installNudgeDismissed',
 }
 
 /** Where a STORAGE_KEY lives. Ionic Storage is the default; the others are written around it. */
@@ -106,7 +123,27 @@ export const STORAGE_KEY_HOMES: Readonly<Record<keyof typeof STORAGE_KEY, readon
   DISABLE_KEY_VIBRATION: ['ionic'],
   LIVE_KEYBOARD: ['ionic'],
   IDLE_PAUSE: ['ionic'],
+  KEEP_AWAKE: ['ionic'],
+  GAME_VOLUME: ['ionic'],
+  GAME_MUTED: ['ionic'],
+  AUDIO_PLAYBACK: ['ionic'],
+  ROTATE_HINT_SHOWN: ['ionic'],
+  INSTALL_NUDGE_DISMISSED: ['ionic'],
 };
+
+/**
+ * Entries js-dos writes to `localStorage` under names of its own, which the registry above cannot
+ * list (it maps STORAGE_KEY names). They are the app's in effect, because the app's own setting
+ * is what makes js-dos write them, so "Apagar todos os dados" removes them as well
+ * (`LocalStorageService.clearAllData`) and storage-keys.spec.ts proves it.
+ *
+ * `emulators.ui.volume` is `dosInstance.setVolume`'s: the game's volume. It is applied at the next
+ * boot before the page has read its own copy, so a value left behind by a wipe would play the first
+ * seconds of the game at a volume the person had just erased.
+ */
+export const JSDOS_STORAGE = {
+  VOLUME_KEY: 'emulators.ui.volume',
+}
 
 /**
  * Save visibility and the safety nets around it (SaveStatusService, SaveSafetyService,
@@ -712,6 +749,62 @@ export const EMULATOR_POWER = {
   // The page's own events that mean somebody is using the game. Capture phase on the document, so
   // they run before the touch layer's listener on the emulator's root stops the event.
   INPUT_EVENTS: ['pointerdown', 'pointerup', 'keydown', 'keyup', 'touchstart', 'wheel'] as readonly string[],
+}
+
+/**
+ * Keeping the screen on while the game runs (WakeLockService, WakeLockHelper). A phone dims and locks
+ * after 30 to 60 s without a touch, and Elifoot plays whole matches and seasons without one; a locked
+ * page is a hidden page, where js-dos pauses the emulator, and a host's stream freezes for everyone.
+ */
+export const WAKE_LOCK = {
+  // Whether a player who never touched the switch has it on (decision D10: on in solo play, with a
+  // toggle). A room holds the screen whatever the switch says: a locked host closes the room.
+  DEFAULT_ENABLED: true,
+  // A lock the browser takes back within this long of granting it is an unstable one, not a lock that
+  // was ended by the system: after QUICK_RELEASE_LIMIT in a row the service stops asking on its own
+  // (a page that is visible again, or a new choice, starts it over). iOS standalone web apps had
+  // versions that granted and released at once (recalled, unverified), and a loop of requests is the
+  // wrong answer to that.
+  QUICK_RELEASE_MS: 2000,
+  QUICK_RELEASE_LIMIT: 3,
+  // A request refused with NotAllowedError (battery saver, a browser that wants a gesture first) is
+  // asked again on a later tap, but not on every tap: at most this often.
+  GESTURE_RETRY_MIN_MS: 30 * 1000,
+  // The page's own events that count as "a gesture" for that retry. Capture phase, passive, and only
+  // while a refusal is waiting for one.
+  GESTURE_EVENTS: ['pointerup', 'touchend', 'keydown'] as readonly string[],
+}
+
+/**
+ * The game's audio when the browser has put its context to sleep, and the player's own volume
+ * (AudioHealthService, AudioHealthHelper).
+ */
+export const AUDIO_HEALTH = {
+  // js-dos builds its AudioContext inside run(), before any gesture, and wakes it from a one-shot
+  // listener. After a phone call, a lock or a Bluetooth change the context can be 'suspended' or (WebKit)
+  // 'interrupted' again, and only a resume() from a gesture brings it back. The chip says so after the
+  // page had this long to fix it by itself, so it does not flash during an ordinary resume.
+  BLOCKED_GRACE_MS: 1200,
+  // The events that may carry the user activation resume() needs. touchstart is not among them: on iOS
+  // it does not unlock audio, touchend and click do.
+  GESTURE_EVENTS: ['pointerup', 'touchend', 'click', 'keydown'] as readonly string[],
+  DEFAULT_VOLUME: 1,
+  // The slider moves in percent and in steps of this many.
+  VOLUME_STEP_PERCENT: 5,
+  // One tap is three events that each ask for a resume; the diagnostics log writes the first of them.
+  RESUME_LOG_GAP_MS: 1000,
+}
+
+/** Fullscreen, and the phone in portrait that the "Gire o aparelho" hint is for. */
+export const FULLSCREEN = {
+  // A phone is a viewport whose short side is under this (css px): a Pro Max is 430, a small tablet 600+.
+  PHONE_MAX_SHORT_SIDE_PX: 600,
+}
+
+/** The two one-time toasts of the platform polish: how long each stays, if it is not dismissed first. */
+export const PLATFORM_NUDGES = {
+  ROTATE_TOAST_MS: 12 * 1000,
+  INSTALL_TOAST_MS: 20 * 1000,
 }
 
 export const BASE_SAVEGAME_DIR = 'd/eli98/jogos/'

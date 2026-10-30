@@ -1,5 +1,5 @@
 import { Storage } from '@ionic/storage-angular';
-import { STORAGE_KEY, STORAGE_KEY_HOMES, StorageHome } from '../../models/constants';
+import { JSDOS_STORAGE, STORAGE_KEY, STORAGE_KEY_HOMES, StorageHome } from '../../models/constants';
 import { LocalStorageService } from './local-storage.service';
 
 /**
@@ -67,6 +67,14 @@ describe('STORAGE_KEY and the wipe', () => {
     }
   });
 
+  it('removes the entries js-dos keeps for itself: the volume is the app\'s setting, and js-dos applies its copy first at the next boot', async () => {
+    for (const key of Object.values(JSDOS_STORAGE)) localStorage.setItem(key, '0.4');
+
+    await service.clearAllData();
+
+    for (const key of Object.values(JSDOS_STORAGE)) expect(localStorage.getItem(key)).withContext(key).toBeNull();
+  });
+
   it('leaves alone what is not the app\'s', async () => {
     localStorage.setItem('somebody else\'s key', 'kept');
 
@@ -77,7 +85,10 @@ describe('STORAGE_KEY and the wipe', () => {
   });
 
   it('covers the keys the mobile work added, which is the audit this spec is the answer to', () => {
-    for (const name of ['TOUCH_MODE', 'DIAGNOSTICS', 'DIAGNOSTICS_LOG', 'LAST_PERSISTED_AT', 'FIRST_PERSISTED_AT', 'LAST_BACKUP_AT', 'BACKUP_NUDGE_DISMISSED'] as const) {
+    for (const name of [
+      'TOUCH_MODE', 'DIAGNOSTICS', 'DIAGNOSTICS_LOG', 'LAST_PERSISTED_AT', 'FIRST_PERSISTED_AT', 'LAST_BACKUP_AT', 'BACKUP_NUDGE_DISMISSED',
+      'KEEP_AWAKE', 'GAME_VOLUME', 'GAME_MUTED', 'AUDIO_PLAYBACK', 'ROTATE_HINT_SHOWN', 'INSTALL_NUDGE_DISMISSED',
+    ] as const) {
       expect(NAMES).toContain(name);
     }
   });

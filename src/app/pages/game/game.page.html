@@ -39,6 +39,12 @@
         no toolbar, so the menu's "Salvar agora" carries the same words there.
       -->
       <app-save-status-chip [compact]="isStreaming" (activate)="saveNow()"></app-save-status-chip>
+      <!--
+        "Ativar som", only while the browser has put the game's audio to sleep and the page could not
+        wake it. Flat shell like the save chip, and only the speaker under 600px: the title slot has
+        the room pill to protect.
+      -->
+      <app-sound-chip [hosting]="isStreaming"></app-sound-chip>
       <ion-button (click)="showPopover($event)" aria-label="Menu de opções">
         <ion-icon slot="icon-only" name="ellipsis-vertical-outline"></ion-icon>
       </ion-button>
@@ -120,6 +126,30 @@
             </ion-item>
           </ng-container>
           <!--
+            Only where the browser has a Fullscreen API: iPhone Safari does not, and the install entry
+            below is the way to chrome-free play there. It is the whole page that goes fullscreen, not
+            the game, so the dialogs, the chat and the key panel stay. On a phone it also turns the
+            screen to landscape (see FullscreenService); the subtitle says so.
+          -->
+          <ion-item *ngIf="fullscreenSupported" button detail="false" (click)="toggleFullscreen()">
+            <ion-label>
+              {{ fullscreenActive ? 'Sair da tela cheia' : 'Tela cheia' }}
+              <p>{{ fullscreenSummary }}</p>
+            </ion-label>
+            <ion-icon slot="end" [name]="fullscreenActive ? 'contract-outline' : 'expand-outline'"></ion-icon>
+          </ion-item>
+          <!--
+            Chromium's own prompt where it offered one, the how-to dialog on iOS, and nothing at all in an
+            app that is already installed (InstallService). The one-time banner points here.
+          -->
+          <ion-item *ngIf="installEntry as install" button detail="false" (click)="promptInstall()">
+            <ion-label>
+              {{ install.title }}
+              <p>{{ install.subtitle }}</p>
+            </ion-label>
+            <ion-icon slot="end" name="download-outline"></ion-icon>
+          </ion-item>
+          <!--
             A dialog, not a toggle: the answer takes a reload. Disabled in a room, because the
             reload would end it for everyone watching. The subtitle is the size of the frame the
             guest is drawing now, not a stored setting.
@@ -159,6 +189,52 @@
           <!-- Only where the browser can vibrate at all (Android; iOS has no vibration API). -->
           <ion-item *ngIf="canVibrate" detail="false">
             <ion-toggle [checked]="keyVibration" (ionChange)="toggleKeyVibration($event)">Vibração nas teclas</ion-toggle>
+          </ion-item>
+          <!--
+            Only where the browser can hold the screen at all (Screen Wake Lock: Chrome 84+, Safari 16.4+,
+            Firefox 126+). On by default; a room holds the screen whatever this says. The subtitle is what
+            the browser actually did, which is not always what was asked (the battery saver says no).
+          -->
+          <ion-item *ngIf="wakeLockSupported" detail="false">
+            <ion-label class="ion-text-wrap">
+              Manter a tela ligada
+              <p>{{ wakeLockSummary }}</p>
+            </ion-label>
+            <ion-toggle slot="end" [checked]="keepAwake" (ionChange)="toggleKeepAwake($event)"
+              aria-label="Manter a tela ligada"></ion-toggle>
+          </ion-item>
+          <!--
+            The game's volume on this device. It is a gain on js-dos's audio, and the sound that goes to a
+            room is taken before it (MultiplayerAudioService), so it never changes what spectators hear:
+            "Enviar o som do jogo aos espectadores" is the switch for that.
+          -->
+          <ion-item detail="false" lines="none">
+            <ion-label class="ion-text-wrap">
+              Volume do jogo
+              <p>{{ volumeSummary }}</p>
+            </ion-label>
+          </ion-item>
+          <ion-item detail="false">
+            <ion-range aria-label="Volume do jogo" min="0" max="100" [step]="volumeStep" [value]="volumePercent"
+              (ionInput)="onVolumeInput($event)" (ionChange)="onVolumeChange($event)">
+              <ion-icon slot="start" name="volume-low-outline" aria-hidden="true"></ion-icon>
+              <ion-icon slot="end" name="volume-high-outline" aria-hidden="true"></ion-icon>
+            </ion-range>
+          </ion-item>
+          <ion-item detail="false">
+            <ion-toggle [checked]="gameMuted" (ionChange)="toggleGameMuted($event)">Silenciar o jogo</ion-toggle>
+          </ion-item>
+          <!--
+            iPhone's ringer switch mutes web audio unless the page asks to be heard like a media player
+            (navigator.audioSession, Safari 16.4+). Off unless chosen: it interrupts other apps' audio.
+          -->
+          <ion-item *ngIf="audioPlaybackSupported" detail="false">
+            <ion-label class="ion-text-wrap">
+              Som no modo silencioso
+              <p>Toca o jogo mesmo com a chave de toque do iPhone no silencioso. Pode interromper a música de outros apps.</p>
+            </ion-label>
+            <ion-toggle slot="end" [checked]="audioPlayback" (ionChange)="toggleAudioPlayback($event)"
+              aria-label="Som no modo silencioso"></ion-toggle>
           </ion-item>
           <!--
             EXPERIMENTAL, and honest about it: the live type bar has only run against simulated keyboards.
@@ -215,6 +291,18 @@
             <ng-template>
               <ion-content>
                 <ion-list>
+                  <!--
+                    What the browser says about this site's storage, read when the menu opened. It never
+                    promises protection: "Protegido" is the browser's answer, nothing more.
+                  -->
+                  <ion-item detail="false">
+                    <ion-label class="ion-text-wrap">
+                      Armazenamento
+                      <p>{{ storageSummary || 'Verificando…' }}</p>
+                      <p *ngIf="storageWarning">{{ storageWarning }}</p>
+                    </ion-label>
+                    <ion-icon slot="end" name="server-outline" aria-hidden="true"></ion-icon>
+                  </ion-item>
                   <ion-item button detail="false" (click)="exportGameSaves()">
                     <ion-label>Exportar jogos salvos</ion-label>
                     <ion-icon slot="end" name="share-outline"></ion-icon>
@@ -327,6 +415,7 @@
         <button type="button" class="gutter-menu-btn" (click)="showPopover($event)" aria-label="Menu de opções">
           <ion-icon name="ellipsis-vertical-outline" aria-hidden="true"></ion-icon>
         </button>
+        <app-sound-chip variant="gutter" [hosting]="isStreaming"></app-sound-chip>
         <button *ngIf="layout.launcherHome === 'gutter'" type="button" class="deck-key gutter-launcher" appDeckKey
           (deckPress)="toggleDeckSheet()" [attr.aria-pressed]="deckSheetOpen" aria-label="Painel de teclas">
           <ion-icon name="keypad-outline" aria-hidden="true"></ion-icon>

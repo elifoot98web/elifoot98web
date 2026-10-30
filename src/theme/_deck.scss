@@ -523,6 +523,32 @@ app-dock.deck-band {
   outline-offset: 2px;
 }
 
+// "Ativar som" where a landscape phone has no toolbar to hold it (SoundChipComponent, variant gutter):
+// the menu button's round navy shell with the chip's amber speaker, never words. It comes and goes
+// with the audio, so the column under the menu button may gain a 44px row for a while; the column is
+// `position: absolute` and takes no room from the picture. Two classes, because the chip's own rules
+// live in global.scss, after this file, and its coarse-pointer border would otherwise win.
+.sound-chip.sound-chip--gutter {
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ion-color-tertiary);
+  background-clip: border-box;
+  font-size: 22px;
+}
+
+.sound-chip.sound-chip--gutter .sound-chip-text {
+  display: none;
+}
+
+.sound-chip.sound-chip--gutter ion-icon {
+  font-size: 22px;
+}
+
 .gutter-launcher {
   width: 56px;
   height: var(--deck-key-h);

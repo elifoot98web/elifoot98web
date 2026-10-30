@@ -25,12 +25,13 @@ npx ng test --include='**/my.spec.ts' --watch=false --browsers=ChromeHeadlessCI 
 npm run mp:launch        # two browsers for a multiplayer session (see the harness README)
 python3 scripts/resolution/build_bundle.py verify src/assets/elifoot/elifoot98.jsdos   # the resolution switch is in the bundle
 node scripts/frame-fixtures/make-fixtures.mjs <out.ts> name=frame.png::note ...   # real guest frames -> a spec fixture
+node scripts/pwa-icons/make-maskable.mjs <source.png> <out.png> --size 512 --check   # a maskable launcher icon from the shipped artwork
 ```
 
 Specs are karma + jasmine. The builder globs `**/*.spec.ts` (its `include` option, which is also
 what `--include` overrides); [src/test.ts](src/test.ts) only initialises the TestBed and
 `tsconfig.spec.json` type-checks `src/**/*.spec.ts`, so a spec needs no registration but must live
-under `src/` to be type-checked. Nothing in a spec reaches the bundle. There are **sixty spec files so
+under `src/` to be type-checked. Nothing in a spec reaches the bundle. There are **seventy-two spec files so
 far**. [room-code.helper.spec.ts](src/app/core/helpers/room-code.helper.spec.ts) is there as
 much to prove the harness as to cover `RoomCodeHelper`: `ng test` with **zero** specs
 prints `Executed 0 of 0 SUCCESS` and still exits 1, so a `test:ci` could never pass before the
@@ -113,7 +114,13 @@ including the handshake (it asks, the caller answers later, and an answer overta
 listeners and a recording fake emulator under `fakeAsync`, with the timeline written in absolute time from `start()` because the
 interval ticks on those instants. [cheat-omatic.service.spec.ts](src/app/core/services/game/cheat-omatic.service.spec.ts) is the model for
 "a service that must hold something open around its awaits": the door is a recording stand-in on `globalThis`, and a read or a write that
-fails must still let go. Write specs for pure logic (helpers,
+fails must still let go. [wake-lock.service.spec.ts](src/app/core/services/shared/wake-lock.service.spec.ts) is the model for "a service whose
+whole job is to ask a browser API that may say no": a fake `navigator.wakeLock` whose next answer the spec chooses (a grant, a refusal, or
+a request held in flight until the spec settles it), the page's visibility and the clock as overridable members, and `fakeAsync(…, { flush:
+false })` so that a listener or timer left behind fails the case; [audio-health.service.spec.ts](src/app/core/services/game/audio-health.service.spec.ts)
+adds the trap of a fake that answers synchronously (the real browser dispatches `statechange` as a task), which is why the service queues a
+re-entrant look. Both service specs and the helpers behind them (`WakeLockHelper`, `AudioHealthHelper`, `InstallHelper`, `NudgeHelper`,
+`FullscreenHelper`, `StorageHealthHelper`) were mutation-checked when the phase was built: thirteen deliberate breaks, thirteen failing cases. Write specs for pure logic (helpers,
 planners, parsers, queues driven by a fake clock); the emulator, the screen-scrapers and the WebRTC
 paths have no karma coverage and are checked in a real browser (see the harness above). `ChromeHeadlessCI` in
 [karma.conf.js](karma.conf.js) is `ChromeHeadless --no-sandbox`, which a CI runner or container
@@ -135,6 +142,11 @@ budget, the audio wake; `typebar.mjs`, the live type bar on the real game agains
 events; and `idle-pause.mjs`, the battery saver on the real game: CPU on a still screen, whole Elifoot rounds with the setting on and off,
 and taps and keys sent to a sleeping guest, see *Letting the guest sleep*), with the tables the constants rest on. **Re-run it after any change to the video mode, the
 Windows mouse settings, js-dos or the disk image.** It needs a dev build (`window.ng`) served with `--live-reload=false`.
+
+The phone-platform work (the screen lock, fullscreen, the game's sound, installing) is checked the same way in
+[scripts/platform-harness/](scripts/platform-harness/README.md), on the touch harness's driver: every browser API that the headless shell lacks or refuses
+is faked there, so it shows what the PAGE does with an answer, never what a phone answers. Its README lists the traps (an init script outlives the
+process that registered it; the shell suspends the audio context by itself; CDP cannot emulate `display-mode`).
 
 Git LFS is required: `*.jsdos` is LFS-tracked (`src/assets/elifoot/elifoot98.jsdos`, ~6.7 MB holding
 the entire Windows 3.1 + game environment). Without LFS the game bundle is a pointer file and the app
@@ -419,12 +431,16 @@ js-dos keeps the *changed* portion of the virtual disk as a zip inside IndexedDB
 the app reads or writes lives under the mounted `d/` tree: game in `d/eli98/`, save games in
 `d/eli98/jogos/*.e98` (`BASE_SAVEGAME_DIR`). Clearing data means deleting those IndexedDB databases
 ([save-game.service.ts](src/app/core/services/game/save-game.service.ts)) plus the Ionic Storage keys,
-and the one `localStorage` key the diagnostics log keeps its tail in (see *Diagnostics log*). What is wiped
+the one `localStorage` key the diagnostics log keeps its tail in (see *Diagnostics log*) and the one js-dos keeps for the game's volume
+(`JSDOS_STORAGE`, below). What is wiped
 is not a list in a method: `STORAGE_KEY_HOMES` in [constants.ts](src/app/core/models/constants.ts) says where each
 `STORAGE_KEY` lives (`Record<keyof typeof STORAGE_KEY, ...>`, so a key added without deciding that does not
 compile), `LocalStorageService.clearAllData` derives its `localStorage` removals from it, and
 [storage-keys.spec.ts](src/app/core/services/shared/storage-keys.spec.ts) proves the wipe leaves nothing standing.
 Nothing survives the wipe today; a key that ever must needs `clearAllData` to learn to spare it and the spec to name it.
+`emulators.ui.volume` is the one entry the registry cannot list, because js-dos names it: `dosInstance.setVolume` writes it, js-dos applies it
+at `run()` before the page has read its own copy (`STORAGE_KEY.GAME_VOLUME`), so `clearAllData` removes it too (`JSDOS_STORAGE`) and
+storage-keys.spec.ts proves it.
 
 ### Save safety nets
 
@@ -1217,6 +1233,100 @@ every few seconds; the count is in `awake` and in `service stopped`), `awake` (w
 with the time asleep and the probes it took), `not sleeping` (why: dialog up, unreadable), and `stall: the guest was working while asleep;
 idle time raised`. Every line carries the log's timestamps.
 
+### Mobile platform polish (screen lock, fullscreen, sound, install, storage)
+
+What a phone does to the app that the game did not ask for, and what the app does about it. It is phase P14 (decisions D4 and D10); the
+design record is [docs/mobile-ux-study.md](docs/mobile-ux-study.md), and the checks are [scripts/platform-harness/](scripts/platform-harness/README.md).
+**Everything is feature-detected and degrades to nothing**: the build's floor (Safari 14.1, iOS 14.5) is untouched, an API a browser lacks
+means the menu does not offer the entry (or says so), and no code path depends on an answer. Every decision lands in the diagnostics log under
+`platform`. The pure rules are helpers ([wake-lock](src/app/core/helpers/wake-lock.helper.ts), [fullscreen](src/app/core/helpers/fullscreen.helper.ts),
+[audio-health](src/app/core/helpers/audio-health.helper.ts), [install](src/app/core/helpers/install.helper.ts),
+[nudge](src/app/core/helpers/nudge.helper.ts), [storage-health](src/app/core/helpers/storage-health.helper.ts)), all specced; the services own the
+listeners; `WAKE_LOCK`, `AUDIO_HEALTH`, `FULLSCREEN`, `PLATFORM_NUDGES` and `JSDOS_STORAGE` in [constants.ts](src/app/core/models/constants.ts) hold the numbers.
+
+- **Keeping the screen on** ([`WakeLockService`](src/app/core/services/shared/wake-lock.service.ts), "Manter a tela ligada",
+  `STORAGE_KEY.KEEP_AWAKE`, **on by default** (`WAKE_LOCK.DEFAULT_ENABLED`, stored as an explicit boolean like the battery saver, so flipping
+  the constant reaches only people who never chose)). Asked for when the game is up (`loadConfig`), when the page becomes visible
+  again (the browser releases the lock when it hides), and when the sentinel's own `release` event arrives on a visible page; let go when the
+  switch goes off and when the page is left (`leaveGameToMenu`, after the save, and `ngOnDestroy`). **A room overrides the switch**: a hosting phone
+  that locks freezes the picture of everyone watching, and a watching one leaves, so `wanted = running && (inRoom || setting)`, with `inRoom` =
+  `MultiplayerService.isInRoom`, refreshed on every `gameStateSubject` emission (the room exists before IN_ROOM is announced and is gone
+  before NOT_IN_ROOM). **The spectator page holds the screen too**, with no setting (it has no menu), and refreshes *last* in its state handler:
+  the `HOST_LEFT` branch drops the room itself and announces nothing more. **A refusal is a state, not an error**: `NotAllowedError` (battery saver; in the
+  headless shell, always) waits for something that could change the answer (the page returning, a new wish, or a tap, at most every
+  `GESTURE_RETRY_MIN_MS`, and the tap listener exists only while such a refusal is waiting), any other failure only for the page returning or a new wish, and a
+  browser that grants and takes back within `QUICK_RELEASE_MS` three times in a row is not asked in a loop. A grant that lands after the wish
+  went away, or after the page was left, is handed straight back. The menu's subtitle is what the browser did, not what was asked.
+  The wake lock keeps the screen on and the battery saver keeps the CPU quiet; they do not interact.
+- **Fullscreen** ([`FullscreenService`](src/app/core/services/shared/fullscreen.service.ts), "Tela cheia"). **The document element goes fullscreen, never
+  `#game-container`**: the browser paints only the fullscreen element and its descendants, and the Ionic alerts, popovers and toasts, the key
+  panel and the chat would vanish (js-dos has a fullscreen of its own that does exactly that, which is why it is not exposed). Nothing about the layout
+  depends on it: the viewport changes and the resize observers that already watch `#game-container` (js-dos's relayout, `OverlaySyncHelper`) do the rest;
+  measured, the canvas followed the viewport and a live room's cursor overlay still covered the canvas to the pixel. The request is made before anything is
+  awaited and before the menu closes (it needs the tap's user activation). **The orientation lock is part of the action**: after a fullscreen that
+  worked, on a device whose primary pointer is a finger, `screen.orientation.lock('landscape')` inside a try/catch (Chromium allows it in fullscreen and
+  an installed app, iOS has no call, a desktop rejects it), and `unlock()` from the `fullscreenchange` that ends fullscreen however it ends. The
+  entry's subtitle says it turns the screen. **No manifest `orientation`, no lock taken unasked** (D4). Hidden where `document.fullscreenEnabled` is
+  not true (iPhone Safari), where the way to chrome-free play is the install entry. **`(display-mode: fullscreen)` also matches the Fullscreen API**, so
+  `InstallHelper.isStandalone` asks only for `standalone`: the first version asked for all three and pressing "Tela cheia" took the install entry away.
+- **The game's sound** ([`AudioHealthService`](src/app/core/services/game/audio-health.service.ts)). **The context is js-dos's** (`getDosAudioNode()?.context`); nothing
+  here creates one. After a call, a lock or a Bluetooth change it can be `suspended` or (WebKit) `interrupted`; the decision table is `AudioHealthHelper`:
+  `resume()` on start, when the page becomes visible and on a gesture (`pointerup`, `touchend`, `click`, `keydown`; the listener exists only while the
+  context is asleep on a visible page; a tap is three events and each asks, because which of them carries the activation WebKit counts is not knowable
+  from here, but the log writes one line), **never on the context's own `statechange`** (a resume answered by a state change is a loop with the
+  browser) and never for a hidden page. `status$` says `blocked` once the context has been asleep on a visible page for `BLOCKED_GRACE_MS`, and the
+  **"Ativar som" chip** ([`SoundChipComponent`](src/app/pages/game/components/sound-chip/sound-chip.component.ts), `.sound-chip`) shows then: shell, **flat**,
+  in the toolbar's end slot (the speaker alone under 600 px, because the title slot holds the room pill: measured at 360 and 402 px with a live room, the pill is not
+  clipped), and a round button in the gutter where a landscape phone has no toolbar. A tap resumes inside the tap. A host's accessible name says that the room
+  is silent too. `evaluate` queues re-entrant looks: `resume()` may change the state before it returns, and the `statechange` that follows would be overwritten by the
+  reading of the look that asked. **Volume** ("Volume do jogo", "Silenciar o jogo", `STORAGE_KEY.GAME_VOLUME` and `GAME_MUTED`): `dosInstance.setVolume`, a gain on the
+  node js-dos puts between its script processor and the speakers; **a mute is a gain of 0 on a context that keeps running**, so muted-by-the-player and
+  blocked-by-the-browser cannot be mistaken for each other, and moving the slider above zero unmutes. **It does not change what spectators hear**:
+  `MultiplayerAudioService` connects the script processor itself to its `MediaStreamAudioDestinationNode`, BEFORE that gain (`capture()` was observed connecting
+  exactly one node, the destination), and the host's "Enviar o som do jogo" switch is the track's own `enabled`. `dosCI.mute()` is not used for the same reason:
+  it stops the emulator pushing samples, and the stream would go silent. The level of that stream could not be measured (the headless shell has no audio device, see
+  the harness README); the claim rests on the topology. **`navigator.audioSession.type = 'playback'`** ("Som no modo silencioso", `STORAGE_KEY.AUDIO_PLAYBACK`,
+  offered only where `navigator.audioSession` exists, **off unless chosen**) makes the game audible with the iPhone's ringer on silent, at the cost of interrupting other
+  apps' audio.
+- **Installing** ([`InstallService`](src/app/core/services/shared/install.service.ts), main bundle). **It starts with the app** (`AppComponent` injects it), not
+  with the game page: Chromium fires `beforeinstallprompt` once, early, and a listener added by a lazy page misses it. The event's default (the browser's own
+  mini-bar) is cancelled and the event held; `prompt()` is called from the tap (menu entry "Instalar o app", or the banner's button, before anything is
+  awaited), the event is spent either way, and Chromium's next one is picked up. `InstallHelper.mode`: `installed` (the `standalone` display mode,
+  `navigator.standalone`, or `appinstalled`; **not** the `android-app://` referrer, which Chrome also sets on an ordinary tab opened from another app and
+  which would hide the offer from people arriving by a link) offers nothing; `prompt`; `ios` (an iPhone, iPod or iPad, including the iPad that asks
+  for the desktop site: a "Macintosh" with a touch screen) shows **a how-to dialog** (`win9x-alert`) whose point is the warning, not the steps: **an app on the Home Screen
+  keeps its own storage, apart from Safari's, so the saves made in the browser are not in it**, and the dialog has a button straight to "Exportar jogos salvos" (and names
+  "Importar jogos salvos" for the other side); `none` offers nothing. Only iOS gets the warning: on Android and the desktop an installed app shares the browser profile's storage (recalled,
+  unverified: on the device checklist).
+- **One-time nudges** ([`NudgeStateService`](src/app/core/services/shared/nudge-state.service.ts), [`NudgeHelper`](src/app/core/helpers/nudge.helper.ts); the install
+  banner and the "Gire o aparelho" hint, beside the backup reminder, which keeps its own answer in `SaveStatusService`). **Each is shown once in the life of the install, and
+  at most one per page load, in this order: backup, install, rotate** (the order of the calls in `GamePage.maybeNudge`, each of which returns true when it showed
+  something; no list of kinds is kept elsewhere to drift from it), after the welcome dialog and the room dialog. **"Never again after it was
+  on screen" is the rule, and it holds when storage fails**: the answer is kept in memory before the write is tried, and a store that cannot be READ counts as answered (a
+  nudge that cannot remember it was shown would nag on every visit). Showing is answering: unlike the backup reminder (a dialog the player must answer), a toast that runs
+  out by itself is spent; the menu entries are the permanent way. The install banner is never due on a first visit (`firstPersistedAt` must exist: an earlier session saved something), in an
+  installed app, with nothing to offer, or in a room; it is a **stacked** toast (two buttons beside a sentence squeeze it into a column a few words wide, the lesson of the
+  backup reminder), and its button calls the prompt from its own tap. The rotate hint is for a phone held upright (`FullscreenHelper.phoneInPortrait`: a finger is the
+  primary pointer, short side under `PHONE_MAX_SHORT_SIDE_PX`, taller than wide); it goes away by itself when the phone is turned, and a tablet, a landscape phone and
+  a desktop never get it. Both toasts are `position: 'top'` and cover the toolbar until they go; neither resizes `#game-container`.
+- **Storage** ("Armazenamento", first line of "Dados e Backups", read each time the menu opens; [`StorageHealthService`](src/app/core/services/shared/storage-health.service.ts)).
+  **It only reads** `navigator.storage.persisted()` and `estimate()`, each raced against a deadline and "unknown" when it fails: the one request to protect the storage is
+  `SaveStatusService`'s, made once after the first save that worked, and `saveStatus.durable` stands in when `persisted()` is missing. The line never promises protection:
+  "Protegido" is the browser's answer to `persist()`, "Não protegido" adds that the browser may clear the data if space runs short and the backup is the copy that survives.
+- **Decided against: `contentHint = 'detail'` on the host's video track.** Measured in a same-page loopback of a 640x480 animated canvas under a 120 kbps cap
+  (`scripts/platform-harness/content-hint.mjs`): `detail` kept 640x480 at 5-6 fps, `motion` fell to 320x240 at 12 fps, and no hint to 480x360 at 10 fps. It trades smoothness for
+  sharpness under a weak link, which is a product call about every spectator's picture that no two-device session has informed; the app sets none.
+
+**Verified in headless Chrome 143 against the dev server, with the APIs the shell lacks faked** (see the harness README): the wake lock state machine on the real page, the room
+override, the release on leaving, the spectator page, the chip's appearance, recovery by tap and by chip and its layout at 360, 402 and 844x390, fullscreen through a real tap
+(real `requestFullscreen` and a real orientation lock, which this shell grants), the canvas and the cursor overlay after the resize, the install entry, the stacked
+banner and its flows on Android and iOS user agents, the maskable icon under three masks, the manifest as Chrome reads it (no errors, no installability errors), the volume
+through the real slider and toggle, the reload and the wipe. **Not verified, and on the device checklist:** any real device. Whether iOS Safari delivers `statechange` with
+`interrupted` and takes a `resume()` from `pointerup`/`touchend`; the wake lock in an installed iOS web app (versions 16.4 to 18.x had bugs, recalled); whether the A07 grants a lock under
+its battery saver; the orientation lock on Android, and what the Back gesture does to it; `navigator.audioSession` on the silent switch; the install prompt and the app id Chrome
+resolves for an already-installed copy (`Page.getAppId` answers nothing in the shell); the maskable icon in a real launcher; `storage.persist()` outcomes; and the level of the spectators' stream
+while the host is muted.
+
 ### Screen-scraping instead of emulator events
 
 Two flows read the framebuffer because js-dos exposes no game-level state (and the guest is a 16-bit
@@ -1323,8 +1433,9 @@ Load-bearing invariants of the auto-save — each of these was a bug, or a measu
 [diagnostics.service.ts](src/app/core/services/shared/diagnostics.service.ts) is a bounded record of
 what the app did on THIS device, built so a phone can hand evidence back: pointer, touch, key, ime,
 frame, boot, ocr, save, update, error, `page` (lifecycle and viewport; added to the plan's list, because it is
-the evidence an iOS tab eviction leaves) and `power` (the emulator going to sleep and waking, see *Letting the
-guest sleep*). **Off by default.**
+the evidence an iOS tab eviction leaves), `power` (the emulator going to sleep and waking, see *Letting the
+guest sleep*) and `platform` (what the browser and the operating system did that the game did not ask for: the screen lock, the audio
+context put to sleep, fullscreen, the install prompt, a one-time banner; see *Mobile platform polish*). **Off by default.**
 
 **How to turn it on:** the options menu's "Diagnóstico" entry opens the window
 ([diagnostics-modal](src/app/pages/game/components/diagnostics-modal/diagnostics-modal.component.ts));
@@ -1468,7 +1579,8 @@ Load-bearing invariants — each of these was a bug once:
   live room needs a renegotiation trystero does not perform (the same failure as the spectator
   rejoin above), so toggling by add/remove would silently reach nobody. Audio is best-effort
   — no node means video only, never a failed host. Host identity is still read from the
-  *video* track, so audio can never confer it. A spectator attaches with `video.muted` set as a
+  *video* track, so audio can never confer it. The host's own volume and mute (`dosInstance.setVolume`, a gain on the node js-dos puts after
+  the script processor) therefore never reach the stream; see *Mobile platform polish*. A spectator attaches with `video.muted` set as a
   property before `srcObject`, and falls back to muted plus an `Ativar som` button when the
   browser refuses to autoplay with sound; their mute persists because every rejoin reloads.
 - **`#stream-target`'s border box must equal the visible picture exactly.** `OverlaySyncHelper`
@@ -1589,11 +1701,13 @@ funnels — `GamePage.showErrorAlert` and `MultiplayerUiService.showError` — a
 so route new error dialogs through those rather than hand-rolling another `create()`.
 `alert-danger` is a *button*-level class and is unaffected. Before opening a PR, check that
 `grep -rc 'alertController.create' src/` and `grep -rc "cssClass: 'win9x-alert" src/app`
-still agree (36 today) — a manual check, because `npm run lint` covers only `.ts`/`.html`
+still agree (37 today) — a manual check, because `npm run lint` covers only `.ts`/`.html`
 and there is no stylelint setup to hang it on.
 
 The save status chip (`.save-chip`, see *Save safety nets*) is on the shell side too, for the same
-reason, and shares the pill's touch-floor trick (a transparent border, not an `::after`). The room status pill (`.mp-status-pill` in [global.scss](src/global.scss)) is on the shell
+reason, and shares the pill's touch-floor trick (a transparent border, not an `::after`). So is the "Ativar som" chip
+(`.sound-chip`, see *Mobile platform polish*), and so are the one-time install and rotate toasts (`ion-toast.platform-toast`: Ionic's own toast, with
+white buttons because the theme's green on its dark grey is 2.5:1). The room status pill (`.mp-status-pill` in [global.scss](src/global.scss)) is on the shell
 side of that line and is deliberately flat, not Win9x: it renders inside the page toolbars,
 and half a retro toolbar reads as a bug. Its landscape instance rides the game surface but
 keeps the same flat look, because one component changing identity by position is worse than
@@ -1690,6 +1804,19 @@ button that closes a Win9x titlebar.
 `@angular/service-worker` with [ngsw-config.json](ngsw-config.json). `AppComponent` watches
 `SwUpdate.versionUpdates`, records `STORAGE_KEY.PENDING_UPDATE`, and applies updates by reloading
 (immediately or on next launch).
+
+**The manifest's decisions** ([manifest.webmanifest](src/manifest.webmanifest), [index.html](src/index.html)): `id: "/"` is what Chrome derives
+from `start_url: "/#/main"` (the fragment is dropped), written down so that it cannot drift, and so the installed copies keep their identity;
+`scope` and `start_url` are untouched for the same reason. `theme_color` and `background_color` are the game green `#008000` (they were
+`#008200` and `#252329`, a dark splash before the green app painted; the `theme-color` metas were already `#008000`), `lang` is `pt-BR`.
+**No `orientation` and no `display_override`** (decision D4: a lock would take portrait play from people who never asked; the "Tela cheia"
+entry locks landscape as its own action, never the manifest). Two **maskable** icons were added beside the ~110 existing entries, which are
+left alone (the Windows tile sizes are Edge's): `android-maskable-512-512.png` and `-192-192.png`, made from the shipped 512 launcher icon by
+[scripts/pwa-icons/make-maskable.mjs](scripts/pwa-icons/make-maskable.mjs) (artwork shrunk to 0.66 on a canvas of its own green, so the lettering
+sits inside the 40% safe-zone circle: 0.387 of the width from the centre at its farthest; the old icon under a circular mask loses the edges of
+"ELIFOOT" and "WEBPLAY"). **An installed copy may change its icon** when the browser refreshes its manifest (Chrome updates a WebAPK's), and
+otherwise on reinstall. `mobile-web-app-capable` was added beside the Apple spelling (Chromium warns about the Apple one alone) and
+`apple-mobile-web-app-title` ("Elifoot 98", what iOS prints under the icon instead of the long `<title>`).
 
 **One online visit is enough for the installed app to start offline, and that is a property to
 keep.** The `app` group prefetches the shell and `assets/elifoot/**` (the bundle), and the `jsdos`

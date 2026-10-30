@@ -997,6 +997,96 @@ canvas {
 }
 
 /*
+ * The one-time toasts of the platform polish (the install banner and the "Gire o aparelho" hint,
+ * `cssClass: 'platform-toast'`): flat shell, so Ionic's own toast, with one change. A toast button
+ * takes the theme's primary colour, which here is the Elifoot green, and green text on the toast's dark
+ * grey is 2.5:1. White on it is 12.6:1, and the buttons stay told apart by their words.
+ */
+ion-toast.platform-toast {
+    --button-color: #fff;
+}
+
+/*
+ * "Ativar som" (SoundChipComponent): there only while the browser has put the game's audio to sleep
+ * and the page could not wake it. Shell and flat, like the save chip it sits beside in the toolbar's
+ * end slot, and for the same reason: half a retro toolbar reads as a mistake. Amber on the
+ * navy toolbar over the chip's scrim is 10.4:1, the figure the save chip's warning tone measured.
+ *
+ * Under 600 px it is the speaker alone (the words stay its accessible name): the toolbar's title
+ * slot holds the room pill while a host is live, and a chip with words costs that pill the width it
+ * needs (119px, in a title with 20px of padding each side). The icon-only chip is ~34px wide, and
+ * a coarse pointer gets the 44px hit area by transparent border, painted on the padding box only,
+ * exactly as the save chip does.
+ */
+.sound-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    margin: 0 4px;
+    padding: 3px 10px;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.28);
+    color: #ffc409;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.4;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.sound-chip ion-icon {
+    flex: 0 0 auto;
+    font-size: 18px;
+}
+
+.sound-chip:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+}
+
+.sound-chip-text {
+    white-space: nowrap;
+}
+
+@media (pointer: coarse) {
+    .sound-chip {
+        border-top: 10px solid transparent;
+        border-bottom: 10px solid transparent;
+        border-radius: 12px / 22px;
+        background-clip: padding-box;
+    }
+
+    .sound-chip:focus-visible {
+        outline-offset: -8px;
+    }
+}
+
+@media (max-width: 599px) {
+    .sound-chip {
+        padding: 3px 8px;
+        margin: 0 2px;
+    }
+
+    .sound-chip-text {
+        display: none;
+    }
+}
+
+@media (max-width: 599px) and (pointer: coarse) {
+    // The hit area stays 44px wide as well as tall, by the same transparent-border trick.
+    .sound-chip {
+        border-left: 10px solid transparent;
+        border-right: 10px solid transparent;
+        border-radius: 22px;
+    }
+}
+
+/*
  * The deck's launcher when the page has a toolbar (landscape tablets and laptops, or a portrait
  * window with no band under the picture). Shell, flat, like everything else in the toolbar: it only
  * opens the Win9x sheet. A native button (with DeckKeyDirective) and not an ion-button, because an

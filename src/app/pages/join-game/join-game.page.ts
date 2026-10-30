@@ -24,7 +24,7 @@ import { CursorRendererHelper } from 'src/app/core/helpers/cursor-renderer.helpe
 import { OverlaySyncHelper } from 'src/app/core/helpers/overlay-sync.helper';
 import { ChatPanelHelper } from 'src/app/core/helpers/chat-panel.helper';
 import { MULTIPLAYER, STORAGE_KEY } from 'src/app/core/models/constants';
-import { LocalStorageService } from '../../core/services/shared';
+import { LocalStorageService, WakeLockService } from '../../core/services/shared';
 
 @Component({
   selector: 'app-join-game',
@@ -101,6 +101,7 @@ export class JoinGamePage implements OnInit, OnDestroy {
     private identityService: MultiplayerIdentityService,
     private storageService: LocalStorageService,
     private relayHealthService: MultiplayerRelayHealthService,
+    private wakeLock: WakeLockService,
     playerInfoService: MultiplayerPlayerInfoService,
     chatService: MultiplayerChatService
   ) {
@@ -124,6 +125,11 @@ export class JoinGamePage implements OnInit, OnDestroy {
       .then(muted => { this.audioMuted = !!muted; })
       .catch(err => console.warn('Could not read the saved sound preference', err));
 
+    // A spectator who lets the screen lock leaves the room, and has no menu to ask for anything else:
+    // the screen is held for as long as they are in one (WakeLockService: a room overrides the switch,
+    // which this page does not read). Refreshed on every state, because the room exists a moment after
+    // it is announced and is gone before the next announcement.
+    this.wakeLock.start({ setting: false, inRoom: () => this.multiplayerService.isInRoom });
     this.pageSubscriptions.add(
       this.multiplayerService.gameStateSubject.subscribe(state => this.onGameStateChange(state))
     );
@@ -149,6 +155,7 @@ export class JoinGamePage implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    this.wakeLock.stop();
     this.detachStream();
     this.roomSubscriptions.unsubscribe();
     this.pageSubscriptions.unsubscribe();
@@ -385,6 +392,9 @@ export class JoinGamePage implements OnInit, OnDestroy {
       this.roomSubscriptions = new Subscription();
       this.multiplayerService.leaveRoom(GameState.HOST_LEFT);
     }
+    // Last, and not first: the HOST_LEFT branch above drops the room itself and announces nothing more
+    // (the state is already HOST_LEFT), so this is the only look at the room after it is gone.
+    this.wakeLock.refresh();
   }
 
   private handleJoinFailure(err: any) {

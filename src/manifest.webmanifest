@@ -1,8 +1,11 @@
 {
+  "id": "/",
   "name": "Elifoot 98 Online",
   "short_name": "Elifoot 98",
-  "theme_color": "#008200",
-  "background_color": "#252329",
+  "lang": "pt-BR",
+  "categories": ["games", "sports"],
+  "theme_color": "#008000",
+  "background_color": "#008000",
   "display": "standalone",
   "scope": "./",
   "start_url": "/#/main",
@@ -346,6 +349,18 @@
     {
       "src": "assets/pwaicons/windows11/Square44x44Logo.altform-lightunplated_targetsize-256.png",
       "sizes": "256x256"
+    },
+    {
+      "src": "assets/pwaicons/android/android-maskable-512-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "assets/pwaicons/android/android-maskable-192-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "assets/pwaicons/android/android-launchericon-512-512.png",

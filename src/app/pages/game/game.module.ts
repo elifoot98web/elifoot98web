@@ -11,6 +11,7 @@ import { AboutComponent } from './components/about/about.component';
 import { OmaticModalComponent } from './components/omatic-modal/omatic-modal.component';
 import { DiagnosticsModalComponent } from './components/diagnostics-modal/diagnostics-modal.component';
 import { SaveStatusChipComponent } from './components/save-status-chip/save-status-chip.component';
+import { SoundChipComponent } from './components/sound-chip/sound-chip.component';
 import { CoreComponentsModule } from 'src/app/core/components/core-components.module';
 
 @NgModule({
@@ -29,7 +30,8 @@ import { CoreComponentsModule } from 'src/app/core/components/core-components.mo
     AboutComponent,
     OmaticModalComponent,
     DiagnosticsModalComponent,
-    SaveStatusChipComponent
+    SaveStatusChipComponent,
+    SoundChipComponent
   ]
 })
 export class GamePageModule {}

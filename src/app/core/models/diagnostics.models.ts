@@ -10,9 +10,14 @@
  * `power` is the second: the emulator going to sleep and waking (EmulatorPowerService). It is a
  * state with timestamps that a reader follows from one line to the next, and mixed in with the
  * guest's frames it would be lost.
+ *
+ * `platform` is the third: what the browser and the operating system did to the app that the game
+ * did not ask for (the screen lock, the audio context put to sleep, fullscreen, the install prompt, a
+ * one-time banner). Each of those is a decision a device makes and an app can only watch, so a device
+ * pass reads them as one list instead of finding them among the page's own lifecycle.
  */
 export const DIAGNOSTICS_CATEGORIES = [
-  'pointer', 'touch', 'key', 'ime', 'frame', 'boot', 'ocr', 'save', 'update', 'error', 'page', 'power',
+  'pointer', 'touch', 'key', 'ime', 'frame', 'boot', 'ocr', 'save', 'update', 'error', 'page', 'power', 'platform',
 ] as const;
 
 export type DiagnosticsCategory = typeof DIAGNOSTICS_CATEGORIES[number];
@@ -31,6 +36,7 @@ export const DIAGNOSTICS_CATEGORY_LABELS: Readonly<Record<DiagnosticsCategory, s
   error: 'Erros',
   page: 'Ciclo de vida da página',
   power: 'Economia de bateria (emulador)',
+  platform: 'Aparelho (tela ligada, som, tela cheia, instalação)',
 };
 
 /** The filter's "everything" choice. */

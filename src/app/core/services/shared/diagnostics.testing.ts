@@ -32,3 +32,18 @@ export async function recordingDiagnostics(storage = memoryStorage()): Promise<D
   await service.enable({ persist: false });
   return service;
 }
+
+/**
+ * A log that is on and keeps what it is told, for a spec that asks "did it note this": the data thunk
+ * is read at the call, as the real one does, so what a line says is what it said then. Hand it where a
+ * service takes a `DiagnosticsService` (`as never`).
+ */
+export function logRecorder() {
+  const calls: Array<[string, string, Record<string, unknown> | undefined]> = [];
+  const diagnostics = {
+    enabled: true,
+    log: (cat: string, msg: string, data?: unknown) =>
+      calls.push([cat, msg, (typeof data === 'function' ? (data as () => unknown)() : data) as Record<string, unknown> | undefined]),
+  };
+  return { diagnostics, calls, messages: () => calls.map(([, msg]) => msg) };
+}

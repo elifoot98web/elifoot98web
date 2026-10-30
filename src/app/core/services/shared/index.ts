@@ -4,3 +4,8 @@ export * from './keyboard-inset.service';
 export * from './layout-helper.service';
 export * from './local-storage.service';
 export * from './save-status.service';
+export * from './wake-lock.service';
+export * from './fullscreen.service';
+export * from './install.service';
+export * from './nudge-state.service';
+export * from './storage-health.service';

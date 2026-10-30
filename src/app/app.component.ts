@@ -3,7 +3,7 @@ import { SwUpdate } from '@angular/service-worker';
 import { AlertController, LoadingController, Platform } from '@ionic/angular/lazy';
 import { TimeoutError, TimeoutHelper } from './core/helpers/timeout.helper';
 import { APP_UPDATE, STORAGE_KEY } from './core/models/constants';
-import { DiagnosticsService, LayoutHelperService, LocalStorageService, SaveStatusService } from './core/services/shared';
+import { DiagnosticsService, InstallService, LayoutHelperService, LocalStorageService, SaveStatusService } from './core/services/shared';
 
 @Component({
     selector: 'app-root',
@@ -24,7 +24,10 @@ export class AppComponent {
     // first moment of the visit: it reads `?diag=1` and the stored choice in its constructor, and
     // the window listeners that explain a tab eviction must be on before the game page is.
     private diagnostics: DiagnosticsService,
-    private saveStatus: SaveStatusService) {
+    private saveStatus: SaveStatusService,
+    // Injected here for the same reason, and not left for the page that offers the install: Chromium
+    // fires `beforeinstallprompt` once, early, and a listener added by a lazy page misses it.
+    private install: InstallService) {
 
     platform.ready().then(async () => {
       console.log('Platform ready', { 
