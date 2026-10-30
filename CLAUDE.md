@@ -31,7 +31,7 @@ node scripts/pwa-icons/make-maskable.mjs <source.png> <out.png> --size 512 --che
 Specs are karma + jasmine. The builder globs `**/*.spec.ts` (its `include` option, which is also
 what `--include` overrides); [src/test.ts](src/test.ts) only initialises the TestBed and
 `tsconfig.spec.json` type-checks `src/**/*.spec.ts`, so a spec needs no registration but must live
-under `src/` to be type-checked. Nothing in a spec reaches the bundle. There are **seventy-two spec files so
+under `src/` to be type-checked. Nothing in a spec reaches the bundle. There are **seventy-four spec files so
 far**. [room-code.helper.spec.ts](src/app/core/helpers/room-code.helper.spec.ts) is there as
 much to prove the harness as to cover `RoomCodeHelper`: `ng test` with **zero** specs
 prints `Executed 0 of 0 SUCCESS` and still exits 1, so a `test:ci` could never pass before the
@@ -103,7 +103,13 @@ last `input` both scripted. [ibeam.helper.spec.ts](src/app/core/helpers/ibeam.he
 must tell a look-alike apart": real 640x480 frames of the guest with its cursor in different shapes
 ([field-hint.fixtures.ts](src/app/core/helpers/field-hint.fixtures.ts), made by `scripts/frame-fixtures/`), the arrow over a
 white list among them, and a case that moves the lookup so that only the serif can reject it (mutation-checked: without the
-serif, two cases fail). [storage-keys.spec.ts](src/app/core/services/shared/storage-keys.spec.ts) writes every `STORAGE_KEY` to every place the
+serif, two cases fail). [stage.helper.spec.ts](src/app/core/helpers/stage.helper.spec.ts) is the model for "a layout that has to hold on every real screen": the table
+is the devices (a phone with and without a notch, both iPhones, tablets, laptops) with the insets a notch really has, the stages that matter are
+written out as numbers, and the invariants (exactly 4:3, between the rails, never under the minimum) run over the whole matrix times deck, chat and view
+mode; [stage-layout.service.spec.ts](src/app/core/services/shared/stage-layout.service.spec.ts) drives the service with a host element whose size the spec moves and a
+viewport it moves with it, and the chat's give-back with a fake clock. Mutation-checked when the phase was built: thirteen deliberate breaks, thirteen failing cases (two
+survived their first run and were closed: a strict `>` where two columns fit EXACTLY, and a 336 px keyboard that left less than the minimum stage, which the service refuses to
+write, so the spec passed for that reason; it uses 120 px now). [storage-keys.spec.ts](src/app/core/services/shared/storage-keys.spec.ts) writes every `STORAGE_KEY` to every place the
 registry says it lives, runs the real wipe against the real Ionic Storage and fails if anything is left. One trap in a
 service spec: a synthetic `beforeunload` on the real `window` reaches Karma's own handler and fails the whole run
 ("Some of your tests did a full page reload!"), so `SaveSafetyService.unloadTarget()` is overridable and the spec dispatches
@@ -140,7 +146,8 @@ screens per send spacing, the gain table, the frame period, drift, stuck buttons
 the "Modo de toque" UI, and the edge cases a review found: a fast second tap, a retry after a miss, a drag past the send
 budget, the audio wake; `typebar.mjs`, the live type bar on the real game against a SIMULATED OS keyboard and CDP's IME
 events; and `idle-pause.mjs`, the battery saver on the real game: CPU on a still screen, whole Elifoot rounds with the setting on and off,
-and taps and keys sent to a sleeping guest, see *Letting the guest sleep*), with the tables the constants rest on. **Re-run it after any change to the video mode, the
+and taps and keys sent to a sleeping guest, see *Letting the guest sleep*; and `stage.mjs`, the picture's box at 19 windows with every input the contract names and every one it
+does not, the rails' keys, and a spectator's picture against the host's in a real two-browser room, see *The stage*), with the tables the constants rest on. **Re-run it after any change to the video mode, the
 Windows mouse settings, js-dos or the disk image.** It needs a dev build (`window.ng`) served with `--live-reload=false`.
 
 The phone-platform work (the screen lock, fullscreen, the game's sound, installing) is checked the same way in
@@ -797,10 +804,11 @@ sheet's title bar and border, the unread flash), and `grep -n 'win9x-' src/theme
 design record is [docs/mobile-ux-study.md](docs/mobile-ux-study.md) (P10).
 
 **The layout contract, which no new control may break: the deck is a SIBLING of `#game-container`, never a child, never over
-the picture, and the picture's box does not depend on it.** js-dos re-lays-out its canvas whenever that element changes size,
+the picture, and the picture's box does not depend on its contents** (in landscape the picture's box is the stage plan's, which counts a rail's WIDTH and
+nothing that is in it; see *The stage*). js-dos re-lays-out its canvas whenever that element changes size,
 and the cursor overlay and every remote cursor are measured against it. In portrait the picture is already pinned to its 4:3
 height (75vw, `flex: 0 0`) and the band under it is free, so the deck is a flex item after it. `DeckLayoutHelper.presentation`
-is a pure function of the viewport, the primary pointer and the player's setting, and it returns one of three things:
+is a pure function of the viewport, the primary pointer and the player's setting, and it returns one of four things:
 
 - `none`: no deck. A desktop with a mouse and a keyboard is not cluttered by default, and a touch laptop (touch is only its
   `any-pointer`) is the same. The floating chat toggle is untouched there.
@@ -812,12 +820,14 @@ is a pure function of the viewport, the primary pointer and the player's setting
   tabs jumped 440 px on the tap that folded them) and **one panel at a time** above it: Táticas, Setas, Mais teclas, or the
   page's chat. Texto is a taskbar button that opens the P1 compose dialog (or, with the experimental "Teclado ao vivo" setting on, the live type bar: see *The live type bar*), and Chat appears only while hosting. A second tap on
   the open tab folds the panel; the picture does not grow into the band.
-- `launcher`: every other shape. Landscape has no free band (the picture takes the height), so the same panels open as a
-  **sheet** over the page from a "Teclas" button: in the toolbar where there is one (a landscape tablet or laptop window), in the
-  left gutter beside the picture when the toolbar is dropped (`landscape-compact`: a landscape phone), under the round options
-  button and the room pill, all three in `.gutter-controls`. The sheet is `position: absolute` and takes no space, so it never
-  resizes the container; it does cover the left part of the picture while it is open. Until the later stage-layout phase builds
-  rails this is the whole landscape deck.
+- `rails`: a landscape phone (`landscape-compact`, a viewport at most 500 px tall: no toolbar, the picture takes the whole height). The keys live in
+  the two gutters the height-fitted picture leaves, one rail each, sized by `StageHelper` so that they never cost the picture; see *The stage*. A landscape
+  phone has the LEFT rail whether or not the deck is shown (`DeckPresentation.rails`): the toolbar is gone and the menu, the room code and the chat button
+  live there, projected into the dock by the page. The sheet below opens from the rail's edge for what a rail has no room for ("Mais teclas", and Táticas
+  in a one-column rail).
+- `launcher`: every other shape without a band: a landscape tablet or laptop (the picture takes the height and the gutters are too thin for keys) and a
+  portrait window with no room under the picture. The same panels open as a **sheet** over the page from a "Teclas" button in the toolbar. The sheet is
+  `position: absolute` and takes no space, so it never resizes the container; it does cover the left part of the picture while it is open.
 
 **Tablets** follow the shape: a portrait iPad (768x1024, 820x1180) gets the band, which fits all three panels with room to spare
 (the keys are capped at 290 px of height there, and rest at the bottom where the thumbs are); a landscape one has no band and
@@ -908,17 +918,111 @@ buzz is 8 ms on the landing of a key, and a repeat does not buzz). Both are read
 behind the loader.
 
 **Safe areas:** the taskbar's face continues under the home indicator (bottom padding is `env(safe-area-inset-bottom)` on top
-of its own 4 px), and the sheet adds the left inset to its width so a notch does not eat the keys. Emulated at 430x932 (59 px top,
+of its own 4 px), a rail's face paints to the screen's edge with the notch's inset in its width and its padding, and the launcher's sheet adds the left inset to its
+width so a notch does not eat the keys (a sheet that opens from a rail needs none). Emulated at 430x932 (59 px top,
 34 px bottom) and 932x430 (59 px left and right, 21 px bottom); real insets are on the device checklist.
 
 **Diagnostics:** `key` / `deck press` (key id, latched modifiers, queue depth, tap or repeat or confirmed), `deck modifier`,
 `deck modifiers cleared` (with the reason), `deck repeat stopped` (reason, repeats, skipped) and `deck guarded key asked`; `page` /
-`deck panel`, `deck layout`, `deck sheet`, `deck chat`, `deck text` and `deck setting chosen`.
+`deck panel`, `deck layout`, `deck sheet` (also from a rail's key), `deck chat`, `deck text`, `deck setting chosen` and `stage view chosen`; the stage's own plans are category `layout`.
 
 **Not verified:** any phone or finger (mis-taps, thumb reach, the 380/55 ms feel), haptics, iOS Safari (callout on a long press of a
 keycap, double-tap zoom, `:active`), real safe-area insets, the OS keyboard over the chat, a low-end CPU, TalkBack and VoiceOver on
 the keycaps, and scrolling "Mais teclas" with a thumb on a short landscape screen (the synthetic drag is graded, a real one is not).
 All of them are on the device checklist of the PR.
+
+### The stage (the picture's box, the rails and the chat dock)
+
+The page's layout used to be a by-product. In landscape `.game-stream-container` was `flex: 1`, js-dos fitted its canvas into whatever width the
+siblings left, and the gutters on either side of a height-fitted picture belonged to the container, so anything that lived in them was an overlay on it. It
+is phase P12 (decision D12); the design record is [docs/mobile-ux-study.md](docs/mobile-ux-study.md). Now **the picture's container IS the picture**, its size is
+a pure function ([`StageHelper`](src/app/core/helpers/stage.helper.ts)), and what is beside it is a sibling in the flex row.
+
+**THE CONTRACT, which no new control, panel or setting may break.** The stage's size depends on **the box, the shape of the window (viewport and orientation), the
+safe areas, whether the deck is shown (key rails), whether the chat is docked open, and the view mode**; and on nothing else: **not on what is inside a panel or a rail, not on
+the OS keyboard, not on the chat's own state (its scroll, its roster), not on a transform.** (*Why:* js-dos re-letterboxes its canvas whenever `#game-container`'s box changes, and the
+cursor overlay and every remote cursor are placed from that box; a stage that followed the keyboard or a panel would redraw the game and misplace the cursors each time a field was focused.
+"Not the OS keyboard" holds for BOTH kinds of browser: Chrome and Safari leave the layout viewport alone when it opens, and a browser that resizes it for the keyboard (older Android WebViews, some OEM
+browsers: the case `LayoutShapeHelper.settle` exists for) shrinks the page's element with the window while the settled shape holds, so `StageLayoutService` adds back the height the window lost against
+the settled viewport (`covered` in the `layout` log line) and measures the box the page had before the keyboard.) `#game-container` keeps `position: relative` and has no padding and no
+border (the cursor overlay is its child and `OverlaySyncHelper` reads `offset*`); zoom, when it comes, is by `transform` only and is the camera's phase. In landscape the
+container is exactly `--stage-w` x `--stage-h` (whole pixels, exactly 4:3: a multiple of 4x3, never 521x390.75) at an integer offset (`--stage-mx`, `--stage-my`), so the
+canvas fills it and its offset inside it is zero. Portrait is untouched: the 4:3 box is still pinned in CSS (`flex: 0 0 75vw`, which needs no JavaScript to be right on
+the first frame) and the plan only mirrors it for the log. **Proved in a browser** (`stage.mjs layout`, 19 windows, 248 checks, 0 failures; headless Chrome 143 with touch
+emulation, CDP safe-area insets): the container is the canvas to the pixel, is the size and place the plan wrote, and its rect is IDENTICAL with the launcher's sheet
+open, with the simulated OS keyboard (`visualViewport` shrunk and `--kb-inset` written: this one only proves the stage reads neither), with the layout viewport REALLY halved while a field has the focus
+(`Emulation.setDeviceMetricsOverride`, the second kind of browser above: the check fails with the compensation removed, `[162,0,520,390] -> [292,0,260,195]`; it also held on the host and the spectator with the chat
+open), with the deck on and off, with a room starting (the pill and the Chat key appearing), and after the chat opens and closes; it differs only for the documented inputs (the chat docked, the view mode).
+**The limit of that clause:** in PORTRAIT such a window (360x340 with the keyboard up) is also `(orientation: landscape)` to the stylesheets, which are not keyed on the settled shape, so the page flips to its row layout
+while a field has the focus, as it always did in those browsers; the picture stays right (the portrait plan mirrors the CSS) but the chat, whose landscape width is the plan's and a portrait plan has none, is 0 px
+wide for as long as the keyboard is up. Not fixed: it needs every `(orientation)` query in `global.scss` and `_deck.scss` moved onto an attribute the service writes.
+
+**The plan and who writes it.** `StageHelper.plan` takes `{ box, shape, insets, keys, chat, view }` and returns the columns of keys in each rail, the width each side takes
+(the notch's inset included), the chat's width, the stage and its offset; `fitStage(box, ratio, reserved)` inside it is the shared ratio fit (the spectator's
+`fitVideoToContainer` is the same idea on the frame's ratio, and stays ratio-based: do not switch it to intrinsic pixels). [`StageLayoutService`](src/app/core/services/shared/stage-layout.service.ts)
+reads the page for it and writes the answer to `<html>`: `--stage-w`, `--stage-h`, `--stage-mx`, `--stage-my` (the picture), `--stage-left`, `--stage-right` (what each
+side takes, which is the rails' width), `--chat-panel-width` (the width the chat dock has when open) and `--chat-dock-w` (what it holds now). It measures the page's flex row with
+one `ResizeObserver` (the address bar collapsing, a rotation and a fullscreen change all arrive as a resize), takes the shape from `LayoutHelperService.viewport$` (settled: the OS keyboard
+does not change it), reads the safe areas from a hidden probe whose padding is `env(safe-area-inset-*)` (observed by its border box, so an inset that changes without the window
+changing size is heard where the browser can observe one; Safari before 15.4 relies on the resize and the rotation), and is told the rest by the page (`setKeys`, `setChat`,
+`setView`). It writes nothing for a page that measures 0x0 (the spectator's, until it has a room) or a window too small to hold a stage, removes everything on `stop()` and
+keeps nothing scheduled. Both pages start it after their first change-detection pass (`queueMicrotask` in `ngAfterViewInit`): the plan changes what the view binds, and a change made
+while the view is being checked is NG0100 in dev mode. Every change of the plan is one `layout` line in the diagnostics log.
+
+**Rails (a landscape phone).** `DeckLayoutHelper` gave `rails` to `landscape-compact` (a viewport at most 500 px tall); the left rail exists whether or not the deck is shown (it holds
+what the missing toolbar did), the right one only with the deck. A rail is `112 px` of padding, keys and gaps with two columns (48 px keys) and `68 px` with one (56 px keys), plus the
+notch's inset on its side; its face paints to the screen's edge and its padding keeps the keys clear (`max(env(), 0px)`). **Columns:** two in each rail where both fit in the gutters
+without costing the picture, otherwise one, and always one in Ampliar. Measured: two at 844x390 (with or without a notch), 915x412, 932x430 and 812x375; one at 852x393 (the
+Dynamic Island's 59 px a side leaves 510 px for a 524 px picture), 667x375 and 640x360. **Known limit: "never cost the picture" holds for the phones of the matrix, whose aspect ratio is 1.67 or wider.** Nothing
+falls back to the "Teclas" launcher below one column, and every window at most 500 px tall and wider than it is tall is a landscape phone: in a short, nearly square window (half of a 915x412 split screen, 457x412) the
+one-column rails take 136 px of 457 and the picture is 320x240 where a width-fit one would be 456x342 (a spectator or a deck-off host there gets 388x291, so the guest's picture is the larger one). `stage.helper.spec.ts` pins it. **Contents:** left, from the top, what the page projects (the round menu button, "Ativar som", the room
+code), and pinned to the bottom, where the thumbs rest, the deck's own Texto, Chat and, with two columns, the arrows, Enter, Esc, Tab and the "Teclas" key that opens the sheet; right, Táticas
+(F1-F12, A, M: seven rows of two) or, with one column, Enter, Esc, Tab and the four arrows (Táticas is then in the sheet). **A key never moves when the room, the sound chip or the chat
+comes and goes** (the page's block grows down, the deck's block is pinned up): at most seven rows, which `--deck-key-dense-h` (44 px with a finger) makes 344 px, so the shortest phone
+there is (667x375) has room to spare. The keys are the same `DeckKeyDirective` keycaps, the same table (`DeckKeyHelper`, plus a `shortCaption` for the one label too long for 48 px,
+"Auto") and the same `GuestKeyQueue` path; non-repeating keys press on release (a rail on a short window scrolls, like the sheet) and the arrows on landing with `.deck-key--landing`.
+Measured at 10 windows (`stage.mjs rails`, 55 checks, 75 with the pill's): every control at least 44x44, no two overlapping, none over the picture, all inside the window or reachable by scrolling; a real
+tap on each safe key is one key down and one up; a held arrow's first repeat is 381 ms after the landing and the next ones 55-60 ms apart, nothing after the lift, and in a 300 px tall
+window (the rail scrolls) it survives 40 px of vertical drift with no `pointercancel`. The sheet opens beside the rail, not over it, and moves nothing.
+
+**The chat in landscape (D12): it REPLACES the right rail, and the left rail folds to icons.** On a phone the chat takes what the gutters leave, 200 to 240 px plus the notch's inset
+(its face paints under the notch); the left rail folds to 56 px of icons (the room's code is not on it, because the chat's own title bar says it); the picture is the one thing that
+may shrink. A tablet or laptop (no rails) keeps the widths the chat always had (320 px, or 40% of the window up to 300 px under 900 px). The plan holds the chat's width for the 220 ms
+of its slide-out before it gives it back (`CHAT_CLOSE_DELAY_MS`), so the stage never grows into a panel that is still on screen; opening is immediate. **What the chat costs the picture,
+measured** (the wireframe's "about 3%" did not count the notch on the chat's side; only the roomiest notch phone reaches it): 0% at 844x390 without a notch, 915x412 and 1366x768; **2.8%** at 932x430 with the
+Dynamic Island (the iPhone 15 Pro Max); **5.4%** at 844x390 with a 47 px notch; 6.4% at 812x375; 9.2% at 852x393; 18.4% at 667x375 (408x306 where the old 267 px chat left a 400x300 picture) and 20% at 640x360;
+on a tablet 15.4% at 1180x820 and 25.7% at 1024x768, the same as before (the container shrank by the same width). The Chat button of a landscape phone is a key in the left rail, not a tab over the picture.
+
+**Ampliar ("Tamanho da imagem", `STORAGE_KEY.STAGE_VIEW`, only offered on a landscape phone) gains NOTHING on any phone measured, and that is the finding.** It makes the rails one column. But a 4:3 picture
+that must be seen whole is already as tall as the screen on every landscape phone (the toolbar is gone and the rails live in the gutters), so a narrower rail has nowhere to give the
+picture room. The 8% to 52% the roadmap modelled needs a stage TALLER than the screen, cropped and panned: that is the camera's phase, not a layout's, and shipping it here would have hidden
+part of the game behind a pan that does not exist yet. The setting, the plan's support for it and the harness stay, so the camera can build on them. The review found the entry's label promising what it does not
+deliver, so the dialog now says what the choice is and is not ("A imagem fica do mesmo tamanho nas duas: muda só quantas colunas de teclas as laterais usam"; the radios read "Ajustar: duas colunas de teclas onde
+cabem" and "Ampliar: uma coluna de teclas"). It still costs a player the one-tap F-keys for nothing, so decide with the owner whether it is worth keeping in the menu until the camera ships.
+
+**The spectator.** [join-game.page](src/app/pages/join-game/join-game.page.html) drops its toolbar on a landscape phone that is watching (not on the joining, waiting and failure cards, which
+keep the way back) and has a left rail instead: the room's pill, "Sala" (the room window), Chat, Som, and "Sair" pinned to the bottom, away from the rest, with the same Win9x keycaps and safe-area
+padding as the host's. Its container is the same stage the host's is, so **at the same window the two pictures are the same size and in the same place** (`stage.mjs guest`, 9 windows, 45 checks:
+within 1 px, `#stream-target`'s border box equal to the stage, the cursor overlay exactly on the picture; before, a landscape phone's guest saw a picture 14-18% smaller). A remote cursor lands where the
+guest pointed, to 0.5 px, at 7 windows (`stage.mjs room`), and the chat works both ways with each picture's box as the plan says; a confirmed leave still reloads the page (`stage.mjs leave`). Rejoining
+is unchanged: a spectator only ever joins from a fresh page load.
+
+**Layout rules that cost an afternoon.** `.game-stream-container` must not carry the page's `.full` class: it is `width: 100%` in each page's stylesheet and outweighs the stage's size (the container
+painted the whole row, with the right rail pushed off screen). A flex item is positioned by `--stage-mx`, an integer margin counted from the end of the left rail, with the right margin `auto`, so that a
+rail or the chat on the right stays at the screen's edge. The toggles (the chat tab, the spectator's sound button) are children of the row, never of the container, because the container is the picture;
+a rail's inset padding on the chat panel is `min(var(--chat-dock-w), inset)`, because a padding is a floor under a border-box width and a plain inset made the CLOSED chat a 47 px grey strip down a notch
+phone's edge (found on the spectator's page). A `background` shorthand on the pill in the rail reset its `background-clip: padding-box` and made a 24 px capsule 44 px tall. The opposite trap in a ONE-column rail (56 px wide, and the spectator's rail is always one):
+the toolbar pill's transparent 10 px borders and padding-box clip paint a 24 px capsule, and `ELI-` over `RVWA` plus the dot is 41 px of content, so the dot floated above the capsule and the second line hung below it as white
+text on the rail's grey (1.8:1). In the rail the one-column pill turns the borders and the clip off, so the capsule is the whole 44 px row, with the dot and the lock in its corners; `stage.mjs rails` checks that every child of
+the pill lies inside the capsule that is painted, with and without the lock, at five windows (a check that was missing: all the 224+55+45+63 earlier ones passed with the bug).
+
+**Verified in headless Chrome 143 against the dev server and the real game, two browsers for the room** (the public nostr relays were reachable; a fresh room code per run, see `room.mjs`; both browsers need
+`--disable-features=WebRtcHideLocalIpsWithMdns`, which `driver.mjs` takes from `CHROME_FLAGS`). Also: a rotation round trip with the chat open returned the exact same rect, and twenty address-bar flaps (390 to 342 px of height)
+settled on the exact stage with no console line. **Not verified, and on the device checklist:** any real notch or home indicator (the insets are `Emulation.setSafeAreaInsetsOverride`'s), `env()` and the probe's
+`ResizeObserver` border-box observation in Safari, thumb reach and mis-taps beside the picture's edge, the browser tab's real address bar and an installed app's, Android's navigation bar, rotating with the chat open on a
+phone, TalkBack and VoiceOver on the rails (they come AFTER the picture in the DOM and BEFORE it on screen, so the Tab order is not the visual one), and the picture's size next to the host's on a real pair of devices. **Known and left:**
+the chat's tab on a tablet or laptop with no gutter still overlays the picture's edge by 34 px, as it always did; a dev-mode NG0100 when a host with unread messages opens the chat (the panel's own input setter resets the count in the middle of a change-detection pass, after a
+parent-level binding read it; it was there before this phase and does not exist in a production build).
 
 ### The live type bar (experimental)
 
@@ -1277,7 +1381,7 @@ listeners; `WAKE_LOCK`, `AUDIO_HEALTH`, `FULLSCREEN`, `PLATFORM_NUDGES` and `JSD
   browser) and never for a hidden page. `status$` says `blocked` once the context has been asleep on a visible page for `BLOCKED_GRACE_MS`, and the
   **"Ativar som" chip** ([`SoundChipComponent`](src/app/pages/game/components/sound-chip/sound-chip.component.ts), `.sound-chip`) shows then: shell, **flat**,
   in the toolbar's end slot (the speaker alone under 600 px, because the title slot holds the room pill: measured at 360 and 402 px with a live room, the pill is not
-  clipped), and a round button in the gutter where a landscape phone has no toolbar. A tap resumes inside the tap. A host's accessible name says that the room
+  clipped), and a round button in the left rail where a landscape phone has no toolbar. A tap resumes inside the tap. A host's accessible name says that the room
   is silent too. `evaluate` queues re-entrant looks: `resume()` may change the state before it returns, and the `statechange` that follows would be overwritten by the
   reading of the look that asked. **Volume** ("Volume do jogo", "Silenciar o jogo", `STORAGE_KEY.GAME_VOLUME` and `GAME_MUTED`): `dosInstance.setVolume`, a gain on the
   node js-dos puts between its script processor and the speakers; **a mute is a gain of 0 on a context that keeps running**, so muted-by-the-player and
@@ -1434,8 +1538,9 @@ Load-bearing invariants of the auto-save — each of these was a bug, or a measu
 what the app did on THIS device, built so a phone can hand evidence back: pointer, touch, key, ime,
 frame, boot, ocr, save, update, error, `page` (lifecycle and viewport; added to the plan's list, because it is
 the evidence an iOS tab eviction leaves), `power` (the emulator going to sleep and waking, see *Letting the
-guest sleep*) and `platform` (what the browser and the operating system did that the game did not ask for: the screen lock, the audio
-context put to sleep, fullscreen, the install prompt, a one-time banner; see *Mobile platform polish*). **Off by default.**
+guest sleep*) `platform` (what the browser and the operating system did that the game did not ask for: the screen lock, the audio
+context put to sleep, fullscreen, the install prompt, a one-time banner; see *Mobile platform polish*) and `layout` (the stage plan each time it changes: the window
+it was made from, the columns of keys, the width of each side, the picture's box and place, and what the chat cost it; see *The stage*). **Off by default.**
 
 **How to turn it on:** the options menu's "Diagnóstico" entry opens the window
 ([diagnostics-modal](src/app/pages/game/components/diagnostics-modal/diagnostics-modal.component.ts));
@@ -1589,7 +1694,9 @@ Load-bearing invariants — each of these was a bug once:
   is computed in TypeScript (`fitVideoToContainer`) from the frame's **ratio**, deliberately not
   from its intrinsic pixels: WebRTC ramps its encoder up from a low resolution on every join, and
   intrinsic sizing made the picture visibly grow. The long comment in
-  [join-game.page.scss](src/app/pages/join-game/join-game.page.scss) lists what must not be added.
+  [join-game.page.scss](src/app/pages/join-game/join-game.page.scss) lists what must not be added. The guest's container is the same stage the host's is (the same
+  plan, `--stage-w` x `--stage-h`), so at the same window the two pictures are the same size and in the same place (checked to 1 px by `stage.mjs guest`); the
+  video's ratio fit happens inside it, as before.
 - **A dropped host is not a departed host.** `onPeerLeave` for the host fires when *our* link
   drops, which is indistinguishable from the host leaving. Hence `HOST_RECONNECTING` plus a grace
   timer, copy that says we lost the connection, and a retry button — the grace period only
@@ -1612,11 +1719,12 @@ Components in `src/app/core/components/multiplayer/` (plus `chat/`): `room-setup
 joining outright, including recent rooms), `multiplayer-panel` (the room's own window — code,
 roster, share, leave; it absorbed a former participants modal), `participant-list` (shared by the
 panel and the chat's contact strip), `room-status-pill` (the ambient code/lock/count indicator;
-flat, not Win9x — see the scope rule below). The chat toggle floating over the game surface is
-the **only** chat entry point wherever the control deck is not a band, because it is the one control that exists at every
+flat, not Win9x — see the scope rule below). The chat toggle floating over the page (a child of the page's flex row, never of the picture's container) is
+the **only** chat entry point wherever the control deck is neither a band nor rails, because it is the one control that exists at every
 breakpoint. Where the deck is a band (a touch device in portrait) the toggle is the taskbar's **Chat** tab instead, with
 the same `aria-controls`/`aria-label` from `ChatPanelHelper`, the unread badge and the taskbar flash, and the panel it opens is
-still the page's own `#chat-panel`, docked above the taskbar. A desktop without the deck keeps the floating toggle.
+still the page's own `#chat-panel`, docked above the taskbar; on a landscape phone it is the **Chat** key of the left rail, for the host and for the
+spectator alike (all three carry `data-chat-toggle`, which is what `ChatPanelHelper.focusToggle` finds). A desktop without the deck keeps the floating toggle.
 
 
 - [cheat-omatic.service.ts](src/app/core/services/game/cheat-omatic.service.ts) — a Cheat-Engine-style memory
@@ -1628,6 +1736,8 @@ still the page's own `#chat-panel`, docked above the taskbar. A desktop without 
   for the auto-save OCR.
 - [local-storage.service.ts](src/app/core/services/shared/local-storage.service.ts) — thin wrapper over
   `@ionic/storage-angular`; all keys in `STORAGE_KEY`.
+- [stage-layout.service.ts](src/app/core/services/shared/stage-layout.service.ts) — writes the page's layout plan (the picture's box, the rails,
+  the docked chat) where the stylesheets and the components read it; see *The stage*.
 - [layout-helper.service.ts](src/app/core/services/shared/layout-helper.service.ts) — two APIs
   for the same facts: synchronous `window.innerWidth/Height` getters (for templates that are
   re-evaluated anyway), and `matchMedia`-backed observables (`isMobile$`, `isLandscape$`, `matches$(query)`) for
@@ -1659,10 +1769,10 @@ below the Ionic imports.
 Retro treatment applies to the multiplayer chat panel, the room-setup dialog, the
 multiplayer panel, the roster rows, the chat toggle, the spectator's sound toggle (which shares
 the chat toggle's rules in `global.scss`), the Cheat 'O Matic modal, the diagnostics window, the
-**control deck** (keycaps, taskbar, panels and the launcher's sheet: it is the Windows 3.1 machine's keyboard, so it
+**control deck** (keycaps, taskbar, panels, a landscape phone's rails and the launcher's sheet: it is the Windows 3.1 machine's keyboard, so it
 is a companion window, decision D3), the live type bar (the deck's keys and face under a title bar, same decision) and every `AlertController` dialog. It does
 **not** apply to the page toolbars (`ion-toolbar color="tertiary"`), the landing cards, the
-toolbar's "Teclas" button and the landscape gutter's round menu button (they are app chrome, and the first only
+toolbar's "Teclas" button and the round menu button in a landscape phone's rail (they are app chrome, and the first only
 opens the Win9x sheet) or the options popover — the navy `#092469` in
 [variables.scss](src/theme/variables.scss) is close enough to `#000080` that shell and retro
 windows read as deliberately related. A retro treatment without an explicit boundary reads
@@ -1701,7 +1811,7 @@ funnels — `GamePage.showErrorAlert` and `MultiplayerUiService.showError` — a
 so route new error dialogs through those rather than hand-rolling another `create()`.
 `alert-danger` is a *button*-level class and is unaffected. Before opening a PR, check that
 `grep -rc 'alertController.create' src/` and `grep -rc "cssClass: 'win9x-alert" src/app`
-still agree (37 today) — a manual check, because `npm run lint` covers only `.ts`/`.html`
+still agree (38 today) — a manual check, because `npm run lint` covers only `.ts`/`.html`
 and there is no stylelint setup to hang it on.
 
 The save status chip (`.save-chip`, see *Save safety nets*) is on the shell side too, for the same
@@ -1709,8 +1819,8 @@ reason, and shares the pill's touch-floor trick (a transparent border, not an `:
 (`.sound-chip`, see *Mobile platform polish*), and so are the one-time install and rotate toasts (`ion-toast.platform-toast`: Ionic's own toast, with
 white buttons because the theme's green on its dark grey is 2.5:1). The room status pill (`.mp-status-pill` in [global.scss](src/global.scss)) is on the shell
 side of that line and is deliberately flat, not Win9x: it renders inside the page toolbars,
-and half a retro toolbar reads as a bug. Its landscape instance rides the game surface but
-keeps the same flat look, because one component changing identity by position is worse than
+and half a retro toolbar reads as a bug. Its landscape phone instance stands in the rail beside the picture but
+keeps the same flat look (a dark capsule on the rail's Win9x grey), because one component changing identity by position is worse than
 one that does not. Do not "fix" it by moving it into `_win9x.scss`.
 
 **Secondary text is `--win9x-ink-muted` (#4a4a4a), never `--win9x-shadow` (#808080).** The

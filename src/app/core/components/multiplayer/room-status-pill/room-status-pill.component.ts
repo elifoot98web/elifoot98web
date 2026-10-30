@@ -11,8 +11,8 @@ export type RoomStatusState = 'live' | 'reconnecting';
  *
  * Deliberately NOT Win9x, unlike the chat and the modals: this renders inside the page
  * toolbar, which the retro boundary rule in CLAUDE.md keeps as app shell. The landscape
- * instance rides the game surface but keeps the same flat look, because one component
- * changing identity by position would read as a bug.
+ * phone's instance stands in a rail beside the picture but keeps the same flat look, because
+ * one component changing identity by position would read as a bug.
  */
 @Component({
   selector: 'app-room-status-pill',
@@ -32,7 +32,7 @@ export class RoomStatusPillComponent {
   /** Shown to spectators, who care whose game this is. Omitted on the host. */
   @Input() hostName = '';
 
-  /** Drops the count and the host name, for the narrow landscape gutter. */
+  /** Drops the count and the host name, for a landscape phone's rail. */
   @Input() compact = false;
 
   /** Live roster size, self included — the same source the chat's titlebar counts from. */

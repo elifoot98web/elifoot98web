@@ -23,7 +23,7 @@ BEFORE the page's own, to fake `navigator` members), `check()` and `shot()`.
 | `room.mjs` | A hosted room holds the screen with the switch off, lets go when it closes; leaving to the menu lets go. |
 | `spectator.mjs` | The spectator page holds the screen in a room and lets go when it ends (including the `HOST_LEFT` path) and when the page is left. |
 | `audio.mjs` | `AudioHealthService` and the "Ativar som" chip, with the context's state forced: resume when the page returns, the chip after the grace period, a tap on the chip or on the game wakes it, a hidden page shows nothing. |
-| `chip-layout.mjs` | The chip in the toolbar at 360 and 402 px with a live room (the pill is not clipped), and in the gutter of a landscape phone. |
+| `chip-layout.mjs` | The chip in the toolbar at 360 and 402 px with a live room (the pill is not clipped), and in the left rail of a landscape phone. |
 | `volume.mjs` | The slider and "Silenciar o jogo" through the real menu: js-dos's gain, storage, reload, the wipe, and that `capture()` taps the script processor before the gain. |
 | `fullscreen.mjs` | "Tela cheia" through a real tap: the document element goes fullscreen, the orientation locks and unlocks, the picture and the room's cursor overlay follow a viewport change. |
 | `install.mjs` | The install entry and the one-time banner with a fake `beforeinstallprompt`, and that a tab opened from another app (an `android-app://` referrer) is still offered the install. |

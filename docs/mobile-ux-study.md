@@ -647,8 +647,8 @@ build, and a CLAUDE.md update.
    three answers (Automático / Sempre mostrar / Nunca mostrar) so the player can hide the deck on a tablet and force it on a laptop.
    **Tablets follow the shape**: portrait gets the band, landscape the launcher (a landscape tablet has no band; compared on
    screenshots at 820x1180, 768x1024, 1180x820, 1024x768 and 1280x800). **Landscape phones get a launcher, not rails** (that is
-   P12): a column in the left gutter holds the room pill, a round options button and "Teclas"; the sheet covers the left part of the
-   picture while it is open. **D12 (chat replaces the right rail in landscape) is not done**: landscape keeps today's right-edge chat
+   P12, item 13 below, which built them and deleted this column): a column in the left gutter holds the room pill, a round options button and "Teclas"; the sheet covers the left part of the
+   picture while it is open. **D12 (chat replaces the right rail in landscape) is not done** (it is, in item 13): landscape keeps today's right-edge chat
    handle and docked panel, and the short-landscape placement of that handle (top of the right edge) was kept because the spectator
    page shares it. **`isMobile` stays, for modal content only**; the page's layout reads the shape and `(pointer: coarse)`. The
    O Matic lives in the options menu and in "Mais" (two places), "Input de Texto" in the menu and the Texto tab (two), and
@@ -875,9 +875,67 @@ build, and a CLAUDE.md update.
     the people arriving by a link); `NudgeHelper.next`/`ORDER`/`NudgeKind` were removed (nothing ran them: the order is the call order in `GamePage.maybeNudge`, and a
     spec on a list nothing read guarded nothing); the host's "Volume do jogo" subtitle stops saying that spectators keep hearing the game while "Enviar o som do jogo aos
     espectadores" is off. None of the three changes touched what the browser pass measured.
-13. Then P11 (zoom/pan camera), P12 (stage layout, landscape
-    rails, spectator parity — re-run the multiplayer harness), P13 (menu IA, first-run coach),
-    P15 (desktop mouse, gamepad).
+13. **P12 — an explicit stage box, landscape rails and spectator parity** (decision D12; LAY-1, LAY-2, LAY-3, LAY-9, LAY-10, LAY-11, LAY-12, BASE-5). **As built:** `StageHelper` (the pure plan:
+    `fitStage(box, ratio, reserved)`, the rails' widths and columns, the chat's width, the picture's offset), `StageLayoutService` (measures the page, writes `--stage-w`, `--stage-h`, `--stage-mx`,
+    `--stage-my`, `--stage-left`, `--stage-right`, `--chat-panel-width` and `--chat-dock-w` on `<html>`, logs every change of the plan into a new `layout` diagnostics category), a `rails`
+    presentation of the dock for a landscape phone (two columns of keys where they fit without costing the picture, one where they do not; the chat REPLACES the right rail and the left folds to 56 px of
+    icons), the spectator page without its toolbar on a landscape phone and with a left rail instead, the picture's container EXACTLY the picture in landscape on both pages, "Tamanho da imagem"
+    (Ajustar / Ampliar, `STORAGE_KEY.STAGE_VIEW`), `DeckKey.shortCaption`, `scripts/touch-harness/stage.mjs` and `room.mjs`, 63 new specs (the suite is 1,455 from 1,391; the stage's spec is the first to run a whole device matrix) and the CLAUDE.md section *The stage*, which is the contract. Measured in headless Chrome 143 (chrome-headless-shell, touch emulation, CDP safe-area insets) against the dev server and the real
+    game, a second browser for the room:
+    - **The contract holds.** `stage.mjs layout` at 19 windows (the 13 of P10 and six more: 915x412, 1366x768, 852x393, 812x375, 640x360 and 844x390 with a notch), 224 checks (248 after the review, below), 0 failures: in landscape
+      `#game-container`, `.game-stream-container` and the canvas are the same rectangle to the pixel, the size and place the plan wrote, exactly 4:3 in whole pixels; that rectangle is IDENTICAL with the
+      sheet open, with the OS keyboard simulated (`visualViewport` shrunk, `--kb-inset` written), with the deck on and off, with a room starting (the pill and the Chat key appearing), and after the chat
+      opens and closes; portrait is the width and its 75vw height as before (360x270, 393x294.75, 430x322.5, 820x615).
+    - **Rails.** Two columns at 844x390 (with and without a 47 px notch), 915x412, 932x430 (59 px) and 812x375; one at 852x393 (59 px leaves 510 px for a 524 px picture), 667x375 and 640x360; at most
+      seven rows of 44 px keys (344 px). At 10 windows (`stage.mjs rails`, 55 checks): every control at least 44x44, none overlapping, none over the picture, all inside the window or reachable by scrolling (the three
+      short windows, 667x320, 667x340 and 800x290, scroll their rails); one real tap on each safe key is one key down and one up (F1-F12 gave 290-301, A 65, M 77, the arrows, Tab); a held arrow's first
+      repeat came at 381 ms and the next at 55-60 ms, nothing after the lift; at 667x300 a held arrow survived 40 px of vertical drift (18 presses, no `pointercancel`); the sheet opens beside the left rail.
+      `deck.mjs layout` (P10's harness) still gives 140 of 140.
+    - **D12, the chat in landscape, measured.** The left rail folds to 56 px and the chat takes 200 to 240 px plus the notch's inset. The picture loses: 0% at 844x390 without a notch, 915x412 and 1366x768; 2.8%
+      at 932x430 (the iPhone 15 Pro Max); 5.4% at 844x390 with a 47 px notch; 6.4% at 812x375; 9.2% at 852x393; 18.4% at 667x375; 20% at 640x360; on a tablet 15.4% at 1180x820 and 25.7% at 1024x768 (as before:
+      the container shrank by the same width). **The wireframe's "about 3%" holds only without a notch or with the roomiest one:** it ignored the notch on the chat's side, which costs as much as the one on the
+      rail's. The first cut folded the rail to the 68 px of a one-column rail and read 7.7% at 844x390 and 4.9% at 932x430; the 56 px icon rail (no room code on it: the chat's title bar has it) won 2.3 and 2.1 points.
+      At 667x375 the picture is 408x306 where the old chat left 400x300.
+    - **Ampliar gains nothing on any phone measured.** Rails of one column cannot enlarge a 4:3 picture that is already as tall as the screen (the toolbar is gone and the rails live in the gutters), and
+      `stage.mjs layout` reads "Ampliar same" at all eight landscape phones. The modelled +8% to +52% needs a stage taller than the screen, cropped and panned: the camera's phase (P11), which the
+      contract keeps out of the layout ("zoom is by transform only"). Not cropping was the safe choice: a crop would hide part of the game behind a pan that does not exist yet. The setting, the plan's
+      support and the menu entry (offered only on a landscape phone) stay for the camera to build on; whether the entry earns its place before the camera is the owner's call.
+    - **The spectator.** Its toolbar is dropped on a landscape phone that is watching (the cards of joining, waiting and failing keep it, and the way back with it); a left rail holds the room's pill,
+      "Sala", Chat, Som and, pinned to the bottom, "Sair". `stage.mjs guest` in a real two-browser room at 9 windows: the guest's picture is the host's size to 1 px and in the same place, `#stream-target`'s border
+      box is the stage, the cursor overlay is exactly on the picture, the toolbar is dropped exactly on landscape phones (before: a picture 14-18% smaller than the host's). `stage.mjs room` at 7 windows: a remote cursor lands where
+      the guest pointed (within 0.5 px, normalised 0.300,0.600 as sent), the guest opens its chat from the rail's key or the floating tab, a message reaches the host's Chat control as unread and its transcript, each picture
+      takes the box the plan says with its chat docked and gets exactly its old box back on closing; `stage.mjs leave`: "Sala" opens the room window, "Sair" asks first, a confirmed leave reloads the page to its start and the
+      host's roster is the host again.
+    - **A rotation round trip** with the chat open (landscape, portrait, landscape) returned the exact same rectangle, and twenty address-bar flaps (390 to 342 px tall) settled on the exact stage with no console line.
+    Where it differs from the plan above, on evidence or by decision: **the left rail exists with the deck off** (the missing toolbar's menu, room and chat button have to live somewhere that is not over the picture),
+    so a landscape phone's menu button and room pill moved from `.gutter-controls` (deleted, with the floating pill variant and the gutter launcher) into the rail; **the picture is placed on the middle of the screen, in integer
+    pixels** (`--stage-mx`), not in the middle of what the rails leave, so that turning the deck off does not slide it; **the chat tab and the spectator's sound button are children of the row, not of the picture's container**
+    (the container is the picture, so a child of it is over the picture); **the chat's give-back waits 220 ms in the service**, where the old CSS delayed the width; **no cropped stage, no pan** (above); the spectator's
+    portrait page is untouched (its chat and sound buttons float as before, no taskbar). **Found on the way, fixed:** the page's `.full` class (`width: 100%`, in each page's stylesheet) outweighed the stage's size and
+    the container painted the whole row; the closed chat on a notch phone was a 47 px grey strip (a padding is a floor under a border-box width); a `background` shorthand on the pill in the rail reset its
+    `background-clip` and made a 24 px capsule 44 px tall; the mutation check of the new specs found two that passed for the wrong reason: a strict `>` where two columns fit EXACTLY (812x375 was not in the table), and a 336 px keyboard that left less than the minimum stage, which the service refuses to write. **Found on the way,
+    not fixed:** in dev mode, a host with unread messages that opens the chat logs NG0100 (the panel's own input setter resets the count in the middle of a change-detection pass, after the parent-level view model that
+    feeds the chat tab read it; it predates this phase and is not in a production build); the same room code reused by a fresh host within minutes failed to join five times and worked under a new one (the relays seem to
+    keep the last host's offers; `room.mjs` says to use a new code per run); the harness's boot still lands at the DOS prompt now and then (46 s, then attempt 2 worked). **Not verified:** any real device, a real notch
+    or home indicator, `env()` and the probe's border-box observation in Safari, thumb reach and mis-taps beside the picture's edge, an installed app's status bar, Android's navigation bar, a real address bar, and
+    TalkBack and VoiceOver on the rails (their order in the DOM is not their order on screen). The checklist for the device pass is in the PR.
+    **Corrections from the review, in the same commit** (four lenses; nothing was blocking):
+    - **The OS-keyboard clause was true only for browsers that keep the layout viewport.** The plan took its SHAPE from the settled `viewport$` but its BOX from `host.clientHeight`; a browser that resizes the layout
+      viewport for the keyboard (the case `LayoutShapeHelper.settle` documents) shrank the box, and a halved 844x390 became a 260x195 stage while the settled shape stayed landscape-compact. The 224 checks and the spec could not
+      see it: they wrote `--kb-inset` and patched `visualViewport.height`, which nothing in the service reads. `StageLayoutService` now adds back the height the window lost against the settled viewport (same width only, never
+      negative; `covered` in the `layout` log line). Reproduced first (`[162,0,520,390] -> [292,0,260,195]` at 844x390, `[82,57,1016,762] -> [354,56,472,354]` at 1180x820 with the fix removed), then `stage.mjs layout`
+      gained a check that really halves the layout viewport with a field focused (12 landscape windows, 24 more checks: 248 in all), and two service specs play such a browser (mutation-checked: both fail without the fix). With
+      the chat open the picture also held on the host (844x390, 915x412, 667x375) and the spectator (844x390 with a notch, 915x412). **Left, documented in CLAUDE.md:** in portrait such a window is also
+      `(orientation: landscape)` to the stylesheets, so the chat is 0 px wide while the keyboard is up.
+    - **The one-column rail's pill was mis-drawn.** 56 px cannot hold `ELI-RVWA` on a line; the code wraps at its hyphen, and the toolbar pill's transparent borders and padding-box clip left a 24 px capsule that the dot
+      and the second line overflowed (white on grey, 1.8:1). Measured at 667x375, 640x360, 852x393 with 59 px insets and on EVERY spectator rail (always one column). Fixed in `_deck.scss` (capsule is the whole row, dot and
+      lock in the corners); `stage.mjs rails` gained the containment check (20 more, 75 in all) and the spectator's rail was checked at 844x390, 667x375 and 932x430.
+    - **"Ampliar" promised more than it gives.** Both the invariants and the visual lens said so; the dialog now says the picture is the same size in both and that only the columns of keys change. The entry stays, the
+      owner decides (see above).
+    - **No fallback below one column** (a short, nearly square window such as half of a split screen pays for the one-column rails; 457x412 gives 320x240): recorded as a known limit in CLAUDE.md and pinned by a spec
+      row, not built; the brief's "collapse to the Teclas launcher below that" would also need a second shape for the toolbar and the spectator.
+    - The harness still selected the deleted `.gutter-menu-btn` in `setting-ui.mjs`, `idle-pause.mjs` and `platform-harness/chip-layout.mjs` (the first two would have thrown on a landscape run); now `.rail-menu-btn`.
+14. Then P11 (zoom/pan camera, which is also where a cropped Ampliar would come from), P13 (menu IA, first-run coach), P15 (desktop mouse, gamepad).
 
 Also add early: a **debug-only diagnostics flag** (pointer/touch/key/IME events plus frame timing,
 exportable from a phone) to feed the device pass, and decide whether specs are real. **T0 made

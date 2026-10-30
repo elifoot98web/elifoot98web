@@ -13,6 +13,8 @@ export interface DeckKey {
   label: string;
   /** Under the label: the formation a function key picks, or what the game does with the key. */
   caption?: string;
+  /** The caption for a keycap too narrow for it (a landscape phone's rail is 48 px wide). Optional; the caption is the fallback. */
+  shortCaption?: string;
   /** The accessible name. pt-BR, and says what the key does where the label alone would not. */
   aria: string;
   /** Pressed together in this order and released in reverse; modifiers first. */
@@ -68,7 +70,7 @@ export class DeckKeyHelper {
   /** Seleccionar > Automático and Seleccionar > Melhores: the other two tactics keys. */
   static tacticShortcuts(): DeckKey[] {
     return [
-      key('a', 'A', 'A, Automático', [K.KBD_a], { caption: 'Automático' }),
+      key('a', 'A', 'A, Automático', [K.KBD_a], { caption: 'Automático', shortCaption: 'Auto' }),
       key('m', 'M', 'M, Melhores', [K.KBD_m], { caption: 'Melhores' }),
     ];
   }

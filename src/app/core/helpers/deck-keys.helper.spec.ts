@@ -69,6 +69,13 @@ describe('DeckKeyHelper', () => {
       expect(best.codes).toEqual([NUMBERS.m]);
       expect(best.caption).toBe('Melhores');
     });
+
+    it('have a caption for a 48 px rail key where the full one would not fit: only Automático needs one', () => {
+      expect(automatic.shortCaption).toBe('Auto');
+      expect(best.shortCaption).toBeUndefined();
+      // A short caption is shorter, or it is not one.
+      expect((automatic.shortCaption ?? '').length).toBeLessThan((automatic.caption ?? '').length);
+    });
   });
 
   describe('the keypad keys', () => {

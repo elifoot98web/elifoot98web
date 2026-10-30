@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { LoadingController } from '@ionic/angular/lazy';
 import {
@@ -24,7 +24,9 @@ import { CursorRendererHelper } from 'src/app/core/helpers/cursor-renderer.helpe
 import { OverlaySyncHelper } from 'src/app/core/helpers/overlay-sync.helper';
 import { ChatPanelHelper } from 'src/app/core/helpers/chat-panel.helper';
 import { MULTIPLAYER, STORAGE_KEY } from 'src/app/core/models/constants';
-import { LocalStorageService, WakeLockService } from '../../core/services/shared';
+import { LayoutHelperService, LocalStorageService, StageLayoutService, WakeLockService } from '../../core/services/shared';
+import { LayoutShape, LayoutShapeHelper } from 'src/app/core/helpers/layout-shape.helper';
+import { StagePlan } from 'src/app/core/helpers/stage.helper';
 
 @Component({
   selector: 'app-join-game',
@@ -32,7 +34,10 @@ import { LocalStorageService, WakeLockService } from '../../core/services/shared
   styleUrls: ['./join-game.page.scss'],
   standalone: false,
 })
-export class JoinGamePage implements OnInit, OnDestroy {
+export class JoinGamePage implements OnInit, AfterViewInit, OnDestroy {
+  /** The page's row: what StageLayoutService measures. Under an `ion-hide` until a room exists, so it measures 0x0 till then. */
+  @ViewChild('stageHost', { static: true }) stageHost!: ElementRef<HTMLElement>;
+
   private playerName = '';
   private roomId = '';
   private password = '';
@@ -44,6 +49,12 @@ export class JoinGamePage implements OnInit, OnDestroy {
   gameState: GameState = GameState.NOT_IN_ROOM;
 
   isChatOpen = false;
+
+  /** The shape of the window (LayoutShapeHelper), settled: the OS keyboard does not change it. */
+  shape: LayoutShape = LayoutShapeHelper.of(window.innerWidth, window.innerHeight);
+
+  /** The page's layout as numbers (StageHelper.plan): here only whether the rail is folded to icons for the chat. */
+  stagePlan: StagePlan | null = null;
 
   /** True only inside the host grace period, while the last frame is still on screen. */
   isReconnecting = false;
@@ -76,6 +87,16 @@ export class JoinGamePage implements OnInit, OnDestroy {
     return this.gameState === GameState.IN_ROOM || this.gameState === GameState.HOST_RECONNECTING;
   }
 
+  /**
+   * A landscape phone that is watching: the toolbar is dropped, as the host's is, and what it held (leave, the room, the
+   * people, the chat and sound buttons) lives in a rail beside the picture. With the toolbar's 56 px gone the guest's
+   * picture is the host's size at the same window (it was 14 to 18% smaller). Not while there is no picture: the cards
+   * of joining, waiting and failing keep the toolbar and its way back.
+   */
+  get railed(): boolean {
+    return this.shape === 'landscape-compact' && this.isSpectating;
+  }
+
   /** Drives the badge on the chat toggle, which sits outside the chat component. */
   unreadCount$: Observable<number>;
 
@@ -85,6 +106,8 @@ export class JoinGamePage implements OnInit, OnDestroy {
    */
   hostName$: Observable<string>;
 
+  /** The page is gone: a start that was queued for after its first pass must not begin laying out a dead page. */
+  private destroyed = false;
   /** Lives as long as the page. */
   private pageSubscriptions = new Subscription();
   /** Recreated per room, so a rejoin does not stack duplicate cursor subscriptions. */
@@ -102,6 +125,8 @@ export class JoinGamePage implements OnInit, OnDestroy {
     private storageService: LocalStorageService,
     private relayHealthService: MultiplayerRelayHealthService,
     private wakeLock: WakeLockService,
+    private layoutHelper: LayoutHelperService,
+    private stageLayout: StageLayoutService,
     playerInfoService: MultiplayerPlayerInfoService,
     chatService: MultiplayerChatService
   ) {
@@ -130,6 +155,8 @@ export class JoinGamePage implements OnInit, OnDestroy {
     // which this page does not read). Refreshed on every state, because the room exists a moment after
     // it is announced and is gone before the next announcement.
     this.wakeLock.start({ setting: false, inRoom: () => this.multiplayerService.isInRoom });
+    this.pageSubscriptions.add(this.layoutHelper.shape$.subscribe(shape => { this.shape = shape; }));
+    this.pageSubscriptions.add(this.stageLayout.plan$.subscribe(plan => { this.stagePlan = plan; }));
     this.pageSubscriptions.add(
       this.multiplayerService.gameStateSubject.subscribe(state => this.onGameStateChange(state))
     );
@@ -154,7 +181,19 @@ export class JoinGamePage implements OnInit, OnDestroy {
     }
   }
 
+  ngAfterViewInit(): void {
+    // The spectator has no deck, so no key rails: a landscape phone's left rail holds the room's controls only. Started after this
+    // change-detection pass, not in it: the plan changes what the view binds, and that is NG0100 in dev mode.
+    queueMicrotask(() => {
+      if (this.destroyed) return;
+      this.stageLayout.start(this.stageHost.nativeElement);
+      this.stageLayout.setChat(this.isChatOpen);
+    });
+  }
+
   ngOnDestroy() {
+    this.destroyed = true;
+    this.stageLayout.stop();
     this.wakeLock.stop();
     this.detachStream();
     this.roomSubscriptions.unsubscribe();
@@ -347,10 +386,16 @@ export class JoinGamePage implements OnInit, OnDestroy {
     this.multiplayerCursorService.sendLocalClick(clickMessage);
   }
 
+  /** The one place `isChatOpen` changes, because the stage has to hear of it (see GamePage.setChatOpen). */
+  private setChatOpen(open: boolean) {
+    this.isChatOpen = open;
+    this.stageLayout.setChat(open);
+  }
+
   toggleChat(force?: boolean) {
     const shouldOpen = typeof force === 'boolean' ? force : !this.isChatOpen;
     if (shouldOpen === this.isChatOpen) return;
-    this.isChatOpen = shouldOpen;
+    this.setChatOpen(shouldOpen);
 
     if (shouldOpen) {
       ChatPanelHelper.focusPanel();
@@ -451,7 +496,7 @@ export class JoinGamePage implements OnInit, OnDestroy {
     this.detachStream();
     this.roomSubscriptions.unsubscribe();
     this.roomSubscriptions = new Subscription();
-    this.isChatOpen = false;
+    this.setChatOpen(false);
     this.multiplayerService.leaveRoom(nextState);
   }
 

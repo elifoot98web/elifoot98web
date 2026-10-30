@@ -17,6 +17,10 @@
  *    cannot shrink, so whatever the deck does (a panel opening, the chat taking the band) cannot
  *    change the picture's box. js-dos re-letterboxes its canvas whenever
  *    that box changes, and every cursor overlay is measured against it.
+ *  - In landscape the picture's container has an EXPLICIT size, `--stage-w` x `--stage-h` (StageHelper through
+ *    StageLayoutService), and the rails are flex siblings whose widths are `--stage-left` and `--stage-right`, written by
+ *    the same plan: so a rail is as wide as the plan says and the picture is as large as the plan says, and neither one
+ *    reads the other's contents. A rail's own CSS may not size the picture, and may not be wider than its custom property.
  *  - The launcher's sheet is `position: absolute` over the page and takes no space at all.
  *  - Nothing here depends on the OS keyboard. The chat is the only panel with a text field, and it
  *    lifts itself by `--kb-inset` (global.scss); the deck's own taskbar stays under the keyboard. The
@@ -62,8 +66,10 @@ app-dock {
   overscroll-behavior: contain;
 }
 
-// The launcher draws nothing in the flow: its sheet is absolutely positioned against the page.
-app-dock.deck-launcher {
+// The launcher draws nothing in the flow: its sheet is absolutely positioned against the page. The rails are the
+// host's children in the page's flex row (the host disappears into it), the sheet is still absolute.
+app-dock.deck-launcher,
+app-dock.deck-rails {
   display: contents;
 }
 
@@ -430,6 +436,19 @@ app-dock.deck-band {
   touch-action: none;
 }
 
+// Beside the left rail and not over it: the rail is the page's, the sheet opens from its edge (the rail's width is
+// `--stage-left`, which already holds the notch's inset, so the sheet needs none of its own).
+.deck-sheet--rails {
+  left: var(--stage-left, 0px);
+  width: 360px;
+}
+
+.deck-sheet--rails .deck-sheet-title,
+.deck-sheet--rails .deck-sheet-tabs,
+.deck-sheet--rails .deck-panel {
+  padding-left: 8px;
+}
+
 .deck-sheet-title {
   display: flex;
   align-items: center;
@@ -480,33 +499,137 @@ app-dock.deck-band {
   margin-top: 0;
 }
 
-// ---- the landscape-compact gutter: the controls that replaced the FABs and the toolbar ----
+// ---- the rails: a landscape phone's gutters ----
 //
-// Landscape phones drop the toolbar, and the left gutter that the height-fitted picture leaves
-// (70px on the narrowest phone, 162 at 844x390) is where the menu, the room code and the launcher
-// live. It is positioned against the content area, beside the picture and never over it; the
-// room pill's own rules (global.scss) are the only ones that may overhang it.
+// Landscape phones drop the toolbar and the height-fitted picture leaves a gutter on either side (84 px at the narrowest
+// phone, 162 at 844x390, 183 at 915x412). The rails live in them: SIBLINGS of the picture's container in the page's flex
+// row, never over it. Their widths are not chosen here but by StageHelper (`--stage-left`, `--stage-right`: the notch's
+// inset plus 112 px for two columns of keys or 68 for one), because the picture is the one thing that must never pay for
+// them, and a width in CSS that the plan did not know about would be exactly such a cost.
+//
+// The face paints to the screen's edge and the inner padding keeps the keys clear of the notch (`max(env(), 0px)`: Android
+// reports a negative inset for some cutouts, and a rail must not grow a negative padding).
 
-.gutter-controls {
-  position: absolute;
-  top: calc(8px + max(env(safe-area-inset-top, 0px), 0px));
-  left: calc(8px + max(env(safe-area-inset-left, 0px), 0px));
-  z-index: 20;
+.stage-rail {
+  flex: 0 0 auto;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  max-width: calc(100% - 16px);
+  min-width: 0;
+  min-height: 0;
+  // A window shorter than seven rows of keys scrolls, like the sheet: keys that press on release (and the arrows, which
+  // press on landing but opt out of panning) work inside it for the reasons the sheet's panel documents.
+  overflow-x: hidden;
+  overflow-y: auto;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  --rail-cols: 1;
+  --rail-pad: 6px;
+  --rail-gap: 4px;
 }
 
-// The options menu, as a round shell button: the toolbar's own look (navy, flat) for the one
-// control that is about the app and not the machine.
-.gutter-menu-btn {
+.stage-rail[data-cols='2'] {
+  --rail-cols: 2;
+}
+
+.stage-rail--left {
+  order: -1;
+  width: var(--stage-left, 0px);
+  padding:
+    calc(var(--rail-pad) + max(env(safe-area-inset-top, 0px), 0px))
+    var(--rail-pad)
+    calc(var(--rail-pad) + max(env(safe-area-inset-bottom, 0px), 0px))
+    calc(var(--rail-pad) + max(env(safe-area-inset-left, 0px), 0px));
+  // The seam against the picture's green, as a shadow: a border would take the keys' room, which the plan counted.
+  box-shadow: inset -2px 0 var(--win9x-dark, #0a0a0a);
+}
+
+.stage-rail--right {
+  order: 1;
+  width: var(--stage-right, 0px);
+  padding:
+    calc(var(--rail-pad) + max(env(safe-area-inset-top, 0px), 0px))
+    calc(var(--rail-pad) + max(env(safe-area-inset-right, 0px), 0px))
+    calc(var(--rail-pad) + max(env(safe-area-inset-bottom, 0px), 0px))
+    var(--rail-pad);
+  box-shadow: inset 2px 0 var(--win9x-dark, #0a0a0a);
+}
+
+.rail-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--rail-cols), minmax(0, 1fr));
+  grid-auto-rows: var(--deck-key-dense-h);
+  gap: var(--rail-gap);
+  flex: 0 0 auto;
+}
+
+// Every child of a rail's scroll flow keeps its natural height (the sheet's lesson: a shrinking flex child overlaps).
+.stage-rail > * {
+  flex-shrink: 0;
+}
+
+// The block that is pinned to the bottom, where the thumbs rest, and flush with the top block when there is no room to spare.
+.rail-grid--bottom {
+  margin-top: auto;
+  padding-top: var(--rail-gap);
+}
+
+// Táticas, or the navigation keys: from the top, in rows of the rail's columns.
+.rail-grid--fill {
+  align-content: start;
+}
+
+.rail-key {
+  // The keycap behaviour is DeckKeyDirective's; this is the face. 11 px labels, as the taskbar's: a rail key is as wide as
+  // a taskbar tab and the words are the same. Relative, for the unread badge.
+  position: relative;
+  gap: 0;
+  padding: 0 1px;
+  min-height: 0;
+  font-size: 11px;
+}
+
+.rail-key .deck-key-label {
+  font-size: 12px;
+}
+
+.rail-key ion-icon {
+  font-size: 20px;
+}
+
+// Enter, Esc and Tab are words; Enter's icon would take the room of its own label.
+.rail-key--word ion-icon {
+  display: none;
+}
+
+.rail-key--word .deck-key-label {
+  font-size: 13px;
+}
+
+.rail-key--arrow ion-icon {
+  font-size: 26px;
+}
+
+// The Táticas keys keep the band's look (label over the formation), in the rail's smaller key.
+.stage-rail .deck-key--formation .deck-key-label,
+.stage-rail .deck-key--shortcut .deck-key-label {
+  font-size: 14px;
+}
+
+.stage-rail .deck-key-caption {
+  font-size: 10px;
+}
+
+// The menu, as a round shell button: the toolbar's own look (navy, flat) for the one control that is about the app and not
+// the machine. It stands on the rail's grey the way the toolbar's buttons stand on the navy.
+.rail-menu-btn {
+  justify-self: center;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: var(--win9x-hit-target, 44px);
+  height: var(--win9x-hit-target, 44px);
   margin: 0;
   padding: 0;
   border: 0;
@@ -518,19 +641,25 @@ app-dock.deck-band {
   -webkit-tap-highlight-color: transparent;
 }
 
-.gutter-menu-btn:focus-visible {
-  outline: 2px solid #fff;
+.rail-menu-btn:focus-visible {
+  outline: 2px solid var(--win9x-ink, #000);
   outline-offset: 2px;
 }
 
-// "Ativar som" where a landscape phone has no toolbar to hold it (SoundChipComponent, variant gutter):
-// the menu button's round navy shell with the chip's amber speaker, never words. It comes and goes
-// with the audio, so the column under the menu button may gain a 44px row for a while; the column is
-// `position: absolute` and takes no room from the picture. Two classes, because the chip's own rules
-// live in global.scss, after this file, and its coarse-pointer border would otherwise win.
-.sound-chip.sound-chip--gutter {
-  width: 44px;
-  height: 44px;
+// The components the page projects into the rail take no box of their own: their buttons are the grid's items.
+.stage-rail app-sound-chip,
+.stage-rail app-room-status-pill {
+  display: contents;
+}
+
+// "Ativar som" where a landscape phone has no toolbar to hold it (SoundChipComponent, variant rail): the menu button's
+// round navy shell with the chip's amber speaker, never words. It comes and goes with the audio, and the rail's top block
+// simply gains a row for a while. Two classes, because the chip's own rules live in global.scss, after this file, and its
+// coarse-pointer border would otherwise win.
+.sound-chip.sound-chip--rail {
+  justify-self: center;
+  width: var(--win9x-hit-target, 44px);
+  height: var(--win9x-hit-target, 44px);
   margin: 0;
   padding: 0;
   justify-content: center;
@@ -541,16 +670,88 @@ app-dock.deck-band {
   font-size: 22px;
 }
 
-.sound-chip.sound-chip--gutter .sound-chip-text {
+.sound-chip.sound-chip--rail .sound-chip-text {
   display: none;
 }
 
-.sound-chip.sound-chip--gutter ion-icon {
+.sound-chip.sound-chip--rail ion-icon {
   font-size: 22px;
 }
 
-.gutter-launcher {
-  width: 56px;
-  height: var(--deck-key-h);
-  min-height: var(--win9x-hit-target, 44px);
+// The room's pill in the rail: the flat shell capsule (global.scss) across the rail's width. Two columns have the room for the
+// code on a line; one column stacks it (below).
+.stage-rail .mp-status-pill {
+  grid-column: 1 / -1;
+  justify-content: center;
+  width: 100%;
+  // The colour alone: the shorthand would reset the `background-clip: padding-box` that keeps the capsule 24 px inside its 44 px hit area.
+  background-color: rgba(0, 0, 0, 0.55);
+}
+
+// One column (56 px) cannot hold "ELI-RVWA" on a line, so the code breaks at its hyphen into two, and the capsule is the whole
+// 44 px row: the toolbar pill's transparent 10 px borders and padding-box clip (global.scss) paint a 24 px capsule, which two
+// lines of code overflowed at both ends, white text on the rail's grey (found by the P12 review, measured at 667x375 and on every
+// spectator rail, which is always one column). The dot and the lock sit in the corners instead of taking lines of their own.
+.stage-rail[data-cols='1'] .mp-status-pill {
+  position: relative;
+  flex-direction: column;
+  gap: 0;
+  padding: 2px;
+  border-top: 0;
+  border-bottom: 0;
+  border-radius: 8px;
+  background-clip: border-box;
+  font-size: 11px;
+  line-height: 1.15;
+}
+
+.stage-rail[data-cols='1'] .mp-status-pill:focus-visible {
+  outline-offset: 2px;
+}
+
+.stage-rail[data-cols='1'] .mp-status-code {
+  width: min-content;
+  text-align: center;
+  letter-spacing: 0;
+}
+
+.stage-rail[data-cols='1'] .mp-status-dot {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+}
+
+.stage-rail[data-cols='1'] .mp-status-lock {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  font-size: 10px;
+}
+
+// The spectator's sound key when the browser refused to start the sound: it asks for the tap with the unread flash, for
+// the same finite six turns (the floating toggle's own rule, global.scss, does the same for the other layouts).
+.rail-key--blocked {
+  animation: deck-tab-flash 1s steps(1, end) 6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail-key--blocked {
+    animation: none;
+  }
+}
+
+// Folded to icons while the chat is docked: 56 px of rail, so the keys are 44 wide. The room's code is not on it, because the
+// chat's own title bar says it, and the labels shrink to the width that fits.
+.stage-rail--folded app-room-status-pill {
+  display: none;
+}
+
+.stage-rail--folded .rail-key .deck-key-label {
+  font-size: 11px;
+}
+
+// The unread flash is the taskbar tab's (.deck-tab--unread, above); the badge moves into the rail key's corner.
+.stage-rail .deck-tab-badge {
+  top: 1px;
+  right: 1px;
 }

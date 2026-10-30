@@ -1,12 +1,17 @@
-<ion-header [translucent]="true">
+<!--
+  Dropped on a landscape phone that is watching (`railed`), as the host's is: the toolbar costs a seventh of the height and
+  the picture was 14 to 18% smaller than the host's for it. Its leave button, the room's pill and the people button are in
+  the left rail then. The cards of joining, waiting and failing keep it (the way back is in it), and so does every other shape.
+-->
+<ion-header [translucent]="true" *ngIf="!railed">
   <ion-toolbar color="tertiary">
     <ion-buttons slot="start">
       <ion-back-button defaultHref="/main" text=""></ion-back-button>
     </ion-buttons>
     <!--
       "Multiplayer" told a spectator nothing they did not already know. In a room the title
-      becomes the room itself; outside one it falls back to the mode name. No landscape
-      instance is needed here, unlike the host page: this header is unconditional.
+      becomes the room itself; outside one it falls back to the mode name. A landscape
+      phone that is watching has no header; the room's pill is in its rail.
     -->
     <ion-title *ngIf="!isSpectating">Multiplayer</ion-title>
     <ion-title *ngIf="isSpectating">
@@ -119,9 +124,13 @@
     }
   }
 
-  <!-- Game stream. Stays mounted through a reconnect so the last frame survives the blip. -->
-  <div [ngClass]="{'ion-hide': !isSpectating }" class="full game-stream-flex-container">
-    <div id="game-stream-container" class="game-stream-container full">
+  <!--
+    Game stream. Stays mounted through a reconnect so the last frame survives the blip. The row is what StageLayoutService
+    measures (zero while hidden: it plans when the room appears), and the picture's container in it is exactly the stage
+    in landscape, the same size as the host's at the same window; the rail and the docked chat are its siblings.
+  -->
+  <div #stageHost [ngClass]="{'ion-hide': !isSpectating }" class="full game-stream-flex-container" [class.has-rails]="railed">
+    <div id="game-stream-container" class="game-stream-container">
       <div id="cursors-overlay" class="pointer-overlay"></div>
       <video id="stream-target" autoplay playsinline
         (mousemove)="onPointerMove($event)" (touchmove)="onPointerMove($event)" (click)="onClick($event)"></video>
@@ -135,38 +144,6 @@
         <ion-spinner name="crescent"></ion-spinner>
         <p>Tentando reconectar…</p>
       </div>
-      <!--
-        Chat drawer handle: bottom-centre in portrait, right-edge tab in landscape (see
-        global.scss). Rides the game surface, so a zero-width closed panel cannot clip it. One async subscription feeds both the badge and the accessible name.
-      -->
-      <ng-container *ngIf="{ unread: (unreadCount$ | async) || 0 } as chat">
-        <ion-button *ngIf="isSpectating" fill="clear" class="chat-toggle-btn"
-          [class.chat-toggle-btn--unread]="!isChatOpen && chat.unread"
-          (click)="toggleChat()"
-          [attr.aria-label]="chatToggleLabel(chat.unread)"
-          [attr.aria-expanded]="isChatOpen"
-          aria-controls="chat-panel">
-          <ion-icon slot="start" [name]="isChatOpen ? 'close-outline' : 'chatbubble-ellipses-outline'"></ion-icon>
-          <span class="chat-toggle-label">Chat</span>
-          <ion-badge *ngIf="!isChatOpen && chat.unread" color="danger" aria-hidden="true">{{ chat.unread }}</ion-badge>
-        </ion-button>
-      </ng-container>
-      <!--
-        Sound toggle. On the game surface rather than in the toolbar for the chat toggle's
-        reason: short landscape has no header. Only offered when the host's stream actually
-        carries sound, and it is a sibling of the video, so the border-box contract holds.
-        When the browser would not start the sound unprompted it says so, and the tap that
-        answers it is the gesture the browser was waiting for.
-      -->
-      <ion-button *ngIf="isSpectating && hasAudio" fill="clear" class="sound-toggle-btn"
-        [class.sound-toggle-btn--blocked]="audioBlocked"
-        (click)="toggleAudio()"
-        [attr.aria-label]="soundToggleLabel()"
-        [attr.aria-pressed]="!isSoundOff">
-        <ion-icon [attr.slot]="audioBlocked ? 'start' : 'icon-only'"
-          [name]="isSoundOff ? 'volume-mute-outline' : 'volume-high-outline'"></ion-icon>
-        <span *ngIf="audioBlocked" class="sound-toggle-label">Ativar som</span>
-      </ion-button>
     </div>
     <!-- Chat docked beside (landscape) or below (portrait) the stream. -->
     <div id="chat-panel" class="chat-docked-panel" [class.chat-open]="isChatOpen"
@@ -175,5 +152,75 @@
       (keydown.escape)="onChatEscape($event)">
       <app-chat [visible]="isChatOpen" [roomCode]="currentRoomCode"></app-chat>
     </div>
+    <!--
+      A landscape phone's left rail, the host's counterpart without keys: the room, the people, the chat and the sound, and
+      leaving at the bottom, away from the rest. The same Win9x keycaps and the same safe-area padding as the host's rails
+      (_deck.scss); plain buttons, because a spectator has no emulator whose focus a tap could steal.
+    -->
+    <aside *ngIf="railed" class="stage-rail stage-rail--left deck-face" [class.stage-rail--folded]="!!stagePlan?.leftFolded" data-cols="1"
+      role="group" aria-label="Controles da sala">
+      <div class="rail-grid rail-grid--top">
+        <app-room-status-pill [roomCode]="currentRoomCode" [locked]="isRoomLocked" [compact]="true"
+          [state]="isReconnecting ? 'reconnecting' : 'live'">
+        </app-room-status-pill>
+        <button type="button" class="deck-key rail-key" (click)="openMultiplayerPanel()" aria-label="Informações da sala">
+          <ion-icon name="people-outline" aria-hidden="true"></ion-icon>
+          <span class="deck-key-label" aria-hidden="true">Sala</span>
+        </button>
+        <ng-container *ngIf="{ unread: (unreadCount$ | async) || 0 } as chat">
+          <button type="button" class="deck-key rail-key chat-toggle-tab" data-chat-toggle
+            [class.deck-tab--on]="isChatOpen" [class.deck-tab--unread]="!isChatOpen && chat.unread"
+            (click)="toggleChat()" [attr.aria-label]="chatToggleLabel(chat.unread)"
+            [attr.aria-pressed]="isChatOpen" aria-controls="chat-panel">
+            <ion-icon [name]="isChatOpen ? 'close-outline' : 'chatbubble-ellipses-outline'" aria-hidden="true"></ion-icon>
+            <span class="deck-key-label" aria-hidden="true">Chat</span>
+            <span *ngIf="!isChatOpen && chat.unread" class="deck-tab-badge" aria-hidden="true">{{ chat.unread }}</span>
+          </button>
+        </ng-container>
+        <button *ngIf="hasAudio" type="button" class="deck-key rail-key" [class.rail-key--blocked]="audioBlocked"
+          (click)="toggleAudio()" [attr.aria-label]="soundToggleLabel()" [attr.aria-pressed]="!isSoundOff">
+          <ion-icon [name]="isSoundOff ? 'volume-mute-outline' : 'volume-high-outline'" aria-hidden="true"></ion-icon>
+          <span class="deck-key-label" aria-hidden="true">{{ audioBlocked ? 'Ativar' : 'Som' }}</span>
+        </button>
+      </div>
+      <div class="rail-grid rail-grid--bottom">
+        <button type="button" class="deck-key deck-key--danger rail-key" (click)="leaveRoom()" aria-label="Sair da sala">
+          <ion-icon name="exit-outline" aria-hidden="true"></ion-icon>
+          <span class="deck-key-label" aria-hidden="true">Sair</span>
+        </button>
+      </div>
+    </aside>
+    <!--
+      Chat drawer handle: bottom-centre in portrait, right-edge tab in landscape (see global.scss), and a key in the rail of a
+      landscape phone instead. A child of the row and not of the picture's container, whose box is the picture in landscape.
+      One async subscription feeds both the badge and the accessible name.
+    -->
+    <ng-container *ngIf="{ unread: (unreadCount$ | async) || 0 } as chat">
+      <ion-button *ngIf="isSpectating && !railed" fill="clear" class="chat-toggle-btn" data-chat-toggle
+        [class.chat-toggle-btn--unread]="!isChatOpen && chat.unread"
+        (click)="toggleChat()"
+        [attr.aria-label]="chatToggleLabel(chat.unread)"
+        [attr.aria-expanded]="isChatOpen"
+        aria-controls="chat-panel">
+        <ion-icon slot="start" [name]="isChatOpen ? 'close-outline' : 'chatbubble-ellipses-outline'"></ion-icon>
+        <span class="chat-toggle-label">Chat</span>
+        <ion-badge *ngIf="!isChatOpen && chat.unread" color="danger" aria-hidden="true">{{ chat.unread }}</ion-badge>
+      </ion-button>
+    </ng-container>
+    <!--
+      Sound toggle. On the page rather than in the toolbar for the chat toggle's reason: a landscape phone has no
+      header. Only offered when the host's stream actually carries sound, and a sibling of the video's container, so the
+      border-box contract holds. When the browser would not start the sound unprompted it says so, and the tap that
+      answers it is the gesture the browser was waiting for. A landscape phone's rail has the same control as a key.
+    -->
+    <ion-button *ngIf="isSpectating && hasAudio && !railed" fill="clear" class="sound-toggle-btn"
+      [class.sound-toggle-btn--blocked]="audioBlocked"
+      (click)="toggleAudio()"
+      [attr.aria-label]="soundToggleLabel()"
+      [attr.aria-pressed]="!isSoundOff">
+      <ion-icon [attr.slot]="audioBlocked ? 'start' : 'icon-only'"
+        [name]="isSoundOff ? 'volume-mute-outline' : 'volume-high-outline'"></ion-icon>
+      <span *ngIf="audioBlocked" class="sound-toggle-label">Ativar som</span>
+    </ion-button>
   </div>
 </ion-content>

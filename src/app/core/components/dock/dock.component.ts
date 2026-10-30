@@ -25,8 +25,9 @@ type PressOrigin = 'tap' | 'repeat' | 'confirmed';
  * remote cursor are measured against it, so the deck gets no say in the picture's box: in
  * portrait the picture is already pinned to a 4:3 height (75vw) and the band under it is free, so
  * the `band` presentation fills that band and the picture's rect is the same with and without it
- * (measured at ten viewports). Landscape has no such band, so the `launcher` presentation is a
- * sheet that opens OVER the page and closes again; opening it resizes nothing.
+ * (measured at ten viewports). Landscape has no such band, so a landscape phone gets `rails` (the keys in the gutters on
+ * either side of the picture, which StageHelper keeps from ever costing it) and a landscape tablet or laptop the `launcher`
+ * presentation, a sheet that opens OVER the page and closes again; opening it resizes nothing.
  *
  * **What the page owns, and what this owns.** The page owns the chat (it mounts the panel above the
  * deck and keeps the open/closed state, the unread count and the focus), the compose dialog and the
@@ -52,8 +53,21 @@ type PressOrigin = 'tap' | 'repeat' | 'confirmed';
 })
 export class DockComponent implements OnInit, OnChanges, OnDestroy {
 
-  /** `band`: taskbar and panel under the picture. `launcher`: a sheet the page's button opens. */
-  @Input() presentation: 'band' | 'launcher' = 'band';
+  /**
+   * `band`: taskbar and panel under the picture. `launcher`: a sheet the page's button opens. `rails`: a landscape phone,
+   * where the keys live in the two gutters beside the picture (see StageHelper) and the sheet holds what does not fit.
+   */
+  @Input() presentation: 'band' | 'launcher' | 'rails' = 'band';
+  /**
+   * Rails only: whether the deck's keys are on. Off, the left rail still holds what the missing toolbar did (the menu, the
+   * room, the chat button), projected by the page, and the right rail is not drawn.
+   */
+  @Input() keysShown = true;
+  /** Rails only: columns of keys in each rail, from the stage plan (StagePlan). The right one is 0 while the chat has its place. */
+  @Input() leftColumns: 1 | 2 = 1;
+  @Input() rightColumns: 0 | 1 | 2 = 0;
+  /** Rails only: the left rail is folded to icons while the chat is docked beside the picture (56 px, no room code). */
+  @Input() leftFolded = false;
   /** The emulator's command interface (`any`, as on the page); null until the game has booted. */
   @Input() dosCI: any = null;
   /** The page says no (it is leaving, or restarting). */
@@ -140,6 +154,10 @@ export class DockComponent implements OnInit, OnChanges, OnDestroy {
 
   @HostBinding('class.deck-launcher') get isLauncher(): boolean {
     return this.presentation === 'launcher';
+  }
+
+  @HostBinding('class.deck-rails') get isRails(): boolean {
+    return this.presentation === 'rails';
   }
 
   /** A panel of keys is up in the band, so the deck takes the band; with the chat or nothing up it is only the taskbar. */
@@ -261,6 +279,12 @@ export class DockComponent implements OnInit, OnChanges, OnDestroy {
 
   closeSheet(): void {
     this.sheetOpenChange.emit(false);
+  }
+
+  /** The rail's "Teclas" key: the sheet that holds what the rails have no room for ("Mais teclas", and Táticas in one column). */
+  toggleSheet(): void {
+    this.diagnostics.log('page', 'deck sheet', () => ({ open: !this.sheetOpen, from: 'rail' }));
+    this.sheetOpenChange.emit(!this.sheetOpen);
   }
 
   // ---- keys ----

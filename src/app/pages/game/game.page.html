@@ -186,6 +186,17 @@
             </ion-label>
             <ion-icon slot="end" name="keypad-outline"></ion-icon>
           </ion-item>
+          <!--
+            Only where there are rails to change: a landscape phone. Ajustar keeps two columns of keys in each rail where they
+            fit without costing the picture, Ampliar always one. The picture's size changes only when this is flipped.
+          -->
+          <ion-item *ngIf="layout.rails" button detail="false" (click)="promptStageView()">
+            <ion-label>
+              Tamanho da imagem
+              <p>{{ stageViewSummary }}</p>
+            </ion-label>
+            <ion-icon slot="end" name="scan-outline"></ion-icon>
+          </ion-item>
           <!-- Only where the browser can vibrate at all (Android; iOS has no vibration API). -->
           <ion-item *ngIf="canVibrate" detail="false">
             <ion-toggle [checked]="keyVibration" (ionChange)="toggleKeyVibration($event)">Vibração nas teclas</ion-toggle>
@@ -389,8 +400,14 @@
     does not know .e98, so the zip type is listed as well as the extension.
   -->
   <input style="display:none;" type="file" multiple accept=".e98,.zip,application/zip" #saveGameFileInput (change)="onSaveFileSelected($event)" />
-  <div class="full game-stream-flex-container" [class.has-deck-band]="layout.kind === 'band'">
-    <div class="game-stream-container full">
+  <!--
+    The page's row (a column in portrait). `#stageHost` is what StageLayoutService measures; every size in it comes from
+    that service's plan (StageHelper) and the stylesheets that read it: the picture's container is EXACTLY the picture in
+    landscape, the rails and the docked chat are its siblings, and the toggle and the deck are not children of it.
+  -->
+  <div #stageHost class="full game-stream-flex-container" [class.has-deck-band]="layout.kind === 'band'"
+    [class.has-rails]="layout.rails">
+    <div class="game-stream-container">
       <!--
         role="application": keystrokes in here are the game's, so a screen reader should hand
         them over rather than treat the page as a document. The canvas inside stays opaque to
@@ -399,56 +416,33 @@
       <div [ngClass]="{ hidden: isHidden, full: !isHidden }" class="smooth-canvas not-selectable" id="game-container"
         role="application" aria-label="Elifoot 98 (emulador). As teclas que você digitar vão direto para o jogo.">
       </div>
-      <!--
-        Landscape-compact only (a landscape phone): the toolbar is dropped, so what it held lives
-        in the gutter the height-fitted picture leaves beside it, never over the picture: the room
-        code (the status pill, which may overhang the picture's edge on the narrowest phones, as it
-        always could), the options menu that the old top-left FAB opened, and the deck's launcher
-        where the deck is on. The menu is here whether or not the deck is, because it is the only
-        way to Salvar agora, Voltar ao menu and the settings that turn the deck back on.
-      -->
-      <div *ngIf="layout.shape === 'landscape-compact'" class="gutter-controls">
-        <div *ngIf="isStreaming" class="mp-status-pill-floating">
-          <app-room-status-pill [roomCode]="hostRoomId" [locked]="!!hostPassword" [compact]="true">
-          </app-room-status-pill>
-        </div>
-        <button type="button" class="gutter-menu-btn" (click)="showPopover($event)" aria-label="Menu de opções">
-          <ion-icon name="ellipsis-vertical-outline" aria-hidden="true"></ion-icon>
-        </button>
-        <app-sound-chip variant="gutter" [hosting]="isStreaming"></app-sound-chip>
-        <button *ngIf="layout.launcherHome === 'gutter'" type="button" class="deck-key gutter-launcher" appDeckKey
-          (deckPress)="toggleDeckSheet()" [attr.aria-pressed]="deckSheetOpen" aria-label="Painel de teclas">
-          <ion-icon name="keypad-outline" aria-hidden="true"></ion-icon>
-          <span class="deck-tab-label">Teclas</span>
-        </button>
-      </div>
-      <!--
-        Chat drawer handle. Lives here, NOT inside the panel: a closed panel is
-        zero-sized with overflow:hidden and would clip the only way to open it. Where the deck is a
-        band (a touch device in portrait) the handle is the deck's Chat button instead, in the
-        taskbar and not over the picture; everywhere else this stays the one chat entry point,
-        because it is the control that exists at every breakpoint. The object-literal *ngIf is a
-        view model, so ONE async subscription feeds both the badge and the button's accessible
-        name — an aria-label suppresses descendant text, so the unread count has to live inside
-        the label itself.
-      -->
-      <ng-container *ngIf="{ unread: (unreadCount$ | async) || 0 } as chat">
-        <ion-button *ngIf="isStreaming && layout.kind !== 'band'" fill="clear" class="chat-toggle-btn"
-          [class.chat-toggle-btn--unread]="!isChatOpen && chat.unread"
-          (click)="toggleChat()"
-          [attr.aria-label]="chatToggleLabel(chat.unread)"
-          [attr.aria-expanded]="isChatOpen"
-          aria-controls="chat-panel">
-          <ion-icon slot="start" [name]="isChatOpen ? 'close-outline' : 'chatbubble-ellipses-outline'"></ion-icon>
-          <span class="chat-toggle-label">Chat</span>
-          <ion-badge *ngIf="!isChatOpen && chat.unread" color="danger" aria-hidden="true">{{ chat.unread }}</ion-badge>
-        </ion-button>
-      </ng-container>
     </div>
+    <!--
+      Chat drawer handle. A child of the row and NOT of the picture's container, whose box is the picture in
+      landscape, and not inside the panel either: a closed panel is zero-sized with overflow:hidden and would clip the
+      only way to open it. Where the deck is a band (a touch device in portrait) the handle is the deck's Chat button
+      instead, in the taskbar; where it is a rail (a landscape phone) it is a key in the left rail. Everywhere else this
+      stays the one chat entry point, because it is the control that exists at every breakpoint. The object-literal
+      *ngIf is a view model, so ONE async subscription feeds both the badge and the button's accessible name — an
+      aria-label suppresses descendant text, so the unread count has to live inside the label itself.
+    -->
+    <ng-container *ngIf="{ unread: (unreadCount$ | async) || 0 } as chat">
+      <ion-button *ngIf="isStreaming && layout.kind !== 'band' && !layout.rails" fill="clear" class="chat-toggle-btn" data-chat-toggle
+        [class.chat-toggle-btn--unread]="!isChatOpen && chat.unread"
+        (click)="toggleChat()"
+        [attr.aria-label]="chatToggleLabel(chat.unread)"
+        [attr.aria-expanded]="isChatOpen"
+        aria-controls="chat-panel">
+        <ion-icon slot="start" [name]="isChatOpen ? 'close-outline' : 'chatbubble-ellipses-outline'"></ion-icon>
+        <span class="chat-toggle-label">Chat</span>
+        <ion-badge *ngIf="!isChatOpen && chat.unread" color="danger" aria-hidden="true">{{ chat.unread }}</ion-badge>
+      </ion-button>
+    </ng-container>
     <!--
       Chat docked beside (landscape) or below (portrait) the game, only while a room is
       live. In portrait the game box is a fixed 4:3 height, so the chat growing into the
-      leftover letterbox space cannot resize it at all.
+      leftover letterbox space cannot resize it at all. In landscape its width is the stage
+      plan's (`--chat-dock-w`) and the picture is sized around it.
     -->
     <div *ngIf="isStreaming" id="chat-panel" class="chat-docked-panel"
       [class.chat-open]="isChatOpen"
@@ -461,11 +455,17 @@
       The control deck: a SIBLING of #game-container (the picture's box is not the deck's to
       change), after the chat panel, so that in portrait the order under the picture is the chat
       or a panel of keys, then the taskbar. Mounted wherever the layout says so (DeckLayoutHelper):
-      a touch device by default, anyone who turned it on. The chat's state stays the page's; the
-      deck mirrors it and asks for changes through (chatToggle).
+      a touch device by default, anyone who turned it on, and always on a landscape phone, whose
+      left rail holds what the missing toolbar did even with the keys off (the three elements
+      projected into it). The chat's state stays the page's; the deck mirrors it and asks for
+      changes through (chatToggle).
     -->
-    <app-dock *ngIf="layout.kind !== 'none'"
+    <app-dock *ngIf="layout.kind !== 'none' || layout.rails"
       [presentation]="deckPresentation"
+      [keysShown]="layout.kind !== 'none'"
+      [leftColumns]="stageLeftColumns"
+      [rightColumns]="stageRightColumns"
+      [leftFolded]="!!stagePlan?.leftFolded"
       [dosCI]="dosCI"
       [disabled]="deckDisabled"
       [vibrate]="keyVibration"
@@ -479,6 +479,13 @@
       (textRequest)="onTextRequest()"
       (omaticRequest)="showOmaticModal()"
       (keyFailure)="onKeyFailure($event)">
+      <!-- Projected into the left rail of a landscape phone (see the dock): the toolbar's menu, "Ativar som" and the room. -->
+      <button railMenu type="button" class="rail-menu-btn" (click)="showPopover($event)" aria-label="Menu de opções">
+        <ion-icon name="ellipsis-vertical-outline" aria-hidden="true"></ion-icon>
+      </button>
+      <app-sound-chip railSound variant="rail" [hosting]="isStreaming"></app-sound-chip>
+      <app-room-status-pill railRoom *ngIf="isStreaming" [roomCode]="hostRoomId" [locked]="!!hostPassword" [compact]="true">
+      </app-room-status-pill>
     </app-dock>
     <!--
       The live type bar (experimental, behind the "Teclado ao vivo" setting): fixed to the bottom of the

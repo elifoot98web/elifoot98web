@@ -10,8 +10,8 @@ import { AudioHealthService } from 'src/app/core/services/game';
  * resumes the context, inside the tap, which is the one thing WebKit counts.
  *
  * Shell chrome, so flat and not Win9x (`.sound-chip` in global.scss shares the save chip's look and
- * its hit area). It sits in the toolbar's end slot, and in the gutter beside the picture where a
- * landscape phone has no toolbar (`variant="gutter"`). Under 600 px it is the speaker alone: the
+ * its hit area). It sits in the toolbar's end slot, and in the left rail beside the picture where a
+ * landscape phone has no toolbar (`variant="rail"`). Under 600 px it is the speaker alone: the
  * words are its accessible name, and the toolbar's title slot has the room code to protect.
  *
  * It takes no focus from the game: the tap hands the focus back to the emulator's root, because a
@@ -24,8 +24,8 @@ import { AudioHealthService } from 'src/app/core/services/game';
   standalone: false
 })
 export class SoundChipComponent {
-  /** `toolbar` (the default) or `gutter`, the round button beside the picture on a landscape phone. */
-  @Input() variant: 'toolbar' | 'gutter' = 'toolbar';
+  /** `toolbar` (the default) or `rail`, the round button in the rail beside the picture on a landscape phone. */
+  @Input() variant: 'toolbar' | 'rail' = 'toolbar';
   /** A host's silence is also the room's: the accessible name says so. */
   @Input() hosting = false;
 

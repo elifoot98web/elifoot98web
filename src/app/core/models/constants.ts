@@ -78,6 +78,9 @@ export const STORAGE_KEY = {
   // an answer is a stored `true`; the menu entries stay as the permanent way to the same things.
   ROTATE_HINT_SHOWN: 'rotateHintShown',
   INSTALL_NUDGE_DISMISSED: 'installNudgeDismissed',
+  // "Tamanho da imagem" (StageLayoutService): 'fit' (Ajustar, the default) or 'wide' (Ampliar: the side
+  // panels shrink to one column). Absent means fit; it changes the picture's box only when the player flips it.
+  STAGE_VIEW: 'stageView',
 }
 
 /** Where a STORAGE_KEY lives. Ionic Storage is the default; the others are written around it. */
@@ -129,6 +132,7 @@ export const STORAGE_KEY_HOMES: Readonly<Record<keyof typeof STORAGE_KEY, readon
   AUDIO_PLAYBACK: ['ionic'],
   ROTATE_HINT_SHOWN: ['ionic'],
   INSTALL_NUDGE_DISMISSED: ['ionic'],
+  STAGE_VIEW: ['ionic'],
 };
 
 /**
@@ -509,6 +513,52 @@ export const DECK = {
   // focused, is the keyboard, and the layout must not move for it (the contract: it depends on
   // the viewport and the orientation, not on the OS keyboard).
   KEYBOARD_HEIGHT_RATIO: 0.8,
+}
+
+/**
+ * The stage (StageHelper, StageLayoutService): the box the picture lives in, and the rails and the chat that share the
+ * screen with it. Everything is in css px. The rails' KEY HEIGHT is not here: it is `--deck-key-dense-h` (_deck.scss),
+ * 44 px under a coarse pointer, so that seven rows of keys, their gaps and the rail's padding are 344 px and fit the
+ * shortest landscape phone there is (667x375) with room to spare.
+ */
+export const STAGE = {
+  // The picture's ratio, as integers so that a stage is always a whole number of pixels on both sides (a stage of 521 px
+  // would need 390.75). The guest's frame is 4:3 at 800x600 and at 640x480; the other video modes (DOS text, 720x400)
+  // are letterboxed INSIDE it by js-dos, as they always were.
+  RATIO_WIDTH: 4,
+  RATIO_HEIGHT: 3,
+
+  // ---- rails (the landscape phone's gutters) ----
+  // The padding between a rail's edge (or the notch's inset) and its keys, the gap between keys, and a key's width. A
+  // two column rail is 112 px of keys and padding, a one column rail 68; the notch's inset is added to the side it is on.
+  // At 844x390 the gutters are 162 px: 47 of notch and 112 fit them with 3 px to spare, which is why the keys are 48 wide
+  // and not 52 (the wireframe's pitch).
+  RAIL_PAD: 6,
+  RAIL_GAP: 4,
+  RAIL_KEY_WIDTH_TWO_COLUMNS: 48,
+  RAIL_KEY_WIDTH_ONE_COLUMN: 56,
+  // The left rail while the chat is docked: icons only, the narrowest a 44 px touch target can be (the wireframe's 56 px of
+  // rail). The room's code is not on it then, because the chat's own title bar says it.
+  RAIL_KEY_WIDTH_FOLDED: 44,
+
+  // ---- the chat dock ----
+  // On a landscape phone the chat REPLACES the right rail and takes what the gutters leave, between these two (the
+  // notch's inset is added): 240 is the width the wireframe asked for and 200 the narrowest a transcript, a field and an
+  // "Enviar" button are still usable in.
+  CHAT_PHONE_MIN: 200,
+  CHAT_PHONE_MAX: 240,
+  // Tablets and laptops (no rails) keep the widths global.scss always gave the chat: 320 px, or 40% of the window up to
+  // 300 px where the window is 900 px wide or less.
+  CHAT_WIDE: 320,
+  CHAT_NARROW: 300,
+  CHAT_NARROW_SHARE: 0.4,
+  CHAT_NARROW_MAX_VIEWPORT: 900,
+  // Closing the chat slides it out (220 ms, global.scss) before the width it held is given back. The plan waits for
+  // the same time, or the stage would grow into a panel that is still on screen.
+  CHAT_CLOSE_DELAY_MS: 220,
+
+  // A stage narrower than this is a degenerate window (or a hidden page measured at 0): it is not written.
+  MIN_STAGE_WIDTH: 120,
 }
 
 /**

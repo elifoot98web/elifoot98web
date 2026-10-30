@@ -22,11 +22,12 @@ export class ChatPanelHelper {
   }
 
   /**
-   * ion-button does not set `delegatesFocus`, so the host element is not focusable — the
-   * inner `.button-native` inside its shadow root is.
+   * The control that opens the drawer: the floating tab, or the key of a landscape phone's rail, both marked
+   * `data-chat-toggle` (the two never exist together). ion-button does not set `delegatesFocus`, so the host
+   * element is not focusable — the inner `.button-native` inside its shadow root is; a rail's key is a plain button.
    */
   static focusToggle() {
-    const toggle = document.querySelector('.chat-toggle-btn') as HTMLElement | null;
+    const toggle = document.querySelector('[data-chat-toggle]') as HTMLElement | null;
     const native = toggle?.shadowRoot?.querySelector('button') as HTMLElement | null;
     (native ?? toggle)?.focus({ preventScroll: true });
   }

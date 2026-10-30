@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AlertController, LoadingController, ModalController, ToastController } from '@ionic/angular/lazy';
 import { AlertButton } from '@ionic/core';
@@ -16,7 +16,7 @@ import { BehaviorSubject, combineLatest, distinctUntilChanged, filter, map, Obse
 import { EmulatorKeyCodeHelper } from '../../core/models/game';
 import { CursorClickMessage, CursorPositionMessage, MultiplayerJoinErrorKind, PlayerInfo } from '../../core/models/multiplayer';
 import { AudioHealthService, AutoSaverService, EmulatorControlService, EmulatorPowerService, FieldHintService, GameExitWatcherService, PatchService, SaveBeforeReloadResult, SaveGameService, SaveImportPlan, SaveSafetyService, SavesBackup, TouchInputService } from '../../core/services/game';
-import { DiagnosticsService, FullscreenService, InstallService, LayoutHelperService, LocalStorageService, NudgeStateService, SaveStatusService, StorageHealthService, WakeLockService } from '../../core/services/shared';
+import { DiagnosticsService, FullscreenService, InstallService, LayoutHelperService, LocalStorageService, NudgeStateService, SaveStatusService, StageLayoutService, StorageHealthService, WakeLockService } from '../../core/services/shared';
 import { MultiplayerAudioService, MultiplayerChatService, MultiplayerCursorService, MultiplayerPlayerInfoService, MultiplayerRelayHealthService, MultiplayerService, MultiplayerUiService } from '../../core/services/multiplayer';
 import { CursorRendererHelper } from 'src/app/core/helpers/cursor-renderer.helper';
 import { OverlaySyncHelper } from 'src/app/core/helpers/overlay-sync.helper';
@@ -28,6 +28,7 @@ import { TimeoutHelper } from 'src/app/core/helpers/timeout.helper';
 import { DisplayMode, DisplayModeHelper } from 'src/app/core/helpers/display-mode.helper';
 import { TouchMode, TouchModeHelper } from 'src/app/core/helpers/touch-mode.helper';
 import { DeckLayoutHelper, DeckPresentation, DeckSetting } from 'src/app/core/helpers/deck-layout.helper';
+import { StageHelper, StagePlan, StageView } from 'src/app/core/helpers/stage.helper';
 import { SaveBackupHelper } from 'src/app/core/helpers/save-backup.helper';
 import { SaveStatusHelper } from 'src/app/core/helpers/save-status.helper';
 import { NavigationGuardHelper } from 'src/app/core/helpers/navigation-guard.helper';
@@ -46,8 +47,10 @@ import { StorageHealthHelper } from 'src/app/core/helpers/storage-health.helper'
     styleUrls: ['./game.page.scss'],
     standalone: false
 })
-export class GamePage implements OnInit, OnDestroy {
+export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('popover') popover: any;
+  /** The page's row: what StageLayoutService measures, and the parent of the picture's container, the rails and the chat. */
+  @ViewChild('stageHost', { static: true }) stageHost!: ElementRef<HTMLElement>;
   /** The live type bar, while it is mounted (the setting is on and the deck is shown). */
   @ViewChild(TypeBarComponent) typeBar?: TypeBarComponent;
   // UI state properties
@@ -89,8 +92,15 @@ export class GamePage implements OnInit, OnDestroy {
   /** The player's word on the deck (STORAGE_KEY.DECK_MODE); the default follows the device. */
   deckSetting: DeckSetting = 'auto';
   private readonly deckSetting$ = new BehaviorSubject<DeckSetting>('auto');
-  /** The launcher's sheet is open. Only meaningful where the deck is a launcher. */
+  /** The launcher's sheet is open. Only meaningful where the deck is a launcher or a landscape phone's rails. */
   deckSheetOpen = false;
+  /**
+   * The page's layout as numbers (StageHelper.plan, written by StageLayoutService): the columns of keys in each rail, the
+   * widths the chat and the rails take, the picture's box. Null until the row has been measured.
+   */
+  stagePlan: StagePlan | null = null;
+  /** "Tamanho da imagem" (STORAGE_KEY.STAGE_VIEW): Ajustar or Ampliar. */
+  stageView: StageView = 'fit';
   /** Whether the keys buzz the phone (STORAGE_KEY.DISABLE_KEY_VIBRATION, inverted); the device still has to be able to. */
   keyVibration = true;
   readonly canVibrate = typeof navigator.vibrate === 'function';
@@ -208,6 +218,7 @@ export class GamePage implements OnInit, OnDestroy {
     private install: InstallService,
     private nudges: NudgeStateService,
     private storageHealth: StorageHealthService,
+    private stageLayout: StageLayoutService,
     chatService: MultiplayerChatService
   ) {
     this.unreadCount$ = chatService.unreadCount$;
@@ -228,9 +239,12 @@ export class GamePage implements OnInit, OnDestroy {
     ).subscribe(layout => {
       this.layout = layout;
       this.diagnostics.log('page', 'deck layout', () => ({ ...layout, setting: this.deckSetting }));
-      // A sheet belongs to a launcher; one left open across a rotation into the band would reopen with it.
-      if (layout.kind !== 'launcher') this.deckSheetOpen = false;
+      // A sheet belongs to a launcher or to rails; one left open across a rotation into the band would reopen with it.
+      if (layout.kind !== 'launcher' && layout.kind !== 'rails') this.deckSheetOpen = false;
+      // The rails carry keys only where the deck is shown (a landscape phone); the plan sizes them to match.
+      this.stageLayout.setKeys(layout.kind === 'rails');
     }));
+    this.pageSubscriptions.add(this.stageLayout.plan$.subscribe(plan => { this.stagePlan = plan; }));
     this.pageSubscriptions.add(this.layoutHelperService.anyCoarse$.subscribe(coarse => { this.anyCoarse = coarse; }));
     this.pageSubscriptions.add(this.fieldHintService.hint$.subscribe(hint => { this.fieldHint = hint; }));
     this.pageSubscriptions.add(this.install.mode$.subscribe(mode => { this.installMode = mode; }));
@@ -262,6 +276,18 @@ export class GamePage implements OnInit, OnDestroy {
     if (!this.diagnostics.enabled) return 'Desligado'
     const events = DiagnosticsReportHelper.events(this.diagnostics.entryCount)
     return this.diagnostics.sessionOnly ? `Ligado nesta visita · ${events}` : `Ligado · ${events}`
+  }
+
+  ngAfterViewInit(): void {
+    // The row is in the DOM (static: it is not under an *ngIf), so it has a size to plan around. Not in this very pass: the plan
+    // changes what the view binds (the rails' columns), and a change made while the view is being checked is NG0100 in dev mode.
+    queueMicrotask(() => {
+      if (this.destroyed) return
+      this.stageLayout.start(this.stageHost.nativeElement)
+      this.stageLayout.setKeys(this.layout.kind === 'rails')
+      this.stageLayout.setView(this.stageView)
+      this.stageLayout.setChat(this.isChatOpen)
+    })
   }
 
   async ngOnInit() {
@@ -478,6 +504,8 @@ export class GamePage implements OnInit, OnDestroy {
     this.wakeLock.stop();
     this.audioHealth.stop();
     this.fullscreen.stop();
+    // The stage's properties are on <html>: a page that is gone must not leave its picture's size to the next one.
+    this.stageLayout.stop();
     void this.nudgeToast?.dismiss(undefined, 'destroyed').catch(() => undefined);
     this.pageSubscriptions.unsubscribe();
     this.multiplayerSubscriptions.unsubscribe();
@@ -681,9 +709,23 @@ export class GamePage implements OnInit, OnDestroy {
     await modal.present()
   }
 
-  /** The deck's presentation as the deck takes it; the deck is not mounted for `none`. */
-  get deckPresentation(): 'band' | 'launcher' {
-    return this.layout.kind === 'band' ? 'band' : 'launcher'
+  /**
+   * The deck's presentation as the deck takes it. The deck is not mounted for `none`, except on a landscape phone, whose
+   * left rail is there with the deck's keys off (`keysShown`) and holds the menu and the room code.
+   */
+  get deckPresentation(): 'band' | 'launcher' | 'rails' {
+    if (this.layout.kind === 'band') return 'band'
+    return this.layout.rails ? 'rails' : 'launcher'
+  }
+
+  /** Columns of keys in each rail, from the stage plan; one and none until the row has been measured. */
+  get stageLeftColumns(): 1 | 2 {
+    return this.stagePlan?.leftColumns === 2 ? 2 : 1
+  }
+
+  get stageRightColumns(): 0 | 1 | 2 {
+    const columns = this.stagePlan?.rightColumns ?? 0
+    return columns === 2 ? 2 : columns === 1 ? 1 : 0
   }
 
   /** Keys are refused while the page is on its way out: the emulator is about to be exited. */
@@ -1552,8 +1594,64 @@ export class GamePage implements OnInit, OnDestroy {
       this.applyDeckSetting(DeckLayoutHelper.normalise(await this.storageService.get<string>(STORAGE_KEY.DECK_MODE)))
       this.keyVibration = !(await this.storageService.get<boolean>(STORAGE_KEY.DISABLE_KEY_VIBRATION))
       this.liveKeyboard = !!(await this.storageService.get<boolean>(STORAGE_KEY.LIVE_KEYBOARD))
+      this.applyStageView(StageHelper.normaliseView(await this.storageService.get<string>(STORAGE_KEY.STAGE_VIEW)))
     } catch (e) {
       console.warn('Could not read the key panel settings; using the defaults', e)
+    }
+  }
+
+  private applyStageView(view: StageView) {
+    this.stageView = view
+    this.stageLayout.setView(view)
+  }
+
+  /** The subtitle of the "Tamanho da imagem" entry: the choice. */
+  get stageViewSummary(): string {
+    return StageHelper.labelView(this.stageView)
+  }
+
+  /**
+   * "Tamanho da imagem": Ajustar or Ampliar. Only a landscape phone has rails to change (the entry is offered there), and
+   * the picture box changes only when the player flips it: nothing else moves it between the two.
+   */
+  async promptStageView() {
+    this.hidePopover()
+
+    const current = this.stageView
+    let chosen: StageView | undefined
+    const alert = await this.alertController.create({
+      header: 'Tamanho da imagem',
+      cssClass: 'win9x-alert alert-whitespace wide-alert',
+      // Short on purpose, like the key panel's: on a landscape phone anything longer pushes the radios out of view. It says
+      // what the choice is NOT, because "Ampliar" reads as a bigger picture and measured on every landscape phone it is not.
+      message: 'A imagem fica do mesmo tamanho nas duas: muda só quantas colunas de teclas as laterais usam.',
+      inputs: StageHelper.views().map(view => ({
+        type: 'radio' as const,
+        label: StageHelper.describeView(view),
+        value: view,
+        checked: view === current,
+      })),
+      buttons: [{
+        text: 'Cancelar',
+        role: 'cancel'
+      }, {
+        text: 'Aplicar',
+        handler: (value: StageView | undefined) => {
+          chosen = value
+        }
+      }]
+    })
+    await alert.present()
+    await alert.onDidDismiss()
+
+    if (!chosen || chosen === current) return
+    this.diagnostics.log('page', 'stage view chosen', () => ({ view: chosen }))
+    this.applyStageView(chosen)
+    try {
+      await this.storageService.set<string>(STORAGE_KEY.STAGE_VIEW, chosen)
+    } catch (e) {
+      // It applies for this visit either way.
+      console.warn('Could not store the picture size setting', e)
     }
   }
 
@@ -1678,7 +1776,7 @@ export class GamePage implements OnInit, OnDestroy {
     void this.multiplayerUiService.showToast(notice.message, notice.color, 4000)
   }
 
-  /** The launcher's button, in the toolbar or in the landscape gutter. */
+  /** The launcher's button (in the toolbar), and the rails' "Teclas" key is the dock's own. */
   toggleDeckSheet() {
     this.deckSheetOpen = !this.deckSheetOpen
     this.diagnostics.log('page', 'deck sheet', () => ({ open: this.deckSheetOpen }))
@@ -2522,7 +2620,7 @@ export class GamePage implements OnInit, OnDestroy {
     this.multiplayerSubscriptions = new Subscription();
 
     this.isStreaming = false;
-    this.isChatOpen = false;
+    this.setChatOpen(false);
     this.hostPassword = '';
 
     // The panel unmounts with the room. Without this, focus is orphaned on <body> and the
@@ -2558,6 +2656,15 @@ export class GamePage implements OnInit, OnDestroy {
   }
 
   /**
+   * The one place `isChatOpen` changes, because the stage has to hear of it: in landscape the chat is docked beside the
+   * picture, and the picture's size is the plan's answer to whether it is.
+   */
+  private setChatOpen(open: boolean) {
+    this.isChatOpen = open;
+    this.stageLayout.setChat(open);
+  }
+
+  /**
    * The panel is always mounted while streaming, so opening it is a state flip plus a focus
    * move. Called by the chat's toggle and, on a touch device, by the control deck's Chat button.
    */
@@ -2565,7 +2672,7 @@ export class GamePage implements OnInit, OnDestroy {
     const shouldOpen = typeof force === 'boolean' ? force : !this.isChatOpen;
     if (shouldOpen === this.isChatOpen) return;
 
-    this.isChatOpen = shouldOpen;
+    this.setChatOpen(shouldOpen);
 
     if (shouldOpen) {
       // The chat has a field of its own, and the type bar mirrors into the game: not both.
@@ -2746,8 +2853,10 @@ export class GamePage implements OnInit, OnDestroy {
    * pinned to its 4:3 height there and they only share what is left — but these do: a window
    * resize, a rotation (which also drops the header in landscape-compact, changing ion-content's
    * height), the mobile URL bar collapsing, a fullscreen change, a landscape chat docking beside
-   * the picture, and `isHidden` flipping `.full` on at boot. The deck's launcher sheet does NOT:
-   * it is `position:absolute` over the page and takes no space.
+   * the picture (the stage plan, StageLayoutService, gives the container its new size), the
+   * player's view mode, and `isHidden` flipping `.full` on at boot. The deck's launcher sheet and
+   * the rails' keys do NOT: the sheet is `position:absolute` over the page, and a rail is a
+   * sibling whose width the plan already subtracted.
    *
    * Both the canvas and the container are observed. The container fires first, before
    * js-dos has rewritten the canvas geometry, so that pass aligns against the old canvas;

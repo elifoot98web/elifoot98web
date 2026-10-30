@@ -55,14 +55,14 @@ describe('DeckLayoutHelper', () => {
     it('gives every portrait phone the band, with the toolbar', () => {
       for (const [w, h] of PHONES_PORTRAIT) {
         expect(present(vp(w, h), true)).withContext(`${w}x${h}`)
-          .toEqual({ kind: 'band', shape: 'portrait', hasHeader: true, launcherHome: null });
+          .toEqual({ kind: 'band', shape: 'portrait', hasHeader: true, launcherHome: null, rails: false });
       }
     });
 
-    it('gives every landscape phone a launcher in the gutter, because there is no toolbar to hold it', () => {
+    it('gives every landscape phone rails in the gutters, because there is no toolbar to hold the controls', () => {
       for (const [w, h] of PHONES_LANDSCAPE) {
         expect(present(vp(w, h), true)).withContext(`${w}x${h}`)
-          .toEqual({ kind: 'launcher', shape: 'landscape-compact', hasHeader: false, launcherHome: 'gutter' });
+          .toEqual({ kind: 'rails', shape: 'landscape-compact', hasHeader: false, launcherHome: null, rails: true });
       }
     });
 
@@ -72,7 +72,7 @@ describe('DeckLayoutHelper', () => {
     });
 
     it('gives a landscape tablet a launcher in the toolbar: its picture takes the height', () => {
-      expect(present(vp(1180, 820), true)).toEqual({ kind: 'launcher', shape: 'landscape-regular', hasHeader: true, launcherHome: 'toolbar' });
+      expect(present(vp(1180, 820), true)).toEqual({ kind: 'launcher', shape: 'landscape-regular', hasHeader: true, launcherHome: 'toolbar', rails: false });
     });
 
     it('shows nothing on a desktop with a mouse, at 1280x800 or at any size', () => {
@@ -81,7 +81,7 @@ describe('DeckLayoutHelper', () => {
     });
 
     it('shows a touch window of 1280x800 the launcher in the toolbar', () => {
-      expect(present(vp(1280, 800), true)).toEqual({ kind: 'launcher', shape: 'landscape-regular', hasHeader: true, launcherHome: 'toolbar' });
+      expect(present(vp(1280, 800), true)).toEqual({ kind: 'launcher', shape: 'landscape-regular', hasHeader: true, launcherHome: 'toolbar', rails: false });
     });
   });
 
@@ -90,12 +90,13 @@ describe('DeckLayoutHelper', () => {
     it('lets a desktop player turn the deck on in any shape', () => {
       expect(present(vp(1280, 800), false, 'on').kind).toBe('launcher');
       expect(present(vp(800, 1000), false, 'on').kind).toBe('band');
-      expect(present(vp(844, 390), false, 'on').launcherHome).toBe('gutter');
+      expect(present(vp(844, 390), false, 'on').kind).toBe('rails');
     });
 
     it('lets a phone player turn it off, and still says which shape the page has (the header depends on it)', () => {
-      expect(present(vp(390, 844), true, 'off')).toEqual({ kind: 'none', shape: 'portrait', hasHeader: true, launcherHome: null });
-      expect(present(vp(844, 390), true, 'off')).toEqual({ kind: 'none', shape: 'landscape-compact', hasHeader: false, launcherHome: null });
+      expect(present(vp(390, 844), true, 'off')).toEqual({ kind: 'none', shape: 'portrait', hasHeader: true, launcherHome: null, rails: false });
+      // The deck is off, but a phone held sideways still has no toolbar: its menu and room code keep the left rail.
+      expect(present(vp(844, 390), true, 'off')).toEqual({ kind: 'none', shape: 'landscape-compact', hasHeader: false, launcherHome: null, rails: true });
     });
   });
 
@@ -114,7 +115,7 @@ describe('DeckLayoutHelper', () => {
     it('falls back to the launcher instead of squeezing a taskbar into nothing', () => {
       // 700x720: the picture is 525 tall, the toolbar 56, and 139 is left.
       expect(DeckLayoutHelper.bandHeight(vp(700, 720))).toBeLessThan(DECK.MIN_BAND_HEIGHT);
-      expect(present(vp(700, 720), true)).toEqual({ kind: 'launcher', shape: 'portrait', hasHeader: true, launcherHome: 'toolbar' });
+      expect(present(vp(700, 720), true)).toEqual({ kind: 'launcher', shape: 'portrait', hasHeader: true, launcherHome: 'toolbar', rails: false });
     });
 
     it('keeps the formation keys at the 44 px floor wherever it picks the band', () => {
@@ -126,7 +127,7 @@ describe('DeckLayoutHelper', () => {
     it('gives the launcher to the window that used to get 32 px formation keys: a Chrome tab on a 360x640 phone', () => {
       // 360 wide and ~512 tall once the status bar, the URL bar and the navigation bar are taken: 186 px of band.
       expect(DeckLayoutHelper.bandHeight(vp(360, 512))).toBe(186);
-      expect(present(vp(360, 512), true)).toEqual({ kind: 'launcher', shape: 'portrait', hasHeader: true, launcherHome: 'toolbar' });
+      expect(present(vp(360, 512), true)).toEqual({ kind: 'launcher', shape: 'portrait', hasHeader: true, launcherHome: 'toolbar', rails: false });
     });
 
     it('gives an iPhone SE in a Safari tab (375x553, 216 px of band) the launcher too: its 42 px keys were under the floor', () => {
@@ -139,6 +140,26 @@ describe('DeckLayoutHelper', () => {
     });
   });
 
+
+  describe('rails', () => {
+
+    it('belong to a landscape phone only: every other shape has a toolbar to hold what a rail would', () => {
+      expect(present(vp(844, 390), true).rails).toBeTrue();
+      expect(present(vp(667, 375), true).rails).toBeTrue();
+      expect(present(vp(390, 844), true).rails).toBeFalse();
+      expect(present(vp(1180, 820), true).rails).toBeFalse();
+      expect(present(vp(1280, 800), false).rails).toBeFalse();
+    });
+
+    it('are there with the deck off, and hold only the menu and the room then', () => {
+      expect(present(vp(844, 390), false)).toEqual({ kind: 'none', shape: 'landscape-compact', hasHeader: false, launcherHome: null, rails: true });
+    });
+
+    it('stop at 500 px of height: a window taller than that is a tablet or a laptop and keeps its toolbar', () => {
+      expect(present(vp(900, 500), true).kind).toBe('rails');
+      expect(present(vp(900, 501), true).kind).toBe('launcher');
+    });
+  });
 
   describe('samePresentation', () => {
 

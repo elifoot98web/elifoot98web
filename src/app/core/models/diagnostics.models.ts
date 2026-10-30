@@ -15,9 +15,13 @@
  * did not ask for (the screen lock, the audio context put to sleep, fullscreen, the install prompt, a
  * one-time banner). Each of those is a decision a device makes and an app can only watch, so a device
  * pass reads them as one list instead of finding them among the page's own lifecycle.
+ *
+ * `layout` is the fourth: the stage (StageLayoutService), one line each time the plan changes, with the window it was
+ * made from and what came of it. The pictures of a landscape phone are decided by a handful of numbers (the notch, the
+ * columns of keys, the chat) and a device pass has to be able to read them back, not infer them from a screenshot.
  */
 export const DIAGNOSTICS_CATEGORIES = [
-  'pointer', 'touch', 'key', 'ime', 'frame', 'boot', 'ocr', 'save', 'update', 'error', 'page', 'power', 'platform',
+  'pointer', 'touch', 'key', 'ime', 'frame', 'boot', 'ocr', 'save', 'update', 'error', 'page', 'power', 'platform', 'layout',
 ] as const;
 
 export type DiagnosticsCategory = typeof DIAGNOSTICS_CATEGORIES[number];
@@ -37,6 +41,7 @@ export const DIAGNOSTICS_CATEGORY_LABELS: Readonly<Record<DiagnosticsCategory, s
   page: 'Ciclo de vida da página',
   power: 'Economia de bateria (emulador)',
   platform: 'Aparelho (tela ligada, som, tela cheia, instalação)',
+  layout: 'Layout da tela (imagem e painéis laterais)',
 };
 
 /** The filter's "everything" choice. */

@@ -240,12 +240,14 @@ canvas {
  * the game box is a fixed height, growing the chat does not resize it — js-dos's resize
  * detector never even fires, so the height transition is safe to animate.
  *
- * LANDSCAPE/DESKTOP docks as a row with a fixed width. Here the canvas IS height-fitted,
- * so a panel wider than the free margin does shrink it (only at 1024x768-ish ratios).
- * That is the accepted cost of docking — but the width is still never ANIMATED: it snaps,
- * so it is ONE re-letterbox per toggle instead of the ~18 the old animated sidebar caused,
- * which is what made the canvas visibly crawl. The open/close motion comes from the chat
- * sliding inside the panel instead, clipped by its overflow (see .chat-docked-panel below).
+ * LANDSCAPE docks as a row, and the picture's container has an EXPLICIT size. It used to be `flex: 1`: js-dos fitted its
+ * canvas into whatever width the siblings left, so the gutters beside a height-fitted picture belonged to the container
+ * and nothing could live in them except as an overlay on it. Now `.game-stream-container` is exactly the picture
+ * (`--stage-w` x `--stage-h`, written by StageLayoutService from StageHelper.plan), and what is beside it is a SIBLING in
+ * the flex row: the rails of a landscape phone (_deck.scss), then the chat. The plan knows the widths of both, so a rail
+ * or the chat costs the picture only when the plan says so (the chat on a phone, measured in CLAUDE.md, *The stage*). The
+ * chat's width still SNAPS (never animated), so it is one re-letterbox per toggle instead of the ~18 the old animated
+ * sidebar caused; the open/close motion is the chat sliding inside the panel, clipped by its overflow.
  *
  * Spectators are unaffected either way: canvas.captureStream() follows the canvas BACKING
  * STORE, which js-dos pins to the DOS frame size, so displayed size never changes the
@@ -256,12 +258,11 @@ canvas {
  * at 800x600 and at 640x480.)
  *
  * Nothing overlays the game any more, so the old z-index ladder is gone; the toggle only
- * needs to sit above the game surface.
+ * needs to sit above the game surface. Where a rail holds the chat button (a landscape phone) there is no toggle at all.
  * ---------------------------------------------------------------------------
  */
 
 .game-stream-flex-container {
-    --chat-panel-width: 320px;
     // Height of the 4:3 game box in portrait. 75% of the width == 3/4.
     --game-box-height: 75vw;
 
@@ -275,8 +276,9 @@ canvas {
 }
 
 /*
- * Landscape/desktop: the game takes the remaining width. No `transition` on any box —
- * see the header. `overflow: hidden` keeps a mid-toggle canvas from painting outside.
+ * The picture's container. No `transition` on any box — see the header. `overflow: hidden` keeps a mid-toggle canvas
+ * from painting outside. Portrait pins it below; in landscape the stage plan gives it an exact size (until the first
+ * plan lands the fallback is the old whole-row container, which the plan replaces within the frame).
  */
 .game-stream-container {
     position: relative;
@@ -284,17 +286,32 @@ canvas {
     min-width: 0;
     min-height: 0;
     height: 100%;
+    // The game's own green, as the page's `.full` always painted it. Not that class: it is `width: 100%; height: 100%` in
+    // each page's stylesheet, which outweighs the stage's explicit size below (and it would be a second answer to the size).
+    background-color: #008000;
     overflow: hidden;
     display: flex;
     justify-content: center;
     align-items: center;
 }
 
+@media (orientation: landscape) {
+    .game-stream-container {
+        flex: 0 0 auto;
+        width: var(--stage-w, 100%);
+        height: var(--stage-h, 100%);
+        // Where the plan puts it, in whole pixels (--stage-mx is from the end of the left rail): the right margin takes the
+        // rest, so that what is on the right (a rail, the chat) stays at the edge of the screen.
+        margin: var(--stage-my, 0px) auto 0 var(--stage-mx, 0px);
+    }
+}
+
 .chat-docked-panel {
     flex: 0 0 auto;
     width: 0;
     // Closing: hold the width until the slide-out has finished, so the panel is seen leaving.
-    // Duration is 0s either way — this is a delayed snap, never an animated width.
+    // Duration is 0s either way — this is a delayed snap, never an animated width. In landscape the
+    // width is the stage plan's (`--chat-dock-w`, below), which waits the same 220ms to give it back.
     transition: width 0s linear 220ms;
     overflow: hidden;
     display: flex;
@@ -311,10 +328,32 @@ canvas {
 }
 
 .chat-docked-panel.chat-open {
-    width: var(--chat-panel-width);
+    width: var(--chat-panel-width, 320px);
     border-left: 2px solid var(--win9x-dark, #0a0a0a);
     // Opening: make room instantly, then slide the panel into it (see below).
     transition: width 0s linear 0s;
+}
+
+/*
+ * LANDSCAPE: the width is the stage plan's, and nothing else. `--chat-dock-w` is what the dock holds NOW (0 until the chat
+ * is open, and 220ms after it closes, the time its slide-out takes), so the picture and the panel change size at the same
+ * instant and the stage never grows into a panel that is still on screen. `--chat-panel-width` is the width it has when
+ * open, which the slide-out travels. The notch's inset is part of that width on a landscape phone (the rails' page): the
+ * face paints under it and the content keeps clear.
+ */
+@media (orientation: landscape) {
+    .chat-docked-panel,
+    .chat-docked-panel.chat-open {
+        width: var(--chat-dock-w, 0px);
+        transition: none;
+        order: 1;
+    }
+
+    // Never more than the dock holds: a closed panel is 0 wide, and a padding is a floor under a border-box width, so a plain
+    // inset here made the closed chat a 47px grey strip down the edge of a notch phone (found on the spectator's page).
+    .has-rails .chat-docked-panel {
+        padding-right: min(var(--chat-dock-w, 0px), max(env(safe-area-inset-right, 0px), 0px));
+    }
 }
 
 .chat-docked-panel > app-chat {
@@ -341,19 +380,12 @@ canvas {
     // The panel width, NOT translateX(100%). A percentage resolves against the chat's OWN
     // width, and in a closed (zero-width) panel that is 0px — so the open transition had
     // nowhere to travel from and only closing appeared to animate.
-    transform: translateX(var(--chat-panel-width));
+    transform: translateX(var(--chat-panel-width, 320px));
     transition: transform 220ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .chat-docked-panel.chat-open > app-chat {
     transform: translateX(0);
-}
-
-/* Landscape phones and small tablets: 320px is a big slice of a 700-900px viewport. */
-@media (orientation: landscape) and (max-width: 900px) {
-    .game-stream-flex-container {
-        --chat-panel-width: min(300px, 40vw);
-    }
 }
 
 /*
@@ -417,10 +449,11 @@ canvas {
 }
 
 /*
- * The toggle. Sits inside .game-stream-container, anchored to the edge the panel docks
- * against, so it reads as the drawer's grip. It rides the game surface rather than the
- * panel, so a closed (zero-sized, overflow:hidden) panel can never clip it — the bug that
- * made the host chat unreachable.
+ * The toggle. A child of the page's flex row (NOT of .game-stream-container: in landscape that is exactly the picture
+ * now, and a handle inside it would sit on the picture), anchored to the edge the panel docks against, so it reads as
+ * the drawer's grip: in landscape at `--chat-dock-w` from the right edge, which is where the panel starts. It rides the
+ * page rather than the panel, so a closed (zero-sized, overflow:hidden) panel can never clip it — the bug that made the
+ * host chat unreachable. Where the picture has no gutter beside it the handle still overlays its edge, as it always did.
  */
 .chat-toggle-btn,
 .sound-toggle-btn {
@@ -457,9 +490,10 @@ canvas {
 }
 
 .chat-toggle-btn {
-    // Portrait: bottom-centre of the game box, just above the chat's top edge.
+    // Portrait: bottom-centre of the game box, just above the chat's top edge. The row is a column there and the box is
+    // its first item, so "the box's bottom" is its 4:3 height (clamped, as the box is, to a near-square window's height).
     left: 50%;
-    bottom: 8px;
+    top: calc(min(var(--game-box-height), 100%) - 52px);
     transform: translateX(-50%);
 }
 
@@ -471,7 +505,7 @@ canvas {
  */
 .sound-toggle-btn {
     left: 8px;
-    bottom: 8px;
+    top: calc(min(var(--game-box-height), 100%) - 52px);
     min-width: 44px;
 }
 
@@ -542,12 +576,17 @@ canvas {
     }
 }
 
-/* Landscape/desktop: a vertical tab welded to the right edge of the game surface. */
+/* Landscape/desktop: a vertical tab welded to the chat's edge (the right edge of the page while it is closed). */
 @media (orientation: landscape) {
+    .sound-toggle-btn {
+        top: auto;
+        bottom: 8px;
+    }
+
     .chat-toggle-btn {
         left: auto;
         bottom: auto;
-        right: 0;
+        right: var(--chat-dock-w, 0px);
         top: 50%;
         min-width: 0;
         width: 34px;
@@ -566,11 +605,10 @@ canvas {
 }
 
 /*
- * Short landscape (phones): the tab parks at the top of the right edge, not in the middle. It was
- * the way round the host's always-open arrows FAB, which is gone, but the rule stays: it also
- * serves the spectator page (which shares this class and has a header of its own above), and a
- * tab in the corner is where that page's people already look for it. The left gutter has the
- * host's own controls (.gutter-controls), so the right edge is the chat's.
+ * Short landscape (windows 600px tall or less): the tab parks at the top of the right edge, not in the middle. It was
+ * the way round the host's always-open arrows FAB, which is gone, but the rule stays: a tab in the corner is where people
+ * already look for it. A landscape PHONE has no tab at all now (its chat button is a key in the left rail), so this serves
+ * the short tablet and laptop windows, and a spectator whose window is that tall.
  */
 @media (orientation: landscape) and (max-height: 600px) {
     .chat-toggle-btn {
@@ -714,8 +752,8 @@ canvas {
  *
  * Deliberately flat rather than Win9x. The retro boundary in CLAUDE.md keeps the page
  * toolbars as app shell, and this renders inside one — a half-retro toolbar reads as a
- * mistake. The landscape instance rides the game surface but keeps the same look, because a
- * component that changes identity by position is worse than one that does not.
+ * mistake. The landscape phone's instance stands in a Win9x rail but keeps the same look, because
+ * a component that changes identity by position is worse than one that does not.
  */
 .mp-status-pill {
     display: inline-flex;
@@ -764,11 +802,8 @@ canvas {
  * `outer radius - 10px` on the vertical axis only, so `999px` (clamped to 22px) would paint
  * stretched ellipses. 12px across and 22px down leaves 12px on both axes inside.
  *
- * Where the pill floats over the game (mobile landscape) there is no clipping parent, and
- * a negative margin takes the 10px back out of the layout so the capsule stays where it was.
- * The extra hit area then sits in the same gutter as the pill, so it takes no taps from the
- * game, except on the narrowest phones where the pill already overhangs the canvas edge (see
- * .mp-status-pill-floating).
+ * In a landscape phone's rail (_deck.scss) the pill is a grid item 44px tall, so the hit area IS the row: nothing is
+ * clipped there either, and nothing overlaps the picture.
  */
 @media (pointer: coarse) {
     .mp-status-pill {
@@ -835,31 +870,6 @@ canvas {
     border-inline-start: 1px solid rgba(255, 255, 255, 0.35);
 }
 
-/*
- * Landscape-compact instance on the host, where the header is suppressed entirely. It is the top
- * of the `.gutter-controls` column (_deck.scss) in the left gutter that the height-fitted canvas
- * leaves free, above the options menu and the deck's launcher, so it takes no position of its own;
- * .chat-toggle-btn owns the right edge, so the left is the free side.
- *
- * At the narrowest landscape phones (667x375 leaves ~83px per side) it will overhang the
- * canvas edge. Accepted: a few pixels of a 4:3 frame's margin, against the alternative of no
- * room code on screen at all in the one orientation that has no toolbar.
- */
-.mp-status-pill-floating {
-    max-width: 60vw;
-}
-
-.mp-status-pill-floating .mp-status-pill {
-    background: rgba(0, 0, 0, 0.55);
-}
-
-// Takes back the transparent border the coarse rule above adds to every pill; see there.
-@media (pointer: coarse) {
-    .mp-status-pill-floating .mp-status-pill {
-        margin-top: -10px;
-        margin-bottom: -10px;
-    }
-}
 /*
  * Save status chip ("Salvo às 14:32"), in the game page's toolbar.
  *

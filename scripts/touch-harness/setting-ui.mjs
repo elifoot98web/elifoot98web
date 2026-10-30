@@ -17,12 +17,12 @@ const centre = selector => c.ev(`JSON.stringify((() => { const b = document.quer
 
 check(await c.ev('__g.touchInputService.attached'), 'direct touch is attached after boot (the default)')
 
-// A real tap on the options button: the toolbar in portrait; in landscape the toolbar is gone and the round button in the left gutter
-// (.gutter-menu-btn, where the control deck's "Teclas" launcher also lives) opens the same menu.
+// A real tap on the options button: the toolbar in portrait; on a landscape phone the toolbar is gone and the round button at the top of
+// the left rail (.rail-menu-btn) opens the same menu.
 const toolbar = await centre('ion-header ion-buttons[slot="end"] ion-button')
-const gutter = toolbar ? null : await centre('.gutter-menu-btn')
-const menuButton = toolbar ?? gutter
-check(!!menuButton, 'the options button is on screen', toolbar ? 'toolbar' : 'gutter')
+const rail = toolbar ? null : await centre('.rail-menu-btn')
+const menuButton = toolbar ?? rail
+check(!!menuButton, 'the options button is on screen', toolbar ? 'toolbar' : 'rail')
 await c.tap(menuButton.x, menuButton.y, 60)
 await sleep(900)
 await c.shot(path.join(OUT, 'shots', `ui-${tag}-menu.png`))

@@ -2,7 +2,7 @@
 /**
  * The control deck against the real page: where it sits, what each key sends, and how a held key repeats.
  *
- *   node scripts/touch-harness/deck.mjs layout [sizes]   the picture's box with the deck on, off and (launcher) with the sheet open; every panel's keys: size, overlap, inside the viewport
+ *   node scripts/touch-harness/deck.mjs layout [sizes]   the picture's box with the deck on, off and (launcher, rails) with the sheet open; every panel's keys: size, overlap, inside the viewport (a landscape phone's rails are stage.mjs's)
  *   node scripts/touch-harness/deck.mjs keys             one real tap on each key that is safe to press, and what the guest got
  *   node scripts/touch-harness/deck.mjs repeat           a 1.5 s hold on Down: the first repeat, the interval, and the stop on release
  *   node scripts/touch-harness/deck.mjs scroll           a hold with 40 px of vertical drift survives inside the scrolling sheet; a drag from a landing key does not scroll, one from a gap does
@@ -47,7 +47,7 @@ if (mode === 'layout') {
     const kind = await c.ev(`__g.layout.kind + '/' + __g.layout.shape`)
     const withDeck = await rects()
     let withSheet = withDeck
-    if (kind.startsWith('launcher')) { await c.evBody(`__g.deckSheetOpen = true`); await settle(); withSheet = await rects() }
+    if (kind.startsWith('launcher') || kind.startsWith('rails')) { await c.evBody(`__g.deckSheetOpen = true`); await settle(); withSheet = await rects() }
     // Every panel, in the presentation the page picked: the keys' sizes, whether any two overlap, whether any is outside the viewport.
     for (const panel of ['tactics', 'arrows', 'more']) {
       await showPanel(panel); await settle()

@@ -78,10 +78,14 @@
   height: 100%;
 }
 
-// Layout for .game-stream-flex-container / .game-stream-container /
-// .chat-overlay-panel / .chat-toggle-btn is shared with the host page and lives in
-// src/global.scss. The chat is an overlay there, so nothing on this page may size itself
-// against whether the chat is open.
+// Layout for .game-stream-flex-container / .game-stream-container / .chat-docked-panel /
+// .chat-toggle-btn is shared with the host page and lives in src/global.scss (the rail's, in
+// src/theme/_deck.scss). The chat is DOCKED there, beside the picture in landscape and below it in
+// portrait, and in landscape the container is given its exact size by the stage plan
+// (--stage-w x --stage-h, StageLayoutService) - the host's size at the same window, which is what
+// makes the guest's picture equal the host's. So nothing on this page may size itself against whether
+// the chat is open or whether there is a rail: the plan already did, and a rule here that did it
+// again would be a second answer.
 
 // The stream is letterboxed from the frame's RATIO by syncStreamContainer(), which writes
 // explicit width/height in px. It used to be pure CSS, deriving the used size from the

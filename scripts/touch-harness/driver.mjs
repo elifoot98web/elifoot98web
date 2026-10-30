@@ -7,6 +7,7 @@
  *
  *   node scripts/touch-harness/driver.mjs [profileDir] [port] [width] [height]
  *   CHROME_BIN=/path/to/chrome node scripts/touch-harness/driver.mjs
+ *   CHROME_FLAGS='--disable-features=WebRtcHideLocalIpsWithMdns' node scripts/touch-harness/driver.mjs   extra switches (a second browser for a room)
  *
  *   GET  /session            the CDP session id of the one tab
  *   POST /send               {method, params, sessionId?} -> the raw CDP response
@@ -51,6 +52,9 @@ const child = spawn(chromePath, [
   '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding',
   '--no-first-run', `--window-size=${widthArg},${heightArg}`, '--use-angle=swiftshader', '--enable-unsafe-swiftshader',
   ...isShell ? [] : ['--headless=new'],
+  // Extra switches, space separated. Two browsers on one machine need `--disable-features=WebRtcHideLocalIpsWithMdns`: Chrome hides
+  // the host candidates behind .local names, and a sandbox that cannot resolve them never connects the pair.
+  ...(process.env.CHROME_FLAGS ? process.env.CHROME_FLAGS.split(' ').filter(Boolean) : []),
   'about:blank',
 ], { stdio: ['ignore', 'ignore', fs.openSync(`${profile}.chrome.log`, 'w'), 'pipe', 'pipe'] })
 const toChrome = child.stdio[3]
