@@ -755,4 +755,71 @@ describe('GuestPointer', () => {
       pointer.dispose();
     }));
   });
+  describe('waking the guest', () => {
+
+    it('calls beforeSend ahead of every motion and every button, the home and the walk back included', strict(() => {
+      const guest = fakeGuest();
+      const order: string[] = [];
+      const sent = guest.ci.sendMouseRelativeMotion;
+      const pressed = guest.ci.sendMouseButton;
+      guest.ci.sendMouseRelativeMotion = (dx, dy) => { order.push('motion'); sent(dx, dy); };
+      guest.ci.sendMouseButton = (button, down) => { order.push(down ? 'press' : 'release'); pressed(button, down); };
+      const pointer = newPointer(guest, { beforeSend: () => order.push('wake') });
+
+      void pointer.moveTo({ x: 200, y: 150 });
+      void pointer.click();
+      tick(1000);
+
+      expect(order.length).toBeGreaterThan(8);
+      // Every send is directly preceded by a wake, and a wake is never followed by another wake.
+      order.forEach((entry, i) => {
+        if (entry === 'wake') return;
+        expect(order[i - 1]).toBe('wake');
+      });
+      expect(order.filter(entry => entry === 'wake').length).toBe(order.filter(entry => entry !== 'wake').length);
+      pointer.dispose();
+    }));
+
+    it('wakes before the release that abort() sends in the same tick', strict(() => {
+      const guest = fakeGuest();
+      let wakes = 0;
+      const pointer = newPointer(guest, { beforeSend: () => wakes++ });
+      void pointer.moveTo({ x: 100, y: 100 });
+      void pointer.press();
+      tick(300);
+      const before = wakes;
+
+      pointer.abort('test');
+
+      expect(wakes).toBe(before + 1);
+      expect(guest.buttons.map(b => b.pressed)).toEqual([true, false]);
+      pointer.dispose();
+    }));
+
+    it('does not wake for a send it refuses: nothing reaches the guest', strict(() => {
+      const guest = fakeGuest();
+      let wakes = 0;
+      const pointer = newPointer(guest, { beforeSend: () => wakes++ });
+      void pointer.moveTo({ x: 100, y: 100 });
+      tick(500);
+      const before = wakes;
+
+      void pointer.moveTo({ x: NaN, y: 3 });
+      tick(100);
+
+      expect(wakes).toBe(before);
+      pointer.dispose();
+    }));
+
+    it('sends anyway when the hook throws', strict(() => {
+      const guest = fakeGuest();
+      const pointer = newPointer(guest, { beforeSend: () => { throw new Error('hook'); } });
+
+      void pointer.moveTo({ x: 100, y: 100 });
+      tick(500);
+
+      expect(distance(guest.position(), { x: 100, y: 100 })).toBeLessThanOrEqual(1);
+      pointer.dispose();
+    }));
+  });
 });

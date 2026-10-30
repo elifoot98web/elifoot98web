@@ -1,4 +1,5 @@
 import { Component } from '@angular/core';
+import { EMULATOR_POWER } from '../../../../core/models/constants';
 
 @Component({
   selector: 'app-faq',
@@ -7,6 +8,9 @@ import { Component } from '@angular/core';
   standalone: false
 })
 export class FaqComponent {
+  /** The battery saver entry quotes these, so a change of the constants reaches the answer (see EMULATOR_POWER). */
+  readonly idleSeconds = Math.round(EMULATOR_POWER.IDLE_MS / 1000);
+  readonly savingByDefault = EMULATOR_POWER.DEFAULT_ENABLED;
 
   constructor() { }
 

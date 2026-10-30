@@ -5,6 +5,7 @@ import { EMULATOR_CONTROL_CONFIG } from '../../models/constants';
 import { EmulatorKeyCode, EmulatorKeyCodeHelper, KeyTask } from '../../models/game';
 import { DosCI } from '../../typings/jsdos';
 import { DiagnosticsService } from '../shared/diagnostics.service';
+import { EmulatorPowerService } from './emulator-power.service';
 
 /** How a submission ended when it did not fail. Cancelling is an outcome, not an error. */
 export interface KeySendResult {
@@ -124,6 +125,10 @@ interface Entry {
  * cancelled or failed. The flush line carries how long the tasks took against how long the
  * pacing says they should, which is the one number the pacing has never had from a phone.
  *
+ * Every submission wakes a sleeping guest first, and so does every task (EmulatorPowerService): keys
+ * sent to a paused guest are queued, not lost, but they would all land in one burst when it resumed,
+ * and DOSBox's keyboard buffer drops what a burst overruns.
+ *
  * **It can say it is in trouble.** When the emulator itself throws while a task is going out (its
  * worker is gone), the queue is `faulted` for `KEY_FAULT_COOLDOWN_MS`, or until a submission goes
  * out whole, whichever comes first. The control deck greys its keys meanwhile, so a held arrow
@@ -155,7 +160,7 @@ export class GuestKeyQueueService implements OnDestroy {
   /** Whether the last send failed in the emulator, and not yet long enough ago (or well enough since) to try again. */
   readonly faulted$: Observable<boolean> = this.faultedSubject.pipe(distinctUntilChanged());
 
-  constructor(private zone: NgZone, private diagnostics: DiagnosticsService) { }
+  constructor(private zone: NgZone, private diagnostics: DiagnosticsService, private power: EmulatorPowerService) { }
 
   get faulted(): boolean {
     return this.faultedSubject.value;
@@ -250,6 +255,9 @@ export class GuestKeyQueueService implements OnDestroy {
     }
 
     this.activitySubject.next();
+    // Before the first key is queued, not when it goes out: the guest has to be running when the
+    // first event lands (see EmulatorPowerService), and the resume takes a moment.
+    this.power.wake('keys');
     return new Promise<KeySendResult>((resolve, reject) => {
       const job: Job = {
         id: ++this.lastJobId,
@@ -328,6 +336,10 @@ export class GuestKeyQueueService implements OnDestroy {
       }
       // A cancel that landed while the guard was reading skips the first task as well.
       if (!job.cancelled) {
+        // Every task, not only the first: a long text takes seconds, and the guest must not be put
+        // to sleep with keys still going out to it. The service also counts keys still queued as a
+        // blocker, but that is the net; waking before each task is the rule.
+        this.power.wake('keys');
         const began = performance.now();
         await this.perform(job.dosCI, task);
         const took = performance.now() - began;

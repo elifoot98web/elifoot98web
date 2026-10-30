@@ -19,3 +19,8 @@ declare function elifootMain(pathPrefix: string, gameBundleURL: string, onProgre
 declare function saveGameFileSystem(): Promise<void>;
 declare var dosInstance: any;
 declare function getDosAudioNode(): ScriptProcessorNode | null;
+/**
+ * Registered by EmulatorPowerService while it is running. Wakes a sleeping guest and holds it awake
+ * until the returned function is called; `saveGameFileSystem()` uses it, and so does GuestAccessHelper.
+ */
+declare var holdGuestAwake: ((reason: string) => () => void) | undefined;

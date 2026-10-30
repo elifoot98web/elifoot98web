@@ -4,6 +4,7 @@ import { DosCI } from '../../typings/jsdos';
 import { lastValueFrom } from 'rxjs';
 import { BASE_SAVEGAME_DIR, DISPLAY_MODE } from '../../models/constants';
 import { DisplayMode } from '../../helpers/display-mode.helper';
+import { GuestAccessHelper } from '../../helpers/guest-access.helper';
 import { BackupInput, BackupReading, BackupSave, SaveBackupHelper } from '../../helpers/save-backup.helper';
 import JSZip from 'jszip';
 
@@ -200,7 +201,7 @@ export class PatchService {
    */
   async existingSaveNames(dosCI: DosCI): Promise<string[]> {
     try {
-      return await SaveBackupHelper.existingNames(await dosCI.persist())
+      return await SaveBackupHelper.existingNames(await GuestAccessHelper.whileAwake('save names', () => dosCI.persist()))
     } catch (error) {
       console.error('Could not list the saves in the emulator', error)
       throw new Error('Não foi possível ler os dados do jogo. Recarregue a página e tente novamente.')
@@ -290,7 +291,7 @@ export class PatchService {
   private async getLocalChanges(dosCI: DosCI): Promise<JSZip> {
     try {
       await saveGameFileSystem()
-      const rawChanges = await dosCI.persist()
+      const rawChanges = await GuestAccessHelper.whileAwake('local changes', () => dosCI.persist())
       return await JSZip.loadAsync(rawChanges)
     } catch (error) {
       console.error('Could not read the emulator changes', error)

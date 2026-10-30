@@ -65,6 +65,15 @@ export class GameExitWatcherService {
     return this.dosCI !== null;
   }
 
+  /**
+   * The game's own screen has been seen since `start()`: always, when the page started it armed,
+   * and from the first frame `armWhen` accepts when the boot's window ran out first. It is how the
+   * idle pause (EmulatorPowerService) learns that a slow boot has finished late.
+   */
+  get gameSeen(): boolean {
+    return this.dosCI !== null && this.armed;
+  }
+
   start(dosCI: DosCI, options: GameExitWatchOptions = {}): void {
     this.stop();
     this.dosCI = dosCI;

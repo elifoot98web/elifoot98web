@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import JSZip from 'jszip';
+import { GuestAccessHelper } from '../../helpers/guest-access.helper';
 import { SaveBackupHelper } from '../../helpers/save-backup.helper';
 import { DiagnosticsService } from '../shared/diagnostics.service';
 import { SaveStatusService } from '../shared/save-status.service';
@@ -28,7 +29,8 @@ export class SaveGameService {
   constructor(private diagnostics: DiagnosticsService, private status: SaveStatusService) { }
 
   /**
-   * Flush the emulator's changes to IndexedDB (`layers.save()`), one flush at a time. Every persist
+   * Flush the emulator's changes to IndexedDB (`layers.save()`), one flush at a time, with the guest
+   * held awake (`saveGameFileSystem()` does that, see game.js and EmulatorPowerService). Every persist
    * in the app passes through here, from the auto-saver, the chip, a page going hidden and leaving
    * the game, and a second `layers.save()` started while the first is still reading the disk is
    * not something the emulator promises to cope with, so a caller that arrives meanwhile waits its
@@ -71,7 +73,7 @@ export class SaveGameService {
       return null
     }
 
-    const built = await SaveBackupHelper.build(await dosCI.persist())
+    const built = await SaveBackupHelper.build(await GuestAccessHelper.whileAwake('backup', () => dosCI.persist()))
     if (!built) {
       return null
     }
@@ -121,7 +123,7 @@ export class SaveGameService {
       return false
     }
 
-    const rawChanges = await dosCI.persist()
+    const rawChanges = await GuestAccessHelper.whileAwake('disk copy', () => dosCI.persist())
     let zip = new JSZip()
     zip = await zip.loadAsync(rawChanges, { createFolders: true })
     let hasChanges = zip && zip.files && Object.keys(zip.files).length > 0;

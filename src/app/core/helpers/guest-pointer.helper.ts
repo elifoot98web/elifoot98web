@@ -138,6 +138,14 @@ export interface GuestPointerOptions {
   /** Milliseconds on a monotonic clock. `performance.now()` unless a spec injects its own. */
   now: () => number;
   log?: GuestPointerLogger;
+  /**
+   * Called before every send to the guest, a motion or a button. The layer uses it to wake a guest
+   * that is asleep (EmulatorPowerService): the engine's timers keep sending after the finger has
+   * gone (the cursor walking to its target, the idle re-home), and what reaches a paused guest is
+   * applied in one go when it resumes, which is exactly what the one-send-per-frame rule exists to
+   * prevent. A hook that throws is the caller's problem and does not stop the send.
+   */
+  beforeSend?: () => void;
 }
 
 type OpKind = 'move' | 'press' | 'release' | 'click' | 'home';
@@ -559,6 +567,7 @@ export class GuestPointer {
       this.options.log?.('refused a send', () => ({ dx, dy }));
       return null;
     }
+    this.wake();
     this.ci.sendMouseRelativeMotion(dx, dy);
     const at = this.options.now();
     const gap = at - this.lastMotionAt;
@@ -574,6 +583,7 @@ export class GuestPointer {
 
   private sendButton(pressed: boolean): void {
     if (pressed === this.pressed) return;
+    this.wake();
     if (pressed) {
       this.ci.sendMouseButton(0, true);
       this.pressed = true;
@@ -581,6 +591,14 @@ export class GuestPointer {
       // Cleared first: if the emulator throws, the button is as released as it will ever be.
       this.pressed = false;
       this.ci.sendMouseButton(0, false);
+    }
+  }
+
+  private wake(): void {
+    try {
+      this.options.beforeSend?.();
+    } catch (error) {
+      this.options.log?.('beforeSend threw', () => ({ error: String(error) }));
     }
   }
 

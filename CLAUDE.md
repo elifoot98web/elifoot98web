@@ -30,7 +30,7 @@ node scripts/frame-fixtures/make-fixtures.mjs <out.ts> name=frame.png::note ... 
 Specs are karma + jasmine. The builder globs `**/*.spec.ts` (its `include` option, which is also
 what `--include` overrides); [src/test.ts](src/test.ts) only initialises the TestBed and
 `tsconfig.spec.json` type-checks `src/**/*.spec.ts`, so a spec needs no registration but must live
-under `src/` to be type-checked. Nothing in a spec reaches the bundle. There are **fifty-six spec files so
+under `src/` to be type-checked. Nothing in a spec reaches the bundle. There are **sixty spec files so
 far**. [room-code.helper.spec.ts](src/app/core/helpers/room-code.helper.spec.ts) is there as
 much to prove the harness as to cover `RoomCodeHelper`: `ng test` with **zero** specs
 prints `Executed 0 of 0 SUCCESS` and still exits 1, so a `test:ci` could never pass before the
@@ -106,7 +106,14 @@ serif, two cases fail). [storage-keys.spec.ts](src/app/core/services/shared/stor
 registry says it lives, runs the real wipe against the real Ionic Storage and fails if anything is left. One trap in a
 service spec: a synthetic `beforeunload` on the real `window` reaches Karma's own handler and fails the whole run
 ("Some of your tests did a full page reload!"), so `SaveSafetyService.unloadTarget()` is overridable and the spec dispatches
-on a stand-in. Write specs for pure logic (helpers,
+on a stand-in. [emulator-power.helper.spec.ts](src/app/core/helpers/emulator-power.helper.spec.ts) is the model for "a rule that
+needs the world's answer before it acts": the state machine is driven by a script of (time, event) calls with no clock of its own,
+including the handshake (it asks, the caller answers later, and an answer overtaken by a frame is dropped), and
+[emulator-power.service.spec.ts](src/app/core/services/game/emulator-power.service.spec.ts) runs the service over the real `document`
+listeners and a recording fake emulator under `fakeAsync`, with the timeline written in absolute time from `start()` because the
+interval ticks on those instants. [cheat-omatic.service.spec.ts](src/app/core/services/game/cheat-omatic.service.spec.ts) is the model for
+"a service that must hold something open around its awaits": the door is a recording stand-in on `globalThis`, and a read or a write that
+fails must still let go. Write specs for pure logic (helpers,
 planners, parsers, queues driven by a fake clock); the emulator, the screen-scrapers and the WebRTC
 paths have no karma coverage and are checked in a real browser (see the harness above). `ChromeHeadlessCI` in
 [karma.conf.js](karma.conf.js) is `ChromeHeadless --no-sandbox`, which a CI runner or container
@@ -124,8 +131,9 @@ landed where the finger was is to read the guest's cursor out of its RAM from ou
 [scripts/touch-harness/](scripts/touch-harness/README.md): a driver, a RAM oracle, and the checks (tap accuracy over 18
 screens per send spacing, the gain table, the frame period, drift, stuck buttons, the Macintosh-user-agent iPad matrix,
 the "Modo de toque" UI, and the edge cases a review found: a fast second tap, a retry after a miss, a drag past the send
-budget, the audio wake; and `typebar.mjs`, the live type bar on the real game against a SIMULATED OS keyboard and CDP's IME
-events), with the tables the constants rest on. **Re-run it after any change to the video mode, the
+budget, the audio wake; `typebar.mjs`, the live type bar on the real game against a SIMULATED OS keyboard and CDP's IME
+events; and `idle-pause.mjs`, the battery saver on the real game: CPU on a still screen, whole Elifoot rounds with the setting on and off,
+and taps and keys sent to a sleeping guest, see *Letting the guest sleep*), with the tables the constants rest on. **Re-run it after any change to the video mode, the
 Windows mouse settings, js-dos or the disk image.** It needs a dev build (`window.ng`) served with `--live-reload=false`.
 
 Git LFS is required: `*.jsdos` is LFS-tracked (`src/assets/elifoot/elifoot98.jsdos`, ~6.7 MB holding
@@ -210,7 +218,8 @@ the bundle name `angular.json` gives [src/scripts/game.js](src/scripts/game.js) 
 the tag is hand-written).
 
 `game.js` exposes four browser globals, typed for TypeScript in
-[src/scripts/game.d.ts](src/scripts/game.d.ts) and called directly from Angular services:
+[src/scripts/game.d.ts](src/scripts/game.d.ts) and called directly from Angular services, and reads one the other way round
+(`holdGuestAwake`, below):
 
 - `elifootMain(pathPrefix, gameBundleURL, onProgress?)` — creates the DOS instance in
   `#game-container`, runs the bundle, resolves the command interface (`dosCI`). `onProgress(text)`
@@ -224,7 +233,8 @@ the tag is hand-written).
   keyboard (63 keys 19 css px wide, over 60% of a portrait picture) where nothing can see it;
   `toggleSoftKeyboard` is gone, and `global.scss` hides `.emulator-keyboard` as the net under the
   option in case a js-dos update stops honouring it. Checked in the app: no `.emulator-keyboard` in the page.
-- `saveGameFileSystem()` — `dosInstance.layers.save()`, i.e. flush changed FS to IndexedDB.
+- `saveGameFileSystem()` — `dosInstance.layers.save()`, i.e. flush changed FS to IndexedDB, with the guest held awake
+  for the length of the flush (`holdGuestAwake`, below).
 - `dosInstance` — the raw js-dos instance, needed by `PatchService` for `emulatorsUi.persist` and by `GamePage`
   for `layers` (`root`, `mouseOverlay`, `canvas`), the elements direct touch attaches to.
 - `getDosAudioNode()` — js-dos's own `ScriptProcessorNode`, or `null`. js-dos builds its
@@ -232,15 +242,21 @@ the tag is hand-written).
   .createScriptProcessor` at load (before `elifootMain` can run) and keeps the one node created
   with no inputs and one output. That wrapper is the only patch to a global in the app; it
   exists for `MultiplayerAudioService` (see the audio invariant below).
+- `holdGuestAwake(reason)` — **the other direction**: Angular registers it, `game.js` calls it. `EmulatorPowerService` sets
+  `globalThis.holdGuestAwake` while it runs and clears it when it stops (only if the function is still its own);
+  `saveGameFileSystem()` calls it around `layers.save()` and releases in `finally`, and TypeScript code outside the service goes
+  through `GuestAccessHelper.hold` / `whileAwake`. It exists because the update prompt in the main bundle persists through
+  `saveGameFileSystem()` and cannot import a service of the game chunk, and because every persist meets in that one function. See
+  *Letting the guest sleep*.
 
 [src/app/core/typings/jsdos.d.ts](src/app/core/typings/jsdos.d.ts) is a hand-maintained typing of the js-dos
 command interface (`DosCI`) — screenshot, key/mouse injection, `persist()`, `readMemory`,
 `writeMemory`. `GamePage.dosCI` is `any` and gets threaded into every service as a parameter, and into the control deck as an `@Input` (which
-sends through the key queue and keeps nothing); no singleton owns it. Four root services touch it for longer than a call: the key queue (see *Typing into the
+sends through the key queue and keeps nothing); no singleton owns it. Five root services touch it for longer than a call: the key queue (see *Typing into the
 guest*), which keeps it only for the length of a job, `TouchInputService` (see *Touching the guest*), which
-holds it from `attach()` to `detach()`, and `SaveSafetyService` and `GameExitWatcherService` (see *Save safety
-nets*), which hold it from `GamePage.loadConfig()` to `stopSafetyNets()`. `GamePage.ngOnDestroy` cancels whatever
-is still queued, detaches and stops them.
+holds it from `attach()` to `detach()`, and `SaveSafetyService`, `GameExitWatcherService` and `EmulatorPowerService` (see *Save safety
+nets* and *Letting the guest sleep*), which hold it from `GamePage.loadConfig()` to `stopSafetyNets()` (the last only while its
+setting is on). `GamePage.ngOnDestroy` cancels whatever is still queued, detaches and stops them.
 
 ### Inside the .jsdos bundle / boot chain
 
@@ -582,6 +598,10 @@ Load-bearing invariants — each of these was a bug, or a measured trap:
 - **A task is atomic.** Once its first key is down it is carried through to the release, so
   neither `cancel()` nor a failure can leave Alt or Shift held in the guest; `cancel()` drops only
   tasks that have not started, and `GamePage.ngOnDestroy` calls it.
+- **A submission wakes a sleeping guest first, and so does every task.** The battery saver (*Letting the guest sleep*) pauses the
+  emulator on a still screen; keys sent to a paused guest are not lost, but they pile up in the worker and land in one burst on
+  resume, which is what the 14-event rule above exists to prevent. `submit` calls `EmulatorPowerService.wake('keys')` before it
+  queues anything and `run` calls it again before each task, so a text that takes seconds never sees the guest fall asleep under it.
 - **Every code point is one visible character in the guest.** `EmulatorKeyCodeHelper.planText` is
   the pure, specced step that turns a string into tasks: ASCII is a plain or Shift chord,
   U+00A1–U+00FF are Alt+0nnn on the keypad (four digits, zero-padded, which selects ANSI over the
@@ -721,6 +741,12 @@ Load-bearing invariants, each measured or a bug waiting:
   `#game-container` (absolute, `pointer-events: none`, transform and opacity only), so the stream the spectators get and
   every screen-scraper (`dosCI.screenshot()`) never see them, and they cannot resize the surface. The look is neutral on
   purpose, not Win9x (it is feedback, not a window), and survives `prefers-reduced-motion` as a fade.
+- **The engine wakes a sleeping guest before every send** (`GuestPointerOptions.beforeSend`, wired from `TouchSurface.beforeSend`; the
+  page passes `EmulatorPowerService.wake('touch')`). Its timers keep sending after the finger has gone (the cursor walking to its
+  target, the idle re-home), and mouse motion that reaches a paused guest is applied in one go when it resumes: the guest sums sends
+  that arrive close together, so a dead-reckoning model fed that way is off by hundreds of pixels. The document-level capture
+  listeners of the service wake it for the finger itself before this layer sees the event; this hook is for what happens later.
+  `TouchInputService.busy` (a finger down, a button held, motion queued) is one of the things that keep the guest awake.
 - **The layer runs outside Angular's zone** (pointer events arrive at the display rate), holds the emulator only
   between `attach()` and `detach()`, and `GamePage.ngOnDestroy`, "Voltar ao menu" and a switch to classic detach it.
   All keys still go through the key queue; this layer sends none.
@@ -1049,6 +1075,148 @@ it on a low-end phone. **Known and left, because the fix is in the P2 pointer en
 still queued, so after a long paste on a slow phone the click can land before the tail of the text has been typed and the tail goes to
 the field just tapped (a paste shows its progress, and the window is the cursor's walk to the tap, at least ~200 ms of 10 ms keys).
 
+### Letting the guest sleep (battery saver)
+
+DOSBox pins one core at about 100% even on a menu that never changes (measured: 101.9% of an Apple-silicon core on a still screen, and
+lowering `cycles` changes nothing), and a manager game is mostly still menus, so on a phone that is battery and heat.
+[`EmulatorPowerService`](src/app/core/services/game/emulator-power.service.ts) calls `dosCI.pause()` when the picture has been still long
+enough and `resume()` the moment anything wants the guest. It is phase P9 (decision D6); the design record is
+[docs/mobile-ux-study.md](docs/mobile-ux-study.md). The rule itself is [`IdlePowerMachine`](src/app/core/helpers/emulator-power.helper.ts)
+(no clock, no timer, no emulator: every call carries the time), the numbers are `EMULATOR_POWER` in [constants.ts](src/app/core/models/constants.ts),
+and everything outside the service reaches the guest through [`GuestAccessHelper`](src/app/core/helpers/guest-access.helper.ts).
+
+**Off by default, and one constant from on.** The setting is `STORAGE_KEY.IDLE_PAUSE` ("Economizar bateria quando parado" in the options
+menu), stored as an explicit boolean so that changing `EMULATOR_POWER.DEFAULT_ENABLED` reaches only people who never touched the switch;
+the menu says it has not been tried on real phones, and the FAQ has an entry. *Why off:* the rule the roadmap proposed, asleep after 2 s
+without a frame or an input, was played on real Elifoot rounds and it made the game's own computations **1.8 times slower on average and 2.7 in the worst round**, because
+Elifoot spends whole seconds with the picture untouched while it works (on this desktop a 6 to 7.4 s stretch two seconds after the key that
+starts a round, and a 9 to 10.3 s one 38 s after the last key, the end of the match) and a guest put to sleep in the middle of that runs the
+rest at the probe's duty cycle (about a ninth of its speed). With the idle time at 20 s the saver never slept in play (0 sleeps in 20 ON rounds over four runs; the longest gap 10.3 s with the saver on and
+the same with it off), and with the learning below it costs one stretched computation at most, but every number here is a desktop's: the
+feature exists for a phone whose silent stretches are unmeasured, and a computation that outlasts the idle time on a slow phone is stretched
+for as long as it takes to be seen once. The owner flips `DEFAULT_ENABLED` after the Galaxy A07 pass, or does not; the FAQ entry follows the constant (and `IDLE_MS`) by binding, but the
+menu's "Ainda não foi testado em celulares de verdade" is prose about that pass and is revised by hand in the same commit.
+
+**The invariant: anything that talks to the guest calls `wake()` first** (or `hold()` for the length of a job; both are no-ops when the
+service is not running, which is the case whenever the setting is off). *Why:* `pause()` is a flag and the guest's clock stops with it.
+Input sent to a paused guest is not lost (0 frames while paused and 7 after the resume, measured) but it piles up in the worker and is applied
+in one go on resume, and that is not harmless here: the guest sums mouse motion that arrives close together and applies its gain to the sum
+(the pointer engine's whole pacing exists because of it), and DOSBox's keyboard buffer drops what a burst overruns (the 14-event rule).
+Waking first means the guest is already running when the first event lands, and every sender paces itself against a guest that is. The
+paths, each of which must keep doing it:
+
+- *The page's own listeners* on `document`, capture phase, passive (`pointerdown`, `pointerup`, `keydown`, `keyup`, `touchstart`, `wheel`,
+  and `pointermove` only with a button down or the pointer locked: a hovering mouse sends the guest nothing). They run before the touch
+  layer stops the event on the emulator's root. This is the finger itself and a hardware keyboard.
+- *`GuestKeyQueueService`*: `submit` before anything is queued, and `run` before each task, so a text that takes seconds never sees the guest
+  fall asleep under it. Every key of the deck, the compose dialog and the type bar goes through there.
+- *`GuestPointer`*: `beforeSend`, wired from the page through `TouchSurface.beforeSend`, runs before every motion and every button, the
+  home and the walk back included. Its timers keep sending after the finger has gone.
+- *Every persist*: `saveGameFileSystem()` in `game.js` calls `globalThis.holdGuestAwake` (which the service registers while it runs, and
+  clears only if it is still its own), because the update prompt in the main bundle cannot import a service of the game chunk and every
+  persist meets in that one function; `PatchService` (`getLocalChanges`, `existingSaveNames`) and `SaveGameService` (the backup, the disk
+  copy) go through `GuestAccessHelper.whileAwake`. A persist works against a paused guest (measured: 5.4 MB in 1.05 s) but was never run
+  against anything else in this app, and a probe resuming it halfway is not worth finding out about.
+- *The Cheat 'O Matic*: the search sweep and the write are held (`readMemory` and `writeMemory` both work on a paused guest, but a value
+  written into one is not seen until it wakes).
+- *Flows that rewrite the saved disk, exit the emulator or leave* (a patch, the import, the resolution switch, the restart, leaving) stop the
+  service first: `GamePage.stopSafetyNets` stops it before anything else, and `stop()` resumes a sleeping guest.
+
+A path that was missed degrades to "delayed", not "lost": with the probe policy the input waits for the next probe (at most 2.25 s), which
+then sees a frame and is read as a stall (the idle time grows, below). That was reproduced by accident with the harness's RAM oracle, whose
+direct sends do not wake anything: its calibration failed ("cursor address not found") while the guest slept, and the nudges were applied at
+the next probe.
+
+**What is paused and what is not.** Only the emulator, and its sound with it (nothing else is touched: no `cycles`, no stream, no audio node;
+a host's audio fan-out keeps running and carries silence). `screenshot()`, `persist()` and `readMemory()` keep working on a paused guest
+(measured), so the auto-saver's looks, the exit watcher and the OCR are unchanged and never wake it. **Never paused:** a hosting browser
+(v1 is conservative: a stream is the guest's picture, and what a paused guest does to the encoder and to a spectator who joins meanwhile has
+not been looked at; a room that starts while the guest sleeps wakes it on the next tick); a page that is not visible (js-dos pauses the
+emulator on `visibilitychange` and resumes it when the page comes back, so the service adds neither a pause nor a probe, sends no `resume()` meanwhile, and `visible()` puts its belief right afterwards: the guest is awake, the idle time starts over); a boot (nothing
+sleeps until the exit watcher or the page has seen the game's own screen).
+
+**The rule** (checked every `TICK_MS`, 250 ms). Asleep needs, all at once: no frame for `IDLE_MS`; no input for `INPUT_QUIET_MS` (the guard
+against the one thing a frame counter cannot see, a computation that starts with a tap); no blocker (hosting, game not seen, a hold, keys
+queued or a finger, a held button or motion in the touch layer, each of which also counts as activity and wakes a sleeper); and then it
+**asks before it sleeps** whether the game's own "A gravar o jogo…" dialog is up (`SaveSafetyService.gameSavingVerdict()`, the auto-saver's
+cached OCR verdict). A static dialog is exactly what a slow save looks like to a frame counter, and a guest asleep in the middle of the write
+is the truncated `.e98` that the auto-saver waits for the dialog to close to avoid. **Only a definite `false` sleeps:** `true` and `null` (no
+OCR, auto-save off, a failed read, a look slower than `LOOK_TIMEOUT_MS`) keep it awake and are asked again after `LOOK_RETRY_MS` (a `null`
+that repeats doubles the wait, up to `LOOK_RETRY_MAX_MS`: it is the page that cannot tell, not the screen, and it would otherwise ask, and log,
+once a second for as long as the screen is still), and an answer overtaken by a frame, an input or a blocker while the look was out is dropped. So the feature is inert on a page with auto-save off or
+no OCR, which the menu says. Asleep, the default policy (`probe`; `hard` never resumes by itself and is not enabled) resumes the guest for
+`PROBE_MS` (250 ms) every `SLEEP_MS` (2 s) and keeps it awake the moment a frame arrives. **A frame from a guest that was asleep is a
+stall** (it was working): the idle and input-quiet times grow to twice the quiet stretch that ended, up to `MAX_IDLE_MS` (120 s), and are
+kept for the rest of the page's life (not across loads), so the first stall on a slow device costs one stretched computation and not one per
+round. A caret blinking in a focused text field is a frame every ~0.55 s and keeps the guest awake for as long as the field has the focus.
+
+**Measured** (headless Chrome 143 and Apple silicon, 640x480, synthetic input, the real game, auto-save on with the real OCR;
+`scripts/touch-harness/idle-pause.mjs`, whose header lists the commands):
+
+*CPU on a still screen* (the main window; the busiest renderer process over 20 s; the page's own main thread is 0.6-1.2% in all of them):
+
+| | saver off | duty-cycle probe (default) | hard pause (`POLICY: 'hard'`, not enabled) |
+| --- | --- | --- | --- |
+| idle time 1.5 s | 101.7, 102.0% | 14.9, 14.6% | 2.9% |
+| idle time 20 s (shipped), asleep within 24.5 s | 101.9, 101.8% | 14.8, 14.9% | 3.1% |
+
+The roadmap's lab page read 101.8 / 14.6 / about 1%; the extra two points of the hard pause are this app's own looks (the auto-saver's
+screenshot every 300 ms, the exit watcher's every second).
+
+*Elifoot rounds played through the real app* (a person's rhythm: Enter on every new screen, the injury and penalty pickers answered, the auction
+skipped; one game, the setting flipped every round; gaps between js-dos `onFrame` events). **Wall time varies about 2x with a round's content (an
+injury, a penalty shootout, an auction), so compare the gaps and the CPU and the sleeps, not single rounds:**
+
+| idle time | learning | rounds ON / OFF | wall per round, mean ON / OFF | longest gap ON / OFF | gaps over 5 s ON / OFF | emulator CPU ON / OFF | sleeps |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1.5 s | off | 4 / 4 | 236 s / 133 s | **61 s** / 10.2 s | 13 / 4 | 59% / 102% | 51 |
+| 2 s | on | 4 / 4 | 114 s / 122 s | 11.8 s / 10.3 s | 6 / 5 | 101% / 102% | 1 (6 s asleep, round 1) |
+| **20 s (shipped)** | on | 8 / 8 | 112 s / 123 s | 10.1 s / 9.9 s | 9 / 11 | 102.2% / 102.2% | 0 |
+
+The first row is the roadmap's rule (its first run, at 2 s with three ON rounds only, read 177-209 s a round, 52 s gaps and 63-69% CPU): rounds
+twice as long, gaps of 18 to 61 s that the OFF rounds do not have (their longest is 10 s): computations that started awake and finished at a
+ninth of their speed, the longest only ending because the harness's 60 s nudge woke the guest. The second row is the same 2 s with the learning: one stall, in the first round (a 5.9 s stretch became 11.8 s),
+and the idle time grew from there; the three rounds after it never slept and their gaps are the OFF rounds'. The third row is what ships, in a
+pseudo-random order of 16 rounds so that neither side is always the later one. Three alternations of 4 + 4 before it (one with the setting off
+first) read the same on everything but wall time: 0 sleeps, longest gaps 10.1 to 10.3 s on both sides, and ON rounds 17 to 25% longer than OFF
+ones, which is what those rounds held (their ON rounds had 6 to 36% more frames, and the balanced run gives the opposite sign). So
+the sleeps in the third row are zero because nothing in play is quiet for 20 s, and a saver that does not sleep does not cost anything; that it
+*does* sleep a still menu on the shipped number is the CPU table above.
+
+*Input to a sleeping guest* (`idle-pause.mjs wake`: the saver given 1.5 s to put the guest to sleep before every send): 24 taps landed within
+1 px, exactly as the 24 awake ones of the control did (0 / 1 / 2 px: 12 / 12 / 0 in both), the engine's own idea of the cursor off by 0 on all of
+them, each tap costing exactly one resume; 40 taps with the same seeds gave the same errors to the pixel awake and asleep; 30 first taps after the
+model forgot the cursor (home, then walk) left the model 2 px off in 1 case asleep and 2 awake (the guest's own 2 px quantum, see *Touching the
+guest*); six arrow keys changed the screen exactly as awake; ten digits through the key queue were ten presses and ten releases, one resume, 1 ms
+before the first key event, no more than one event without a gap, 10 ms between groups. The cursor first moved a median 14 ms after a finger landed
+on a sleeping guest (max 20) and 14 ms awake (max 22).
+
+*The game's save dialog*: with the idle time cut to 150 ms, on the first kickoff of a new game the service asked as soon as the dialog was up
+(`not sleeping: save dialog up`), the auto-saver saw it appear and go (1.0 s) and persisted after it, and the save is on the disk. *A hidden page*
+(the property overridden and `visibilitychange` dispatched): js-dos paused the emulator (2% CPU), the service ran no probe, a key sent
+meanwhile did not resume it, and when the page was shown the guest was awake (100.8%) with a fresh idle time, and asleep again after it (12.9%).
+*Auto-save off*: in 48 s the guest was never put to sleep (100.9% CPU) and the look was asked 7 times, 1.0, 2.3, 4.0, 8.0, 15 and 15 s apart; with
+auto-save back on it slept within 4 s. *Sound*: no pause landed within 300 ms of a loud chunk in any run (0 of 51 sleeps in the 1.5 s run); the
+game does play sound in stretches with no frames (about a second of crowd noise inside a 1.5 to 5 s gap), which end long before 20 s.
+
+**Not measured, and what the numbers do not say.** Any phone: the A07's CPU, how long Elifoot's silent computations last on it (the 20 s
+rests on a desktop's longest, 10.3 s; on a phone five times slower that stretch is 50 s, the saver would put the guest to sleep 20 s into it
+and the other 30 s would run at a ninth of their speed, about four and a half minutes once, before the learning raises the idle time),
+what the probe costs there, how much of the app's own polling (the auto-saver's screenshot every 300 ms and the exit watcher's every second, which keep
+looking at a framebuffer that cannot change while the guest sleeps: about two of the hard pause's three points here, and a cost that grows on a slow core where the
+probe's does not; skipping them while asleep is a follow-up), iOS Safari's worker, the real battery. A real hidden tab, a screen lock and
+a real background/foreground switch (the harness overrides `document.hidden` and dispatches `visibilitychange`; CDP delivers no lifecycle
+event to a headless page). A sound long enough to span the idle time (every pause that landed within 300 ms of a loud chunk is counted: none
+did). A host and a spectator (hosting is excluded by rule). Elifoot screens the walk never reached. The idle time is set so the saver stays
+out of the way of what was seen, which is not a proof about what was not; that is the reason it is off.
+
+**Diagnostics** (category `power`, the state indicator the roadmap asked for): `service started` (the numbers in force) and `service stopped`
+(the books: sleeps, probes, wakes, time asleep, probing and awake, the longest awake gap, stalls), `setting chosen`, `asleep` (why, the longest
+awake gap so far), `probe` and `asleep again` (the first probe of a sleep only: a still screen probes every 2.25 s and the log would otherwise fill with it and rewrite its persisted tail
+every few seconds; the count is in `awake` and in `service stopped`), `awake` (what woke it: the input's own name, `keys`, `touch`, `persist`..., or the machine's reason,
+with the time asleep and the probes it took), `not sleeping` (why: dialog up, unreadable), and `stall: the guest was working while asleep;
+idle time raised`. Every line carries the log's timestamps.
+
 ### Screen-scraping instead of emulator events
 
 Two flows read the framebuffer because js-dos exposes no game-level state (and the guest is a 16-bit
@@ -1154,8 +1322,9 @@ Load-bearing invariants of the auto-save — each of these was a bug, or a measu
 
 [diagnostics.service.ts](src/app/core/services/shared/diagnostics.service.ts) is a bounded record of
 what the app did on THIS device, built so a phone can hand evidence back: pointer, touch, key, ime,
-frame, boot, ocr, save, update, error, and `page` (lifecycle and viewport; the one category added to
-the plan's list, because it is the evidence an iOS tab eviction leaves). **Off by default.**
+frame, boot, ocr, save, update, error, `page` (lifecycle and viewport; added to the plan's list, because it is
+the evidence an iOS tab eviction leaves) and `power` (the emulator going to sleep and waking, see *Letting the
+guest sleep*). **Off by default.**
 
 **How to turn it on:** the options menu's "Diagnóstico" entry opens the window
 ([diagnostics-modal](src/app/pages/game/components/diagnostics-modal/diagnostics-modal.component.ts));
@@ -1230,7 +1399,7 @@ guest position and whether the cursor was sent ahead; every decision: tap, doubl
 and end, cancel with its reason, a palm or an extra finger ignored; the first compat mouse event dropped) and `pointer`
 (each move with its from, to, sends, units, duration and the smallest and largest gap between sends, which is the
 number that says whether a device stretches the spacing; each home with its reason; each click with how long it waited
-behind the cursor and how long it held; each abort with what it dropped; a refused send). `DockComponent` logs the control deck's presses, modifiers, repeats and panel changes into `key` and `page` (see *The control deck*). The live type bar logs every event of its field into `ime` while it is open,
+behind the cursor and how long it held; each abort with what it dropped; a refused send). `EmulatorPowerService` logs every change of state into `power` (see *Letting the guest sleep*). `DockComponent` logs the control deck's presses, modifiers, repeats and panel changes into `key` and `page` (see *The control deck*). The live type bar logs every event of its field into `ime` while it is open,
 and the field hint into `frame` (see *The live type bar*); typed text therefore does appear in the log, and the panel says so.
 
 ### Multiplayer (watch-together, not play-together)

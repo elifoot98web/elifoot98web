@@ -8,3 +8,4 @@ export * from './touch-input.service';
 export * from './game-exit-watcher.service';
 export * from './save-safety.service';
 export * from './field-hint.service';
+export * from './emulator-power.service';

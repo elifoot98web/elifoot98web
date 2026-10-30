@@ -458,6 +458,51 @@ describe('TouchInputService', () => {
     }));
   });
 
+  describe('for the battery saver (EmulatorPowerService)', () => {
+
+    it('is busy from the finger landing until the layer has nothing left to send, and not before or after', scenario(() => {
+      expect(rig.service.busy).toBeFalse();
+
+      down(300, 300);
+      expect(rig.service.busy).toBeTrue();
+
+      tick(60);
+      up(300, 300);
+      tick(2000);
+
+      expect(rig.service.busy).toBeFalse();
+    }));
+
+    it('is busy for a held button even when the finger is still, which is what aim mode and a drag look like', scenario(() => {
+      down(300, 300);
+      tick(TOUCH_INPUT.HOLD_MS + 200);
+      expect(rig.service.busy).toBeTrue();
+
+      up(300, 300);
+      tick(2000);
+      expect(rig.service.busy).toBeFalse();
+    }));
+
+    it('is not busy without a layer', () => {
+      expect(new TouchInputService(new NgZone({ enableLongStackTrace: false }), silentDiagnostics()).busy).toBeFalse();
+    });
+
+    it('asks the surface to wake the guest before the first thing it sends, and before every one after', scenario(() => {
+      const order: string[] = [];
+      rig.dosCI.sendMouseRelativeMotion = () => { order.push('motion'); };
+      rig.dosCI.sendMouseButton = (_button: number, pressed: boolean) => { order.push(pressed ? 'press' : 'release'); };
+      rig.service.attach(rig.dosCI, { root: rig.root, overlay: rig.overlay, canvas: rig.canvas, beforeSend: () => order.push('wake') });
+
+      tap(200, 150);
+      tick(500);
+
+      expect(order.filter(entry => entry !== 'wake').length).toBeGreaterThan(2);
+      order.forEach((entry, i) => {
+        if (entry !== 'wake') expect(order[i - 1]).toBe('wake');
+      });
+    }));
+  });
+
   describe('keeping the model honest', () => {
 
     it('forgets where the cursor is when a real mouse moves, so the next touch homes first', scenario(() => {

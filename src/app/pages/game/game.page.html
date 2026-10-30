@@ -173,6 +173,20 @@
             <ion-toggle slot="end" [checked]="liveKeyboard" (ionChange)="toggleLiveKeyboard($event)"
               aria-label="Teclado ao vivo (experimental)"></ion-toggle>
           </ion-item>
+          <!--
+            The emulator sleeps while the picture does not change (EmulatorPowerService). The description
+            says what it costs and what it has not been tried on: it is off until the device pass says
+            otherwise, and the menu is where a player who sees a slowdown turns it off. The label sits
+            outside the toggle so the explanation can wrap under it on a narrow phone.
+          -->
+          <ion-item detail="false">
+            <ion-label class="ion-text-wrap">
+              Economizar bateria quando parado
+              <p>Se a tela do jogo fica parada por {{ idleSeconds }} segundos ou mais, o emulador descansa e usa bem menos bateria. Ele acorda ao tocar ou digitar. Não age durante uma sala multiplayer, nem com o Auto-Save desligado. Ainda não foi testado em celulares de verdade: se algum cálculo do jogo ficar mais lento sem a tela se mexer, desligue.</p>
+            </ion-label>
+            <ion-toggle slot="end" [checked]="idlePause" (ionChange)="toggleIdlePause($event)"
+              aria-label="Economizar bateria quando parado"></ion-toggle>
+          </ion-item>
           <ion-item detail="false">
             <ion-toggle [checked]="smoothFilterDisabled" (ionChange)="toggleSmoothFilter($event)">Desativar
               Suavização</ion-toggle>

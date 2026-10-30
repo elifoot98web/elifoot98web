@@ -118,6 +118,20 @@
         </p>
       </div>
     </ion-accordion>
+    <ion-accordion value="battery-info">
+      <ion-item slot="header" color="light">
+        <ion-label>O celular esquenta e a bateria acaba rápido. Dá para economizar?</ion-label>
+      </ion-item>
+      <div class="ion-padding" slot="content">
+        O Windows 3.1 e o Elifoot rodam dentro de um emulador que trabalha o tempo todo, mesmo numa tela que não muda. Por isso o aparelho usa um núcleo do processador sem parar enquanto o jogo está aberto.
+        <p class="ion-padding-top">
+        No menu <ion-icon name="ellipsis-vertical-outline"></ion-icon> existe <strong>Economizar bateria quando parado</strong>, {{ savingByDefault ? 'ligado' : 'desligado' }} por padrão. Com ele ligado, se a tela do jogo fica parada por cerca de {{ idleSeconds }} segundos, o emulador descansa e só acorda por instantes, de tempos em tempos, para ver se o jogo está fazendo alguma coisa. Ao tocar na tela ou digitar, ele acorda na hora.
+        </p>
+        <p class="ion-padding-top">
+        Ele não age enquanto você hospeda uma sala (quem hospeda precisa do jogo sempre ativo) nem com o <strong>Auto-Save</strong> desligado, porque é o Auto-Save que confirma que o jogo não está gravando. Foi medido só em computador. Se algum cálculo do Elifoot, como passar a rodada, ficar mais lento sem a tela se mexer, desligue a opção.
+        </p>
+      </div>
+    </ion-accordion>
     <ion-accordion value="copyright-info">
       <ion-item slot="header" color="light">
         <ion-label>Não é pirataria jogar dessa forma?</ion-label>

@@ -4,7 +4,7 @@ import { AlertController, LoadingController, ModalController, ToastController } 
 import { AlertButton } from '@ionic/core';
 import JSZip from 'jszip';
 import { environment } from 'src/environments/environment';
-import { AUTO_SAVER, DISPLAY_MODE, EMULATOR_CONTROL_CONFIG, GAME_BOOT, GAME_EXIT_WATCH, MULTIPLAYER, SAVE_SAFETY, STORAGE_KEY } from '../../core/models/constants';
+import { AUTO_SAVER, DISPLAY_MODE, EMULATOR_CONTROL_CONFIG, EMULATOR_POWER, GAME_BOOT, GAME_EXIT_WATCH, MULTIPLAYER, SAVE_SAFETY, STORAGE_KEY } from '../../core/models/constants';
 import { TypeBarComponent, TypeBarNotice } from '../../core/components/type-bar/type-bar.component';
 import { FieldHint } from '../../core/helpers/field-hint.helper';
 import { UserGuideComponent } from './components/user-guide/user-guide.component';
@@ -15,7 +15,7 @@ import { DiagnosticsReportHelper } from 'src/app/core/helpers/diagnostics-report
 import { BehaviorSubject, combineLatest, distinctUntilChanged, filter, map, Observable, Subscription, take } from 'rxjs';
 import { EmulatorKeyCodeHelper } from '../../core/models/game';
 import { CursorClickMessage, CursorPositionMessage, MultiplayerJoinErrorKind, PlayerInfo } from '../../core/models/multiplayer';
-import { AutoSaverService, EmulatorControlService, FieldHintService, GameExitWatcherService, PatchService, SaveBeforeReloadResult, SaveGameService, SaveImportPlan, SaveSafetyService, SavesBackup, TouchInputService } from '../../core/services/game';
+import { AutoSaverService, EmulatorControlService, EmulatorPowerService, FieldHintService, GameExitWatcherService, PatchService, SaveBeforeReloadResult, SaveGameService, SaveImportPlan, SaveSafetyService, SavesBackup, TouchInputService } from '../../core/services/game';
 import { DiagnosticsService, LayoutHelperService, LocalStorageService, SaveStatusService } from '../../core/services/shared';
 import { MultiplayerAudioService, MultiplayerChatService, MultiplayerCursorService, MultiplayerPlayerInfoService, MultiplayerRelayHealthService, MultiplayerService, MultiplayerUiService } from '../../core/services/multiplayer';
 import { CursorRendererHelper } from 'src/app/core/helpers/cursor-renderer.helper';
@@ -31,6 +31,7 @@ import { DeckLayoutHelper, DeckPresentation, DeckSetting } from 'src/app/core/he
 import { SaveBackupHelper } from 'src/app/core/helpers/save-backup.helper';
 import { SaveStatusHelper } from 'src/app/core/helpers/save-status.helper';
 import { NavigationGuardHelper } from 'src/app/core/helpers/navigation-guard.helper';
+import { EmulatorPowerHelper } from 'src/app/core/helpers/emulator-power.helper';
 
 
 @Component({
@@ -96,6 +97,13 @@ export class GamePage implements OnInit, OnDestroy {
   fieldHint: FieldHint = 'none';
   /** `(any-pointer: coarse)`: only to tell, in the menu, why an automatic deck is hidden on a device that has a touch screen. */
   anyCoarse = false;
+  /**
+   * "Economizar bateria quando parado" (STORAGE_KEY.IDLE_PAUSE): the emulator sleeps while the
+   * screen is still. What the person chose, or {@link EMULATOR_POWER.DEFAULT_ENABLED} for one who never did.
+   */
+  idlePause: boolean = EMULATOR_POWER.DEFAULT_ENABLED;
+  /** How long a still screen has to stay still before the saver acts: the number the menu's description quotes. */
+  readonly idleSeconds = Math.round(EMULATOR_POWER.IDLE_MS / 1000);
 
   /**
    * Whether the options menu offers "Modo de toque": a finger is the primary pointer AND the
@@ -137,6 +145,8 @@ export class GamePage implements OnInit, OnDestroy {
   /** The boot saw the game's own screen, which is what lets the exit watcher run (see startSafetyNets). */
   private gameDetected = false;
   private exitSubscription?: Subscription;
+  /** `startSafetyNets` has run and `stopSafetyNets` has not: the idle pause is one of the nets. */
+  private netsUp = false;
 
   constructor(
     private loadingController: LoadingController,
@@ -163,6 +173,7 @@ export class GamePage implements OnInit, OnDestroy {
     private saveStatus: SaveStatusService,
     private exitWatcher: GameExitWatcherService,
     private fieldHintService: FieldHintService,
+    private power: EmulatorPowerService,
     chatService: MultiplayerChatService
   ) {
     this.unreadCount$ = chatService.unreadCount$;
@@ -510,6 +521,7 @@ export class GamePage implements OnInit, OnDestroy {
     this.setupSpectatorAudio()
     await this.setupTouchInput()
     this.syncFieldHint()
+    await this.setupIdlePause()
     this.gameDetected = gameDetected
     this.startSafetyNets()
   }
@@ -828,6 +840,47 @@ export class GamePage implements OnInit, OnDestroy {
     await alert.present()
   }
 
+  /** Read the player's choice, or the default for one who never made it. An unreadable store is the default. */
+  private async setupIdlePause() {
+    try {
+      this.idlePause = EmulatorPowerHelper.enabled(await this.storageService.get<boolean>(STORAGE_KEY.IDLE_PAUSE), EMULATOR_POWER.DEFAULT_ENABLED)
+    } catch (e) {
+      console.warn('Could not read the battery saver setting; using the default', e)
+    }
+  }
+
+  /**
+   * "Economizar bateria quando parado". Applies at once: turning it off wakes a sleeping guest.
+   */
+  async toggleIdlePause(e: any) {
+    this.idlePause = !!e.detail.checked
+    this.diagnostics.log('power', 'setting chosen', () => ({ on: this.idlePause }))
+    this.syncIdlePause()
+    try {
+      await this.storageService.set<boolean>(STORAGE_KEY.IDLE_PAUSE, this.idlePause)
+    } catch (error) {
+      // It applies for this visit either way.
+      console.warn('Could not store the battery saver setting', error)
+    }
+  }
+
+  /**
+   * The idle pause runs while the setting is on, the emulator is up and the safety nets are (it is
+   * one of them, see stopSafetyNets), and not otherwise.
+   */
+  private syncIdlePause() {
+    if (!this.idlePause || !this.netsUp || !this.dosCI || this.destroyed) {
+      this.power.stop()
+      return
+    }
+    this.power.start(this.dosCI, {
+      isHosting: () => this.multiplayerService.isHosting || this.isHosting || this.isStreaming,
+      gameDetected: () => this.gameDetected || this.exitWatcher.gameSeen,
+      isBusy: () => this.emulatorControlService.pendingKeys > 0 || this.touchInputService.busy,
+      isGameSaving: () => this.saveSafety.gameSavingVerdict(),
+    })
+  }
+
   async setupAutoSave() {
     const disableAutoSave = await this.storageService.get<boolean>(STORAGE_KEY.DISABLE_AUTO_SAVE)
     this.toggleDisableAutoSave({ detail: { checked: disableAutoSave } })
@@ -1095,6 +1148,8 @@ export class GamePage implements OnInit, OnDestroy {
       // A tap on the game's own field must not close the OS keyboard the live type bar has open, and
       // the tap moves the guest on from whatever the bar was describing (see onGameTouched).
       keepFocus: () => this.typeBar?.onGameTouched() ?? false,
+      // The layer's timers send after the finger has gone; a sleeping guest is woken before each.
+      beforeSend: () => this.power.wake('touch'),
     })
   }
 
@@ -1596,10 +1651,19 @@ export class GamePage implements OnInit, OnDestroy {
     this.exitSubscription?.unsubscribe()
     this.exitSubscription = this.exitWatcher.exited$.subscribe(() => void this.onGameExited())
     this.exitWatcher.start(this.dosCI, this.gameDetected ? {} : { armWhen: frame => BootStageHelper.isGameScreen(frame) })
+    this.netsUp = true
+    this.syncIdlePause()
   }
 
-  /** Detach everything `startSafetyNets` attached. Safe to call twice. */
+  /**
+   * Detach everything `startSafetyNets` attached. Safe to call twice. The idle pause is one of
+   * them, and goes first, so the guest is awake for whatever the caller does next.
+   */
   private stopSafetyNets() {
+    // First: every flow that stops the nets is about to rewrite the saved disk, exit the emulator or
+    // leave, and none of them wants a guest that is asleep (or about to be put to sleep) under it.
+    this.netsUp = false
+    this.syncIdlePause()
     this.saveSafety.detach()
     this.exitWatcher.stop()
     this.exitSubscription?.unsubscribe()

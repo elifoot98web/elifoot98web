@@ -57,6 +57,10 @@ export const STORAGE_KEY = {
   // compose dialog. Absent means off: the bar has never run on a real phone's keyboard, and the
   // owner decides after the device pass (decision D7).
   LIVE_KEYBOARD: 'liveKeyboard',
+  // "Economizar bateria quando parado" (EmulatorPowerService): the guest sleeps while nothing is
+  // happening on screen. Stored as an explicit boolean when the player chooses, so that a change
+  // of EMULATOR_POWER.DEFAULT_ENABLED reaches only the people who never touched the switch.
+  IDLE_PAUSE: 'idlePause',
 }
 
 /** Where a STORAGE_KEY lives. Ionic Storage is the default; the others are written around it. */
@@ -101,6 +105,7 @@ export const STORAGE_KEY_HOMES: Readonly<Record<keyof typeof STORAGE_KEY, readon
   DECK_MODE: ['ionic'],
   DISABLE_KEY_VIBRATION: ['ionic'],
   LIVE_KEYBOARD: ['ionic'],
+  IDLE_PAUSE: ['ionic'],
 };
 
 /**
@@ -644,6 +649,69 @@ export const TOUCH_INPUT = {
   // this is what the cleanup timer is built on), and how many may be on screen at once.
   FEEDBACK_RING_MS: 420,
   FEEDBACK_MAX_RINGS: 8,
+}
+
+/**
+ * Letting the guest sleep while the screen is still (EmulatorPowerService, IdlePowerMachine).
+ * DOSBox pins one core at 100% even on a static menu (measured: 101.8% of an Apple-silicon core,
+ * 1.5% with `pause()`, and lowering `cycles` changes nothing), and a manager game spends most of
+ * its time on static menus. These numbers are policy, and they were set on a desktop: the phone
+ * numbers are on the device checklist.
+ */
+export const EMULATOR_POWER = {
+  // Whether a player who never touched the switch has it on. Off: at the roadmap's 2 s the scripted
+  // rounds ran 1.8 times slower with the saver on, and the 20 s that fixes that was set on a desktop,
+  // for a feature that exists for a phone. The numbers, and what flips this, are in CLAUDE.md,
+  // *Letting the guest sleep*; it is one constant. The FAQ entry follows it and IDLE_MS by binding;
+  // the menu's "Ainda não foi testado em celulares de verdade" (game.page.html) is prose about the
+  // device pass and is revised by hand in the commit that flips this.
+  DEFAULT_ENABLED: false,
+  // No frame for this long and the guest may sleep, and no input either (INPUT_QUIET_MS). The roadmap
+  // said 2 s; the scripted rounds said no. Elifoot spends whole seconds with the picture untouched while
+  // it works, with no input at all: on a desktop (Apple silicon, headless Chrome 143, 640x480) the
+  // gaps between two frames in play were 2.8 to 4.9 s, a 6 to 7.4 s one two seconds after the key that
+  // starts a round, and the longest, 9.3 to 10.3 s, 38 s after the last key (the end of a match). A
+  // guest put to sleep in the middle of one runs the rest at the probe's duty cycle, so the idle time
+  // has to sit above the longest gap the game makes; 20 s is twice the longest seen here, and the
+  // longest on a phone is on the device checklist. A still menu, the case this exists for, is still
+  // for minutes. A focused text field blinks its caret every ~0.55 s and keeps the guest awake for as
+  // long as it is focused.
+  IDLE_MS: 20000,
+  // When a frame arrives from a guest that was put to sleep, it was working, and the idle time grows to
+  // twice the quiet stretch that ended (see IdlePowerMachine.frame), up to this. The first stall on a
+  // slow device costs one stretched computation, not one every round. 0 turns it off.
+  MAX_IDLE_MS: 120000,
+  // No input for this long either. The same reasoning from the other side: a gap that starts with a tap
+  // (the weekly update after a round) is the most likely to be a computation.
+  INPUT_QUIET_MS: 20000,
+  // How often the rule is checked. The clock is the timer's, so every duration below is a multiple
+  // of this to within a tick.
+  TICK_MS: 250,
+  // The duty-cycle probe: asleep this long, then running for PROBE_MS, then asleep again, until a
+  // frame arrives in a probe (which proves the guest is doing something visible and wakes it).
+  // 250 ms of every 2.25 s measured 14.6% of a core against ~100% awake and ~1% for a hard pause.
+  // What it buys over the hard pause is guest-side work that never redraws: it still advances, at
+  // roughly one ninth of its speed.
+  SLEEP_MS: 2000,
+  PROBE_MS: 250,
+  // 'probe' (the default) or 'hard' (never resume until something happens). The hard pause is NOT
+  // on: it would freeze each of those silent stretches (up to 10 s on a desktop) until the next touch,
+  // and it saves 12 points of a core over the probe (3% against 15%, measured).
+  POLICY: 'probe' as 'probe' | 'hard',
+  // A timer that fires a hair early must not cost a probe a whole extra tick.
+  SLACK_MS: 25,
+  // When the look at the game's save dialog does not say "not up", it is not repeated sooner than this.
+  LOOK_RETRY_MS: 1000,
+  // A look that could not tell (auto-save off, no OCR) will not be able to a second later either, so each one
+  // in a row doubles the wait up to this. It keeps a page where the saver is inert from asking, and from
+  // filling the diagnostics log, once a second for as long as the screen is still.
+  LOOK_RETRY_MAX_MS: 15000,
+  // The look is a screenshot and a cached verdict (~0.1 ms), or one OCR pass for a strip never read;
+  // it has no deadline of its own, and a look that hangs is an answer of "could not tell".
+  LOOK_TIMEOUT_MS: 3000,
+  // The page's own events that mean somebody is using the game. Capture phase on the document, so
+  // they run before the touch layer's listener on the emulator's root stops the event.
+  INPUT_EVENTS: ['pointerdown', 'pointerup', 'keydown', 'keyup', 'touchstart', 'wheel'] as readonly string[],
 }
 
 export const BASE_SAVEGAME_DIR = 'd/eli98/jogos/'

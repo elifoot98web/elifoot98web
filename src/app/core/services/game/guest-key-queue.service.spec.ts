@@ -5,6 +5,7 @@ import { EmulatorKeyCode } from '../../models/game';
 import { DosCI } from '../../typings/jsdos';
 import { GuestKeyQueueService, KeyQueueError, KeySendResult } from './guest-key-queue.service';
 import { silentDiagnostics } from '../shared/diagnostics.testing';
+import { silentPower } from './emulator-power.testing';
 
 const K = EmulatorKeyCode;
 const GAP = EMULATOR_CONTROL_CONFIG.KEY_PACING_MS;
@@ -66,7 +67,7 @@ function fakeEmulator(start: number, options: FakeEmulatorOptions = {}): FakeEmu
   return { dosCI, events, readMemory, held, flags };
 }
 
-const newQueue = () => new GuestKeyQueueService(new NgZone({ enableLongStackTrace: false }), silentDiagnostics());
+const newQueue = () => new GuestKeyQueueService(new NgZone({ enableLongStackTrace: false }), silentDiagnostics(), silentPower());
 
 /** Capture how a promise ended without letting the assertion depend on microtask order. */
 function outcome<T>(promise: Promise<T>) {
@@ -128,6 +129,53 @@ describe('GuestKeyQueueService', () => {
 
       expect(refused.state).toBe('rejected');
       expect(announced).toBe(0);
+    }));
+  });
+
+  describe('waking the guest', () => {
+
+    /** `woken` holds, for each wake, how many key events had already left when it happened. */
+    function queueWithPower(emulator?: FakeEmulator) {
+      const power = silentPower();
+      const woken: number[] = [];
+      spyOn(power, 'wake').and.callFake(() => { woken.push(emulator?.events.length ?? 0); });
+      const queue = new GuestKeyQueueService(new NgZone({ enableLongStackTrace: false }), silentDiagnostics(), power);
+      return { queue, woken };
+    }
+
+    it('wakes before the first key leaves, in the call that submits it', strict(() => {
+      const emulator = fakeEmulator(Date.now());
+      const { queue, woken } = queueWithPower(emulator);
+
+      queue.chord(emulator.dosCI, [K.KBD_a]);
+
+      // The submission's wake, then the first task's: neither after a key.
+      expect(woken).toEqual([0, 0]);
+      expect(emulator.events.length).toBe(1);
+      tick(20 * GAP);
+    }));
+
+    it('wakes again for every task, so a long text never lets the guest fall asleep under it', strict(() => {
+      const emulator = fakeEmulator(Date.now());
+      const { queue, woken } = queueWithPower(emulator);
+
+      queue.text(emulator.dosCI, 'abcd');
+      tick(100 * GAP);
+
+      // One for the submission, one for each of the four tasks.
+      expect(woken.length).toBe(5);
+      expect(typed(emulator.events).length).toBe(4);
+    }));
+
+    it('does not wake for a submission that is refused or empty: nothing goes to the guest', strict(() => {
+      const { queue, woken } = queueWithPower();
+
+      const refused = outcome(queue.chord(null, [K.KBD_a]));
+      queue.text(fakeEmulator(Date.now()).dosCI, '');
+      flushMicrotasks();
+
+      expect(refused.state).toBe('rejected');
+      expect(woken).toEqual([]);
     }));
   });
 
@@ -779,7 +827,7 @@ describe('GuestKeyQueueService', () => {
           calls.push([cat, msg, (typeof data === 'function' ? (data as () => unknown)() : data) as Logged[2]]);
         },
       };
-      const queue = new GuestKeyQueueService(new NgZone({ enableLongStackTrace: false }), diagnostics as never);
+      const queue = new GuestKeyQueueService(new NgZone({ enableLongStackTrace: false }), diagnostics as never, silentPower());
       const messages = () => calls.map(([, msg]) => msg);
       const dataOf = (msg: string) => calls.find(([, m]) => m === msg)?.[2];
       return { queue, calls, raw, messages, dataOf };

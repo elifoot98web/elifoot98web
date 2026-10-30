@@ -228,8 +228,22 @@ var elifootMain = (pathPrefix, gameBundleURL, onProgress) => {
     return waitForBoot(elifootBoot, onProgress)
 }
 
+// Set by EmulatorPowerService while it runs (and removed when it stops): wakes the guest if it is
+// asleep and keeps it awake until the function it returns is called. Every persist of the
+// guest's disk goes through the function below, and the update prompt in the main bundle calls
+// it too without being able to import the service, so the hold lives here, where all of them meet.
+// A persist of a sleeping guest does work (measured: 5.4 MB in 1031 ms), but it was never run
+// against anything but a running one before, and a probe resuming it in the middle is not worth
+// finding out about.
+var holdGuestAwake
+
 var saveGameFileSystem = async () => {
     if(dosInstance != null && dosInstance.layers != null && dosInstance.layers.save != null && typeof dosInstance.layers.save === "function") {
-        return await dosInstance.layers.save()
+        const release = typeof holdGuestAwake === "function" ? holdGuestAwake("persist") : null
+        try {
+            return await dosInstance.layers.save()
+        } finally {
+            if (typeof release === "function") release()
+        }
     }
 }

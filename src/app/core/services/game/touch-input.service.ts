@@ -24,6 +24,11 @@ export interface TouchSurface {
    * the answer.
    */
   keepFocus?: () => boolean;
+  /**
+   * Called before the layer sends anything to the guest (see {@link GuestPointerOptions.beforeSend}).
+   * The page passes the one that wakes a sleeping guest.
+   */
+  beforeSend?: () => void;
 }
 
 /** What {@link TouchInputService.retune} may change on a live layer. The harness sweeps these. */
@@ -117,6 +122,15 @@ export class TouchInputService {
   }
 
   /**
+   * A finger is down, a button is held in the guest or the engine still has motion to send: the
+   * guest is in use even though nothing is on the screen yet (aim mode holds a finger still).
+   */
+  get busy(): boolean {
+    const inspection = this.session?.inspect();
+    return !!inspection && (inspection.buttonDown || inspection.pending > 0 || inspection.gesture !== 'idle');
+  }
+
+  /**
    * Install the layer on a booted emulator. Attaching again detaches the previous attachment
    * first, so a second call can never leave two layers fighting over one finger.
    */
@@ -188,6 +202,7 @@ class TouchSession {
       now: this.now,
       ...tuning.pointer,
       log: (message, data) => this.diagnostics.log('pointer', message, data),
+      beforeSend: surface.beforeSend,
     });
     this.feedback = new TouchFeedbackHelper(surface.root);
 

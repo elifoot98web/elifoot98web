@@ -6,9 +6,13 @@
  * ocr, save, update, error): the lifecycle of the page itself (hidden, frozen, evicted, resized,
  * rotated) is neither a boot stage nor a frame, and it is the evidence the iOS tab evictions
  * leave, so it gets its own filter instead of hiding under a name that means something else.
+ *
+ * `power` is the second: the emulator going to sleep and waking (EmulatorPowerService). It is a
+ * state with timestamps that a reader follows from one line to the next, and mixed in with the
+ * guest's frames it would be lost.
  */
 export const DIAGNOSTICS_CATEGORIES = [
-  'pointer', 'touch', 'key', 'ime', 'frame', 'boot', 'ocr', 'save', 'update', 'error', 'page',
+  'pointer', 'touch', 'key', 'ime', 'frame', 'boot', 'ocr', 'save', 'update', 'error', 'page', 'power',
 ] as const;
 
 export type DiagnosticsCategory = typeof DIAGNOSTICS_CATEGORIES[number];
@@ -26,6 +30,7 @@ export const DIAGNOSTICS_CATEGORY_LABELS: Readonly<Record<DiagnosticsCategory, s
   update: 'Atualização do app',
   error: 'Erros',
   page: 'Ciclo de vida da página',
+  power: 'Economia de bateria (emulador)',
 };
 
 /** The filter's "everything" choice. */

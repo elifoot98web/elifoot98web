@@ -162,6 +162,16 @@ export class SaveSafetyService {
   }
 
   /**
+   * The look as the three-valued answer it is: `true` the game's save dialog is up, `false` it
+   * provably is not, `null` this could not be told. For a caller that has to keep `false` and `null`
+   * apart (EmulatorPowerService sleeps the guest only on a `false`). Like every look it needs the
+   * auto-saver running.
+   */
+  gameSavingVerdict(): Promise<GameSavingVerdict> {
+    return this.look();
+  }
+
+  /**
    * Flush the disk, giving up waiting after PERSIST_TIMEOUT_MS. Every caller sits behind a loader
    * the player cannot dismiss, and a flush that never answers (IndexedDB stalls on a phone that
    * has been in the background) must end as a failed save they can decide about, not as a screen

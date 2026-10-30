@@ -82,7 +82,8 @@ buttons, English error strings, an eager YouTube iframe that overflows phones.
   the serial registration key. Label them accordingly in "Mais teclas".
 - **D9 — yes**, real-device pass on a Galaxy A07 (low-end Android) and an iPhone 15 Pro Max.
   P2, P8 and P11 stay behind settings until that pass.
-- D4-D7 and D10-D14 were not answered; the recommendations below stand as defaults.
+- D4-D7 and D10-D14 were not answered; the recommendations below stand as defaults. D6 was built as recommended (the
+  duty-cycle probe, not while hosting) except for "on by default" (see P9 as built).
 
 ### Original questions and recommendations
 
@@ -745,7 +746,81 @@ build, and a CLAUDE.md update.
       inside `GuestPointer`, which is the P2 engine's hot path and not this phase's to change; it is in CLAUDE.md as known, and on the
       checklist. The bar's `maxlength` of 300 against Elifoot's shorter fields is documented as an assumption (nothing knows a field's
       limit) and put on the checklist. Esc under 400 px is a layout decision with a cost either way and stays.
-11. Then P9 (idle pause), P11 (zoom/pan camera), P12 (stage layout, landscape
+11. **P9 — idle pause**, behind a setting that is **off by default** (decision D6: the duty-cycle probe, not while hosting; the recommendation
+    of "on by default" is the one thing not followed, on evidence). **As built:** `EmulatorPowerService` (`start(dosCI, options)`, `stop()`,
+    `wake(reason)`, `hold(reason)`), the pure `IdlePowerMachine` (the rule: no clock, no timer, no emulator), `EmulatorPowerHelper` (the setting
+    and the blockers), `GuestAccessHelper` (the door for code that is not the service), `EMULATOR_POWER` in `constants.ts`,
+    `STORAGE_KEY.IDLE_PAUSE`, the menu's "Economizar bateria quando parado" and a FAQ entry, a `power` category in the diagnostics log
+    (the state indicator the roadmap asked for), `GuestPointerOptions.beforeSend`, `TouchInputService.busy`,
+    `GameExitWatcherService.gameSeen`, `SaveSafetyService.gameSavingVerdict()`, `saveGameFileSystem()` holding the guest through the
+    global `holdGuestAwake`, and `scripts/touch-harness/idle-pause.mjs`. 122 new specs (the suite is 1199, from 1077), among them the state machine
+    driven by a script of (time, event) calls, the service over the real `document` listeners and a recording emulator under `fakeAsync`,
+    and the guarantee that every path wakes first (the key queue, the pointer engine, the touch layer's surface, the O Matic, the door).
+    The contract is in CLAUDE.md, *Letting the guest sleep*. Measured in headless Chrome 143 (chrome-headless-shell) on Apple silicon
+    against the dev server and the real game at 640x480, auto-save on with the real OCR, synthetic input:
+    - **CPU on a still screen** (the busiest renderer process over 20 s): off 101.7-102.0%, the probe 14.6-14.9% (the roadmap's lab page:
+      14.6%), a hard pause 2.9-3.1% (the lab page's 1% plus this app's own looks, the auto-saver's screenshot every 300 ms and the exit
+      watcher's every second). The same on the shipped 20 s idle time: it falls asleep within 24.5 s and reads 14.8-14.9%.
+    - **The roadmap's rule slows the game down, and that is the answer to the critic's warning.** Elifoot spends whole seconds with the picture
+      untouched while it works, and a guest put to sleep in the middle of that finishes at the probe's duty cycle, about a ninth of its
+      speed. Played through the real app (a person's rhythm: Enter on every new screen, the injury and penalty pickers answered, the auction
+      skipped; gaps measured between js-dos `onFrame` events), with the saver flipped every round inside one game: **idle time 1.5 s,
+      learning off** (4 rounds ON, 4 OFF): a round took 236 s on average against 133 s, the longest
+      gap between frames was 61 s against 10 s, 13 gaps over 5 s against 4, and the emulator's process ran at 59% against 102%, with 51
+      sleeps; **idle time 2 s, learning off** (an earlier run: 3 rounds ON, then 3 OFF of the same game): 177-209 s against 117-161 s,
+      longest gap 52 s, 63-69% CPU. The silent stretches the game makes on this desktop, OFF: 2.8 to 4.9 s here and there, a 6 to 7.4 s one
+      two seconds after the key that starts a round, and a 9.3 to 10.3 s one 38 s after the last key (the end of the match). A guest asleep
+      at the start of the last one takes about a minute to finish it.
+    - **Hence 20 s.** The idle time is twice the longest gap seen. Played the same way, 16 rounds in a pseudo-random order (8 ON, 8 OFF),
+      and three alternations of 4 + 4 before it (one starting with the setting off): **0 sleeps** in play, the longest gap 10.1 to 10.3 s ON
+      and 9.9 to 10.3 s OFF, the same two kinds of gap over 5 s in both, 102.2% of a core in both. Wall time per round varies about 2x with
+      its content (an injury, a shootout or an auction), so alternating single rounds misleads: the three short runs had the ON rounds 17 to
+      25% longer, with 6 to 36% more frames in them, and the balanced run had them 9% shorter (112 s against 123 s). A saver that does not sleep
+      costs a 250 ms timer and a few listeners. That it does sleep a still screen on the shipped number is the CPU line above: asleep
+      within 24.5 s, 14.8%.
+    - **A frame from a guest that was asleep is a stall, and the machine learns from it:** the idle time grows to twice the quiet stretch that
+      ended, up to 120 s, so the first stall on a slow device costs one stretched computation and not one per round. With the roadmap's 2 s
+      and the learning on (4 rounds ON, 4 OFF): exactly one stall, in the first ON round (the 6 s stretch two seconds after the key that starts
+      a round became 11.8 s, 6 s asleep, 3 probes), and the three ON rounds after it never slept and had the OFF rounds' gaps (10.1, 10.2 and
+      9.8 s against 10.3, 9.3, 9.8 and 9.7 s); 114 s a round ON against 122 s OFF. A page that is reloaded starts again from the constant.
+    - **Input to a sleeping guest** (`idle-pause.mjs wake`; the saver given 1.5 s to put the guest to sleep before every send): 24 taps
+      landed within 1 px, exactly as the 24 awake ones of the control did (0 / 1 / 2 px: 12 / 12 / 0 in both), the engine's own idea of the
+      cursor off by 0 on every one, each tap costing exactly one resume; a longer run of 40 taps with the same seeds gave the same errors to
+      the pixel awake and asleep; 30 first taps after the model forgot the cursor (home, then walk) left it 2 px off in 1 case asleep and 2
+      awake (that is the guest's 2 px quantum, P2); six arrow keys changed the screen exactly as awake; ten digits through the key queue were
+      ten presses and ten releases, one resume, 1 ms before the first key event, never more than one event without a gap and 10 ms between
+      groups. The cursor first moved a median 14 ms (max 20) after a finger landed on a sleeping guest and 14 ms (max 22) on an awake one
+      (in 1 of 20 asleep trials the poller saw no movement; see below).
+    - **The game's save dialog.** With the idle time cut to 150 ms, on the first kickoff of a new game the service asked about the dialog the
+      moment it was up (`not sleeping: save dialog up`), the auto-saver saw it appear and go (1.0 s) and persisted after it, and the save is on
+      the disk; in one of the two runs the guest had gone to sleep before the flush and the flush woke it (`awake: persist`).
+    - **A hidden page** (the property overridden and `visibilitychange` dispatched, because CDP delivers no lifecycle event): js-dos paused the
+      emulator (2% CPU), the service ran no probe, a key sent meanwhile did not resume it, and when the page was shown the guest was awake
+      (100.8%), with a fresh idle time, and asleep again after it (12.9%).
+    - **Auto-save off** (the look cannot tell): in 48 s the guest was never put to sleep (0 sleeps, 100.9% CPU) and it asked 7 times, at 1.0,
+      2.3, 4.0, 8.0, 15 and 15 s apart; with auto-save back on it slept within 4 s of the next look.
+    - **Sound:** no pause landed within 300 ms of a loud chunk in any run (0 of 51 sleeps in the 1.5 s run). The game does play sound in
+      stretches without frames (about a second of crowd noise inside a 1.5 to 5 s gap, once 288 ms of loud chunks inside a 27 s one), and it
+      ends long before 20 s. Whether a sound can be cut on a phone, and whether it comes back after a wake, is on the device checklist.
+    Where it differs from the plan above, on evidence or by decision: **the idle time is 20 s, not 2 s** (above); **the default is off**
+    (the same evidence, and D9: the feature is for a phone and everything above is a desktop); **sleeping is a handshake** (the machine asks
+    whether the game's save dialog is up and sleeps only on a definite no; a static dialog is what a slow save looks like to a frame counter),
+    which the plan expressed as "AutoSaver is not mid-save" and which makes the feature inert with auto-save off, said in the menu;
+    **a persist holds the guest awake** through one global registered by the service (the update prompt lives in the main bundle and cannot
+    import it); **the learning** and the **doubling of an unreadable look** are additions; hosting is excluded outright, as the plan said.
+    **Found on the way, not fixed:** twice, on the first tap of a script run, the cursor had not moved when it was read (300 ms after the
+    finger lifted, in the first run of `wake`; and the poller of a latency check saw no movement in one of 20 trials); the next tap was
+    exact each time, and neither came back in 12 first taps after a fresh sleep, 30 homing taps and about 150 more taps. A game that has
+    just finished a round is silent for seconds, so a first send that waits behind it is the likelier cause than the wake, but it is not shown; the retuned numbers of a scratch script
+    survived in the service singleton and turned a "20 s" season into a 1.5 s one (the harness README's trap 11; every mode now starts from
+    and returns to `defaults()`). **Not verified:** any phone (the Galaxy A07 above all: its silent stretches, the probe's cost on a slow
+    core, battery and heat), iOS Safari's worker, a real hidden tab, a screen lock, a long sound, hosting with the saver on (excluded by
+    rule, not run), the O Matic against a sleeping guest in the browser (specced with a fake). **Left for a follow-up:** the auto-saver (every 300 ms) and the
+    exit watcher (every second) keep taking screenshots of a framebuffer that cannot change while the guest sleeps, which is about two of the hard
+    pause's three points here and a cost that grows on a slow core where the probe's fixed duty cycle does not; a cheap `asleep` getter for them to
+    consult is the fix, and the A07 reading of the worker plus main thread, asleep, auto-save on against off, says whether it is worth doing.
+    The checklist for the device pass is in the PR.
+12. Then P11 (zoom/pan camera), P12 (stage layout, landscape
     rails, spectator parity — re-run the multiplayer harness), P13 (menu IA, first-run coach),
     P14 (wake lock, fullscreen, audio health, install), P15 (desktop mouse, gamepad).
 
@@ -827,7 +902,9 @@ a real soft keyboard, and the 5 s write cost on a low-end CPU (the write is a `J
 - The spectator page was never rendered at phone sizes; the multiplayer harness was not used.
 - Emulator speed on phones is unknown: CDP CPU throttling does not slow Workers, so the 4x/6x
   boot-time numbers measure the network and main thread only. This bounds the 45 s detection
-  window (P6) and the "duty-cycle is cheap" claim (P9).
+  window (P6) and the claims of P9: the probe costs about 15% of a core on a desktop (a fixed
+  250 ms in every 2.25 s, so about the same share on a slower core, which has less to run it with),
+  and the 20 s idle time rests on silent stretches of up to 10 s that a phone may stretch several times.
 - ~~OCR at 640x480 is proven only on a pasted frame~~ Closed by P4: measured on real saves in the
   running game, see item 7.
 - Offline start was inferred from ngsw semantics and never run.
