@@ -11,6 +11,14 @@ import { DECK } from '../../models/constants';
 import { EmulatorControlService, GuestKeyQueueService } from '../../services/game';
 import { DiagnosticsService } from '../../services/shared';
 
+/** A tab of the taskbar or of the sheet. `aria` is its accessible name where the words on it are not enough. */
+interface DockTab {
+  id: DeckKeysPanel;
+  label: string;
+  icon: string;
+  aria?: string;
+}
+
 /** How a press began, for the diagnostics log and for the haptics (a repeat does not buzz). */
 type PressOrigin = 'tap' | 'repeat' | 'confirmed';
 
@@ -90,6 +98,16 @@ export class DockComponent implements OnInit, OnChanges, OnDestroy {
   /** A text field seems to have the focus in the guest (FieldHintService): Texto pulses. Only a cue, never a gate. */
   @Input() fieldHint: FieldHint = 'none';
 
+  /** "Zoom e movimento" is on: the taskbar and the sheet gain the Zoom tab, whose panel is the camera's (CameraPanelComponent). */
+  @Input() cameraAvailable = false;
+  /** What the Zoom tab says: "Zoom" at the fit, the scale ("1,5x") while the picture is magnified. */
+  @Input() cameraLabel = 'Zoom';
+  /**
+   * The picture is magnified. The band collapses to its taskbar while it is (DeckPanelHelper.withZoom): in portrait the camera takes the
+   * free band under the picture. A panel folded this way comes back at the fit.
+   */
+  @Input() zoomed = false;
+
   /** The launcher's sheet. Two-way: the page's button opens it and this one closes it. */
   @Input() sheetOpen = false;
   @Output() sheetOpenChange = new EventEmitter<boolean>();
@@ -100,6 +118,11 @@ export class DockComponent implements OnInit, OnChanges, OnDestroy {
   @Output() omaticRequest = new EventEmitter<void>();
   /** A key could not be sent. The page words it and rate-limits it. */
   @Output() keyFailure = new EventEmitter<unknown>();
+  /**
+   * Which panel is up in the band now (a panel of keys, the camera's, the chat, or null when it is folded). The page needs it to know
+   * whether the camera may take the band under the picture, and it is NOT the deck's to decide: the picture's box never depends on it.
+   */
+  @Output() shownChange = new EventEmitter<DeckPanel | null>();
 
   readonly formations = DeckKeyHelper.formations();
   readonly shortcuts = DeckKeyHelper.tacticShortcuts();
@@ -116,13 +139,17 @@ export class DockComponent implements OnInit, OnChanges, OnDestroy {
     { modifier: 'ctrl', label: 'Ctrl' },
     { modifier: 'alt', label: 'Alt' },
   ];
-  readonly panels: ReadonlyArray<{ id: DeckKeysPanel; label: string; icon: string }> = [
+  private static readonly KEY_PANELS: ReadonlyArray<DockTab> = [
     { id: 'tactics', label: 'Táticas', icon: 'football-outline' },
     { id: 'arrows', label: 'Setas', icon: 'game-controller-outline' },
   ];
+  /** The tabs of the taskbar and the sheet: Táticas and Setas, and the Zoom tab while the camera is on. Rebuilt when its inputs change, not per pass. */
+  panels: ReadonlyArray<DockTab> = DockComponent.KEY_PANELS;
   readonly chatPanelId = ChatPanelHelper.PANEL_ID;
 
   panelState: DeckPanelState = { keys: DeckPanelHelper.DEFAULT, chatOpen: false };
+  /** What `shownChange` last said, so it speaks only when the panel on screen changes. */
+  private announced: DeckPanel | null | undefined;
   readonly latch = new ModifierLatch();
   private faulted = false;
   private quitPromptOpen = false;
@@ -160,9 +187,17 @@ export class DockComponent implements OnInit, OnChanges, OnDestroy {
     return this.presentation === 'rails';
   }
 
-  /** A panel of keys is up in the band, so the deck takes the band; with the chat or nothing up it is only the taskbar. */
+  /**
+   * A panel of keys is up in the band, so the deck takes the band; with the chat or nothing up it is only the taskbar. The camera's
+   * panel is the exception: it is as tall as its keys and the camera keeps the rest of the band (a panel that took the band would
+   * leave the camera a picture-sized view to be used in, which is the thing the panel is for).
+   */
   @HostBinding('class.deck-band--open') get isOpen(): boolean {
-    return this.isBand && this.shownKeys !== null;
+    return this.isBand && this.shownKeys !== null && this.shownKeys !== 'camera';
+  }
+
+  panelLabel(panel: DeckKeysPanel): string {
+    return DeckPanelHelper.label(panel);
   }
 
   /** Keycaps work only with an emulator, a page that is not leaving, and a queue that is not faulted. */
@@ -228,6 +263,21 @@ export class DockComponent implements OnInit, OnChanges, OnDestroy {
     if (changes['chatOpen']) {
       this.panelState = DeckPanelHelper.withChat(this.panelState, this.chatOpen);
     }
+    if (changes['cameraAvailable'] || changes['cameraLabel']) {
+      // The tab's words are the scale while the picture is magnified, so its accessible name says what the tab is as well.
+      this.panels = this.cameraAvailable
+        ? [...DockComponent.KEY_PANELS, { id: 'camera', label: this.cameraLabel, icon: 'search-outline', aria: this.cameraLabel === 'Zoom' ? 'Zoom e movimento' : `Zoom e movimento, ${this.cameraLabel}` }]
+        : DockComponent.KEY_PANELS;
+    }
+    if (changes['cameraAvailable'] && !this.cameraAvailable) {
+      this.panelState = DeckPanelHelper.withoutCamera(this.panelState);
+    }
+    // Only the band has a folded state (the sheet shows a panel or the first one), and only there is the band something to give up.
+    if (changes['zoomed'] || changes['presentation']) {
+      this.panelState = DeckPanelHelper.withZoom(this.panelState, this.zoomed && this.presentation === 'band');
+    }
+    // Said after the pass: a parent binding that depends on it was already checked, and a change under it is NG0100.
+    queueMicrotask(() => this.announce());
     if (changes['dosCI'] || changes['disabled'] || changes['presentation']) {
       // A hold must not outlive the emulator it was typing into, nor the layout it was pressed in.
       this.stopRepeats('inputs changed');
@@ -321,6 +371,11 @@ export class DockComponent implements OnInit, OnChanges, OnDestroy {
 
   trackKey(_: number, key: DeckKey): string {
     return key.id;
+  }
+
+  /** The tab is its panel: a new label (the scale, as a pinch ends) updates the Zoom tab's text and does not rebuild the others. */
+  trackTab(_: number, tab: DockTab): string {
+    return tab.id;
   }
 
   // ---- internals ----
@@ -420,6 +475,15 @@ export class DockComponent implements OnInit, OnChanges, OnDestroy {
     if (before !== after) {
       this.diagnostics.log('page', 'deck panel', () => ({ from: before, to: after, presentation: this.presentation }));
     }
+    this.announce();
+  }
+
+  /** Tell the page which panel is up, once per change. */
+  private announce(): void {
+    const shown = this.presentation === 'band' ? DeckPanelHelper.shown(this.panelState) : null;
+    if (shown === this.announced) return;
+    this.announced = shown;
+    this.shownChange.emit(shown);
   }
 
   /** navigator.vibrate(), where there is one and the player has not turned it off. A pure feel, so it never throws. */

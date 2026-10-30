@@ -175,6 +175,19 @@
             <ion-icon slot="end" name="hand-left-outline"></ion-icon>
           </ion-item>
           <!--
+            The in-app camera (CameraService), offered where a finger is the pointer. Local to this screen: the copy says so,
+            because a host who zooms might think the room sees it. Off as shipped, and honest about it like the other
+            experiments; the label sits outside the toggle so the explanation can wrap under it on a narrow phone.
+          -->
+          <ion-item *ngIf="cameraChoice$ | async" detail="false">
+            <ion-label class="ion-text-wrap">
+              Zoom e movimento
+              <p>Pince com dois dedos na imagem para ampliar e arraste com dois dedos para mover. {{ cameraButtonsHint }} Só você vê isso: quem assiste à sala sempre vê o jogo inteiro. Ainda não foi testado em celulares de verdade: se algo sair errado, desligue.</p>
+            </ion-label>
+            <ion-toggle slot="end" [checked]="cameraEnabled" (ionChange)="toggleCamera($event)"
+              aria-label="Zoom e movimento"></ion-toggle>
+          </ion-item>
+          <!--
             The key panel under the picture (the control deck). A dialog, not a toggle: there are
             three answers (the device decides, always, never), and the subtitle says what the
             automatic one comes to on this device.
@@ -406,7 +419,7 @@
     landscape, the rails and the docked chat are its siblings, and the toggle and the deck are not children of it.
   -->
   <div #stageHost class="full game-stream-flex-container" [class.has-deck-band]="layout.kind === 'band'"
-    [class.has-rails]="layout.rails">
+    [class.has-rails]="layout.rails" [class.camera-on]="cameraView.enabled" [class.camera-tall]="cameraTall">
     <div class="game-stream-container">
       <!--
         role="application": keystrokes in here are the game's, so a screen reader should hand
@@ -471,6 +484,10 @@
       [vibrate]="keyVibration"
       [liveKeyboard]="liveKeyboard"
       [fieldHint]="fieldHint"
+      [cameraAvailable]="cameraView.enabled"
+      [cameraLabel]="cameraView.zoomed ? cameraView.label : 'Zoom'"
+      [zoomed]="cameraView.zoomed"
+      (shownChange)="deckShown = $event"
       [chatAvailable]="isStreaming"
       [chatOpen]="isChatOpen"
       [unread]="(unreadCount$ | async) || 0"

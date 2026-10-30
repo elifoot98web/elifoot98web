@@ -344,7 +344,8 @@ async function modeUi() {
   const { c } = await lab()
   const click = ({ css, text }) => c.ev(`(() => { const el = [...document.querySelectorAll(${JSON.stringify(css)})].find(e => ${text ? `e.textContent.includes(${JSON.stringify(text)})` : 'true'}); if (!el) return false; el.click(); return true })()`)
   const centre = selector => c.ev(`JSON.stringify((() => { const b = document.querySelector(${JSON.stringify(selector)}); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 } })())`).then(JSON.parse)
-  const toolbar = await centre('ion-header ion-buttons[slot="end"] ion-button')
+  // The slot's own button: the save chip and the sound chip hold ion-buttons too, and a tap on the first of those saves the game.
+  const toolbar = await centre('ion-header ion-buttons[slot="end"] > ion-button')
   const menuButton = toolbar ?? await centre('.rail-menu-btn')
   check(!!menuButton, 'the options button is on screen', toolbar ? 'toolbar' : 'rail')
   await c.tap(menuButton.x, menuButton.y, 60)

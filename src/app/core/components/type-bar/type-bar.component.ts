@@ -309,13 +309,12 @@ export class TypeBarComponent implements OnChanges, OnDestroy {
 
   private relayout(): void {
     if (!this.isOpen) return;
-    const picture = document.getElementById('game-container')?.getBoundingClientRect();
     const compact = TypeBarLayoutHelper.folds({
       shape: this.shape,
       viewportWidth: window.innerWidth,
       viewportHeight: window.innerHeight,
       keyboardInset: this.inset,
-      pictureBottom: picture?.bottom ?? 0,
+      pictureBottom: this.visiblePictureBottom() ?? 0,
     });
     if (compact !== this.compact) {
       this.compact = compact;
@@ -324,11 +323,25 @@ export class TypeBarComponent implements OnChanges, OnDestroy {
     this.cdr.markForCheck();
   }
 
+  /**
+   * Where the picture ends on the screen. Not the root's own rectangle: with the camera on that is the MAGNIFIED picture, which runs
+   * past the clip that cuts it off (and past the screen), so the bottom is the lower of the two. Without a camera the clip and the
+   * picture end together and this is what it always was. The bar never moves the camera either way: it covers what it covers.
+   */
+  private visiblePictureBottom(): number | null {
+    const picture = document.getElementById('game-container');
+    if (!picture) return null;
+    const clip = picture.parentElement?.getBoundingClientRect();
+    const bottom = picture.getBoundingClientRect().bottom;
+    return clip ? Math.min(bottom, clip.bottom) : bottom;
+  }
+
   /** Everything the device pass needs to judge where the bar sits: the viewport, the keyboard and the bar's own box. */
   private layoutSnapshot(): unknown {
     const viewport = window.visualViewport;
     const bar = document.querySelector('.type-bar')?.getBoundingClientRect();
     const picture = document.getElementById('game-container')?.getBoundingClientRect();
+    const visibleBottom = this.visiblePictureBottom();
     return {
       shape: this.shape,
       compact: this.compact,
@@ -336,7 +349,7 @@ export class TypeBarComponent implements OnChanges, OnDestroy {
       inner: `${window.innerWidth}x${window.innerHeight}`,
       visual: viewport ? { w: Math.round(viewport.width), h: Math.round(viewport.height), top: Math.round(viewport.offsetTop), scale: viewport.scale } : null,
       bar: bar ? { top: Math.round(bar.top), bottom: Math.round(bar.bottom), h: Math.round(bar.height) } : null,
-      picture: picture ? { top: Math.round(picture.top), bottom: Math.round(picture.bottom) } : null,
+      picture: picture ? { top: Math.round(picture.top), bottom: Math.round(visibleBottom ?? picture.bottom) } : null,
     };
   }
 

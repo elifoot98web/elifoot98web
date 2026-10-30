@@ -31,7 +31,7 @@ node scripts/pwa-icons/make-maskable.mjs <source.png> <out.png> --size 512 --che
 Specs are karma + jasmine. The builder globs `**/*.spec.ts` (its `include` option, which is also
 what `--include` overrides); [src/test.ts](src/test.ts) only initialises the TestBed and
 `tsconfig.spec.json` type-checks `src/**/*.spec.ts`, so a spec needs no registration but must live
-under `src/` to be type-checked. Nothing in a spec reaches the bundle. There are **seventy-four spec files so
+under `src/` to be type-checked. Nothing in a spec reaches the bundle. There are **seventy-eight spec files so
 far**. [room-code.helper.spec.ts](src/app/core/helpers/room-code.helper.spec.ts) is there as
 much to prove the harness as to cover `RoomCodeHelper`: `ng test` with **zero** specs
 prints `Executed 0 of 0 SUCCESS` and still exits 1, so a `test:ci` could never pass before the
@@ -126,7 +126,13 @@ a request held in flight until the spec settles it), the page's visibility and t
 false })` so that a listener or timer left behind fails the case; [audio-health.service.spec.ts](src/app/core/services/game/audio-health.service.spec.ts)
 adds the trap of a fake that answers synchronously (the real browser dispatches `statechange` as a task), which is why the service queues a
 re-entrant look. Both service specs and the helpers behind them (`WakeLockHelper`, `AudioHealthHelper`, `InstallHelper`, `NudgeHelper`,
-`FullscreenHelper`, `StorageHealthHelper`) were mutation-checked when the phase was built: thirteen deliberate breaks, thirteen failing cases. Write specs for pure logic (helpers,
+`FullscreenHelper`, `StorageHealthHelper`) were mutation-checked when the phase was built: thirteen deliberate breaks, thirteen failing cases.
+[viewport-transform.helper.spec.ts](src/app/core/helpers/viewport-transform.helper.spec.ts) is the model for "maths that everything else trusts": the camera's scale, clamp,
+zoom-about-a-point, pinch step, snap to the device pixel grid and page-to-guest mapping are written as numbers (a 393x295 phone, its tall view, a landscape phone), the mapping is
+round-tripped for every column and row of the 640x480 frame at 1x, 1.5x, 2x and 3x and across a sweep of scales and focal points, and [overlay-sync.helper.spec.ts](src/app/core/helpers/overlay-sync.helper.spec.ts)
+checks `OverlaySyncHelper` under a transform in REAL layout (no mocks: a container, a letterboxed canvas, an overlay, `getBoundingClientRect`). Twelve deliberate breaks of the camera's
+rules (the covering clamp, the focal point, the grid rounding, `scale(1)` at the fit, the dead band, the dead-until-every-finger-is-up rule, the settle near the fit, the
+rotation store, the clip as a listener, the folded panel coming back, a write per pinch step, the click reaching the camera) each failed at least one case. Write specs for pure logic (helpers,
 planners, parsers, queues driven by a fake clock); the emulator, the screen-scrapers and the WebRTC
 paths have no karma coverage and are checked in a real browser (see the harness above). `ChromeHeadlessCI` in
 [karma.conf.js](karma.conf.js) is `ChromeHeadless --no-sandbox`, which a CI runner or container
@@ -147,7 +153,9 @@ the "Modo de toque" UI, and the edge cases a review found: a fast second tap, a 
 budget, the audio wake; `typebar.mjs`, the live type bar on the real game against a SIMULATED OS keyboard and CDP's IME
 events; and `idle-pause.mjs`, the battery saver on the real game: CPU on a still screen, whole Elifoot rounds with the setting on and off,
 and taps and keys sent to a sleeping guest, see *Letting the guest sleep*; and `stage.mjs`, the picture's box at 19 windows with every input the contract names and every one it
-does not, the rails' keys, and a spectator's picture against the host's in a real two-browser room, see *The stage*), with the tables the constants rest on. **Re-run it after any change to the video mode, the
+does not, the rails' keys, and a spectator's picture against the host's in a real two-browser room, see *The stage*; and `camera.mjs`, the in-app camera on the real game:
+the picture's box at 12 windows and 4 zooms, the unzoomed page byte for byte, real two-finger touches, tap accuracy at each zoom against the RAM oracle, the host's overlay and
+stream, the deck while zoomed, rotation and the battery saver, see *The camera*), with the tables the constants rest on. **Re-run it after any change to the video mode, the
 Windows mouse settings, js-dos or the disk image.** It needs a dev build (`window.ng`) served with `--live-reload=false`.
 
 The phone-platform work (the screen lock, fullscreen, the game's sound, installing) is checked the same way in
@@ -704,9 +712,11 @@ Load-bearing invariants, each measured or a bug waiting:
 - **Blind dead reckoning, no `readMemory`.** The model adds exactly what the guest applies and clips as it does; it
   is homed to (0, 0) first. The RAM oracle (the cursor as two `uint16`s, found by verify-then-scan) is a harness tool: it
   couples to addresses that may move, and `readMemory` rejects concurrent calls, which the Cheat 'O Matic would hit.
-- **The listeners are on `layers.root`, in the capture phase, and chosen by `pointerType`, never by user agent.** They
-  `stopPropagation()` for `touch` and `pen` pointers aimed at js-dos's overlay or canvas, so its own handlers (on the
-  overlay, bubbling) never see a finger. A real mouse is not touched (desktop pointer lock, a hybrid laptop, an iPad
+- **The listeners are on `layers.root`, or on the clip around it (`TouchSurface.stage`, `.game-stream-container`) where the page gives one, in the capture phase, and chosen by `pointerType`, never by user agent.** They
+  `stopPropagation()` for `touch` and `pen` pointers aimed at js-dos's overlay or canvas, or at the clip itself, so its own handlers (on the
+  overlay, bubbling) never see a finger. GamePage always gives the clip, so the camera-off page is on it too: it IS the picture there (landscape: exactly
+  the stage; portrait: the 4:3 box), and the only reason to listen on it is the camera's tall view, where part of the clip is not the picture
+  (*The camera*). **Nothing may be put inside the clip that a finger has to reach**: a touch aimed at the clip itself is swallowed like one aimed at the canvas. A real mouse is not touched (desktop pointer lock, a hybrid laptop, an iPad
   with a mouse all behave as before), and neither is anything else inside the root (js-dos's own controls; the control deck is
   outside it, a sibling of `#game-container`).
   `layers.pointerDisabled` was rejected: it disables the mouse path too. A mouse event within 500 ms of a touch is the
@@ -737,9 +747,11 @@ Load-bearing invariants, each measured or a bug waiting:
 - **A drag presses where the finger landed** (movement past 10 css px before 450 ms), follows at the engine's pace
   (latest target wins) and releases where it lifted. **Holding still 450 ms is aim mode:** the cursor is parked 56 css px
   above the finger, follows it, and the click is at release (`HOLD_MODE: 'none'` turns it into a slow tap).
-- **A second finger cancels the gesture, and the touch stays dead until every finger is up.** Two-finger gestures are
-  reserved for the camera planned for P11, so they mean nothing now. A palm (contact radius over 48 css px) is ignored
-  outright, not tracked. There is no right click: no tested Elifoot screen reacts to one.
+- **A second finger cancels the gesture, and the touch stays dead until every finger is up.** What two fingers MEAN is the
+  camera's (*The camera*, `CameraGesture`, fed the same samples; with the camera off they mean nothing, as before), but the
+  cancel is this layer's and comes first: any press is released, synchronously, before the pinch starts. A palm (contact radius over 48 css px) is ignored
+  outright, not tracked. There is no right click: no tested Elifoot screen reacts to one. **There is no double-tap zoom**: a double tap is a
+  `WM_LBUTTONDBLCLK` (measured with the camera on: two quick taps are `down,up,down,up` and the scale does not move).
 - **Scrolling is the scrollbar.** Dragging the 16 px thumb scrolls a list without touching the selection, and a tap in
   the trough pages it (both on the country list). Mapping a drag to Up/Down was tested and rejected: in that list the
   arrow and page keys SELECT as they move (the counter went 20, 25, 38, 40, 43).
@@ -753,7 +765,7 @@ Load-bearing invariants, each measured or a bug waiting:
   from the engine's side looks exactly like idle; the layer tells it with `setFingerDown()`), and the 600-send budget
   never fires with the button held, it waits for the release. It also homes once when the layer attaches, before anyone is touching, but only on a device with a touch screen (`any-pointer: coarse`): on a plain desktop it would move the guest's cursor for nothing.
 - **A lifted finger wakes the game's audio.** js-dos builds its `AudioContext` inside `run()`, before any gesture, and wakes
-  it from a one-shot `click`/`touchstart`/`keydown` listener on `document`. This layer stops the touch at `layers.root` and
+  it from a one-shot `click`/`touchstart`/`keydown` listener on `document`. This layer stops the touch at `layers.root` (or at the clip around it) and
   cancels the click the browser would have made of it, so on iOS (a context made outside a gesture stays suspended) the game
   would stay silent, and a hosting phone would stream silence, until the person tapped something outside the game. So
   `pointerup` and `touchend` of a handled touch call `resume()` on `getDosAudioNode()`'s context when it is not running.
@@ -945,7 +957,7 @@ cursor overlay and every remote cursor are placed from that box; a stage that fo
 "Not the OS keyboard" holds for BOTH kinds of browser: Chrome and Safari leave the layout viewport alone when it opens, and a browser that resizes it for the keyboard (older Android WebViews, some OEM
 browsers: the case `LayoutShapeHelper.settle` exists for) shrinks the page's element with the window while the settled shape holds, so `StageLayoutService` adds back the height the window lost against
 the settled viewport (`covered` in the `layout` log line) and measures the box the page had before the keyboard.) `#game-container` keeps `position: relative` and has no padding and no
-border (the cursor overlay is its child and `OverlaySyncHelper` reads `offset*`); zoom, when it comes, is by `transform` only and is the camera's phase. In landscape the
+border (the cursor overlay is its child and `OverlaySyncHelper` reads `offset*`); zoom is by `transform` only and is the camera's (*The camera*: the picture's box is never touched by it, which is why this clause holds with it on). In landscape the
 container is exactly `--stage-w` x `--stage-h` (whole pixels, exactly 4:3: a multiple of 4x3, never 521x390.75) at an integer offset (`--stage-mx`, `--stage-my`), so the
 canvas fills it and its offset inside it is zero. Portrait is untouched: the 4:3 box is still pinned in CSS (`flex: 0 0 75vw`, which needs no JavaScript to be right on
 the first frame) and the plan only mirrors it for the log. **Proved in a browser** (`stage.mjs layout`, 19 windows, 248 checks, 0 failures; headless Chrome 143 with touch
@@ -998,7 +1010,8 @@ that must be seen whole is already as tall as the screen on every landscape phon
 picture room. The 8% to 52% the roadmap modelled needs a stage TALLER than the screen, cropped and panned: that is the camera's phase, not a layout's, and shipping it here would have hidden
 part of the game behind a pan that does not exist yet. The setting, the plan's support for it and the harness stay, so the camera can build on them. The review found the entry's label promising what it does not
 deliver, so the dialog now says what the choice is and is not ("A imagem fica do mesmo tamanho nas duas: muda só quantas colunas de teclas as laterais usam"; the radios read "Ajustar: duas colunas de teclas onde
-cabem" and "Ampliar: uma coluna de teclas"). It still costs a player the one-tap F-keys for nothing, so decide with the owner whether it is worth keeping in the menu until the camera ships.
+cabem" and "Ampliar: uma coluna de teclas"). It still costs a player the one-tap F-keys for nothing, so decide with the owner whether it is worth keeping in the menu. **The camera shipped (P11) without
+cropping it**: "Zoom e movimento" magnifies and pans the picture inside the stage, whatever the rails are, and `Ampliar` still gains nothing; the entry is the owner's call as before.
 
 **The spectator.** [join-game.page](src/app/pages/join-game/join-game.page.html) drops its toolbar on a landscape phone that is watching (not on the joining, waiting and failure cards, which
 keep the way back) and has a left rail instead: the room's pill, "Sala" (the room window), Chat, Som, and "Sair" pinned to the bottom, away from the rest, with the same Win9x keycaps and safe-area
@@ -1023,6 +1036,99 @@ settled on the exact stage with no console line. **Not verified, and on the devi
 phone, TalkBack and VoiceOver on the rails (they come AFTER the picture in the DOM and BEFORE it on screen, so the Tab order is not the visual one), and the picture's size next to the host's on a real pair of devices. **Known and left:**
 the chat's tab on a tablet or laptop with no gutter still overlays the picture's edge by 34 px, as it always did; a dev-mode NG0100 when a host with unread messages opens the chat (the panel's own input setter resets the count in the middle of a change-detection pass, after a
 parent-level binding read it; it was there before this phase and does not exist in a production build).
+
+### The camera (zoom and pan of the host's picture, experimental)
+
+A transform on the picture's root that magnifies and moves it inside the stage, so that the game's 8 to 12 px text and 6 to 11 px targets can be read and hit on a phone: about 1.67x brings
+a 640x480 frame to the 12 px equivalent that P4's 1.25x left short (phase P11; the design record, the as-built numbers and the conflict it settled are in
+[docs/mobile-ux-study.md](docs/mobile-ux-study.md)). **It is behind a setting and off as shipped**: `STORAGE_KEY.CAMERA_ENABLED`, "Zoom e movimento" in the options menu (offered where
+`(pointer: coarse)` holds, like "Modo de toque"), stored as an explicit boolean so that flipping `CAMERA.DEFAULT_ENABLED` reaches only people who never chose; the menu's text and the FAQ say it has not been tried on a phone.
+*Why off:* **every measurement below is Chromium's**, and WebKit's behaviour with a transform on a WebGL canvas, with two-finger gestures and with edge swipes is unseen (decision D9: the
+device pass first). Files: `ViewportTransform` ([viewport-transform.helper.ts](src/app/core/helpers/viewport-transform.helper.ts): the maths, pure), `CameraGesture`
+([camera-gesture.helper.ts](src/app/core/helpers/camera-gesture.helper.ts): two fingers to steps, pure), `CameraService` (the element, the observers, what is remembered), `CameraPanelComponent`
+([camera-panel/](src/app/core/components/camera-panel/camera-panel.component.ts): the deck's Zoom tab), `CAMERA` in [constants.ts](src/app/core/models/constants.ts), and the rules in
+[global.scss](src/global.scss) (`.camera-on`, `.camera-tall`, the tap ring's size) and [_deck.scss](src/theme/_deck.scss) (the panel).
+
+**THE CONTRACT, which no later change to the camera may break.**
+
+- **The transform is on `#game-container` (js-dos's `layers.root`) and nowhere else: `translate(x, y) scale(s)`, `transform-origin: 0 0`.** Never the canvas alone (js-dos sizes the canvas inside the
+  root), never a rotation (the page-to-guest mapping and `OverlaySyncHelper` would both break), and `CameraService.write` is the only writer. **At the fit there is NO transform**: the property is
+  removed (not `scale(1)`, which would still make a compositing layer) and the root gets back the `style` attribute it had. Measured (`camera.mjs identical`): with the camera off and with it on
+  at the fit, the root's attributes, its computed transform and every rectangle (picture, canvas, clip, taskbar, js-dos's overlay) are equal to the last digit, and 2x and back leaves them so.
+- **The picture's own box is never resized by the camera.** The root's size is still what the stage plan (or the portrait CSS) says, so js-dos, whose resize detector watches that box, does not
+  re-letterbox, and the stage plan does not move. Measured (`camera.mjs layout`: 12 windows from a 360x640 phone to a 1280x800 laptop, at 1.5x, 2x and 3x, 318 checks, 0 failures): `offsetWidth`,
+  `offsetHeight`, `offsetLeft` and `offsetTop` of the root and the canvas, the canvas's inline `width`, `height`, `left` and `top`, and `stagePlan` are identical to their values at the fit, in the portrait
+  windows where the clip grows into the band as well, and the rectangle is the box times the scale at the place the camera says (the translation on the device pixel grid).
+- **The clip is `.game-stream-container`**, whose `overflow: hidden` was already there; its content box is the camera's view. The camera re-clamps from a `ResizeObserver` on the clip and on the root (a
+  rotation, the address bar, fullscreen, the stage plan changing, the clip growing or folding), and a transform does not wake that observer or js-dos's (checked in a real browser by
+  `overlay-sync.helper.spec.ts`: three camera changes, no callback).
+- **A page point reaches the guest through the canvas's own rectangle in the page**: `x = floor((clientX - rect.left) / rect.width * frameWidth)` (likewise y), `rect = canvas.getBoundingClientRect()`, which
+  already holds the letterbox, the zoom and the pan. `TouchInputService.toGuest` is `ViewportTransform.clientToGuest`; a point on the right or bottom edge is the last pixel, not one past it.
+  Round-tripped for every column and row of 640x480 at 1x, 1.5x, 2x and 3x and over a sweep of scales and focal points (specs), driven through the real layer at those four zooms (spec), and graded
+  against the guest's RAM (`camera.mjs accuracy`, 130 taps, four places of the picture at each zoom, the camera following the clicks): **worst error 1 px, median 0**. A 12 px radio that a finger
+  5 css px to its left misses at the fit is selected by the same finger at 2x (`camera.mjs radio`).
+- **`OverlaySyncHelper` is unchanged and still reads untransformed `offset*`** of the canvas and the overlay, which scale together. The cost is rounding (the integers `offset*` returns), times the
+  scale: measured with a hosting phone and fake spectators, the overlay is within 0.25, 0.38, 0.5 and 0.75 px of the canvas at 1x, 1.5x, 2x and 3x and every remote cursor within 0.1 to 0.3 px of
+  the fraction its spectator pointed at (the multiplayer study measured 1.25 px at 2.5x, and `overlay-sync.helper.spec.ts` bounds it at half a pixel of the picture's own space per edge, times the scale).
+  Remote cursors and click pings are children of the root, so they zoom with the picture; the tap ring is not allowed to (below).
+- **Host only.** `canvas.captureStream()` follows the canvas's backing store, which a transform cannot reach: **the stream is the whole 640x480 frame at every zoom**, equal to the guest's framebuffer
+  at 600 sample points (mean difference 0 at 1x, 1.5x, 2x and 3x) and, over a real `RTCPeerConnection` pair inside the page, the same picture at 1x and at 3x (mean difference 8.18 and 8.18, the
+  codec's, at the 320x240 the encoder starts at). A spectator's cursor stays normalised to the full picture. The spectator's page does not import the camera, and the menu's text, the Zoom panel
+  ("Quem assiste à sala sempre vê o jogo inteiro") and the FAQ say so in Portuguese. **A real spectator was never connected**: the sandbox's Chrome could not resolve the public relays.
+
+**Controls.** Every one has a single-pointer twin, because a two-finger gesture alone fails WCAG 2.5.1 and is unreliable on some devices.
+
+- **Two fingers pinch and pan** (`CameraGesture`, fed by `TouchInputService` with the same samples as the recognizer, so the second finger's cancel still comes first and synchronously: the button is
+  released and nothing is clicked, measured with a drag in progress, no stuck button). The first two fingers are the pinch; a third and a palm are ignored; when either of the two lifts the pinch ends and the
+  touch is dead until every finger is up (a finger put back after a pan neither zooms nor clicks); a `pointercancel`, the page hidden and a detach end it. Each step is the change since the last one, not since
+  the start, so the camera owes nothing for the distance it overshot at an edge. A **dead band** of 8 css px on the spread keeps a two-finger pan from shimmering the scale, counted from where it ends so there is no
+  jump, and the distance a ratio is measured from is never under 40 px. **No double-tap zoom** (a double tap is a Windows double click: measured, `down,up,down,up` and the scale unchanged). No inertia.
+  The layer listens on the clip when the page gives it one (`TouchSurface.stage`), so a finger on the part of the view the picture does not cover is still the layer's: it clicks nothing, and a second finger there still pinches.
+- **Presets and buttons** (the deck's **Zoom** tab, `CameraPanelComponent`): Ajustar (the fit), 1,5x, 2x, "+" and "-" (one rung of 1, 1.25, 1.5, 1.75, 2, 2.5, 3), and a pad that moves the VIEW a quarter of itself per press
+  and repeats while held (the deck's repeat scheduler: 380 ms, then 90 ms, nothing after the lift). They zoom about the last click when it was under 15 s ago and is on the view, otherwise the middle. The maximum is
+  3x (a 16 guest px scrollbar thumb is 29 css px on a 393 px phone). A pinch that ends under 1.06x is the fit. The tab says the scale while the picture is magnified.
+- **It follows the click.** After a tap, a double tap or the end of aim mode, if the click is within 22% of an edge of the view the camera moves the least that gives it that margin (menus and lists open below and
+  beside what was tapped); never during a drag. Taps at the corners of a magnified picture graded 1 px at worst with it following. **Never under a finger that has landed since:** the click settles after the cursor's paced walk (on a slow
+  phone, long after the lift), so the layer tells the camera `clicked(point, { follow: false })` when a finger is down by then, and the camera also refuses while its own pinch is running; the click is still remembered for the buttons' focal point. *Why:* a drag's
+  press was mapped through the picture as it stood, and sliding it now would send the held thumb's next move somewhere else.
+- **Per orientation, and remembered.** `STORAGE_KEY.CAMERA_VIEWS`: `{ portrait?, landscape? }` of `{ scale, cx, cy }`, the centre of the view as a FRACTION of the picture, so a different window (a rotation, another phone)
+  restores the same part of it. Written 600 ms after the last change and at once on detach, never at a step of a pinch; read defensively (storage is an input); a rotation stores the camera it leaves against the window it was made for and
+  swaps the other in (measured: portrait 2x, landscape 1.5x, back, and across a reload); a camera at the fit is not stored. Both keys are in `STORAGE_KEY_HOMES` and wiped by "Apagar todos os dados" (the registry spec proves it).
+  A camera restored while the game is still hidden (no `.full`, no box) waits for the first layout that has one.
+
+**Portrait: the tall view.** The 4:3 stage of a portrait phone is 295 px of a 700 px column, and a 2x zoom of it would be a window 393x295 onto a quarter of the game. So while the picture is magnified, the deck's band holds
+nothing but its taskbar (or the Zoom panel) and the chat is closed, the clip **grows down into the free band** (`.camera-tall`, decided by the page: `GamePage.cameraTall`): 736 px at 393x852, 524 at 360x640, 816 at 430x932,
+1064 at 820x1180 (587 with the Zoom panel open at 393x852). **The picture does not change size** (its height is written again as the same `75vw`, since its `.full` height was a percentage of the clip, which is what grew), so
+js-dos and the overlay never notice (`camera.mjs layout`, above). *Decided with screenshots*, not measured on a person: the picture grows from the clip's top-left corner (that is the transform's origin) and a picture
+shorter than the view sits at the top, so at 393x852 a 2x picture (589 px) leaves 146 px of empty green below it (the same green the band had before) and has no vertical room until about 2.5x. **The 1.5x preset, the first one on the panel, is worse**: a 442 px picture in a 736 px clip leaves
+294 px (40% of the screen) of flat green at 393x852, and about 330 px at 430x932; with the Zoom panel open instead of folded there is no void at 2x (589 px in a 587 px clip). Capping the clip at the magnified picture's height would NOT remove it (the green is the page's either side of the clip's edge);
+what would is using the leftover for something, which is a decision for the device pass (see the fallback list below), not a measurement. **Known:** pinching away from the top
+therefore does not keep the content under the fingers vertically while the picture is shorter than the view (measured: a spread of about 2.2x at y 150 moved the guest pixel under the fingers from y 153 to y 71), because there is nowhere to put the picture's top edge but at the top; horizontally it does.
+It does not when the picture is only just taller than the view either (the Zoom panel open, a 587 px view: 2.15x gave 153 to 77), because each step is owed nothing for the distance it could not go and the room opens only at the end of the gesture; `camera.mjs pinch` therefore grades the picture's top edge against what the clip allows, not against the fingers. If the device pass finds
+that disorienting, the fix is to let the picture float during the gesture and settle at its end (a follow-up, not built). **The deck collapses to its taskbar while magnified**: `DeckPanelHelper.withZoom` folds the open panel of keys
+(and remembers which) when the picture is first magnified and brings it back at the fit if the band is still folded and the player chose nothing else meanwhile; a tab tapped while magnified is a choice and forgets it. The Zoom panel is as tall as its
+keys and does NOT take the band (`flex: 0 0 auto`; every other panel does), so the picture can be watched while it is used. Opening a panel of keys or the chat gives the band back and the clip is the stage again
+(the camera is re-clamped to the smaller view; nothing else moves). In landscape the clip IS the stage and never grows: the rails and the chat dock are where they were, the chat narrowing the stage (a documented input) re-clamps the camera and closing it gives the box back exactly.
+**The stage contract is intact**: the picture's box depends on the same inputs as before; "zoomed" is an input of the camera's VIEW (the clip), not of the stage.
+
+**Interactions.** *The deck, the rails and the sheet* work while magnified (a deck key sends one key down and one up; the rails are siblings, untouched). The Zoom tab is in the taskbar and in the sheet's tabs, so on a
+landscape phone the camera's buttons are one tap further, behind the rail's "Teclas" key (the sheet covers part of the picture while it is open, as it does for every panel). *The live type bar and the chat do not move the camera* (`camera.mjs bar`: opened over the deck with a simulated OS keyboard at 3x, the camera,
+the clip and the picture are the same rectangles; the bar's fold decision reads the VISIBLE bottom of the picture, `min(picture, clip)`, since the magnified root runs past the screen). *The tap ring* is drawn at the finger in
+the root's own space (`TouchFeedbackHelper` divides by the scale) and is kept a fingertip big on the screen by `--camera-unscale`, which the camera writes on the root. *The battery saver*: a pinch (a
+`pointerdown` the page's document listeners see, and `busy` while the recognizer is not idle) and every camera button (`CameraOptions.activity` -> `EmulatorPowerService.wake('camera')`) wake a sleeping guest (`camera.mjs power`). *Rotation while
+zoomed*: above. *Fullscreen, the address bar*: the observer. *Diagnostics*: category `touch`: `camera attached/detached/setting/restored/rotation/reclamp`, `two fingers`, `camera pinch start/end` (steps, clamps, the scale
+it began and ended at), `camera pinch` (at most every 250 ms) and `camera clamp` (the same throttle), `camera preset`, `camera nudge`, `camera follow`, `camera pad held`.
+
+**Not verified, and on the device checklist of the PR.** Everything on a phone: iPhone Safari AND the installed app (a pinch on the canvas against page zoom, `gesturestart`, the edge-swipe back, `touch-action: none` on the clip,
+pull-to-refresh), **a transform on the WebGL canvas in WebKit** (tearing, blur, a blank canvas, memory), the overlay with a real spectator watching on a real pair of devices, the pan's feel and the dead band with real fingers
+(a thumb rolls, fingers are uneven), the nudge pad, the Galaxy A07's frame rate while magnified, legibility at 1.5x and 2x on both phones, rotation while magnified, the tall view's empty green and the vertical slide described above, a hardware keyboard on an iPad.
+**The fallback, and its trigger:** if WebKit mis-draws or mis-hits under the transform (blank or torn canvas, taps landing off by the zoom, `getBoundingClientRect` lying), do NOT patch around it: switch to the investigation's
+LAY-3 design, a *preview* transform while the fingers are down that is committed on the lift by resizing the container to `z*W x z*H` and moving it with a pure translate (js-dos re-letterboxes once per commit; the stage plan,
+the overlay and the type bar's bottom would then have to learn that the container is bigger than the picture). It was not built: two mechanisms is one too many for something nobody has seen on a phone, and this one's evidence is Chromium's.
+**Known and left:** a browser that resizes the LAYOUT viewport for the OS keyboard (older Android WebViews) shrinks the tall clip with it and re-clamps the camera when it grows back (the P12 clause "not the OS keyboard" has the same limit in
+portrait); with the deck forced off ("Nunca mostrar", the one configuration where `layout.kind` is `none` on a touch device) there is no Zoom tab, so the buttons are unreachable and a pinch in is the way back to the fit: **the single-pointer twin of the gesture is missing there** (WCAG 2.5.1).
+The menu entry and the toast say so (`GamePage.cameraButtonsHint`) instead of naming a tab that is not there. The fix belongs to the options menu rework (P13: a Zoom section of Ajustar, "-" and "+" in the sheet, which is reachable with the deck off), and the camera should not become the default before it exists; the hardware mouse and the trackpad have no zoom; `Ampliar` is unchanged.
+**Lifting `user-scalable=no` is a separate, later commit that needs an iOS test (D11).** The viewport meta was not touched by this phase.
 
 ### The live type bar (experimental)
 
@@ -1615,7 +1721,7 @@ guest position and whether the cursor was sent ahead; every decision: tap, doubl
 and end, cancel with its reason, a palm or an extra finger ignored; the first compat mouse event dropped) and `pointer`
 (each move with its from, to, sends, units, duration and the smallest and largest gap between sends, which is the
 number that says whether a device stretches the spacing; each home with its reason; each click with how long it waited
-behind the cursor and how long it held; each abort with what it dropped; a refused send). `EmulatorPowerService` logs every change of state into `power` (see *Letting the guest sleep*). `DockComponent` logs the control deck's presses, modifiers, repeats and panel changes into `key` and `page` (see *The control deck*). The live type bar logs every event of its field into `ime` while it is open,
+behind the cursor and how long it held; each abort with what it dropped; a refused send). `CameraService` logs the camera into `touch` too (its attach and detach, a pinch's start, throttled steps, clamps and end, the presets, the pad, the follow, a rotation, a restore; see *The camera*). `EmulatorPowerService` logs every change of state into `power` (see *Letting the guest sleep*). `DockComponent` logs the control deck's presses, modifiers, repeats and panel changes into `key` and `page` (see *The control deck*). The live type bar logs every event of its field into `ime` while it is open,
 and the field hint into `frame` (see *The live type bar*); typed text therefore does appear in the log, and the panel says so.
 
 ### Multiplayer (watch-together, not play-together)
@@ -1697,6 +1803,10 @@ Load-bearing invariants — each of these was a bug once:
   [join-game.page.scss](src/app/pages/join-game/join-game.page.scss) lists what must not be added. The guest's container is the same stage the host's is (the same
   plan, `--stage-w` x `--stage-h`), so at the same window the two pictures are the same size and in the same place (checked to 1 px by `stage.mjs guest`); the
   video's ratio fit happens inside it, as before.
+- **The host's camera is the host's alone, and the spectator never learns of it.** The zoom and pan of "Zoom e movimento" are a transform on the host's `#game-container`;
+  `captureStream` reads the canvas's backing store, so the stream is the whole frame at every zoom (measured: identical to the framebuffer at 1x, 1.5x, 2x and 3x, and over a WebRTC pair
+  inside the page), a spectator's cursor is still normalised to the full picture and drawn on the host in the picture's own space (it zooms with it), and the spectator's page does not
+  import the camera. The host's own menu and panel say so in Portuguese. See *The camera*.
 - **A dropped host is not a departed host.** `onPeerLeave` for the host fires when *our* link
   drops, which is indistinguishable from the host leaving. Hence `HOST_RECONNECTING` plus a grace
   timer, copy that says we lost the connection, and a retry button — the grace period only
@@ -1736,6 +1846,8 @@ spectator alike (all three carry `data-chat-toggle`, which is what `ChatPanelHel
   for the auto-save OCR.
 - [local-storage.service.ts](src/app/core/services/shared/local-storage.service.ts) — thin wrapper over
   `@ionic/storage-angular`; all keys in `STORAGE_KEY`.
+- [camera.service.ts](src/app/core/services/game/camera.service.ts) — the in-app camera (zoom and pan of the host's picture by a transform on its root, clipped by the stage,
+  remembered per orientation); see *The camera*.
 - [stage-layout.service.ts](src/app/core/services/shared/stage-layout.service.ts) — writes the page's layout plan (the picture's box, the rails,
   the docked chat) where the stylesheets and the components read it; see *The stage*.
 - [layout-helper.service.ts](src/app/core/services/shared/layout-helper.service.ts) — two APIs

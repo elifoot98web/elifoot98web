@@ -370,7 +370,7 @@ build, and a CLAUDE.md update.
    Where it differs from the plan above, on evidence: **no list drag-to-scroll gesture** (the critic's addition). In
    Elifoot's country list the arrow and page keys SELECT as they move (the selected-teams counter went 20, 25, 38, 40, 43), so
    mapping a two-finger drag to them would break the selection; the scrollbar thumb drag and a tap in the trough already work, and
-   two-finger gestures are reserved for P11. **No right click**, as decided. **The tap ring lives in the host's DOM**, not in
+   two-finger gestures are reserved for P11 (built: item 14). **No right click**, as decided. **The tap ring lives in the host's DOM**, not in
    the guest's frame, so spectators and the OCR never see it. **Classic is not offered where it cannot work** (a default-UA
    iPad, a phone in "desktop site"), and a stored `classic` is ignored there. The re-home returns the cursor to where it was.
    **Not verified:** any phone, any real finger (the 10 px / 450 ms / 56 px / 400 ms / 32 px thresholds are recalled), iOS
@@ -935,7 +935,44 @@ build, and a CLAUDE.md update.
     - **No fallback below one column** (a short, nearly square window such as half of a split screen pays for the one-column rails; 457x412 gives 320x240): recorded as a known limit in CLAUDE.md and pinned by a spec
       row, not built; the brief's "collapse to the Teclas launcher below that" would also need a second shape for the toolbar and the spectator.
     - The harness still selected the deleted `.gutter-menu-btn` in `setting-ui.mjs`, `idle-pause.mjs` and `platform-harness/chip-layout.mjs` (the first two would have thrown on a landscape run); now `.rail-menu-btn`.
-14. Then P11 (zoom/pan camera, which is also where a cropped Ampliar would come from), P13 (menu IA, first-run coach), P15 (desktop mouse, gamepad).
+14. **P11 — the in-app camera: zoom, pan and a precision aid** (decisions D9 and D11; TOUCH-4, TOUCH-5, BASE-4, BASE-5, LAY-3, LAY-4, LAY-6; the conflict "Zoom mechanism"). **As built:** `ViewportTransform` (the maths, pure),
+    `CameraGesture` (two fingers to steps, pure), `CameraService` (the transform on `#game-container`, the observers, the per-orientation memory), `CameraPanelComponent` (the deck's **Zoom** tab: Ajustar, 1,5x, 2x, "+", "-" and a
+    pad), `TouchInputService` feeding the pinch and following the click, the "Zoom e movimento" setting (`STORAGE_KEY.CAMERA_ENABLED`, **off as shipped**, `CAMERA.DEFAULT_ENABLED`), `STORAGE_KEY.CAMERA_VIEWS`, the portrait **tall
+    view**, a FAQ entry, 4 new spec files and cases in 2 (the suite is 1,656; 12 deliberate breaks each failed a case), `scripts/touch-harness/camera.mjs` (11 modes) and the CLAUDE.md section *The camera*, which is the contract.
+    Measured in headless Chrome 143 (chrome-headless-shell, touch emulation, 393x852 unless noted) against the dev server and the real game, **synthetic touches on a desktop CPU; no WebKit, no phone, no real spectator**:
+    - **The picture is never resized.** `camera.mjs layout`, 12 windows (360x640 to 1280x800, notches included) x 1.5x, 2x, 3x, 318 checks, 0 failures: the root's and the canvas's `offset*`, the canvas's inline size and place and the stage
+      plan are identical to their values at the fit, in the portrait windows where the clip grows into the band as well; the rectangle is the box times the scale; the clip is on the screen and the taskbar below it.
+    - **The unzoomed path is the page it was.** `camera.mjs identical` (8 checks): camera off against camera on at the fit: the same attributes on the root (`outline: none;` is all it has), computed transform `none`, and every
+      rectangle equal to the last digit; 2x and back leaves the same, and switching off while zoomed puts it back exactly. The only difference with the camera on is a `camera-on` class on the page's row.
+    - **A tap lands where the finger is, at every zoom.** `camera.mjs accuracy`: 130 taps at 1x, 1.5x, 2x and 3x in four places of the picture each, the camera following the clicks, against the RAM oracle: worst 1 px, median 0. The
+      mapping is `ViewportTransform.clientToGuest` through the canvas's rectangle, round-tripped for every column and row at four zooms and over a sweep (specs) and driven through the real layer (spec). `camera.mjs radio`: the 12 px
+      "Quero começar" radio, a finger 5 css px to its left: missed at the fit (nothing changed), selected at 2x.
+    - **Real two-finger touches** (`camera.mjs pinch`, 21 checks): a spread zooms (2.52x), the guest pixel under the midpoint holds horizontally (319 -> 320), two fingers moving together pan by their travel, a pinch in to the fit removes the transform, a second finger
+      released a held drag at once (`down,up`, no stuck button, the engine idle), a two-finger tap clicks nothing, a third finger changes nothing, one finger lifting ends the pinch and the next finger does not start another, a cancelled touch
+      leaves the layer idle, **two quick taps are `down,up,down,up` and the scale does not move**, and a pinch with both fingers on the part of the clip the picture does not cover (the tall view at 1.25x) zooms. The regressions: `gestures.mjs` 10/10,
+      `stuck-button.mjs` 8/8 and `edge-cases.mjs` 4/4 with the camera off and the last two with it on at the fit, `ipad.mjs` 8/8, `setting-ui.mjs` 11/11, `deck.mjs layout` 140/140, `stage.mjs layout` 248/248 and `rails` 75/75.
+    - **Host only, measured** (`camera.mjs overlay`, a room with no peer): the overlay is within 0.25, 0.38, 0.5 and 0.75 px of the canvas at 1x, 1.5x, 2x and 3x, a fake spectator's cursor within 0.1 to 0.3 px of its fraction; the `captureStream` is 640x480 at all
+      four and equal to `dosCI.screenshot()` at 600 points (mean difference 0), not the zoomed view; the same stream over an `RTCPeerConnection` pair inside the page is the same picture at 1x and 3x (mean difference 8.18 and 8.18, at the 320x240 the encoder
+      starts at). `overlay-sync.helper.spec.ts` proves the contract in real layout with no mocks, and that a transform wakes none of the observers.
+    - **The deck, the rails, the chat, the bar, the saver and rotation while zoomed** (`deck` 24 checks, `chat` 8, `bar` 4, `power` 5, `rotate` 6): the Zoom panel's nine keys are 44x44 or more and on screen; a tap on 2x zooms with the panel still up and the clip taller
+      than the stage; the pad moves the view, a hold repeats to the edge and stops on the lift; + and - climb the ladder; the folded panel comes back at the fit, and a panel chosen while zoomed is kept; a deck key is one down and one up while zoomed; the options
+      menu's switch, tapped for real, takes the camera and the tab away; the chat open gives the band back (the clip is the 4:3 stage) and closing it gives the tall view back; on a landscape phone it narrows the stage and the camera is re-clamped; the live type
+      bar over a 3x picture moves neither the camera nor the clip; a pinch and a camera button wake the sleeping guest; portrait 2x -> landscape (its own camera) -> portrait returns the same camera, and both are in storage.
+    Where it differs from the plan above, on evidence or by decision: **default off** (the roadmap allowed on-for-coarse after the unzoomed path was shown identical, which it was; WebKit's behaviour cannot be dismissed with Chromium's evidence, and D9 says the device pass first), so the entry
+    carries the "not tried on a phone" sentence and one constant flips it; **the listeners moved to the clip** when the page gives one (`TouchSurface.stage`), because in the tall view part of the clip is not the picture and a finger there must still count; **the Zoom panel is a
+    deck panel** (a fourth tab, in the taskbar, the sheet and so the rails' sheet) and not a bar of its own, and it is the one panel that does not take the band; **the deck collapses to its taskbar while the picture is magnified and comes back at the fit** (the roadmap's
+    "compact bar"); **the follow is on whenever the camera is** (no setting of its own); **presets zoom about the last click**, not only the middle; **no animation** between camera states (a transition would make the mapping wrong mid-frame). **Found on the way, fixed:** the
+    sheet of a landscape phone's rails indented every panel by the notch's inset (a rule of equal specificity, written later, beat the 8 px the rail's sheet wanted), which cut the first key of the new row to "Ajus..."; `setting-ui.mjs` and `idle-pause.mjs ui` tapped the first
+    `ion-button` of the toolbar's end slot, which since the save chip (P5) is the chip, and a fresh profile's rotate-hint toast (P14) covers the toolbar until it goes, so `setting-ui.mjs` failed right after a boot (both dismissed or avoided now; it passes, 11/11). **Found on the way, not fixed:** the "Sala … no ar" toast is still
+    a column one letter wide at 360 px and now covers the Zoom tab too (P14's note); the sheet in the rails still covers the left of the picture while it is open, so the pad is awkward there; with the deck forced off there is no Zoom tab. **Known:** in the tall view the picture grows from its
+    top-left corner and has no vertical room until about 2.5x, so a pinch away from the top does not keep the content under the fingers vertically (measured, CLAUDE.md), and the 1.5x preset leaves 294 px of empty green under a 442 px picture at 393x852 (the review's number; 2x leaves 146);
+    `Ampliar` still gains nothing. **Not verified:** everything on a phone and everything in WebKit (CLAUDE.md lists them,
+    and the PR carries the device checklist); a real spectator (the sandbox's Chrome could not resolve the relays: `room.mjs join` failed twice with state 6); the feel of the dead band and the pan with real fingers. **The fallback** (LAY-3's preview transform plus commit-resize) is
+    recorded with its trigger in CLAUDE.md and was deliberately not built. D11 stands: the viewport meta was not touched, and lifting `user-scalable=no` is a separate later commit that needs an iOS test.
+    **After the review:** the follow-the-click move is refused while a finger is down or a pinch is running when the click settles (`clicked(point, { follow })`; the click is still remembered), the menu entry, the toast and the FAQ say that the buttons need the key panel
+    (with the deck off a pinch is all there is, which is the missing single-pointer twin, left for the P13 options sheet), `camera.mjs pinch` grades the picture's vertical place against what the clip allows instead of against the fingers (the old check failed whenever the picture was only a little taller than the view, which
+    depended on the panel an earlier mode had left up; the camera behaves as designed there, each step being owed nothing for the distance it could not go, and CLAUDE.md now says so), and a comment and two CLAUDE.md passages that the camera had made stale (the touch layer's listeners are on the clip; the stage helper's "pan that does not exist yet") were corrected.
+15. Then P13 (menu IA, first-run coach), P15 (desktop mouse, gamepad).
 
 Also add early: a **debug-only diagnostics flag** (pointer/touch/key/IME events plus frame timing,
 exportable from a phone) to feed the device pass, and decide whether specs are real. **T0 made
@@ -948,7 +985,7 @@ reachable from the options menu; `?diag=1` turns it on for a tab's session. Off,
 boolean check; on, a 5000-entry ring buffer of `{t, w, cat, msg, data?}`. Hooked: the key queue
 (enqueue, start, flush with timings, cancel, fail), the boot stages, the OCR worker lifecycle and each
 saving verdict, every persist with its duration, and the update flow. Pointer, touch and IME are not
-hooked: P2, P8, P9 and P11 log into it (P2 and P8 now do). CLAUDE.md has the design and its invariants; what was measured,
+hooked: P2, P8, P9 and P11 log into it (P2, P8, P9 and P11 now do). CLAUDE.md has the design and its invariants; what was measured,
 headless Chrome 143 with touch emulation at 390x844, 844x390 and 1280x800, against the dev server:
 - **Zero cost off.** After a fresh load of `/#/game` no `error`, `unhandledrejection`, `pagehide`,
   `pageshow`, `orientationchange` or `freeze` listener exists on the page; switching on adds all of them

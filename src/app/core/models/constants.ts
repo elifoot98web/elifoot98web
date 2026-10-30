@@ -81,6 +81,14 @@ export const STORAGE_KEY = {
   // "Tamanho da imagem" (StageLayoutService): 'fit' (Ajustar, the default) or 'wide' (Ampliar: the side
   // panels shrink to one column). Absent means fit; it changes the picture's box only when the player flips it.
   STAGE_VIEW: 'stageView',
+  // "Zoom e movimento" (CameraService): the in-app camera on the host's picture. Stored as an explicit
+  // boolean when the player chooses, like IDLE_PAUSE, so that a change of CAMERA.DEFAULT_ENABLED reaches
+  // only the people who never touched the switch. Off until the device pass says otherwise.
+  CAMERA_ENABLED: 'cameraEnabled',
+  // Where the camera was left, once per orientation (a portrait phone and the same phone on its side want
+  // different zooms): a small JSON object of { scale, cx, cy }, the centre as a fraction of the picture.
+  // Read defensively on the way in, because storage is just another input; see ViewportTransform.
+  CAMERA_VIEWS: 'cameraViews',
 }
 
 /** Where a STORAGE_KEY lives. Ionic Storage is the default; the others are written around it. */
@@ -133,6 +141,8 @@ export const STORAGE_KEY_HOMES: Readonly<Record<keyof typeof STORAGE_KEY, readon
   ROTATE_HINT_SHOWN: ['ionic'],
   INSTALL_NUDGE_DISMISSED: ['ionic'],
   STAGE_VIEW: ['ionic'],
+  CAMERA_ENABLED: ['ionic'],
+  CAMERA_VIEWS: ['ionic'],
 };
 
 /**
@@ -736,6 +746,48 @@ export const TOUCH_INPUT = {
   // this is what the cleanup timer is built on), and how many may be on screen at once.
   FEEDBACK_RING_MS: 420,
   FEEDBACK_MAX_RINGS: 8,
+}
+
+/**
+ * The in-app camera (CameraService, ViewportTransform, CameraGesture): zoom and pan of the HOST's picture by a transform on
+ * `#game-container`, clipped by the stage. It is phase P11 and behind STORAGE_KEY.CAMERA_ENABLED, because WebKit's behaviour
+ * with a transform on a WebGL canvas and with two-finger gestures has not been seen: everything measured is Chromium's.
+ * Spectators never see it; they are sent the whole frame (the canvas's backing store, which a transform does not touch).
+ */
+export const CAMERA = {
+  // Whether a player who never touched the switch has it on. Off: the device pass is what decides, and the owner flips
+  // this one constant afterwards. It applies on a coarse-pointer device only (the menu offers the setting nowhere else).
+  DEFAULT_ENABLED: false,
+  // "Ajustar" is the scale 1: the picture exactly as it is without a camera, with no transform at all.
+  MIN_SCALE: 1,
+  // 3x puts a 16 guest px scrollbar thumb at 29 css px on a 393 px phone and a 12 guest px radio at 22, with a guest pixel
+  // 1.84 css px wide: past it the picture is only a bigger blur, and the view shows a ninth of it.
+  MAX_SCALE: 3,
+  // The presets of the panel (Ajustar is the scale 1), and the ladder "+" and "-" climb: each press is one step.
+  PRESETS: [1.5, 2] as readonly number[],
+  STEPS: [1, 1.25, 1.5, 1.75, 2, 2.5, 3] as readonly number[],
+  // A scale this close to 1 is 1: a pinch that ends at 1.04 is not a zoom, and an identity is the one state with no transform.
+  SNAP_TO_FIT: 1.06,
+  // Two fingers drift: a pinch changes the distance between them by this many css px before it counts, so a two-finger pan
+  // does not shimmer the scale. The change is taken from where the dead band ends, so nothing jumps when it is crossed.
+  PINCH_SLOP_PX: 8,
+  // Two fingers that start nearly together would turn the smallest spread into a huge ratio: the distance a pinch measures
+  // from is never taken as less than this, so a pinch that starts with the fingertips touching still zooms at a sane rate.
+  PINCH_MIN_BASE_PX: 40,
+  // The pad moves the view by this share of its own size per press, and a held key repeats like the deck's arrows.
+  NUDGE_FRACTION: 0.25,
+  NUDGE_REPEAT_DELAY_MS: 380,
+  NUDGE_REPEAT_INTERVAL_MS: 90,
+  // After a click the camera brings the click's neighbourhood into view: the point is moved to at least this share of the
+  // view's size from each edge (menus and lists open below and beside what was tapped).
+  FOLLOW_MARGIN: 0.22,
+  // The presets and the buttons zoom around the last click when it was this recent and is inside the view, otherwise the
+  // middle of the view.
+  FOCUS_CLICK_MS: 15 * 1000,
+  // Where the camera was left is written this long after the last change, not at every frame of a pinch.
+  SAVE_DEBOUNCE_MS: 600,
+  // A pinch is logged at most this often (the start, the end and every clamp are logged as they happen).
+  LOG_PINCH_EVERY_MS: 250,
 }
 
 /**

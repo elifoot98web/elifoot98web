@@ -15,7 +15,7 @@ import { DiagnosticsReportHelper } from 'src/app/core/helpers/diagnostics-report
 import { BehaviorSubject, combineLatest, distinctUntilChanged, filter, map, Observable, Subscription, take } from 'rxjs';
 import { EmulatorKeyCodeHelper } from '../../core/models/game';
 import { CursorClickMessage, CursorPositionMessage, MultiplayerJoinErrorKind, PlayerInfo } from '../../core/models/multiplayer';
-import { AudioHealthService, AutoSaverService, EmulatorControlService, EmulatorPowerService, FieldHintService, GameExitWatcherService, PatchService, SaveBeforeReloadResult, SaveGameService, SaveImportPlan, SaveSafetyService, SavesBackup, TouchInputService } from '../../core/services/game';
+import { AudioHealthService, AutoSaverService, CameraService, CameraSurface, CameraView, EmulatorControlService, EmulatorPowerService, FieldHintService, GameExitWatcherService, PatchService, SaveBeforeReloadResult, SaveGameService, SaveImportPlan, SaveSafetyService, SavesBackup, TouchInputService } from '../../core/services/game';
 import { DiagnosticsService, FullscreenService, InstallService, LayoutHelperService, LocalStorageService, NudgeStateService, SaveStatusService, StageLayoutService, StorageHealthService, WakeLockService } from '../../core/services/shared';
 import { MultiplayerAudioService, MultiplayerChatService, MultiplayerCursorService, MultiplayerPlayerInfoService, MultiplayerRelayHealthService, MultiplayerService, MultiplayerUiService } from '../../core/services/multiplayer';
 import { CursorRendererHelper } from 'src/app/core/helpers/cursor-renderer.helper';
@@ -29,6 +29,8 @@ import { DisplayMode, DisplayModeHelper } from 'src/app/core/helpers/display-mod
 import { TouchMode, TouchModeHelper } from 'src/app/core/helpers/touch-mode.helper';
 import { DeckLayoutHelper, DeckPresentation, DeckSetting } from 'src/app/core/helpers/deck-layout.helper';
 import { StageHelper, StagePlan, StageView } from 'src/app/core/helpers/stage.helper';
+import { ViewportTransform } from 'src/app/core/helpers/viewport-transform.helper';
+import { DeckPanel } from 'src/app/core/helpers/deck-panel.helper';
 import { SaveBackupHelper } from 'src/app/core/helpers/save-backup.helper';
 import { SaveStatusHelper } from 'src/app/core/helpers/save-status.helper';
 import { NavigationGuardHelper } from 'src/app/core/helpers/navigation-guard.helper';
@@ -150,6 +152,18 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   /** The person's choice. What is actually in force is {@link TouchModeHelper.effective}. */
   touchMode: TouchMode = 'direct';
 
+  /**
+   * "Zoom e movimento" (STORAGE_KEY.CAMERA_ENABLED): the in-app camera on the host's picture (CameraService). Offered where a finger is
+   * the pointer, and off as shipped (CAMERA.DEFAULT_ENABLED): nobody has seen it on a phone.
+   */
+  cameraEnabled = false;
+  /** What the camera is doing, for the deck's Zoom tab and for the portrait layout. */
+  cameraView: CameraView = { attached: false, enabled: false, scale: 1, zoomed: false, label: 'Ajustar', canZoomIn: false, canZoomOut: false };
+  /** The panel the deck has up in its band (null when folded): the camera takes the band under the picture only while there is none. */
+  deckShown: DeckPanel | null = null;
+  /** Whether the menu offers "Zoom e movimento": the same test as "Modo de toque", a finger is the pointer. */
+  cameraChoice$: Observable<boolean>;
+
   private static readonly KEY_FAILURE_REPORT_INTERVAL_MS = 5000;
   private lastKeyFailureAt = 0;
 
@@ -219,6 +233,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     private nudges: NudgeStateService,
     private storageHealth: StorageHealthService,
     private stageLayout: StageLayoutService,
+    private camera: CameraService,
     chatService: MultiplayerChatService
   ) {
     this.unreadCount$ = chatService.unreadCount$;
@@ -241,10 +256,13 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
       this.diagnostics.log('page', 'deck layout', () => ({ ...layout, setting: this.deckSetting }));
       // A sheet belongs to a launcher or to rails; one left open across a rotation into the band would reopen with it.
       if (layout.kind !== 'launcher' && layout.kind !== 'rails') this.deckSheetOpen = false;
+      // Without the band there is no panel in it (the dock announces nothing once it is gone).
+      if (layout.kind !== 'band') this.deckShown = null;
       // The rails carry keys only where the deck is shown (a landscape phone); the plan sizes them to match.
       this.stageLayout.setKeys(layout.kind === 'rails');
     }));
     this.pageSubscriptions.add(this.stageLayout.plan$.subscribe(plan => { this.stagePlan = plan; }));
+    this.pageSubscriptions.add(this.camera.view$.subscribe(view => { this.cameraView = view; }));
     this.pageSubscriptions.add(this.layoutHelperService.anyCoarse$.subscribe(coarse => { this.anyCoarse = coarse; }));
     this.pageSubscriptions.add(this.fieldHintService.hint$.subscribe(hint => { this.fieldHint = hint; }));
     this.pageSubscriptions.add(this.install.mode$.subscribe(mode => { this.installMode = mode; }));
@@ -255,6 +273,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     this.touchModeChoice$ = this.layoutHelperService.matches$('(pointer: coarse)').pipe(
       map(coarse => TouchModeHelper.offersChoice(coarse, navigator.userAgent))
     );
+    this.cameraChoice$ = this.layoutHelperService.matches$('(pointer: coarse)');
   }
 
   /**
@@ -354,6 +373,12 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     }
     this.isHidden = false
     await this.dismissBootLoading(loading)
+    // After the picture has its box (the game was hidden, and without `.full` the container has no size to put a camera on).
+    try {
+      await this.setupCamera()
+    } catch (e) {
+      console.error('Could not set up the camera', e)
+    }
 
     try {
       if (detected) {
@@ -497,6 +522,8 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     // The layer is a root service too: its listeners sit on this page's container, and it holds
     // the emulator. Detaching also releases a button the guest may have been left holding.
     this.touchInputService.detach('page destroyed');
+    // After the layer: it ends a pinch that is still going, and the camera takes its transform off the page.
+    this.camera.detach('page destroyed');
     this.fieldHintService.stop();
     this.stopObservingOverlay?.();
     // Root services too, and each holds something of the browser: the screen lock, a document
@@ -1014,6 +1041,8 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
           this.autoSaverService.stopPeriodicSave()
           this.stopSafetyNets()
           this.saveStatus.freeze()
+          // The camera's debounced write of where it was left must not land after the wipe either: detaching flushes it now, before the storage is emptied.
+          this.camera.detach('data wipe')
 
           // clear all data
           await this.saveGameService.clearAllData(this.dosCI)
@@ -1527,12 +1556,102 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
       root: layers.root,
       overlay: layers.mouseOverlay,
       canvas: layers.canvas,
+      // The clip around the picture, which the camera can make bigger than it, and the camera itself (two fingers; a click is followed).
+      stage: this.stageElement(),
+      camera: this.camera,
       // A tap on the game's own field must not close the OS keyboard the live type bar has open, and
       // the tap moves the guest on from whatever the bar was describing (see onGameTouched).
       keepFocus: () => this.typeBar?.onGameTouched() ?? false,
       // The layer's timers send after the finger has gone; a sleeping guest is woken before each.
       beforeSend: () => this.power.wake('touch'),
     })
+  }
+
+  /** The clip around the picture, `.game-stream-container`: the camera's view, and where the touch layer listens when it can be bigger than the picture. */
+  private stageElement(): HTMLElement | undefined {
+    return document.querySelector<HTMLElement>('.game-stream-container') ?? undefined
+  }
+
+  /**
+   * Read the camera's setting and where it was left, and put it on the picture. Runs once the game is up AND shown (bootGame): the
+   * camera works from the picture's box, and a game that is still hidden has none. Each read is its own try, like the platform's,
+   * because with site data blocked every Ionic Storage read rejects while the game itself boots.
+   */
+  private async setupCamera() {
+    let stored: boolean | undefined
+    let views: unknown
+    try {
+      stored = (await this.storageService.get<boolean>(STORAGE_KEY.CAMERA_ENABLED)) ?? undefined
+      views = await this.storageService.get<unknown>(STORAGE_KEY.CAMERA_VIEWS)
+    } catch (e) {
+      console.warn('Could not read the camera settings; using the defaults', e)
+    }
+    if (this.destroyed) return
+    this.cameraEnabled = ViewportTransform.enabled(stored, this.layoutHelperService.isTouchPrimary)
+    this.camera.configure(this.cameraEnabled, views)
+    const layers = dosInstance?.layers
+    const stage = this.stageElement()
+    if (!layers?.root || !layers.canvas || !stage) {
+      console.warn('The emulator has no picture to put the camera on.')
+      return
+    }
+    const surface: CameraSurface = {
+      stage,
+      root: layers.root,
+      canvas: layers.canvas,
+      frame: () => ({ width: this.dosCI.width(), height: this.dosCI.height() }),
+    }
+    // Every gesture and button of the camera counts as the player being there, for the battery saver.
+    this.camera.attach(surface, { activity: () => this.power.wake('camera') })
+  }
+
+  /**
+   * The picture is magnified and the camera may take the free band under it: a portrait page whose band holds nothing but its
+   * taskbar (no panel of keys, no chat). The picture's own box never depends on this; see global.scss `.camera-tall`.
+   */
+  get cameraTall(): boolean {
+    return ViewportTransform.tallView({
+      zoomed: this.cameraView.zoomed,
+      shape: this.layout.shape,
+      chatOpen: this.isChatOpen,
+      deck: this.layout.kind,
+      panel: this.layout.kind === 'band' ? this.deckShown : null,
+    })
+  }
+
+  /**
+   * Where the camera's single-pointer controls are, for the menu entry and the toast. They are the deck's Zoom tab (CameraPanelComponent), so
+   * with the deck off there are none and the two-finger gesture is all there is: the copy must not name a tab that is not there.
+   */
+  get cameraButtonsHint(): string {
+    return this.layout.kind === 'none'
+      ? 'O painel de teclas está desligado, então não há botões de zoom: só os dois dedos. Ligue o painel para ter os botões.'
+      : 'Os botões de zoom ficam na aba Zoom do painel de teclas.'
+  }
+
+  /** "Zoom e movimento". Applies at once: off puts the picture back as it was, and the camera that was left is kept for when it is on again. */
+  async toggleCamera(e: any) {
+    this.cameraEnabled = !!e.detail.checked
+    this.camera.setEnabled(this.cameraEnabled)
+    this.diagnostics.log('touch', 'camera setting chosen', () => ({ on: this.cameraEnabled }))
+    try {
+      await this.storageService.set<boolean>(STORAGE_KEY.CAMERA_ENABLED, this.cameraEnabled)
+    } catch (error) {
+      // It applies for this visit either way.
+      console.warn('Could not store the camera setting', error)
+    }
+    if (this.cameraEnabled) {
+      // At the top, like the live keyboard's: the bottom is where the Zoom tab it mentions is.
+      const toast = await this.toastController.create({
+        message: this.layout.kind === 'none'
+          ? 'Zoom ligado. Pince com dois dedos na imagem. Sem o painel de teclas não há botões de zoom.'
+          : 'Zoom ligado. Pince com dois dedos na imagem, ou use a aba Zoom do painel de teclas.',
+        duration: 4000,
+        position: 'top',
+        color: 'success',
+      })
+      await toast.present()
+    }
   }
 
   /** The subtitle of the "Modo de toque" entry. */

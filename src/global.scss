@@ -164,15 +164,18 @@ canvas {
  * Neutral on purpose, not Win9x: it is feedback, not a window.
  */
 .touch-feedback {
+    // While the camera magnifies the picture (CameraService), the ring is a child of the magnified root and would grow with it: the
+    // camera writes the inverse scale on that root, and a ring is as big as a fingertip on the SCREEN. 1 without a camera.
+    --ring: var(--camera-unscale, 1);
     position: absolute;
     z-index: 20;
     box-sizing: border-box;
-    width: 44px;
-    height: 44px;
-    margin: -22px 0 0 -22px;
-    border: 3px solid #fff;
+    width: calc(44px * var(--ring));
+    height: calc(44px * var(--ring));
+    margin: calc(-22px * var(--ring)) 0 0 calc(-22px * var(--ring));
+    border: calc(3px * var(--ring)) solid #fff;
     border-radius: 50%;
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7), inset 0 0 0 1px rgba(0, 0, 0, 0.7);
+    box-shadow: 0 0 0 calc(1px * var(--ring)) rgba(0, 0, 0, 0.7), inset 0 0 0 calc(1px * var(--ring)) rgba(0, 0, 0, 0.7);
     pointer-events: none;
 }
 
@@ -183,7 +186,7 @@ canvas {
 
 // A double-tap is two clicks, so its ring is heavier.
 .touch-feedback--double {
-    border-width: 6px;
+    border-width: calc(6px * var(--ring));
     animation: touch-feedback-ring 420ms ease-out both;
 }
 
@@ -445,6 +448,45 @@ canvas {
         // A margin shrinks the space flex hands it, keeping the game box untouched.
         margin-bottom: var(--kb-inset, 0px);
         padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+}
+
+/*
+ * THE CAMERA (CameraService, phase P11, behind the "Zoom e movimento" setting). The transform is written on `#game-container` by the
+ * service and nowhere else, and `.game-stream-container` (above) is what clips it; the rules here are only the ones the camera needs
+ * from the layout.
+ *
+ * `.camera-on`: a finger on the clip that is not on the picture (the part of the view a magnified picture does not cover, see below)
+ * must be the layer's, not the browser's, so the clip takes `touch-action: none` like js-dos's own root does. With the camera off the
+ * clip IS the picture and nothing is added.
+ *
+ * `.camera-tall` (portrait only; the page decides, game.page.ts `cameraTall`): while the picture is magnified and the deck's band
+ * holds nothing but its taskbar (or the camera's own panel), the clip grows DOWN into the band, so a magnified picture is seen in a view
+ * as tall as the phone allows instead of the 4:3 strip it was a window onto. **The PICTURE does not change size:** `#game-container`
+ * keeps the 4:3 height it had (the same `75vw`, written again here because its `.full` height was a percentage of the clip, which is
+ * what grew), so js-dos does not re-letterbox and `OverlaySyncHelper` and every remote cursor stay where they were (checked by
+ * `camera.mjs layout`: the container's `offsetWidth` x `offsetHeight` and the canvas's are identical with the clip at either height). The
+ * picture is at the clip's top-left corner and grows from it (`align-items: flex-start`), because the transform's origin is that corner.
+ * The stage plan does not read any of this: it measures the page's row, which the clip does not resize.
+ */
+.game-stream-flex-container.camera-on .game-stream-container {
+    touch-action: none;
+}
+
+@media (orientation: portrait) {
+    .game-stream-flex-container.camera-tall .game-stream-container {
+        flex: 1 1 0;
+        // Never less than the 4:3 box the picture itself is (a near-square window has less than 75vw to give).
+        min-height: min(var(--game-box-height), 100%);
+        max-height: none;
+        justify-content: flex-start;
+        align-items: flex-start;
+    }
+
+    .game-stream-flex-container.camera-tall .game-stream-container > #game-container {
+        flex: 0 0 auto;
+        width: 100%;
+        height: var(--game-box-height);
     }
 }
 

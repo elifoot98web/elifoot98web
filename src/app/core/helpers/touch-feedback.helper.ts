@@ -16,8 +16,8 @@ export type TouchFeedbackKind = 'tap' | 'double';
  * reach them.
  *
  * Coordinates are page (client) px. They are turned into the surface's own by the rectangle's
- * scale as well as its origin, so the same call stays right when a camera transform is put on the
- * surface (P11).
+ * scale as well as its origin, so the same call stays right while the camera (CameraService) has a
+ * transform on the surface; the ring's own size is undone with `--camera-unscale` (global.scss).
  */
 export class TouchFeedbackHelper {
   private readonly rings: HTMLElement[] = [];

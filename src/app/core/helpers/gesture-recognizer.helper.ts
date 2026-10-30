@@ -83,8 +83,9 @@ interface Contact {
  *   can be seen, follows it, and the click happens at release. A hold that moves is still aim
  *   mode (moving does not turn it into a drag).
  * - **A second finger cancels the gesture and the touch stays dead until every finger is up.**
- *   Two-finger gestures are reserved for the camera planned for P11, so they mean nothing yet,
- *   but they must never leave a button held, which is what `cancel` is for.
+ *   What two fingers MEAN (the camera's pinch and pan) is {@link CameraGesture}'s, fed the same
+ *   samples by `TouchInputService`; this only has to make sure they never leave a button held, which
+ *   is what `cancel` is for.
  * - **A palm is ignored outright**, not tracked: a resting palm does not stop a finger tapping.
  * - **There is no right click.** No tested Elifoot screen reacts to one.
  */

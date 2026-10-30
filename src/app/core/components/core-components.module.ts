@@ -10,6 +10,7 @@ import { RoomStatusPillComponent } from './multiplayer/room-status-pill/room-sta
 import { RoomSetupModalComponent } from './multiplayer/room-setup-modal/room-setup-modal.component';
 import { DockComponent } from './dock/dock.component';
 import { DeckKeyDirective } from './dock/deck-key.directive';
+import { CameraPanelComponent } from './camera-panel/camera-panel.component';
 import { TypeBarComponent } from './type-bar/type-bar.component';
 
 @NgModule({
@@ -27,6 +28,7 @@ import { TypeBarComponent } from './type-bar/type-bar.component';
     RoomStatusPillComponent,
     DockComponent,
     DeckKeyDirective,
+    CameraPanelComponent,
     TypeBarComponent
   ],
   exports: [

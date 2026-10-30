@@ -1,16 +1,49 @@
 import { Injectable, NgZone } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
+import { CameraGesture, CameraGestureIntent } from '../../helpers/camera-gesture.helper';
 import { GestureConfig, GestureIntent, GestureRecognizer, TouchSample } from '../../helpers/gesture-recognizer.helper';
 import { GuestPoint, GuestPointer, GuestPointerOptions } from '../../helpers/guest-pointer.helper';
 import { TouchFeedbackHelper } from '../../helpers/touch-feedback.helper';
+import { PinchStep, ViewportTransform } from '../../helpers/viewport-transform.helper';
 import { TOUCH_INPUT } from '../../models/constants';
 import { DosCI } from '../../typings/jsdos';
 import { DiagnosticsService } from '../shared/diagnostics.service';
 
+/**
+ * What two fingers mean when the in-app camera is on (CameraService implements it). The layer owns the fingers, so it
+ * cancels any click or drag the second one interrupts and hands the pinch to this; it never moves a picture itself.
+ */
+export interface TouchCamera {
+  /** The camera does something now (the setting is on and the picture is there): two fingers are a pinch, and a click is followed. */
+  readonly enabled: boolean;
+  /** Two fingers are down and the camera now belongs to them. */
+  gestureStart(): void;
+  /** One step of the fingers, in page px (see {@link PinchStep}). */
+  gestureStep(step: PinchStep): void;
+  /** The camera has let go of the fingers: one lifted, the browser cancelled, the page went away or the layer was detached. */
+  gestureEnd(reason: string): void;
+  /**
+   * A click went out at this guest pixel (a tap, a double tap, the end of aim mode). `follow: false` says a finger is down by the time the
+   * click settled (the cursor walk is paced, and a slow phone is slower): the camera remembers where it was but must not move the picture
+   * under that finger.
+   */
+  clicked(point: GuestPoint, options?: { follow?: boolean }): void;
+}
+
 /** The elements of js-dos's surface the layer works with (`dosInstance.layers`). */
 export interface TouchSurface {
-  /** `#game-container` (`.emulator-root`): the listeners go here, in the capture phase. */
+  /** `#game-container` (`.emulator-root`): the picture. The listeners go here, in the capture phase, unless there is a {@link stage}. */
   root: HTMLElement;
+  /**
+   * The clip around the picture (`.game-stream-container`), when the camera can make it bigger than the picture: the listeners go
+   * here instead, so a finger that lands on the part of the view the picture does not cover (the tall view of a portrait phone, with
+   * the picture magnified less than the view is) is still a finger of the layer. It is a touch outside the picture, which does
+   * nothing; but a second finger there still cancels the first one's click and still pinches. It is the same event flow
+   * as the root's for every touch that is on the picture, and the clip IS the picture whenever the camera is off.
+   */
+  stage?: HTMLElement;
+  /** The in-app camera, or none: with none (or while it is off) a second finger cancels the gesture and means nothing else. */
+  camera?: TouchCamera;
   /** `.emulator-mouse-overlay`: where js-dos binds its own pointer handlers. */
   overlay: HTMLElement;
   /** `.emulator-canvas`: the picture; its rectangle maps the finger to the guest frame. */
@@ -73,8 +106,8 @@ interface Binding {
  *
  * Load-bearing:
  *
- * - **Capture phase on `layers.root`, by pointer type, never by user agent.** The listeners
- *   `stopPropagation()` for `touch` and `pen` pointers whose target is js-dos's overlay or canvas,
+ * - **Capture phase on `layers.root` (or on the clip around it, see `TouchSurface.stage`), by pointer type, never by user agent.** The listeners
+ *   `stopPropagation()` for `touch` and `pen` pointers whose target is js-dos's overlay or canvas (or that clip itself),
  *   so js-dos's own handlers (on the overlay, bubbling) never run for a finger. A real mouse is
  *   not touched: desktop pointer lock, hybrid laptops and an iPad with a mouse behave as before.
  *   Events aimed at anything else inside the root (js-dos's own controls) are left
@@ -91,6 +124,10 @@ interface Binding {
  *   `pagehide`, a finger silent for {@link TOUCH_INPUT.GESTURE_STALL_MS}, and `detach()` all
  *   reach `GuestPointer.abort()`, which is synchronous. The timers of a hidden page are throttled
  *   or frozen, so the release of a held button cannot be left to one.
+ * - **Two fingers are the camera's** (`TouchSurface.camera`, CameraService): the recognizer's second-finger rule still cancels
+ *   whatever the first finger was doing, synchronously and with the button released, and the same samples feed a
+ *   {@link CameraGesture}, whose steps go to the camera. The page-to-guest mapping goes through the canvas's own rectangle, which
+ *   already holds the camera's zoom and pan (see {@link toGuest}). With no camera, or with it off, this layer is what it was.
  * - **Listeners and timers run outside Angular's zone.** A finger produces pointer events at the
  *   display rate; each would otherwise cost the whole app a change-detection pass.
  * - **Feedback is DOM, not pixels** ({@link TouchFeedbackHelper}): spectators and the OCR
@@ -173,6 +210,9 @@ class TouchSession {
   /** A clock was handed in, so event timestamps (which are the real clock's) are not used. */
   private readonly ownClock: boolean;
   private readonly recognizer: GestureRecognizer;
+  private readonly pinch = new CameraGesture();
+  /** The camera has the fingers (a pinch it was told about is running). */
+  private pinching = false;
   private readonly pointer: GuestPointer;
   private readonly feedback: TouchFeedbackHelper;
   private readonly bindings: Binding[] = [];
@@ -246,6 +286,7 @@ class TouchSession {
     clearTimeout(this.stallTimer);
     this.clearLostPointerupCheck();
     this.recognizer.cancelAll(reason);
+    this.dispatchCamera(this.pinch.cancelAll(reason));
     // dispose() aborts first, which releases a held button on the spot.
     this.pointer.dispose();
     this.feedback.dispose();
@@ -255,7 +296,8 @@ class TouchSession {
   // ------------------------------------------------------------------------------ listeners
 
   private install(): void {
-    const { root } = this.surface;
+    // The clip when there is one (see TouchSurface.stage), otherwise the picture's root: either way before js-dos's own handlers, which sit on the overlay beneath.
+    const root = this.surface.stage ?? this.surface.root;
     // Capture and not passive: the layer cancels touches, and it has to run before js-dos's own
     // handlers, which sit on the overlay beneath the root.
     const capture: AddEventListenerOptions = { capture: true, passive: false };
@@ -299,7 +341,7 @@ class TouchSession {
 
   /** Whether an event is aimed at the picture or the layer over it, and not at one of js-dos's controls. */
   private ours(event: Event): boolean {
-    return event.target === this.surface.overlay || event.target === this.surface.canvas;
+    return event.target === this.surface.overlay || event.target === this.surface.canvas || event.target === this.surface.stage;
   }
 
   private onPointerDown(event: PointerEvent): void {
@@ -314,7 +356,9 @@ class TouchSession {
     // A finger that lands now proves the last one ended: its pointerup was not lost.
     this.clearLostPointerupCheck();
     this.focusSurface();
-    this.dispatch(this.recognizer.down(this.sample(event)));
+    const sample = this.sample(event);
+    this.dispatch(this.recognizer.down(sample));
+    this.feedCamera(() => this.pinch.down(sample));
     this.afterInput();
   }
 
@@ -330,7 +374,9 @@ class TouchSession {
     event.stopPropagation();
     this.lastTouchAt = this.now();
     if (this.gesture) this.gesture.moves++;
-    this.dispatch(this.recognizer.move(this.sample(event)));
+    const sample = this.sample(event);
+    this.dispatch(this.recognizer.move(sample));
+    this.feedCamera(() => this.pinch.move(sample));
     this.afterInput();
   }
 
@@ -344,6 +390,7 @@ class TouchSession {
       ? this.recognizer.cancel(event.pointerId)
       : this.recognizer.up(this.sample(event));
     this.dispatch(intents);
+    this.feedCamera(() => event.type === 'pointercancel' ? this.pinch.cancel(event.pointerId) : this.pinch.up(event.pointerId));
     this.afterInput();
   }
 
@@ -451,21 +498,49 @@ class TouchSession {
 
   // ------------------------------------------------------------------------------- intents
 
-  /** Page px to the guest's pixels through the picture's own rectangle (letterbox, and later zoom, are one formula). */
+  /**
+   * Page px to the guest's pixels through the canvas's own rectangle in the page: the letterbox and the camera's zoom and pan are all
+   * in `getBoundingClientRect`, so they are one formula (ViewportTransform.clientToGuest, specced at 1x, 1.5x, 2x and 3x).
+   */
   private toGuest(clientX: number, clientY: number): (GuestPoint & { inside: boolean }) | null {
-    const width = this.ci.width();
-    const height = this.ci.height();
-    const rect = this.surface.canvas.getBoundingClientRect();
-    if (!(rect.width > 0) || !(rect.height > 0) || !(width > 0) || !(height > 0)) return null;
-    return {
-      x: Math.floor((clientX - rect.left) / rect.width * width),
-      y: Math.floor((clientY - rect.top) / rect.height * height),
-      inside: clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom,
-    };
+    return ViewportTransform.clientToGuest(
+      this.surface.canvas.getBoundingClientRect(), { width: this.ci.width(), height: this.ci.height() }, clientX, clientY);
   }
 
   private dispatch(intents: GestureIntent[]): void {
     for (const intent of intents) this.apply(intent);
+  }
+
+  /**
+   * The second thing a finger feeds: the pinch. Only where there is a camera at all, so without one the layer is what it was before
+   * the camera existed. The tracker is fed whether the camera is on or not, so it always knows which fingers are down; only
+   * `camera.enabled` decides whether a pair of them is a pinch.
+   */
+  private feedCamera(read: () => CameraGestureIntent[]): void {
+    if (this.surface.camera) this.dispatchCamera(read());
+  }
+
+  private dispatchCamera(intents: CameraGestureIntent[]): void {
+    const camera = this.surface.camera;
+    if (!camera) return;
+    for (const intent of intents) {
+      switch (intent.type) {
+        case 'start':
+          if (!camera.enabled) break;
+          this.pinching = true;
+          this.diagnostics.log('touch', 'two fingers', () => ({ x: Math.round(intent.midpoint.x), y: Math.round(intent.midpoint.y), apart: Math.round(intent.distance) }));
+          camera.gestureStart();
+          break;
+        case 'step':
+          if (this.pinching) camera.gestureStep(intent.step);
+          break;
+        case 'end':
+          if (!this.pinching) break;
+          this.pinching = false;
+          camera.gestureEnd(intent.reason);
+          break;
+      }
+    }
   }
 
   private apply(intent: GestureIntent): void {
@@ -563,7 +638,11 @@ class TouchSession {
   private announce(click: Promise<void>): void {
     void click.then(() => {
       const at = this.pointer.position;
-      if (!this.disposed && at) this.onClick?.(at);
+      if (this.disposed || !at) return;
+      this.onClick?.(at);
+      // After the look at the pixels was queued: the camera moves the view for what the click opens, never before it, and never under a finger
+      // that has landed since (a drag's press was mapped through the picture as it was; moving it now would teleport the held thumb).
+      if (this.surface.camera?.enabled) this.surface.camera.clicked(at, { follow: !this.recognizer.active });
     });
   }
 
@@ -580,6 +659,7 @@ class TouchSession {
   /** Stop whatever is going on, now: the finger is gone or the page is. */
   private releaseAll(reason: string): void {
     this.dispatch(this.recognizer.cancelAll(reason));
+    this.dispatchCamera(this.pinch.cancelAll(reason));
     // A click in its hold, or a press the recognizer no longer knows about.
     if (this.pointer.buttonDown || this.pointer.pending > 0) this.pointer.abort(reason);
     this.feedback.stopFollowing();

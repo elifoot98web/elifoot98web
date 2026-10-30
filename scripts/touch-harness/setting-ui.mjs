@@ -16,15 +16,20 @@ const click = ({ css, text }) => c.ev(`(() => { const el = [...document.querySel
 const centre = selector => c.ev(`JSON.stringify((() => { const b = document.querySelector(${JSON.stringify(selector)}); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 } })())`).then(JSON.parse)
 
 check(await c.ev('__g.touchInputService.attached'), 'direct touch is attached after boot (the default)')
+// A fresh profile on a portrait phone gets the one-time "Gire o aparelho" toast (P14), which covers the toolbar until it goes: a tap
+// on the options button right after boot lands on it. Dismissed, like a person would.
+await c.ev(`(async () => { for (const toast of document.querySelectorAll('ion-toast')) await toast.dismiss(); return 1 })()`)
+await sleep(400)
 
 // A real tap on the options button: the toolbar in portrait; on a landscape phone the toolbar is gone and the round button at the top of
 // the left rail (.rail-menu-btn) opens the same menu.
-const toolbar = await centre('ion-header ion-buttons[slot="end"] ion-button')
+// The slot's own button (a direct child): the save chip (P5) and the sound chip (P14) hold ion-buttons too, and a tap on the first of those saves the game.
+const toolbar = await centre('ion-header ion-buttons[slot="end"] > ion-button')
 const rail = toolbar ? null : await centre('.rail-menu-btn')
 const menuButton = toolbar ?? rail
 check(!!menuButton, 'the options button is on screen', toolbar ? 'toolbar' : 'rail')
 await c.tap(menuButton.x, menuButton.y, 60)
-await sleep(900)
+await sleep(1500)   // the menu has twenty-odd entries now; 900 ms was not always enough for the popover to render them
 await c.shot(path.join(OUT, 'shots', `ui-${tag}-menu.png`))
 const items = await c.ev(`[...document.querySelectorAll('ion-popover ion-item ion-label')].map(l => l.textContent.trim().replace(/\\s+/g, ' '))`)
 check(items.some(t => t.startsWith('Modo de toque')), 'the menu lists "Modo de toque" with its subtitle', JSON.stringify(items.find(t => t.startsWith('Modo de toque'))))

@@ -63,6 +63,67 @@ describe('DeckPanelHelper', () => {
     });
   });
 
+  describe('the camera', () => {
+
+    it('folds the panel that is open when the picture is magnified, and remembers which', () => {
+      expect(DeckPanelHelper.withZoom(state('tactics'), true)).toEqual({ keys: null, chatOpen: false, foldedByZoom: 'tactics' });
+      expect(DeckPanelHelper.withZoom(state('more'), true)).toEqual({ keys: null, chatOpen: false, foldedByZoom: 'more' });
+    });
+
+    it('brings it back at the fit when the band is still folded', () => {
+      const zoomed = DeckPanelHelper.withZoom(state('arrows'), true);
+      expect(DeckPanelHelper.withZoom(zoomed, false)).toEqual(state('arrows'));
+    });
+
+    it('does not bring it back over a panel the player chose meanwhile, and forgets it', () => {
+      const zoomed = DeckPanelHelper.withZoom(state('arrows'), true);
+      const chosen = DeckPanelHelper.tapKeys(zoomed, 'more').state;
+
+      expect(chosen).toEqual(state('more'));
+      expect(DeckPanelHelper.withZoom(chosen, false)).toBe(chosen);
+    });
+
+    it('does not bring it back when the player folded the band by hand', () => {
+      const zoomed = DeckPanelHelper.withZoom(state('arrows'), true);
+      const opened = DeckPanelHelper.tapKeys(zoomed, 'more').state;
+      const folded = DeckPanelHelper.tapKeys(opened, 'more').state;
+
+      expect(folded).toEqual(state(null));
+      expect(DeckPanelHelper.withZoom(folded, false)).toBe(folded);
+    });
+
+    it('has nothing to fold when the band is folded already, or when the panel is the camera\'s', () => {
+      const folded = state(null);
+      const camera = state('camera');
+      expect(DeckPanelHelper.withZoom(folded, true)).toBe(folded);
+      expect(DeckPanelHelper.withZoom(camera, true)).toBe(camera);
+      expect(DeckPanelHelper.withZoom(camera, false)).toBe(camera);
+    });
+
+    it('folds once: a second zoom does not overwrite what the first one remembered', () => {
+      const zoomed = DeckPanelHelper.withZoom(state('tactics'), true);
+      expect(DeckPanelHelper.withZoom(zoomed, true)).toBe(zoomed);
+    });
+
+    it('keeps the chat as it was: zooming does not close it, and what it covered is still remembered', () => {
+      const zoomed = DeckPanelHelper.withZoom(state('arrows', true), true);
+      expect(zoomed).toEqual({ keys: null, chatOpen: true, foldedByZoom: 'arrows' });
+      expect(DeckPanelHelper.shown(zoomed)).toBe('chat');
+      expect(DeckPanelHelper.withZoom(zoomed, false)).toEqual(state('arrows', true));
+    });
+
+    it('taps the Zoom tab like any other: opens it, folds it', () => {
+      expect(DeckPanelHelper.tapKeys(state('tactics'), 'camera').state).toEqual(state('camera'));
+      expect(DeckPanelHelper.tapKeys(state('camera'), 'camera').state).toEqual(state(null));
+    });
+
+    it('folds the camera\'s panel when the camera is switched off, and only that one', () => {
+      expect(DeckPanelHelper.withoutCamera(state('camera'))).toEqual(state(null));
+      const other = state('arrows');
+      expect(DeckPanelHelper.withoutCamera(other)).toBe(other);
+    });
+  });
+
   it('opens on the tactics panel, the one the old FAB led with', () => {
     expect(DeckPanelHelper.DEFAULT).toBe('tactics');
   });
@@ -71,5 +132,6 @@ describe('DeckPanelHelper', () => {
     expect(DeckPanelHelper.label('tactics')).toBe('Táticas');
     expect(DeckPanelHelper.label('arrows')).toBe('Setas');
     expect(DeckPanelHelper.label('more')).toBe('Mais teclas');
+    expect(DeckPanelHelper.label('camera')).toBe('Zoom e movimento');
   });
 });

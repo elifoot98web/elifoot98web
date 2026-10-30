@@ -23,8 +23,9 @@ export interface StageRatio {
 
 /**
  * "Tamanho da imagem": `fit` (Ajustar, the default) shows two columns of keys in each rail where they fit without costing
- * the picture, `wide` (Ampliar) always one. Neither crops the picture: a stage taller than the screen would hide part of
- * the game behind a pan that does not exist yet (the camera is its own phase).
+ * the picture, `wide` (Ampliar) always one. Neither crops the picture: magnifying and panning it is the camera's job
+ * (CameraService), which does it INSIDE a stage whose box it never changes, and a cropped stage would change that box,
+ * which is what the camera's contract forbids (CLAUDE.md, *The camera*).
  */
 export type StageView = 'fit' | 'wide';
 

@@ -1,5 +1,8 @@
-/** The three panels of keys. The chat is a fourth thing in the same place, owned by the page. */
-export type DeckKeysPanel = 'tactics' | 'arrows' | 'more';
+/**
+ * The panels of the band: three of keys, and the camera's (Zoom, offered only while "Zoom e movimento" is on). The chat is one more
+ * thing in the same place, owned by the page.
+ */
+export type DeckKeysPanel = 'tactics' | 'arrows' | 'more' | 'camera';
 export type DeckPanel = DeckKeysPanel | 'chat';
 
 /** What the deck remembers about which panel is up. */
@@ -8,6 +11,11 @@ export interface DeckPanelState {
   keys: DeckKeysPanel | null;
   /** The chat is open; the page owns that, the deck only mirrors it. */
   chatOpen: boolean;
+  /**
+   * The panel that magnifying the picture folded away (see {@link DeckPanelHelper.withZoom}), to bring back when the picture is
+   * back at the fit and the band is still folded. Absent, not null, when there is none.
+   */
+  foldedByZoom?: DeckKeysPanel;
 }
 
 export interface DeckPanelChange {
@@ -54,10 +62,32 @@ export class DeckPanelHelper {
     return state.chatOpen === chatOpen ? state : { ...state, chatOpen };
   }
 
+  /**
+   * The deck collapses to its taskbar while the picture is magnified, and comes back when it is not. In portrait the camera grows into the
+   * free band under the picture, and a panel of keys left open would be that band: so zooming folds the panel (and remembers which),
+   * and returning to the fit brings it back, if the band is still folded and nobody chose another panel meanwhile (a tap on a tab
+   * is a choice and forgets what was folded). The camera's own panel is not folded: it is the one that is used while zoomed.
+   */
+  static withZoom(state: DeckPanelState, zoomed: boolean): DeckPanelState {
+    if (zoomed) {
+      if (state.keys === null || state.keys === 'camera' || state.foldedByZoom) return state;
+      return { keys: null, chatOpen: state.chatOpen, foldedByZoom: state.keys };
+    }
+    if (!state.foldedByZoom) return state;
+    const { foldedByZoom, ...rest } = state;
+    return state.keys === null ? { ...rest, keys: foldedByZoom } : rest;
+  }
+
+  /** The panel on screen is one that is not on offer any more (the camera's, with the setting off): the band folds. */
+  static withoutCamera(state: DeckPanelState): DeckPanelState {
+    return state.keys === 'camera' ? { ...state, keys: null } : state;
+  }
+
   static label(panel: DeckKeysPanel): string {
     switch (panel) {
       case 'tactics': return 'Táticas';
       case 'arrows': return 'Setas';
+      case 'camera': return 'Zoom e movimento';
       default: return 'Mais teclas';
     }
   }

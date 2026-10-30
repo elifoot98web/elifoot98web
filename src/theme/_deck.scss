@@ -444,8 +444,14 @@ app-dock.deck-band {
 }
 
 .deck-sheet--rails .deck-sheet-title,
-.deck-sheet--rails .deck-sheet-tabs,
-.deck-sheet--rails .deck-panel {
+.deck-sheet--rails .deck-sheet-tabs {
+  padding-left: 8px;
+}
+
+// A third class on the panel: `.deck-sheet .deck-panel` (below) is as specific and later, and its notch-sized left padding won, so on
+// a notch phone every panel of the rails' sheet was indented by the inset (47 px) that the rail beside it had already taken. It was
+// found when the camera's panel, a row of five keys, came out with its first key cut to "Ajus...".
+.deck-sheet.deck-sheet--rails .deck-panel {
   padding-left: 8px;
 }
 
@@ -754,4 +760,57 @@ app-dock.deck-band {
 .stage-rail .deck-tab-badge {
   top: 1px;
   right: 1px;
+}
+
+// ---- the camera's panel (CameraPanelComponent) ----
+//
+// "Zoom": the presets, "+" and "-" in one row, the pad that moves the view in another, and a line that says what two fingers do (and, in a
+// room, that spectators see the whole picture). It is as tall as its keys and does NOT take the band: the camera keeps the rest of it (global.scss,
+// `.camera-tall`), so the picture can be watched while the panel is used. Keys are the deck's (`.deck-key`), text only: no icon to fetch.
+.deck-panel--camera {
+  flex: 0 0 auto;
+}
+
+.camera-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--deck-gap);
+}
+
+.camera-row,
+.camera-pad {
+  display: grid;
+  gap: var(--deck-gap);
+  grid-auto-rows: var(--deck-key-h);
+}
+
+.camera-row {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.camera-pad {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.camera-key {
+  min-height: 0;
+  font-size: 14px;
+}
+
+.camera-key--sign .deck-key-label {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.camera-pad-key .deck-key-label {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.camera-note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.25;
+  font-weight: normal;
+  color: var(--win9x-ink-muted, #4a4a4a);
 }

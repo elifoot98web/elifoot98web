@@ -54,6 +54,9 @@
       </div>
     </div>
 
+    <!-- Zoom: the camera's own controls (CameraPanelComponent), for the hand that does not pinch. -->
+    <app-camera-panel *ngSwitchCase="'camera'" [hosting]="chatAvailable"></app-camera-panel>
+
     <!-- Setas: the cross on the left thumb, Enter and Esc and Tab on the right. -->
     <div *ngSwitchCase="'arrows'" class="deck-arrows">
       <ng-container *ngTemplateOutlet="keycap; context: { $implicit: arrows.up, extra: 'deck-area-up' }"></ng-container>
@@ -113,15 +116,15 @@
 <!-- ======================= band ======================= -->
 <ng-container *ngIf="presentation === 'band'">
   <div *ngIf="shownKeys as panel" class="deck-panel deck-face" [class.deck-panel--scroll]="panel === 'more'"
-    role="group" [attr.aria-label]="panel === 'tactics' ? 'Táticas' : panel === 'arrows' ? 'Setas' : 'Mais teclas'">
+    [class.deck-panel--camera]="panel === 'camera'" role="group" [attr.aria-label]="panelLabel(panel)">
     <ng-container *ngTemplateOutlet="keys; context: { $implicit: panel }"></ng-container>
   </div>
 
   <ng-container *ngTemplateOutlet="latchStatus"></ng-container>
 
   <div class="deck-taskbar deck-face" role="toolbar" aria-label="Painel de teclas">
-    <button *ngFor="let panel of panels" class="deck-key deck-tab" appDeckKey (deckPress)="onPanelTab(panel.id)"
-      [class.deck-tab--on]="shownKeys === panel.id" [attr.aria-pressed]="shownKeys === panel.id">
+    <button *ngFor="let panel of panels; trackBy: trackTab" class="deck-key deck-tab" appDeckKey (deckPress)="onPanelTab(panel.id)"
+      [class.deck-tab--on]="shownKeys === panel.id" [attr.aria-pressed]="shownKeys === panel.id" [attr.aria-label]="panel.aria">
       <ion-icon [name]="panel.icon" aria-hidden="true"></ion-icon>
       <span class="deck-tab-label">{{ panel.label }}</span>
     </button>
@@ -258,8 +261,8 @@
   </div>
 
   <div class="deck-sheet-tabs" role="toolbar" aria-label="Painéis">
-    <button *ngFor="let panel of panels" class="deck-key deck-tab" appDeckKey (deckPress)="onSheetTab(panel.id)"
-      [class.deck-tab--on]="sheetKeys === panel.id" [attr.aria-pressed]="sheetKeys === panel.id">
+    <button *ngFor="let panel of panels; trackBy: trackTab" class="deck-key deck-tab" appDeckKey (deckPress)="onSheetTab(panel.id)"
+      [class.deck-tab--on]="sheetKeys === panel.id" [attr.aria-pressed]="sheetKeys === panel.id" [attr.aria-label]="panel.aria">
       <ion-icon [name]="panel.icon" aria-hidden="true"></ion-icon>
       <span class="deck-tab-label">{{ panel.label }}</span>
     </button>

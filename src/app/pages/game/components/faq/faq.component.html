@@ -118,6 +118,20 @@
         </p>
       </div>
     </ion-accordion>
+    <ion-accordion value="zoom-info">
+      <ion-item slot="header" color="light">
+        <ion-label>As letras estão pequenas. Dá para ampliar a imagem?</ion-label>
+      </ion-item>
+      <div class="ion-padding" slot="content">
+        No menu <ion-icon name="ellipsis-vertical-outline"></ion-icon> existe <strong>Zoom e movimento</strong>, {{ zoomByDefault ? 'ligado' : 'desligado' }} por padrão e só nos aparelhos de toque. Com ele ligado, <strong>pince com dois dedos</strong> na imagem para ampliar (até 3 vezes) e <strong>arraste com dois dedos</strong> para mover. Depois de tocar em algo perto da borda, a imagem anda sozinha para mostrar o que se abre ali (menus e listas). O que você escolhe fica guardado, uma vez para o aparelho em pé e outra para o aparelho deitado. O pinçar só funciona no <strong>Modo de toque</strong> Direto, que é o padrão.
+        <p class="ion-padding-top">
+        Quem não consegue pinçar usa a aba <strong>Zoom</strong> do painel de teclas (ele precisa estar ligado em <strong>Mostrar painel de teclas</strong>): <strong>Ajustar</strong> (a imagem inteira), <strong>1,5x</strong>, <strong>2x</strong>, <strong>+</strong> e <strong>&minus;</strong>, e quatro setas que movem a imagem (segure para repetir). Com o aparelho em pé, a imagem ampliada ganha o espaço livre embaixo dela e o painel de teclas se recolhe até a barra de abas; ao voltar para <strong>Ajustar</strong>, o painel volta.
+        </p>
+        <p class="ion-padding-top">
+        O zoom é só da sua tela. Quem assiste à sala multiplayer sempre vê o jogo inteiro, e o cursor de cada um continua no lugar certo. Ainda não foi testado em celulares de verdade: se algo sair errado, desligue a opção e a imagem volta ao normal. Dar dois toques rápidos <em>não</em> amplia, porque dois toques são um clique duplo do Windows.
+        </p>
+      </div>
+    </ion-accordion>
     <ion-accordion value="battery-info">
       <ion-item slot="header" color="light">
         <ion-label>O celular esquenta e a bateria acaba rápido. Dá para economizar?</ion-label>
