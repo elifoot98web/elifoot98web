@@ -740,16 +740,11 @@ button that closes a Win9x titlebar.
 
 ### Help modals, copy and accessibility
 
-- **The manual's video is a click-to-load facade, and the landing page's privacy line is why.**
-  The FAQ/Manual accordions render their content slot immediately, so a plain iframe loaded
-  YouTube whenever the guide opened, against a footer that says nothing is sent to anyone.
-  `ManualComponent` draws a local placeholder (no thumbnail: that would be a request too) and
-  creates the `youtube-nocookie.com` iframe on the tap, with `autoplay=1` because the tap is the
-  request to play. Its box is 16:9 without `aspect-ratio` (Safari 14.1 is the floor): padding in
-  percent resolves against the *containing* block, so the 480px cap lives on an outer element and
-  the padded one is `width: 100%`. **Known:** the video id in that file is dead — YouTube's oEmbed
-  endpoint answers 404 for it, against 200 for a control video — so the player shows "Video
-  unavailable" until someone supplies a new id.
+- **The FAQ and the manual load nothing from a third party.** Their accordions render the content slot
+  immediately, so an embed (an iframe, an image from another host) would contact that host whenever the guide
+  opens, against the landing page's footer, which says nothing is sent to anyone. The 'O Matic video was
+  dropped for that reason as much as for its dead id; a new embed needs a click-to-load facade that requests
+  nothing (not even a thumbnail) until the tap.
 - **Every `Error` thrown by `PatchService` is shown verbatim** by `GamePage.showErrorAlert`, so its
   messages are Portuguese and say what to do next (the import's too: `prepareSaveFilesPatch` names a file type
   it cannot use, a zip it cannot open, a zip with no save in it and a cloud file it cannot read, and

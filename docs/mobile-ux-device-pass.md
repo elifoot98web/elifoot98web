@@ -237,7 +237,7 @@ Bluetooth keyboard are worth a few minutes if you have them.
 - [ ] Status pill on the Galaxy A07 and iPhone 15 Pro Max in portrait: a thumb tap about 10px above and below the capsule in the toolbar copies the room link. Check the capsule shape (round ends, not stretched) and that the focus ring hugs it with a Bluetooth keyboard.
 - [ ] Status pill floating on the host in mobile landscape: its capsule has not moved from the top-left gutter, and a tap on the invisible band above or below it does not reach the game. Needs a live hosted room; I only measured it with a cloned pill in the real floating wrapper.
 - [ ] O Matic on an iPad (portrait and landscape) or any Android tablet: no scrollbar, 'Cheats Salvos' fully visible, 44px close button reachable. Also the landscape phone case at 844x390 (titlebar and close button on screen, content scrolls inside).
-- [ ] Everything on the implementer's checklist still applies: TalkBack and VoiceOver on the labels and the chat live region, (pointer: coarse) matching on both phones, iOS text-field zoom at 16px, and the padding-bottom video box on an older Safari.
+- [ ] Everything on the implementer's checklist still applies: TalkBack and VoiceOver on the labels and the chat live region, (pointer: coarse) matching on both phones, iOS text-field zoom at 16px.
 
 ### DIAG - Diagnostics log  (`f77deb6`)
 

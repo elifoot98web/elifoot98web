@@ -262,7 +262,9 @@ build, and a CLAUDE.md update.
    toggle (P10 deletes them), `maximum-scale`/`user-scalable` (VIEW-1; the 16px inputs are its
    precondition). **Known:** the 'O Matic video id is dead (YouTube's oEmbed answers 404, against
    200 for a control video), so the player says "Video unavailable" until the owner supplies a new
-   id.
+   id. **Resolved 2026-10-31:** the owner chose to drop the video; the paragraph, the facade, its
+   stylesheet (`manual.component.scss`) and the sanitizer are gone, and CLAUDE.md keeps only the rule that
+   the guide loads nothing from a third party.
 5. **Fix `game.js` first, then P6 — boot honesty and offline.** `elifootMain`'s async Promise
    executor swallows `Dos()`/`run()` failures (it never calls `reject`), so today a timeout is
    the only error that exists; classify real errors before changing `FAIL_COUNT` or the wipe
