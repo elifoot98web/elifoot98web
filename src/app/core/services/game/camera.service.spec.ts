@@ -1,5 +1,5 @@
 import { NgZone } from '@angular/core';
-import { fakeAsync, tick } from '@angular/core/testing';
+import { fakeAsync, flush, tick } from '@angular/core/testing';
 import { CameraOrientation } from '../../helpers/viewport-transform.helper';
 import { CAMERA, STORAGE_KEY } from '../../models/constants';
 import { logRecorder, memoryStorage } from '../shared/diagnostics.testing';
@@ -583,6 +583,9 @@ describe('CameraService', () => {
       rig = build();
       rig.camera.zoomTo(2);
       rig.camera.detach('spec');
+      // flush() answers with the virtual milliseconds it had to advance to run what was pending: 0 is "nothing was scheduled".
+      // (fakeAsync with flush:false would also fail on a leftover timer, but only implicitly, and Jasmine calls that "no expectations".)
+      expect(flush()).toBe(0);
       cleanUp();
     }, { flush: false }));
   });
