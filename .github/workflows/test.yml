@@ -1,0 +1,48 @@
+# Lint and specs.
+#
+# A file of its own on purpose: none of the other workflows runs lint or the specs (they build, deploy, check the
+# version and check the lockfile), and this one must not change what any of them does or when they run.
+#
+# Neither job needs the LFS game bundle: no spec reads it (they stub the emulator), and the production build is not
+# made here (firebase-hosting-pull-request.yml already builds the app on every pull request).
+name: Lint and Specs
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A new push to the same pull request supersedes the run in flight.
+concurrency:
+  group: lint-and-specs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      # Same pin as the other workflows: Angular 21 needs node ^20.19.0 || ^22.12.0 || >=24.0.0.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+
+  specs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      # ChromeHeadlessCI (karma.conf.js) is ChromeHeadless with --no-sandbox, which is what a container needs; the
+      # runner image ships Google Chrome. `dots` keeps the log to one character per spec instead of one line each.
+      - run: npm run test:ci -- --reporters=dots

@@ -1009,8 +1009,8 @@ build, and a CLAUDE.md update.
 Also add early: a **debug-only diagnostics flag** (pointer/touch/key/IME events plus frame timing,
 exportable from a phone) to feed the device pass, and decide whether specs are real. **T0 made
 them runnable** (`npm run test:ci`, a `ChromeHeadlessCI` launcher, and the first spec for
-`RoomCodeHelper`), but CI still runs no tests or lint, so specs gate a PR only once a
-ChromeHeadless job is added to the workflows (the owner's call).
+`RoomCodeHelper`). **Resolved 2026-10-31:** the owner asked for a separate workflow, so
+`.github/workflows/test.yml` runs lint and the specs on every pull request (no other workflow was touched).
 
 **DIAG (the diagnostics flag) — as built.** `DiagnosticsService` plus a Win9x "Diagnóstico" window
 reachable from the options menu; `?diag=1` turns it on for a tab's session. Off, a `log()` is one

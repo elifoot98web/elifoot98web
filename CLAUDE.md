@@ -58,8 +58,9 @@ placeholders (`git checkout src/environments`) before committing. The commit has
 - Push to `main` → build `githubpages` config, deploy to GitHub Pages, push a `v<version>` tag.
 - Push to the `firebase` branch → Firebase Hosting (project `elifoot-98`); PRs also get preview channels.
 - `lockfile-hygiene.yml` fails any PR whose `package-lock.json` resolves from a non-public registry.
-- No workflow runs `npm run lint` or `npm run test:ci` (the Firebase PR workflow only builds), so specs
-  and lint gate nothing on a PR until a job is added; run both locally before opening one.
+- `test.yml` ("Lint and Specs") runs `npm run lint` and `npm run test:ci` as two parallel jobs on every PR and on
+  manual dispatch. It is a file of its own so it cannot change what the others do; it needs no LFS (no spec reads the
+  bundle) and does not build (the Firebase PR workflow already does). Not yet exercised on GitHub's runners.
 
 ### Dependency traps
 
