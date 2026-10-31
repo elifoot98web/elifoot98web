@@ -28,145 +28,33 @@ node scripts/frame-fixtures/make-fixtures.mjs <out.ts> name=frame.png::note ... 
 node scripts/pwa-icons/make-maskable.mjs <source.png> <out.png> --size 512 --check   # a maskable launcher icon from the shipped artwork
 ```
 
-Specs are karma + jasmine. The builder globs `**/*.spec.ts` (its `include` option, which is also
-what `--include` overrides); [src/test.ts](src/test.ts) only initialises the TestBed and
-`tsconfig.spec.json` type-checks `src/**/*.spec.ts`, so a spec needs no registration but must live
-under `src/` to be type-checked. Nothing in a spec reaches the bundle. There are **eighty-eight spec files so
-far**. [room-code.helper.spec.ts](src/app/core/helpers/room-code.helper.spec.ts) is there as
-much to prove the harness as to cover `RoomCodeHelper`: `ng test` with **zero** specs
-prints `Executed 0 of 0 SUCCESS` and still exits 1, so a `test:ci` could never pass before the
-first spec existed. [timeout.helper.spec.ts](src/app/core/helpers/timeout.helper.spec.ts) is the
-first to use a fake clock, and shows the one trap in doing so: Angular's `fakeAsync` drains
-whatever timers are left when the body ends (`flush: true` is its default), which hides a timer
-that was never cleared, so pass `{ flush: false }` whenever "nothing is left scheduled" is part
-of what a spec asserts. [emulator-keycode.helper.spec.ts](src/app/core/models/game/emulator-keycode.helper.spec.ts)
-(the text planner) and [guest-key-queue.service.spec.ts](src/app/core/services/game/guest-key-queue.service.spec.ts)
-(the key queue, against a fake emulator that records every raw key event with the fake clock)
-are the model for "a service that talks to the emulator": hand it a stub `DosCI`, never the real
-one. [auto-saver.service.spec.ts](src/app/core/services/game/auto-saver.service.spec.ts) is the model
-for "a loop that must survive its own failures": the collaborators are plain fakes cast to the
-constructor's types, the clock is `fakeAsync`, and every spec ends with `stop()` so
-`{ flush: false }` can prove nothing is left scheduled. One trap there: build a rejected promise
-*inside* the fake (`outcomes()`), never up front, or it has no handler yet and fails the spec as
-unhandled. [patch.service.spec.ts](src/app/core/services/game/patch.service.spec.ts) is the model for
-"a service whose `Error` messages are the UI": the game page shows them verbatim, so the spec pins
-the Portuguese wording and fails on the English that JSZip and HttpClient reject with; it also
-pins `setDisplayMode` against a stand-in `dosInstance`, reading back the layer the fake CI would
-write.
-[diagnostics.service.spec.ts](src/app/core/services/shared/diagnostics.service.spec.ts) is the model for
-"code that must cost nothing while it is off": the thunk spy that is never called, no listeners on the
-real `window` (spied before the service exists), nothing on the fake clock, and a `finish()` that switches
-the service off so a failing case cannot leave listeners on the karma page. Its doubles
-([diagnostics.testing.ts](src/app/core/services/shared/diagnostics.testing.ts): `silentDiagnostics()`,
-`recordingDiagnostics()`, `memoryStorage()`) are what every other spec passes where a service now takes
-a `DiagnosticsService`; for "did it log this" the specs of the key queue and the auto-saver hand in a
-two-line recorder that reads each data thunk at the call, as the real one does.
-[guest-pointer.helper.spec.ts](src/app/core/helpers/guest-pointer.helper.spec.ts) is the model for "an engine whose
-worst failure only shows against the real guest": it drives the engine against a fake guest written from the
-measured rules, independently of the code under test (the gain, the clip, the wrap and, the part that matters, sends
-inside one frame being summed), under `fakeAsync` with `Date.now` handed in as the clock, because zone.js fakes `Date`
-and not `performance.now`; one spec is a control that shows the fake really does punish a spacing below a frame.
-[gesture-recognizer.helper.spec.ts](src/app/core/helpers/gesture-recognizer.helper.spec.ts) is the model for a state
-machine with no clock of its own: every sample carries its time, so the specs are plain calls with made-up timestamps.
-[touch-input.service.spec.ts](src/app/core/services/game/touch-input.service.spec.ts) is the one DOM spec worth copying:
-real elements, js-dos's handlers stood in for by a bubbling listener, a `scenario()` helper that builds the rig INSIDE
-`fakeAsync` (attaching starts the engine's timers) and detaches in a `finally`.
-[win9x-palette.spec.ts](src/theme/win9x-palette.spec.ts) is the model for asserting CSS: karma loads
-`src/global.scss`, so it probes the real `.win9x-roster-*` rules and `:root` tokens for contrast
-instead of keeping a second copy of the hex values. [save-game.service.spec.ts](src/app/core/services/game/save-game.service.spec.ts)
-is the model for "code that reads a browser store": karma's Chrome has a real IndexedDB, so the spec
-builds `js-dos-cache (spec …)` databases shaped like js-dos's and deletes every `js-dos-cache*`
-database before and after each case. [save-policy.helper.spec.ts](src/app/core/helpers/save-policy.helper.spec.ts)
-is the model for a decision that must not drift: the table is written out row by row (purpose x answer), and the
-rule the table exists for (`null`, "OCR could not read it", is never the all-clear) is asserted again on its own.
-[save-backup.roundtrip.spec.ts](src/app/core/services/game/save-backup.roundtrip.spec.ts) is the model for both ends of
-a file format: the export is fed to the import through the two services the page calls, against a stand-in emulator
-that keeps its changed files in a zip like js-dos's. [game-exit.helper.spec.ts](src/app/core/helpers/game-exit.helper.spec.ts)
-is the model for "real pixel data as a fixture": the frames in [game-exit.fixtures.ts](src/app/core/helpers/game-exit.fixtures.ts)
-are captures of the live guest (`dosCI.screenshot()` via the touch harness), stored as a palette plus one deflated
-index per pixel (1 to 9 KB a frame, 54 KB for ten) by [scripts/frame-fixtures/](scripts/frame-fixtures/make-fixtures.mjs)
-and inflated in the spec with `DecompressionStream`; the specs then paint on copies of them (a cursor over the icon, a second icon).
-[key-repeat.helper.spec.ts](src/app/core/helpers/key-repeat.helper.spec.ts) is the model for "a timer-driven helper that must
-leave nothing scheduled": zone.js's fake timers, a queue depth the spec moves, `{ flush: false }` on the cases that assert it.
-[deck-key.directive.spec.ts](src/app/core/components/dock/deck-key.directive.spec.ts) is the model for "a directive whose worst bug
-only shows with real events": a host component with real buttons, real `PointerEvent`s and a spied `performance.now` that is
-**never reset between specs**, because the guard it tests keeps its clock in a static. One trap there: this repo's TestBed is
-zoneless, where `fixture.detectChanges()` refreshes only a view that was marked dirty and a plain field a spec writes is not a
-signal, so the change is never applied and the dev-mode check throws NG0100 (mark the fixture, then detect).
-[type-mirror.helper.spec.ts](src/app/core/helpers/type-mirror.helper.spec.ts) is the model for "an engine that has to absorb
-what real keyboards do differently": scripted value sequences (a suggestion tap with the keyboard's trailing space, a
-composition that rewrites a word, an emoji, a paste of 80 characters) read back as a line of words (`BS alt227 o`) through
-[type-bar.testing.ts](src/app/core/helpers/type-bar.testing.ts). [type-bar-session.helper.spec.ts](src/app/core/helpers/type-bar-session.helper.spec.ts)
-is the model for "events whose order differs per browser": REAL `InputEvent`, `CompositionEvent` and `KeyboardEvent`s dispatched
-at a real `<input>`, a fake queue that records what it was handed, and Chrome's and Safari's orders of `compositionend` and the
-last `input` both scripted. [ibeam.helper.spec.ts](src/app/core/helpers/ibeam.helper.spec.ts) is the model for "a detector that
-must tell a look-alike apart": real 640x480 frames of the guest with its cursor in different shapes
-([field-hint.fixtures.ts](src/app/core/helpers/field-hint.fixtures.ts), made by `scripts/frame-fixtures/`), the arrow over a
-white list among them, and a case that moves the lookup so that only the serif can reject it (mutation-checked: without the
-serif, two cases fail). [stage.helper.spec.ts](src/app/core/helpers/stage.helper.spec.ts) is the model for "a layout that has to hold on every real screen": the table
-is the devices (a phone with and without a notch, both iPhones, tablets, laptops) with the insets a notch really has, the stages that matter are
-written out as numbers, and the invariants (exactly 4:3, between the rails, never under the minimum) run over the whole matrix times deck, chat and view
-mode; [stage-layout.service.spec.ts](src/app/core/services/shared/stage-layout.service.spec.ts) drives the service with a host element whose size the spec moves and a
-viewport it moves with it, and the chat's give-back with a fake clock. Mutation-checked when the phase was built: thirteen deliberate breaks, thirteen failing cases (two
-survived their first run and were closed: a strict `>` where two columns fit EXACTLY, and a 336 px keyboard that left less than the minimum stage, which the service refuses to
-write, so the spec passed for that reason; it uses 120 px now). [storage-keys.spec.ts](src/app/core/services/shared/storage-keys.spec.ts) writes every `STORAGE_KEY` to every place the
-registry says it lives, runs the real wipe against the real Ionic Storage and fails if anything is left. One trap in a
-service spec: a synthetic `beforeunload` on the real `window` reaches Karma's own handler and fails the whole run
-("Some of your tests did a full page reload!"), so `SaveSafetyService.unloadTarget()` is overridable and the spec dispatches
-on a stand-in. [emulator-power.helper.spec.ts](src/app/core/helpers/emulator-power.helper.spec.ts) is the model for "a rule that
-needs the world's answer before it acts": the state machine is driven by a script of (time, event) calls with no clock of its own,
-including the handshake (it asks, the caller answers later, and an answer overtaken by a frame is dropped), and
-[emulator-power.service.spec.ts](src/app/core/services/game/emulator-power.service.spec.ts) runs the service over the real `document`
-listeners and a recording fake emulator under `fakeAsync`, with the timeline written in absolute time from `start()` because the
-interval ticks on those instants. [cheat-omatic.service.spec.ts](src/app/core/services/game/cheat-omatic.service.spec.ts) is the model for
-"a service that must hold something open around its awaits": the door is a recording stand-in on `globalThis`, and a read or a write that
-fails must still let go. [wake-lock.service.spec.ts](src/app/core/services/shared/wake-lock.service.spec.ts) is the model for "a service whose
-whole job is to ask a browser API that may say no": a fake `navigator.wakeLock` whose next answer the spec chooses (a grant, a refusal, or
-a request held in flight until the spec settles it), the page's visibility and the clock as overridable members, and `fakeAsync(…, { flush:
-false })` so that a listener or timer left behind fails the case; [audio-health.service.spec.ts](src/app/core/services/game/audio-health.service.spec.ts)
-adds the trap of a fake that answers synchronously (the real browser dispatches `statechange` as a task), which is why the service queues a
-re-entrant look. Both service specs and the helpers behind them (`WakeLockHelper`, `AudioHealthHelper`, `InstallHelper`, `NudgeHelper`,
-`FullscreenHelper`, `StorageHealthHelper`) were mutation-checked when the phase was built: thirteen deliberate breaks, thirteen failing cases.
-[viewport-transform.helper.spec.ts](src/app/core/helpers/viewport-transform.helper.spec.ts) is the model for "maths that everything else trusts": the camera's scale, clamp,
-zoom-about-a-point, pinch step, snap to the device pixel grid and page-to-guest mapping are written as numbers (a 393x295 phone, its tall view, a landscape phone), the mapping is
-round-tripped for every column and row of the 640x480 frame at 1x, 1.5x, 2x and 3x and across a sweep of scales and focal points, and [overlay-sync.helper.spec.ts](src/app/core/helpers/overlay-sync.helper.spec.ts)
-checks `OverlaySyncHelper` under a transform in REAL layout (no mocks: a container, a letterboxed canvas, an overlay, `getBoundingClientRect`). Twelve deliberate breaks of the camera's
-rules (the covering clamp, the focal point, the grid rounding, `scale(1)` at the fit, the dead band, the dead-until-every-finger-is-up rule, the settle near the fit, the
-rotation store, the clip as a listener, the folded panel coming back, a write per pinch step, the click reaching the camera) each failed at least one case. Write specs for pure logic (helpers,
-planners, parsers, queues driven by a fake clock); the emulator, the screen-scrapers and the WebRTC
-paths have no karma coverage and are checked in a real browser (see the harness above). `ChromeHeadlessCI` in
-[karma.conf.js](karma.conf.js) is `ChromeHeadless --no-sandbox`, which a CI runner or container
-needs; plain `npm test` keeps the visible Chrome and the file watcher.
+**Specs** are karma + jasmine. The builder globs `**/*.spec.ts` (its `include`, which `--include` overrides) and `tsconfig.spec.json` type-checks `src/**/*.spec.ts`: a spec needs no registration but must live under `src/` to be type-checked, and nothing in a spec reaches the bundle. A run that matches no spec prints `Executed 0 of 0 SUCCESS` and still exits 1, so a mistyped `--include` fails the run. Write specs for pure logic (helpers, planners, parsers, queues on a fake clock); the emulator, the screen-scrapers and the WebRTC paths have no karma coverage and are checked in a real browser with the harnesses below. `ChromeHeadlessCI` ([karma.conf.js](karma.conf.js)) is `ChromeHeadless --no-sandbox`, which a CI runner or container needs; plain `npm test` keeps the visible Chrome and the watcher. Rules that keep a spec honest, and the traps in writing one:
 
-Multiplayer needs two or more peers to test at all, so that part is covered by a CDP-driven
-browser harness in [scripts/multiplayer-harness/](scripts/multiplayer-harness/README.md) —
-launcher, driver and the scenario checklist, plus the traps that silently invalidate a run (a
-covered window throttles timers and stalls Ionic's overlay animations, which hangs the join
-dialog). Read its README before doing multiplayer work by hand. Nothing in `scripts/` reaches
-the bundle: `angular.json`'s inputs are all under `src/`.
+- **`fakeAsync` drains leftover timers by default (`flush: true`), which hides a timer that was never cleared.** Pass `{ flush: false }` whenever "nothing is left scheduled" is part of what a spec asserts, and end the spec with `stop()`/`detach()` so it can prove it ([timeout.helper.spec.ts](src/app/core/helpers/timeout.helper.spec.ts), [auto-saver.service.spec.ts](src/app/core/services/game/auto-saver.service.spec.ts), [key-repeat.helper.spec.ts](src/app/core/helpers/key-repeat.helper.spec.ts)).
+- **zone.js fakes `Date`, not `performance.now`.** Code timed with `performance.now` needs a clock handed in (`now: () => Date.now()`, as [guest-pointer.helper.spec.ts](src/app/core/helpers/guest-pointer.helper.spec.ts) does) or a spy; [deck-key.directive.spec.ts](src/app/core/components/dock/deck-key.directive.spec.ts) spies it and must **never reset it between specs**, because the guard it tests keeps its clock in a static.
+- **Build a rejected promise inside the fake, never up front** (`outcomes()` in the auto-saver spec), or it has no handler yet and fails the spec as unhandled. The same goes for a rig whose `attach()` starts timers: build it inside `fakeAsync` and detach it in a `finally` (`scenario()` in [touch-input.service.spec.ts](src/app/core/services/game/touch-input.service.spec.ts)).
+- **TestBed is zoneless (Angular 21's default) although `main.ts` boots the app with zone change detection.** `fixture.detectChanges()` refreshes only a view that was marked dirty and a plain field a spec writes is not a signal, so `markForCheck()` first or the dev-mode check throws NG0100.
+- **Never dispatch a synthetic `beforeunload` on the real `window`:** it reaches Karma's own handler and fails the whole run ("Some of your tests did a full page reload!"). `SaveSafetyService.unloadTarget()` is overridable for exactly this.
+- **Hand an emulator-facing service a stub `DosCI`, never the real one** (the key queue, `PatchService.setDisplayMode` against a stand-in `dosInstance`). A service that takes a `DiagnosticsService` gets a double from [diagnostics.testing.ts](src/app/core/services/shared/diagnostics.testing.ts) (`silentDiagnostics()`, `recordingDiagnostics()`, `memoryStorage()`). `PatchService`'s `Error` messages are shown verbatim by the game page, so its spec pins the Portuguese wording and fails on the English JSZip and HttpClient reject with.
+- **Check a rule against an independent model of the world, not a copy of the code.** The pointer engine runs against a fake guest written from the measured rules (one case is a control showing the fake really does punish a spacing below a frame); the detectors ([game-exit.helper.spec.ts](src/app/core/helpers/game-exit.helper.spec.ts), [ibeam.helper.spec.ts](src/app/core/helpers/ibeam.helper.spec.ts)) run on real 640x480 frames of the guest, made by `scripts/frame-fixtures/` from `dosCI.screenshot()` PNGs and inflated by the fixtures module's `loadFrame()` with `DecompressionStream`, a spec paints on a copy and never on the shared frame, and the set holds the look-alikes (the arrow over a white list, for the I-beam) so a case can only pass by telling them apart; typing engines get REAL `InputEvent`/`CompositionEvent`/`KeyboardEvent`s at a real `<input>` ([type-bar-session.helper.spec.ts](src/app/core/helpers/type-bar-session.helper.spec.ts)) because Chrome's and Safari's orders differ; layout runs a whole device matrix ([stage.helper.spec.ts](src/app/core/helpers/stage.helper.spec.ts)) and the overlay's geometry runs in REAL layout, no mocks ([overlay-sync.helper.spec.ts](src/app/core/helpers/overlay-sync.helper.spec.ts), `getBoundingClientRect`); CSS is probed on the real `src/global.scss` karma loads ([win9x-palette.spec.ts](src/theme/win9x-palette.spec.ts)), never a second copy of the hex values; browser stores are real ([save-game.service.spec.ts](src/app/core/services/game/save-game.service.spec.ts) builds `js-dos-cache (spec …)` IndexedDB databases and deletes every `js-dos-cache*` one before and after each case).
+- **[storage-keys.spec.ts](src/app/core/services/shared/storage-keys.spec.ts) writes every `STORAGE_KEY` to every home `STORAGE_KEY_HOMES` lists, runs the real wipe against the real Ionic Storage** and fails if any survives; a key with no `STORAGE_KEY_HOMES` entry does not compile. Nothing is meant to survive the wipe: a key that must is a decision to name in both `clearAllData` and this spec.
+- **A fake of a browser API must answer the way the real one does.** [wake-lock.service.spec.ts](src/app/core/services/shared/wake-lock.service.spec.ts) lets each case choose the next answer of a fake `navigator.wakeLock` (a grant, a refusal, a request held in flight); a fake that answers synchronously is a trap, because the real browser dispatches `statechange` as a task, which is why `AudioHealthService` queues a re-entrant look. A service that holds something open around its awaits ([cheat-omatic.service.spec.ts](src/app/core/services/game/cheat-omatic.service.spec.ts)) is tested by failing the read and the write: it must still let go.
+- **Code that must cost nothing while it is off** ([diagnostics.service.spec.ts](src/app/core/services/shared/diagnostics.service.spec.ts)): spy the real `window` before the service exists, assert the data thunk is never called, and end with a `finish()` that switches the service off, so a failing case cannot leave listeners on the karma page. For "did it log this", hand in a two-line recorder that reads each data thunk at the call, as the real one does.
+- **A decision gets a table, a machine gets its time as an argument, a file format gets both ends.** [save-policy.helper.spec.ts](src/app/core/helpers/save-policy.helper.spec.ts) writes the table out row by row and asserts the rule it exists for (`null`, "OCR could not read it", is never the all-clear) again on its own. A state machine with no clock of its own ([gesture-recognizer.helper.spec.ts](src/app/core/helpers/gesture-recognizer.helper.spec.ts), [emulator-power.helper.spec.ts](src/app/core/helpers/emulator-power.helper.spec.ts)) is driven by plain calls with made-up timestamps, and its interval-driven service ([emulator-power.service.spec.ts](src/app/core/services/game/emulator-power.service.spec.ts)) gets its timeline in absolute time from `start()`, because the interval ticks on those instants. [save-backup.roundtrip.spec.ts](src/app/core/services/game/save-backup.roundtrip.spec.ts) feeds the export to the import through the two services the page calls, against a stand-in emulator that keeps its changed files in a zip like js-dos's.
+- **A guard whose spec has never failed proves nothing.** Break the rule on purpose and watch a case fail; the stage, camera and platform helpers were checked this way, and two stage cases had passed for the wrong reason (a strict `>` where two columns fit exactly; a keyboard so tall the service refused to write).
 
-Direct touch has the same problem in another shape: it is blind dead reckoning, so the only way to know a tap
-landed where the finger was is to read the guest's cursor out of its RAM from outside. That is
-[scripts/touch-harness/](scripts/touch-harness/README.md): a driver, a RAM oracle, and the checks (tap accuracy over 18
-screens per send spacing, the gain table, the frame period, drift, stuck buttons, the Macintosh-user-agent iPad matrix,
-the "Modo de toque" UI, and the edge cases a review found: a fast second tap, a retry after a miss, a drag past the send
-budget, the audio wake; `typebar.mjs`, the live type bar on the real game against a SIMULATED OS keyboard and CDP's IME
-events; and `idle-pause.mjs`, the battery saver on the real game: CPU on a still screen, whole Elifoot rounds with the setting on and off,
-and taps and keys sent to a sleeping guest, see *Letting the guest sleep*; and `stage.mjs`, the picture's box at 19 windows with every input the contract names and every one it
-does not, the rails' keys, and a spectator's picture against the host's in a real two-browser room, see *The stage*; and `camera.mjs`, the in-app camera on the real game:
-the picture's box at 12 windows and 4 zooms, the unzoomed page byte for byte, real two-finger touches, tap accuracy at each zoom against the RAM oracle, the host's overlay and
-stream, the deck while zoomed, rotation and the battery saver, see *The camera*; and `menu.mjs`, the options sheet at 8 windows, "Dados e avançado", the old stored switches, the wipe, Back, the first-run
-coach, the boot screen, `?host=1` and the spectator's waiting card, see *The options menu*), with the tables the constants rest on. **Re-run it after any change to the video mode, the
-Windows mouse settings, js-dos or the disk image.** It needs a dev build (`window.ng`) served with `--live-reload=false`.
+**The harnesses** drive Chrome over CDP with no dependencies (the touch and platform ones headless, the multiplayer one with windows unless `--headless`), and nothing in `scripts/` reaches the bundle (`angular.json`'s inputs are all under `src/`). Each README lists the traps that silently invalidate a run: read it before driving one by hand.
 
-The phone-platform work (the screen lock, fullscreen, the game's sound, installing) is checked the same way in
-[scripts/platform-harness/](scripts/platform-harness/README.md), on the touch harness's driver: every browser API that the headless shell lacks or refuses
-is faked there, so it shows what the PAGE does with an answer, never what a phone answers. Its README lists the traps (an init script outlives the
-process that registered it; the shell suspends the audio context by itself; CDP cannot emulate `display-mode`).
+- **Multiplayer** needs two or more peers, so [scripts/multiplayer-harness/](scripts/multiplayer-harness/README.md) (launcher, driver, scenario checklist) covers it. A covered window reports `visibilityState: 'hidden'`, which throttles its timers and stalls Ionic's overlay animations, so the join dialog hangs with nothing in the console: run `front <port>` before driving a dialog. Peers need separate profiles (two tabs in one profile share save games and confuse every observation); one `watch` per port (two redirected to one file truncate each other).
+- **Touch** is blind dead reckoning, so [scripts/touch-harness/](scripts/touch-harness/README.md) reads the guest's cursor out of its RAM from outside (`oracle.js`, verify-then-scan: never hard-code the address) and holds the tables the `TOUCH_INPUT` constants rest on. **Re-run it after any change to the video mode, the Windows mouse settings (`WIN.INI`/`SYSTEM.INI`), js-dos or the disk image:** the gain, the corner and the frame period are properties of the guest, not of the app. Its per-feature scripts (`deck`, `typebar`, `idle-pause`, `stage`, `camera`, `menu`, `room`) cover the control deck, the type bar, the battery saver, the stage, the camera, the options menu and a two-browser room; the README table says what each answers.
+- **The touch and platform harnesses need a DEV build served with `--live-reload=false`:** the scripts read `window.ng` and private members, so they do not work on a production build, and a source edit reloads the page mid-run. Start `node scripts/touch-harness/driver.mjs &` first (headless Chrome on :9444) and point `APP` at `http://localhost:4200/`, not `127.0.0.1` (`ng serve` may listen on `::1` only).
+- **Touch-harness runs that measure nothing:** the guest sometimes stays at the DOS prompt (now and then, not understood; `boot.mjs` retries up to three times, but a run on a guest that never reached Windows is void); the oracle talks to the guest directly and so does not wake a sleeping one (calibrate with the battery saver off); `gain`/`spacing`/`homecheck` detach the touch layer and a script that dies leaves it off (`__g.applyTouchMode()` in the page restores it).
+- **Platform** ([scripts/platform-harness/](scripts/platform-harness/README.md): screen lock, fullscreen, the game's sound, installing) runs on the touch harness's driver with every API the headless shell lacks or refuses faked, so it shows what the PAGE does with an answer, never what a phone answers. An init script outlives the process that registered it (restart the driver when in doubt); the shell suspends the audio context by itself; CDP cannot emulate `display-mode`.
+- **Unverified:** every harness is desktop Chromium with synthetic input (the touch and platform ones headless); no real finger, IME, iOS/WebKit or phone CPU has been tried, and the Galaxy A07 / iPhone 15 Pro Max passes are pending ([docs/mobile-ux-device-pass.md](docs/mobile-ux-device-pass.md)).
 
-Git LFS is required: `*.jsdos` is LFS-tracked (`src/assets/elifoot/elifoot98.jsdos`, ~6.7 MB holding
-the entire Windows 3.1 + game environment). Without LFS the game bundle is a pointer file and the app
-will not boot.
+Git LFS is required: `*.jsdos` is LFS-tracked (`src/assets/elifoot/elifoot98.jsdos`, ~6.7 MB holding the entire Windows 3.1 + game environment). Without LFS the game bundle is a pointer file and the app will not boot.
+
+Details, measurements and the review history: [docs/mobile-ux/commands-and-harnesses.md](docs/mobile-ux/commands-and-harnesses.md).
 
 ### Version-stamping gotcha
 
@@ -240,51 +128,22 @@ NgModule-based, **not** standalone: every component declares `standalone: false`
 
 ### The Angular ↔ js-dos bridge
 
-js-dos is **vendored, not an npm dependency**: `src/assets/js-dos/` (js-dos.js, wdosbox.wasm) is
-loaded by plain `<script>` tags in [index.html](src/index.html), which also loads `elifootweb.js` —
-the bundle name `angular.json` gives [src/scripts/game.js](src/scripts/game.js) (`inject: false`, so
-the tag is hand-written).
+js-dos is **vendored, not an npm dependency**: `src/assets/js-dos/` (js-dos.js, wdosbox.wasm) is loaded by plain `<script>` tags in [index.html](src/index.html), which also loads `elifootweb.js` — the bundle name `angular.json` gives [src/scripts/game.js](src/scripts/game.js) (`inject: false`, so the tag is hand-written). `game.js` is plain JS outside the TypeScript build and **not loaded by the karma specs** (they stub the globals), so a change to it is only ever checked in a real browser.
 
-`game.js` exposes four browser globals, typed for TypeScript in
-[src/scripts/game.d.ts](src/scripts/game.d.ts) and called directly from Angular services, and reads one the other way round
-(`holdGuestAwake`, below):
+`game.js` exposes four browser globals, typed in [src/scripts/game.d.ts](src/scripts/game.d.ts) and called directly from Angular services, and reads one the other way round (`holdGuestAwake`):
 
-- `elifootMain(pathPrefix, gameBundleURL, onProgress?)` — creates the DOS instance in
-  `#game-container`, runs the bundle, resolves the command interface (`dosCI`). `onProgress(text)`
-  gets js-dos's own loading text on every change, in English and unparsed (`BootProgressHelper`
-  makes the pt-BR line). **Error contract:** it rejects with the real error from `Dos()`/`run()`,
-  name and message untouched (a non-Error rejection keeps whatever `name`/`message` it carries),
-  or with an Error named `JsdosTimeoutError` (carrying `lastProgress`) when js-dos goes 20 s
-  without changing that text (60 s after the download completes) or one wait passes 120 s. A
-  timeout ends the *wait*, not the boot: see *Booting the emulator* below. It also hands `Dos()`
-  `layersOptions: { keyboardDiv: <a div that is never attached> }`, so js-dos builds its on-screen
-  keyboard (63 keys 19 css px wide, over 60% of a portrait picture) where nothing can see it;
-  `toggleSoftKeyboard` is gone, and `global.scss` hides `.emulator-keyboard` as the net under the
-  option in case a js-dos update stops honouring it. Checked in the app: no `.emulator-keyboard` in the page.
-- `saveGameFileSystem()` — `dosInstance.layers.save()`, i.e. flush changed FS to IndexedDB, with the guest held awake
-  for the length of the flush (`holdGuestAwake`, below).
-- `dosInstance` — the raw js-dos instance, needed by `PatchService` for `emulatorsUi.persist` and by `GamePage`
-  for `layers` (`root`, `mouseOverlay`, `canvas`), the elements direct touch attaches to.
-- `getDosAudioNode()` — js-dos's own `ScriptProcessorNode`, or `null`. js-dos builds its
-  `AudioContext` privately inside `run()`, so `game.js` wraps `AudioContext.prototype
-  .createScriptProcessor` at load (before `elifootMain` can run) and keeps the one node created
-  with no inputs and one output. That wrapper is the only patch to a global in the app; it
-  exists for `MultiplayerAudioService` (see the audio invariant below).
-- `holdGuestAwake(reason)` — **the other direction**: Angular registers it, `game.js` calls it. `EmulatorPowerService` sets
-  `globalThis.holdGuestAwake` while it runs and clears it when it stops (only if the function is still its own);
-  `saveGameFileSystem()` calls it around `layers.save()` and releases in `finally`, and TypeScript code outside the service goes
-  through `GuestAccessHelper.hold` / `whileAwake`. It exists because the update prompt in the main bundle persists through
-  `saveGameFileSystem()` and cannot import a service of the game chunk, and because every persist meets in that one function. See
-  *Letting the guest sleep*.
+- `elifootMain(pathPrefix, gameBundleURL, onProgress?)` — creates the DOS instance in `#game-container`, runs the bundle, resolves the command interface (`dosCI`). `onProgress(text)` gets js-dos's own loading text on every change, in English and unparsed (`BootProgressHelper` makes the pt-BR line). That text (`.emulator-loading-pre-2`) is the only progress js-dos exposes; if a js-dos update drops the element, only `BOOT_HARD_CAP_MS` is left as a deadline, and if it rewords "Downloading bundle 100%" (the cue for the longer window) the boot silently falls back to `BOOT_STALL_MS` (the `BOOT_*` constants sit at the top of `game.js`).
+- **Error contract.** `elifootMain` rejects with the real error from `Dos()`/`run()`, name and message untouched (a non-Error rejection is wrapped, keeping the `name`/`message` it carries), or with an Error named `JsdosTimeoutError` (carrying `lastProgress`) when the text stops changing for `BOOT_STALL_MS` (`BOOT_STALL_AFTER_DOWNLOAD_MS` once the download is complete, the one silent step) or one wait passes `BOOT_HARD_CAP_MS`. Callers tell a slow boot from a broken one by `name`. **A timeout ends the *wait*, not the boot**: calling again re-attaches to the boot in flight, while `#game-container` is still the element it started in, instead of stacking a second DOSBox on the first. See *Booting the emulator*.
+- **Never hand `gameBundleURL` anything but the bundle's own URL** (no `blob:`, no renamed copy): js-dos keys the saved changes layer by `"<url>.changes"` and `PatchService` hardcodes the same key, so any other URL orphans every existing save.
+- **js-dos's on-screen keyboard is built where nothing can see it, and must stay that way.** `Dos()` gets `layersOptions: { keyboardDiv: <a div that is never attached> }`, because its 63 keys cover 60% of a portrait picture and press through `simulateKeyPress`, which wedges the guest when two land within 16 ms (the control deck, through `GuestKeyQueueService`, is the keyboard). `global.scss` hides `.emulator-keyboard` as the net if a js-dos update stops honouring the option, and ESLint rejects any `simulateKeyPress` in app code; `toggleSoftKeyboard` is gone.
+- `saveGameFileSystem()` — `dosInstance.layers.save()`, i.e. flush the changed FS to IndexedDB, with the guest held awake for the flush; a no-op while there is no emulator (the update prompt in the main bundle relies on that).
+- `dosInstance` — the raw js-dos instance, **undefined until the game page has started js-dos** (`Dos()` assigns it when `elifootMain` begins, before the boot finishes; guard with `typeof` or `?.`). `PatchService` needs it for `emulatorsUi.persist`, `GamePage` for `layers` (`root`, `mouseOverlay`, `canvas`), the elements direct touch attaches to, and the O Matic modal takes the current `dosCI` from `dosInstance.ciPromise`.
+- `getDosAudioNode()` — js-dos's own `ScriptProcessorNode`, or `null`. js-dos builds its `AudioContext` privately inside `run()`, so `game.js` wraps `AudioContext.prototype.createScriptProcessor` at load (before `elifootMain` can run) and keeps the one node created with no inputs and one output, so no other processor can be mistaken for js-dos's. That wrapper is the only patch to a global in the app; `MultiplayerAudioService` (see the audio invariant in the Multiplayer section), `AudioHealthService` and `TouchInputService` read the node.
+- `holdGuestAwake(reason)` — **the other direction**: Angular registers it, `game.js` calls it. `EmulatorPowerService` sets `globalThis.holdGuestAwake` while it runs and clears it when it stops, only if the function is still its own; `saveGameFileSystem()` calls it around `layers.save()` and releases in `finally`; TypeScript outside the service goes through `GuestAccessHelper.hold` / `whileAwake`. **Any new bulk read or write of the guest (a persist, a backup, a memory sweep) goes through one of those, never bare**: the update prompt cannot import a game-chunk service, and every persist must meet in one place to wake a sleeping guest (a persist was never run against a paused one). See *Letting the guest sleep*.
 
-[src/app/core/typings/jsdos.d.ts](src/app/core/typings/jsdos.d.ts) is a hand-maintained typing of the js-dos
-command interface (`DosCI`) — screenshot, key/mouse injection, `persist()`, `readMemory`,
-`writeMemory`. `GamePage.dosCI` is `any` and gets threaded into every service as a parameter, and into the control deck as an `@Input` (which
-sends through the key queue and keeps nothing); no singleton owns it. Five root services touch it for longer than a call: the key queue (see *Typing into the
-guest*), which keeps it only for the length of a job, `TouchInputService` (see *Touching the guest*), which
-holds it from `attach()` to `detach()`, and `SaveSafetyService`, `GameExitWatcherService` and `EmulatorPowerService` (see *Save safety
-nets* and *Letting the guest sleep*), which hold it from `GamePage.loadConfig()` to `stopSafetyNets()` (the last only while its
-setting is on). `GamePage.ngOnDestroy` cancels whatever is still queued, detaches and stops them.
+[src/app/core/typings/jsdos.d.ts](src/app/core/typings/jsdos.d.ts) is a hand-maintained typing of the js-dos command interface (`DosCI`) — screenshot, key/mouse injection, `persist()`, `readMemory`, `writeMemory`. **`GamePage.dosCI` is `any` and is threaded into every service as a parameter (into the control deck as an `@Input` that sends through the key queue and keeps nothing); no singleton owns it.** The root services that keep driving it between calls (`TouchInputService`, `SaveSafetyService`, `GameExitWatcherService`, `EmulatorPowerService` (only while its battery-saver setting is on), `FieldHintService`, `AutoSaverService`; the key queue only for the length of one job) outlive `GamePage`, which is destroyed and rebuilt within one document, so `GamePage.ngOnDestroy` must cancel the queue and detach or stop each of them, or they keep driving a dead emulator. `CheatOmaticService` also remembers the last one but acts only when its modal asks, so it needs no stop. A new service that keeps `dosCI` must be added there.
+
+Details, measurements and the review history: [docs/mobile-ux/js-dos-bridge.md](docs/mobile-ux/js-dos-bridge.md).
 
 ### Inside the .jsdos bundle / boot chain
 
@@ -306,139 +165,34 @@ everything the user sees is Windows 3.1 rendering the 16-bit app.
 
 ### The guest's resolution
 
-The guest boots at **640x480** (`screen-size=640` in `SYSTEM.INI`), the size Elifoot (a Delphi 1 app)
-was designed for: its window is ~634x474, so it used to float on a green 800x600 desktop and now
-fills the frame, which is a free 1.25x on every glyph. `use800.flg` returns a player to the old
-800x600. Load-bearing:
+The guest boots at **640x480** (`screen-size=640` in `SYSTEM.INI`), the size Elifoot was designed for, so its ~634x474 window fills the frame instead of floating on an 800x600 desktop (a free 1.25x on every glyph); `d/res/use800.flg` in the saved disk returns a player to 800x600. `dosbox.conf` `[autoexec]` runs `call d:\setres.bat` right after `imgmount c` (C: must be mounted to be written, and the `c:`/`autoexec.bat` that start Windows come after it; `verify` enforces the position), which copies `d/res/s640.ini` (or `s800.ini` when the flag exists) over `C:\WINDOWS\SYSTEM.INI` before Windows starts.
 
-- **The mode is set from `dosbox.conf`, never from `hdd.img`.** Every persisted layer carries its
-  OWN full copy of `hdd.img` (a session always dirties it), and that copy shadows the bundle's, so
-  a `SYSTEM.INI` edited inside the bundle's image reached new visitors only: measured, an edited
-  bundle plus an old layer still booted 800x600. `dosbox.conf` and the files under `d/` are read
-  from the bundle at every boot, which is why `SETRES.BAT` reaches everyone, including a layer
-  holding `PatchService`'s overwritten `ELIFOOT.BAT`/`PATCH.BAT`. **The bundle URL must still never
-  change** (the layer key is `<url>.changes`).
-- **The bundle is rebuilt by [scripts/resolution/build_bundle.py](scripts/resolution/README.md)**
-  (standard library only, deterministic, idempotent), which adds `call d:\setres.bat`,
-  `d/SETRES.BAT`, `d/res/s640.ini` and `d/res/s800.ini` and copies every other zip entry byte for
-  byte; `hdd.img` is never rewritten. Check a bundle with
-  `python3 scripts/resolution/build_bundle.py verify <bundle> --base <the bundle it was built from>`.
-  `s800.ini` is the image's own `SYSTEM.INI`, so the script refuses an image that is not the
-  800x600 one. Nothing under `scripts/` reaches the bundle.
-- **`SETRES.BAT` only touches a disk that has the drivers its `SYSTEM.INI` files name.** It tests
-  seven files in `C:\WINDOWS\SYSTEM` (`SYSTEM_FILES` in the script) and does nothing if any is
-  missing. *Why:* a layer keeps the `hdd.img` it first got, and the repo has shipped others: the
-  256-colour image of `ce6eb4a` was on `main` for about a day (2025-04-19 to 04-20) and lacks
-  `vsbd.386`, `vadlibd.386`, `sndblst2.drv` and `msadlib.drv`. The first version of the script
-  copied unconditionally, and on such a layer Windows stopped at "Cannot find a device file that may
-  be needed to run Windows in 386 enhanced mode ... vsbd.386", leaving the guest at the DOS prompt
-  (reproduced on a bare js-dos page; the app would never see the green and count a failed boot).
-  Guarded, the same layer boots at 800x600 as it always did and its save loads. Such a player keeps
-  their mode, and the menu cannot change it (it only writes the flag); "Apagar todos os dados" gives
-  them the current image. `verify` checks the seven files exist on the bundle's image and are named
-  in both INIs, so the guard cannot silently pin everyone to 800x600.
-- **The first boot after this update rewrites `SYSTEM.INI` on the `C:` of every player whose disk is
-  the current image** (a 1.8 KB file; `hdd.img` was already dirty). A session that is open when the
-  new bundle is served keeps 800x600 until it reloads. Tested on a real layer: a long-time user's
-  save (made on the old bundle) loads at 640x480 after the bundle is replaced at the same URL, and
-  so does a layer patched through `PatchService`. **It is a one-way door for the LFS file:**
-  reverting `dosbox.conf` leaves every player's last persisted `SYSTEM.INI` (640x480) in their disk
-  with nothing to switch it.
-- **The mode in force is the framebuffer's size, never a stored flag.** `GamePage.currentDisplayMode`
-  asks `DisplayModeHelper.fromFrameSize(dosCI.width(), dosCI.height())`; `null` is anything that is
-  neither size (DOS text mode). The only persisted fact is `d/res/use800.flg` in the changes layer,
-  which says what the NEXT boot does, written by `PatchService.setDisplayMode` with the same
-  fake-CI trick as a patch (and so with the same rule: stop the auto-saver, do not play on, reload).
-  The flag survives patches and their removal (their filters match by name); "Apagar todos os
-  dados" deletes it, which restores the default. There is deliberately no `STORAGE_KEY` for it.
-- **The menu entry is disabled while a room is live** (`isStreaming || isHosting`): the change is a
-  reload, and a host's reload ends the room for everyone. A spectator is unaffected (it has no
-  emulator) and the stream stays 4:3 in either mode, so every ratio-based fit holds; a
-  same-page loopback of the host's canvas stream at 640x480 arrived as 320x240 (WebRTC ramping up)
-  with the ratio intact. The two-peer harness has not been run against a 640x480 host (it needs
-  the public nostr relays, which the sandbox that built this blocks).
-- **At 640x480 the Elifoot window hides the green backdrop that load detection samples.** See
-  *Screen-scraping*.
+- **The mode is set from `dosbox.conf` and `d/`, never from `hdd.img`.** Every persisted layer carries its OWN full copy of `hdd.img` (a session always dirties it) and that copy shadows the bundle's, so a `SYSTEM.INI` edited inside the image reached new visitors only (an edited bundle plus an old layer still booted 800x600). `dosbox.conf` and `d/` are read from the bundle at every boot, so `SETRES.BAT` reaches everyone, including layers holding `PatchService`'s `ELIFOOT.BAT`/`PATCH.BAT` (those run after `[autoexec]`). **The bundle URL must still never change** (the layer key is `<url>.changes`, which `PatchService` also hardcodes, so a rename strands every saved game).
+- **The bundle is rebuilt by [scripts/resolution/build_bundle.py](scripts/resolution/README.md)** (stdlib only, deterministic, idempotent): it adds the `[autoexec]` line, `d/SETRES.BAT`, `d/res/s640.ini` and `s800.ini`, copies every other zip entry byte for byte (`hdd.img` is never rewritten) and refuses an image whose `SYSTEM.INI` is not the 800x600 one. Check with `python3 scripts/resolution/build_bundle.py verify <bundle> --base <the bundle it was built from>`. Nothing under `scripts/` reaches the app bundle.
+- **`SETRES.BAT` only touches a disk that has the drivers its `SYSTEM.INI` files name:** it tests seven files in `C:\WINDOWS\SYSTEM` (`SYSTEM_FILES` in the script) and does nothing if one is missing. A layer keeps the `hdd.img` it first got and older images shipped (the 256-colour `ce6eb4a` lacks the sound drivers); an unconditional copy stopped Windows at "Cannot find a device file ... vsbd.386", leaving the guest at the DOS prompt, which the page counts as a failed boot. Such a player keeps their old mode, the menu cannot change it (it only writes the flag) and "Apagar todos os dados" gives them the current image. `verify` fails if the seven files are not on the bundle's image and named in both INIs, so the guard cannot silently pin everyone to 800x600.
+- **Reverting the `dosbox.conf` line is a one-way door for the LFS file.** `SETRES.BAT` rewrites `SYSTEM.INI` at every boot (the first boot after the switch ships does it for every player on the current image), so a 640x480 player's last persisted copy stays 640x480 and, with the script gone, nothing would switch it back. A session open when a new bundle is served keeps its old mode until it reloads.
+- **The mode in force is the framebuffer's size, never a stored flag.** `GamePage.currentDisplayMode` asks `DisplayModeHelper.fromFrameSize(dosCI.width(), dosCI.height())` (sizes in `DISPLAY_MODE.SIZES`); `null` is anything that is neither size (DOS text mode, 640x400; or 0x0 before the first frame). A stored flag would lie after a restored backup, a reload not yet done or a boot that failed to switch, so there is deliberately no `STORAGE_KEY` for it.
+- **The only persisted fact is `DISPLAY_MODE.FLAG_PATH` (`d/res/use800.flg`) in the changes layer (never in the bundle, which can only carry the default), and it says what the NEXT boot does.** `PatchService.setDisplayMode` writes it (or removes it, for 640x480) with the same fake-CI trick as a patch (see *Patching*), so the same rule holds: `applyDisplayMode` stops the auto-saver and safety nets, the page exits the emulator (`EXIT_TIMEOUT_MS`) and reloads, and nobody plays on, because a later `layers.save()` would no longer persist the running VM. The flag survives patches and their removal because `getClearLocalChanges` matches by name and nothing under `d/res/` matches (a new filter must not either); "Apagar todos os dados" deletes it, which restores the default.
+- **The "Resolução do jogo" entry is disabled while a room is live or starting** (`inRoom || hostStarting` in `menu.helper.ts`; `promptDisplayMode` and `applyDisplayMode` also refuse on their own): a change is a reload and a host's reload ends the room for everyone. A spectator is unaffected (no emulator) and the stream stays 4:3 in either mode, so every ratio-based fit holds. The dialog copy says 640x480 is "larger but softer" on a desktop, never sharper: the canvas box does not change, so the same picture is just magnified more.
+- **At 640x480 the Elifoot window hides the green backdrop that load detection samples:** see *Screen-scraping* for why the probe still passes at boot and what must not be built on "the green went away".
+
+Details and measurements: [docs/mobile-ux/guest-resolution.md](docs/mobile-ux/guest-resolution.md).
 
 ### Booting the emulator
 
-`GamePage.bootGame()` starts js-dos through `elifootMain`, keeps the boot screen (*The boot screen*) in step with it and
-decides what a failure means. The pure parts are specced
-([boot-progress](src/app/core/helpers/boot-progress.helper.ts),
-[boot-stage](src/app/core/helpers/boot-stage.helper.ts) and
-[boot-failure](src/app/core/helpers/boot-failure.helper.ts) helpers); the deadline logic lives in
-`game.js`, which karma cannot load, and is checked in a real browser. Load-bearing:
+`GamePage.bootGame()` starts js-dos through `elifootMain` ([game.js](src/scripts/game.js)), keeps the boot screen (*The boot screen*) in step with it and decides what a failure means. The `boot-progress`, `boot-stage` and `boot-failure` helpers (in [src/app/core/helpers/](src/app/core/helpers/)) are specced; `game.js`'s deadline logic is not (karma cannot load it), so check it in a real browser. Load-bearing:
 
-- **A timeout is the end of a wait, not of the boot.** The old flat 15 s clock started before the
-  6.7 MB download and ended when `run()` resolved, so a slow first visit was a "failure" that
-  reloaded itself into the same failure. Now `game.js` watches `.emulator-loading-pre-2` with a
-  `MutationObserver` and restarts a 20 s stall clock on every *change* of its text (`BOOT_STALL_MS`;
-  60 s once the text reads "Downloading bundle 100%", see below; `BOOT_HARD_CAP_MS` = 120 s bounds
-  one wait however busy the text keeps). The download is still
-  running behind a `JsdosTimeoutError`, so `elifootMain` called again **re-attaches to the boot in
-  flight** instead of stacking a second DOSBox on `#game-container`; a boot that already failed
-  reports the same error again, and one that succeeded while nobody was waiting hands over its
-  `dosCI`. A boot is replaced when its result was delivered **or when `#game-container` is no
-  longer the element it was started in**. *Why:* `Dos()` builds the canvas, mouse layer and
-  keyboard inside the element it is given, and `GamePage` is destroyed and rebuilt within one
-  document (browser Back to the landing page, then Jogar). Re-attaching there handed the new page
-  a `dosCI` whose picture and input sat in a detached tree (a dialog over an empty game
-  area), or replayed the old failure as if it were a new attempt: three round trips counted
-  three failures and reached the wipe offer without one real try. The abandoned boot is not
-  stopped (`stop()` cannot cancel a download in flight): the same ghost emulator the code had
-  before any of this. Because alerts outlive the route,
-  `GamePage.ngOnDestroy` also dismisses its timeout/failure dialog, and "Continuar esperando"
-  does nothing for a destroyed page (it would start a boot nothing is watching). Without an
-  element to watch the stall clock is meaningless, so the hard cap is the only deadline.
-- **The progress is js-dos's own text, so the bundle URL must never change.** "Downloading bundle
-  N%" appears only when the server sends a length, "Extracting N%" is cumulative over the whole
-  bundle (monotonic, not per file), and one step is silent by construction: after the download
-  js-dos fetches and compiles `wdosbox.wasm` and writes nothing meanwhile. Measured with the page
-  throttled to 40 KB/s that gap was 43 s (the flat 20 s fired "Continuar esperando?" at a boot
-  one download from done), hence the longer window after "100%". A dialog that was already up
-  when the boot lands stays up until tapped; "Continuar esperando" then returns at once.
-  Never give `run()` a `blob:` URL or a renamed copy to get finer progress: the changes layer is
-  keyed by `bundleURL + '.changes'` (`PatchService` hardcodes the same string), so a different URL
-  orphans every saved game.
-- **"Ready" is not the game.** After `run()` resolves, `waitForGameScreen` polls the framebuffer
-  every 500 ms for up to 45 s (`GAME_BOOT.DETECTION_TIMEOUT_MS`) and `BootStageHelper.classify`
-  labels what it sees: a frame under 480 lines is DOS text mode ("Iniciando o DOS…"), a black
-  graphics frame is Windows 3.1 starting ("Abrindo o Windows 3.1…"), a flat `(0, 64, 128)` is
-  Windows' desktop with the game loading ("Carregando o Elifoot…"), the game's green ends the
-  wait. The label never goes back (a black frame between desktop and splash would flip it).
-  The green test is the old one moved verbatim: same four pixels, same two greens, tolerance 25.
-  A window that closes without green is not an error: the page carries on without the first-run
-  coach and says "O jogo ainda está iniciando…" in a toast. Measured on a desktop dev server
-  (frames every 250 ms): DOS text at 0.5 s, black graphics at 1.8 s, the desktop at 2.0 s and the
-  game's green at 4.1 s after navigation, 3.5 s after `run()` resolved; a phone's numbers are
-  unknown, which is what the 45 s is a ceiling for.
-- **Three kinds of failure, three outcomes** (`BootFailureHelper.kindOf`). `timeout`: dialog with
-  "Continuar esperando" / "Tentar de novo", `FAIL_COUNT` untouched, nothing reloads by itself.
-  `network` (js-dos's "Network error, can't download", which is *any* non-200 including a 404, or
-  `js-dos.js` never loaded): counted, but a wipe cannot fix a missing download, so it is never
-  offered. `other` (the emulator itself threw, e.g. "Broken bundle"): counted, and from the third
-  in a row the dialog adds "Apagar todos os dados…", always beside "Baixar cópia dos meus dados".
-  Nothing is shown from js-dos's English: it goes to the console. Only a failure to *start* the
-  emulator is a boot failure; an exception in the settings, the first-run coach or the room asked for after
-  it is logged and alerted, never a reload (the old catch-all reloaded a game that was running).
-- **The backup and the wipe work without an emulator.** `SaveGameService.readStoredChanges()` reads
-  the layer straight out of IndexedDB (database `js-dos-cache (emulators-ui-saves)`, store
-  `files`, key `<bundle url>.changes`, the zip's `ArrayBuffer`), and `clearAllData(null)` deletes
-  the databases anyway: it used to return early without a `dosCI`, which made the failure
-  dialog's wipe a reload with the broken disk intact. `runBundle`'s try/catch swallows only a
-  layer that cannot be *read* from IndexedDB (it retries with the bundle alone and boots a
-  pristine game). A layer that reads but is not a valid zip is not caught there, because the
-  `emulators.dosWorker([bundle, changes])` promise is returned, not awaited, inside that try: it
-  fails in the worker ("Unable to extract bundle archive"), `run()` rejects with the worker's
-  panic messages as a JSON string, and that is an `other` failure, which is what the third-failure
-  wipe offer is for. Read from the vendored source and pinned by a `kindOf` spec, not run in a
-  browser. Without `indexedDB.databases()` (Firefox before 126) the backup asks for the one
-  database name js-dos uses, and aborts the upgrade if it does not exist: an open that creates
-  it leaves a database without its `files` store, which js-dos then opens at the same version
-  and never repairs, so every later save fails.
-- **js-dos paints its own red toast** ("Can't start emulator look browser logs for more info",
-  English) on a failed `run()`. It sits over the failure dialog for a few seconds and is left
-  alone: it is a global notyf container shared with every other js-dos message.
+- **A timeout is the end of one wait, not of the boot.** `elifootMain` rejects `JsdosTimeoutError` when js-dos's loading text (`.emulator-loading-pre-2`) goes `BOOT_STALL_MS` (20 s) without a *change*, `BOOT_STALL_AFTER_DOWNLOAD_MS` (60 s) once it reads "Downloading bundle 100%" (js-dos then fetches and compiles `wdosbox.wasm` over the same link and writes nothing), or when one wait passes `BOOT_HARD_CAP_MS` (120 s; the only deadline if that element is missing). A flat clock once made a slow first download a failure that reloaded into itself; the percentage exists only while the server sends a length, without one a slow download looks stalled. Both clocks key on js-dos's own English text, so a js-dos upgrade must re-check them. The boot keeps running, so `elifootMain` called again **re-attaches** to it instead of stacking a second DOSBox: a failed boot reports the same error again, and one that finished while nobody was waiting hands its `dosCI` to the next call.
+- **Re-attach only inside the element the boot started in.** A boot is replaced once its result was delivered **or when `#game-container` is no longer its element** (`GamePage` is rebuilt within one document: Back, then Jogar): `Dos()` builds canvas and input inside that element, so re-attaching gave the new page a `dosCI` over a detached tree, or replayed an old failure as a new attempt that counted toward the wipe offer. The abandoned boot is not stopped (`stop()` cannot cancel a download). Alerts outlive the route, so `GamePage.ngOnDestroy` dismisses its boot dialog and "Continuar esperando" ignores a destroyed page (it would start a boot nothing is watching).
+- **The bundle URL must never change.** No `blob:` URL or renamed copy to get finer progress: the changes layer is keyed `bundleURL + '.changes'` (`PatchService` hardcodes the same string), so another URL orphans every saved game.
+- **"Ready" is not the game.** After `run()` resolves, `waitForGameScreen` polls the framebuffer for `GAME_BOOT.DETECTION_TIMEOUT_MS` and `BootStageHelper.classify` labels the stage (under 480 lines: DOS text; black graphics: Windows 3.1; flat `(0, 64, 128)`: desktop, game loading); only the game's green ends the wait. The label never goes back (a black frame between desktop and splash would flip it) and the blue never declares ready. The green test is the original probe (`GAME_SCREEN_PROBE`: 3 of 8 colour/point pairs, tolerance 25): re-measure at 640x480 and 800x600 before retuning (*Screen-scraping instead of emulator events*). A window that closes without green is not an error: no first-run coach, a toast "O jogo ainda está iniciando…", and the exit watcher arms itself on the same `isGameScreen`.
+- **Three kinds of failure, three outcomes** (`BootFailureHelper.kindOf`, which reads the real `name`/`message` `elifootMain` rejects with). `timeout`: "Continuar esperando" / "Tentar de novo", `FAIL_COUNT` untouched, nothing reloads by itself. `network` (any non-200, a 404 included, or `js-dos.js` never loaded): counted, but a wipe cannot fix a missing download, so it is never offered. `other` (the emulator threw, e.g. "Broken bundle"): counted, and once the count (reset when the emulator starts) reaches `WIPE_OFFER_AFTER_FAILURES` (3) the dialog adds "Apagar todos os dados…", always beside "Baixar cópia dos meus dados". js-dos's English goes to the console. Only a failure to *start* the emulator is a boot failure; an exception after it (settings, coach, the room asked for) is logged and alerted, never a reload (the old catch-all reloaded a game that was running).
+- **The backup and the wipe work without an emulator.** `SaveGameService.readStoredChanges()` reads the layer straight from IndexedDB (every `js-dos-cache*` database, store `files`, the `<bundle url>.changes` entry), and `clearAllData(null)` still deletes the databases (it returned early without a `dosCI`, so the wipe reloaded into the same broken disk). Without `indexedDB.databases()` (Firefox before 126) the backup opens the one known name, `js-dos-cache (emulators-ui-saves)`, and **must abort the upgrade if it does not exist**: an open that creates it leaves a database without its `files` store, which js-dos never repairs, so every later save fails. js-dos drops a layer IndexedDB cannot *read* and boots a pristine game; a readable layer that is not a valid zip fails in the worker as `other`, which is what the third-failure wipe offer is for (read from the vendored source and pinned by a `kindOf` spec, not run in a browser).
+- **js-dos paints its own red toast** ("Can't start emulator…") on a failed `run()`; it sits over the failure dialog and is left alone: it is the global notyf container shared with every other js-dos message.
+
+Not verified on a real phone or iOS: boot timings (the 45 s detection window is a ceiling chosen for a phone, not a measurement).
+
+Details, measurements and the review history: [docs/mobile-ux/boot.md](docs/mobile-ux/boot.md).
 
 ### Persistence model
 
@@ -460,134 +214,25 @@ storage-keys.spec.ts proves it.
 
 ### Save safety nets
 
-What stops progress from vanishing without anyone choosing it, and what tells the player it is safe. It is the
-work of P5; the design record is [docs/mobile-ux-study.md](docs/mobile-ux-study.md).
+What stops progress from vanishing without anyone choosing it, and what tells the player it is safe. [`SaveStatusService`](src/app/core/services/shared/save-status.service.ts) (main bundle; feeds the toolbar chip and the backup reminder), [`SaveSafetyService`](src/app/core/services/game/save-safety.service.ts) (game chunk: `saveNow`, `saveBeforeReload`, the page-hidden save, `beforeunload`) and [`GameExitWatcherService`](src/app/core/services/game/game-exit-watcher.service.ts), plus the pure helpers in `src/app/core/helpers/` (`save-policy`, `save-backup`, `save-status`, `navigation-guard`, `game-exit`). `GamePage.startSafetyNets()` (end of `loadConfig()`) attaches the nets and `stopSafetyNets()` takes them down, the idle pause first so the guest is awake for what follows.
 
-**What "saved" means.** One thing: the emulator's changes layer was written to IndexedDB (`layers.save()`). Every
-persist in the app goes through `SaveGameService.saveGame()`, which runs **one flush at a time** (a second
-`layers.save()` started while the first reads the disk is not something the emulator promises to survive; the
-auto-saver's own serialisation composes with it) and reports start and end to
-[`SaveStatusService`](src/app/core/services/shared/save-status.service.ts). The layer holds whatever the game had written to its own
-files by then; it does not hold the game's state in memory (Elifoot writes its `.e98` at kickoffs). That is why the
-status also tracks **input since the last persist**: `dirty` is set by any pointer-down or key aimed at
-`#game-container` (document-level capture listeners, so a finger the touch layer takes over is still seen) and by the
-key queue's `activity$` (virtual keys never become a DOM event), and it is a *counter*, not a flag: a persist
-remembers the count as it began, and only clears `dirty` if nothing moved meanwhile, so a click that lands during
-the second a persist takes is not called saved. It is conservative by nature (it cannot tell a click on a tab from a
-click that changed the game) and errs towards "not saved".
+- **"Saved" means one thing: the changes layer reached IndexedDB.** Every persist of the running game goes through `SaveGameService.saveGame()`, one flush at a time (a second `layers.save()` over one still reading the disk is not promised to survive), which reports to `SaveStatusService`; a new path around it makes the chip lie. The only ones that skip it end in a reload: `PatchService`'s own `saveGameFileSystem()` calls and the update prompt's. The game's in-memory state is not on disk (Elifoot writes its `.e98` at kickoffs), so the status also tracks `dirty`, input since the last persist: a *counter*, cleared only if nothing moved during the flush (a click mid-persist is not "saved"), fed by document-level capture listeners for pointer/key aimed at `#game-container` (a finger the touch layer takes over is still seen) and by `keyActivity$` (virtual keys are no DOM event). It errs towards "not saved".
+- **The chip is app shell: flat, not Win9x** (a tap is `GamePage.saveNow()`; it renders in the page toolbar, like the room pill; mobile landscape has no toolbar, so the menu's first entry "Salvar agora" carries its words). While a room is live it shares the title slot with the pill, so it drops its words under 600 px and steps aside under 402 px: the pill is what a host must see. The data wipe stops the savers and the nets, then calls `SaveStatusService.freeze()`, before it deletes anything, so a persist finishing after it cannot write its timestamp back into a wiped store.
+- **`isGameSaving` is three-valued everywhere, and `null` ("OCR could not read") is never "not saving".** `SavePolicyHelper.decide` holds the table; rows differ by the price of being wrong. `hidden` (nobody asked) persists only on a proven `false`. `reload` (throws the page away) persists on `false`, refuses on `true`, and on `null` asks the person ("Recarregar sem salvar"). `manual` and `leave` (the player asked; the leave dialog promises a save) persist on `false` and `null`, because with the OCR down the button is the only manual save there is; only a seen dialog waits (`manual` says the auto-saver will take it; `leave` waits at most `GAME_IDLE_WAIT_MS`). A `null` save returns `verified: false` and the toast says it could not confirm (amber), never the plain "Jogo salvo". The idle pause sleeps the guest only on `false` for the same reason.
+- **The look needs the auto-saver running, so the leave flushes BEFORE it stops the auto-saver.** `SaveSafetyService.look()` rides the auto-saver's OCR worker, does not ask when auto-save is off (it would start the 5 MB worker download), and counts that, a throw and an overrun of `HEARTBEAT_MS` as `null`. Stopped first, the leave's look is `null` and its wait for the game's dialog never happens (it was dead code once, and its spec passed because the rig set `autoSaver.running`). `leaveGameToMenu` flushes, then stops tickers and nets, then exits the emulator; with the nets never attached (`no-emulator`) it falls back to a plain `saveGame()`.
+- **Every persist behind a loader is bounded by `AUTO_SAVER.PERSIST_TIMEOUT_MS` and ends as a failed save.** The loader cannot be dismissed and IndexedDB stalls after a phone has been in the background; the deadline stops the *wait*, not the flush, so `saveGame()` keeps its queue and a persist behind a stuck one times out the same way (the chip stays "Salvando…" while the flush truly is in flight). The export refuses only a proven `true` (`isGameWriting`: a copy under the game's write holds a half file). The update prompt is the one path outside the table: it waits (`APP_UPDATE.IDLE_WAIT_MS`) for a dialog the auto-saver has *seen* (`SaveStatusService.setGameWriting`), then persists whatever the OCR could read, because the reload is certain; with the OCR down it can race a write, as the forced periodic save can.
+- **The page going hidden persists, a little.** `visibilitychange` to hidden is the last event a mobile browser reliably delivers (`pagehide` leaves no time for an async write). `SavePolicyHelper.gateHidden` checks cheapest first: an emulator, input since the last persist, no hide-persist within `HIDDEN_PERSIST_MIN_GAP_MS` (a failed attempt counts, so a broken disk is not retried on every tab flip), the auto-saver running; only then the look, and only a `false` persists (and not if the page is visible again by then). After the first persist that worked, `navigator.storage.persist()` is asked once per page; no copy promises protection the browser may refuse.
+- **Flows that rewrite the layer stop the savers, and give them back only if nothing was written.** A patch, the save import and the resolution switch stop the auto-saver, the periodic save and the nets first (a persist of the running VM would write the old disk over what they are about to write); if one fails BEFORE the write, `GamePage.restoreSaving()` turns them back on, so a failed patch does not leave a game with no chip, no hidden save and no `beforeunload`. Once written (`written` in `applyPatch`/`applySaveGamePatch`) they stay off: the reload is coming and persisting the running VM would undo it. Known gap: `clearCustomPatch` stops and restores only the nets, so the auto-saver keeps running over the rewritten layer.
+- **Leaving the game page goes through `canDeactivate`** (`GamePage.canLeave` → `NavigationGuardHelper.verdict`): a navigation that stays on `/game` (`?host=1` is stripped by one), one the page started (`leaving`) and one with no emulator and no open window pass; an open window takes the Back first (see *The options menu*); anything else opens "Voltar ao menu?" once (a Back with it open changes nothing). Only the game page is guarded. **`AppRoutingModule` must keep `canceledNavigationResolution: 'computed'`:** the default `'replace'` rewrites the history entry the browser already moved to and loses a level, so the first Back asks and the next leaves with no question; `'computed'` walks the pointer back and pushes nothing, so nothing is trapped.
+- **Every reload the app starts from a booted game goes through `GamePage.reloadPage()` (or calls `SaveStatusService.allowExit()` first).** `beforeunload` asks the browser to confirm when `dirty` or hosting, and `allowExit` keeps a deliberate reload from asking again right after the player answered; a bare `window.location.reload()` in the game page asks twice (the boot-failure retries are exempt: the nets are not attached yet, so nothing asks). "Salvar e recarregar" confirms, runs `saveBeforeReload()`, and reloads only on a proven all-clear.
+- **The backup is one file format with both ends in `SaveBackupHelper`** (its spec feeds one to the other): export is a flat zip of `NAME.E98`; import takes `.e98` files and `.zip`s, several at once, and from a zip every `.e98` wherever it sits (so the boot-failure dialog's full-disk copy restores its saves; a Mac zip's `__MACOSX` shadows are skipped, and unreadable zips or unusable files are named, not fatal). The confirm flags saves that replace an existing one, read from the live `dosCI.persist()` (the bundle ships none). Every download is stamped by `SaveBackupHelper.fileStamp`. **Both file inputs (the saves import and "Carregar Patch") are emptied in `finally`**, after the files are copied out of `input.files`: `change` fires only when the value changes, so re-choosing the same file after "Cancelar" did nothing. **Sharing is a button, not a side effect:** Safari honours `navigator.share()` only inside the tap and the zip outlasts a gesture, so on a coarse pointer whose browser says `canShare({files})` the page builds the zip first, offers "Baixar arquivo" / "Compartilhar…", and `deliverBackup('share')` calls `navigator.share` before awaiting anything; a desktop downloads at once, an `AbortError` is not a backup, any other failure downloads.
+- **The backup reminder is one dismissible dialog, ever (either answer is stored), due `BACKUP_NUDGE_AFTER_MS` after the last backup (after the first save if there never was one), and only when the disk holds an `.e98`** (`PatchService.existingSaveNames`): a visit that only looked around also persists the layer, and a reminder answered with nothing to back up would be spent for good.
+- **Elifoot exiting to the Program Manager is recognised from the desktop, not from the green probe.** The boot chain leaves Windows with the game as its only program, so when it quits (Esc or Cancelar in its first dialog, a crash) the player is on a blue desktop with no way back but a reload. At 640x480 "green lost" is the normal state (see *Screen-scraping*), so `GameExitHelper` requires nearly the whole frame to be the flat `(0, 64, 128)` on an 8 px grid (a few stray samples allowed for the drawn-in mouse cursor) plus the Program Manager's icon, in a box measured from the bottom-left corner so it holds at 640x480 and 800x600 (`GAME_EXIT_SIGNATURE`). Strict on purpose: Elifoot never draws that colour, the team editor and the Program Manager window leave only part of the frame, and a second icon (a minimised Elifoot) fails the grid; loosen it and ordinary screens raise the dialog.
+- **`GameExitWatcherService` says it once per episode, and only once the game has been seen.** One look a second, `LOOKS_NEEDED` in a row; any other frame, or a `screenshot()` that throws or hangs, resets the run; "Agora não" is not asked again until something else has been on screen; a hidden page is not looked at. Windows draws this very desktop while the game loads, so it is armed only after the boot saw the game, or via `armWhen` (the boot's green probe) when the boot window ran out first. Every flow that rewrites the layer or leaves stops it (`leaveGameToMenu` first, so a game on its way out cannot raise it). The dialog is a `win9x-alert`, not a docked banner (the game behind it is gone): "Reiniciar jogo" leaves a live room (the dialog says so), saves with no `isGameSaving` check (the game is not running; still bounded), asks the emulator to exit for at most `GAME_EXIT_WATCH.EXIT_TIMEOUT_MS`, and reloads. The FAQ's team-editor recipe quits the game on purpose and says to answer "Agora não".
 
-**The chip** (`app-save-status-chip`, `.save-chip` in `global.scss`) sits in the game toolbar's end slot and says
-`Salvo às 14:32` / `Salvo ontem 21:14` / `Salvo em 20/10 21:14` / `Salvando…` / `Sem salvar há 12 min` (unsaved
-input older than 10 minutes, amber) / `Falha ao salvar` / `Ainda não salvo`, in `SaveStatusHelper`'s words; a tap is
-`GamePage.saveNow()`. **It is shell, flat, not Win9x**, for the reason the room pill is: it renders inside a page
-toolbar. It shares that toolbar's title slot with the pill, and the pill needs 119 px of a title that has 168 at 360 px
-(the title has 20 px of padding each side), so while a room is live the chip drops its words below 600 px and
-steps aside altogether below 402 px (measured: with the dot only the pill was still cut to 78 px at 360 and its
-code with it). Mobile landscape has no toolbar; the menu's first entry, "Salvar agora", carries the same words as its
-subtitle. `lastPersistedAt`, `firstPersistedAt`, `lastBackupAt` and the nudge's answer are `STORAGE_KEY`s in Ionic
-Storage, and `GamePage.clearAllData` calls `freeze()` before the wipe so a persist that finishes after it cannot
-write its timestamp back (the diagnostics tail had the same bug through `pagehide`).
+Unverified on real devices (the Galaxy A07 and iPhone 15 Pro Max passes are pending): Safari's `navigator.share`, `storage.persist()`, `beforeunload` and edge-swipe Back, the Android Back button in an installed PWA, a real background/foreground switch for the hidden save, and importing a zip from Files or Drive.
 
-**`isGameSaving` is three-valued everywhere, and `null` is never "not saving".** [`SavePolicyHelper`](src/app/core/helpers/save-policy.helper.ts)
-holds the table, and what differs between rows is the price of being wrong. `hidden` (nobody asked) persists only on
-a proven `false`. `reload` (throws the page away) persists only on a proven `false`, refuses on `true` ("O jogo está
-gravando": try again in a moment), and on `null` **asks the person** ("Recarregar sem salvar") rather than pretend. `manual` and `leave` (the player asked, and the
-leave dialog promises a save) persist on `false` and on `null`, because with the OCR down the button is the only
-manual save there is and the forced periodic save runs just as unguarded; only a seen dialog waits (`manual` says the
-auto-saver will take it as the dialog closes; `leave` waits for it, at most 15 s). Such a save is not passed off as a
-clean one: `saveNow` returns `verified: false` and the toast says it could not confirm whether the game was writing
-(amber, 5 s) instead of the plain "Jogo salvo". `SaveSafetyService.look()` does
-not ask at all when the auto-saver is not running (asking starts the OCR worker's 5 MB download for a page that
-switched auto-save off) and counts that, a throw and a look that overruns the heartbeat as `null`. **So the leave
-has to flush BEFORE it stops the auto-saver**: stopped first, the look is `null` and the wait for the dialog never
-happens (it was dead code in the first cut). `leaveGameToMenu` flushes, then stops the tickers and the nets, then exits
-the emulator; if the nets were never attached (`no-emulator`) it falls back to a plain `saveGame()`, as the old path did. Every persist
-the safety service starts is **bounded to `AUTO_SAVER.PERSIST_TIMEOUT_MS`** and ends as a failed save, because each
-sits behind a loader the player cannot dismiss and IndexedDB is known to stall after a phone has been in the
-background; the deadline stops the *wait*, not the flush, so `saveGame()` keeps its queue and a later persist behind a
-stuck one times out the same way (the chip says "Salvando…" for as long as the flush is truly in flight). The export refuses
-only a proven `true` (`isGameWriting`): it copies the disk without writing it, but a copy made under the game's write
-holds a half file. The update prompt is the one path that does not use the table: `AutoSaverService` tells
-`SaveStatusService.setGameWriting()` for as long as it has *seen* the dialog, `installUpdate()` waits that out for
-at most `APP_UPDATE.IDLE_WAIT_MS` and then persists whatever the OCR could read, because the reload is certain and
-what is not saved is lost for sure. With the OCR down that path can still race a write, as the forced periodic save can.
-
-**The page going hidden persists, a little.** `visibilitychange` to hidden (the last event a mobile browser reliably
-delivers before it may freeze the tab; `pagehide` leaves no time for an asynchronous write) runs
-`SavePolicyHelper.gateHidden` in the order that spares the most work: an emulator, input since the last persist,
-no hide-persist in the last `HIDDEN_PERSIST_MIN_GAP_MS` (3 min; a failed attempt counts, so a broken disk is not retried
-on every tab flip), the auto-saver running; only then does it look at the screen, and only a `false` persists. It gives
-up if the page is visible again by the time the look comes back. Every decision is a `save` line in the diagnostics
-log (`hidden: no persist {"reason":…}`). After the first persist that worked the app asks `navigator.storage.persist()`
-once per page (feature-detected; the answer is logged and kept in `SaveStatusService.durable`, and no copy promises
-protection the browser may refuse).
-
-**Flows that rewrite the layer stop the savers, and give them back only if nothing was written.** A patch, a clear of
-a patch, the save import and the resolution switch each stop the auto-saver, the periodic save and the nets first
-(a persist of the running VM would write the old disk over what they are about to write), and when one fails BEFORE the
-write `GamePage.restoreSaving()` turns them back on, so a failed patch does not leave a game that plays on with no
-chip, no page-hidden save and no `beforeunload`. Once the layer is written they stay off whatever happens next
-(`written` in `applyPatch` and `applySaveGamePatch`): the reload is coming, and persisting the running VM would undo it.
-
-**The ways out of the game page.** `GamePageRoutingModule` has a `canDeactivate` that asks the page
-([`NavigationGuardHelper`](src/app/core/helpers/navigation-guard.helper.ts)): a navigation that stays on `/game`
-(`?host=1` is stripped by one), one the page started (`leaving`), and one with no emulator to lose pass; anything else
-opens the existing "Voltar ao menu?" dialog once (a Back pressed while it is open changes nothing). Only the game page is guarded. **The router
-has to be told how to put the address back:** its default (`canceledNavigationResolution: 'replace'`) rewrites the
-history entry the browser already moved to, which loses a level: measured, the first Back asked and the next one left
-the page with no question. `AppRoutingModule` sets `'computed'`, which walks the history pointer back, and the same
-sequence (Back, Back with the dialog open, Cancelar, Back, `router.navigate`) was one dialog each time with
-`history.length` constant. Nothing is pushed, so nothing is trapped. `beforeunload` asks the browser to confirm only when
-`dirty` or hosting, and **every reload the app starts goes through `GamePage.reloadPage()` (or calls
-`SaveStatusService.allowExit()` first)**, which is what keeps a deliberate reload from asking: the player has just
-answered. A new `window.location.reload()` in the game page that skips it would ask twice. "Recarregar" is now "Salvar e
-recarregar": confirm, then `saveBeforeReload()`, then reload only on a proven all-clear.
-
-**The backup is one file format with both ends in one place** ([`SaveBackupHelper`](src/app/core/helpers/save-backup.helper.ts)).
-Export writes a flat zip of `NAME.E98` named `elifoot98_saves_YYYY-MM-DD_HH-mm-ss.zip` (the older names counted
-the month from 0; every download is now stamped by `SaveBackupHelper.fileStamp`). Import takes `.e98` files and
-`.zip` backups, several at once, and from a zip takes every `.e98` wherever it sits (so the full-disk copy of the
-boot-failure dialog restores its saves, and a Mac zip's `__MACOSX/._NAME.E98` shadows are skipped). The confirm lists
-what will be added and flags the ones that replace a save the guest already has (read from the live `dosCI.persist()`,
-since the bundle ships no `.E98`); unreadable zips and unusable files are named, not fatal. **Both file inputs are
-emptied in `finally`** (a `change` fires only when the value changes, so choosing the same file again after "Cancelar"
-did nothing), after the files are copied out of `input.files`, and an empty selection is a no-op. Import stops the
-auto-saver and the safety nets first, like a patch: a persist of the running VM would write the imported saves out again.
-**Sharing is a button, not a side effect:** Safari honours `navigator.share()` only inside the tap, and the zip takes longer
-than a gesture, so on a coarse pointer whose browser says `canShare({files})` the page builds the backup, then offers
-"Baixar arquivo" / "Compartilhar…", and `deliverBackup('share')` calls `navigator.share` before awaiting anything
-(checked: `navigator.userActivation.isActive` was true inside the call). A desktop downloads at once. A share closed by the
-player (`AbortError`) is not a backup; any other failure downloads instead. A week without a backup (counted from the
-first save when there never was one) earns **one** dismissible reminder, ever: answering it, either way, is stored.
-It is shown only when the disk holds at least one `.e98` (`PatchService.existingSaveNames`): a visit that only looked
-around persists the layer too, and a reminder that is answered with nothing to back up is spent for good.
-
-**Recovery: telling that Elifoot has exited to the Program Manager.** The boot chain leaves Windows with the game as its
-only program, so when it quits (Esc or Cancelar in its first dialog, Enter before a choice, a crash) the player is on a
-blue desktop with no way back but a reload. **The green probe cannot tell** (see *Screen-scraping*: at 640x480 "green lost"
-is the normal state), so [`GameExitHelper`](src/app/core/helpers/game-exit.helper.ts) recognises the desktop itself, and the
-signature is nearly the whole frame: a flat `(0, 64, 128)` at every sample of an 8 px grid (all but 8, for the mouse
-cursor, which is drawn into the frame) outside the Program Manager's icon, and in that icon's box, a fixed distance from the
-bottom-left corner (x 16-61, 60 px tall, 10 px above the edge, identical at 640x480 and 800x600), white text and ink. Measured: the real frame is
-99.3% desktop colour; across 127 real frames at 640x480 (every dialog, tab, menu, list and live match of the P4 walk,
-the team-colour standings, the team editor and the Program Manager) the desktop colour never appears in any of Elifoot's own screens, not even within a
-tolerance of 25, the fewest stray samples in any of them was 3,268 against the 8 allowed, and the only two frames that
-matched were the Program Manager's. The programs that share the screen with it leave it 31% (the team editor) and 44%
-(the Program Manager window) of the frame, and a second icon (a minimised Elifoot) fails the grid, so none of
-them is an exit. A live walk of 20 screens (new game, countries, draw, the main window's five tabs, menus, modals) with the
-watcher running never saw a desktop sample. [`GameExitWatcherService`](src/app/core/services/game/game-exit-watcher.service.ts)
-looks once a second, needs `LOOKS_NEEDED` (3) in a row (so ~3 s, as the roadmap asks; measured 2.9 s from Esc to the dialog),
-resets on anything else, on a `screenshot()` that throws or hangs, and says it **once per episode**: "Agora não" is not
-asked again until something else has been on screen. It is armed only once the game's own screen has been seen, because
-Windows draws this very desktop while the game loads: the page starts it armed after a boot that saw the game, and
-with `armWhen` (the boot's own green probe) when the 45 s window ran out first, so a slow phone is not left without the
-dialog for the whole session (checked: the bare desktop never arms it, the splash does, and Esc then raised the dialog
-in 2.9 s). It is stopped by every flow that rewrites the layer or leaves. The
-banner is a `win9x-alert` ("O Elifoot foi fechado" / "Reiniciar jogo?"); its action leaves the room if one is live
-(the dialog says it ends), saves (no isGameSaving check: the game is not running; bounded like every persist), asks the
-emulator to exit for at most 3 s, and reloads. The FAQ's team-editor recipe quits the game on purpose and tells
-the reader to answer "Agora não". It is a dialog, not a docked banner, because it is
-the one thing on screen worth reading and the game behind it is gone. The load-detection pixels are unchanged.
+Details, measurements and the review history: [docs/mobile-ux/save-safety.md](docs/mobile-ux/save-safety.md).
 
 ### Patching (the central trick)
 
@@ -606,1204 +251,263 @@ patch zips are flattened/validated in `processPatchFile()` (needs ≥34 `.EFT` t
 
 ### Typing into the guest
 
-[guest-key-queue.service.ts](src/app/core/services/game/guest-key-queue.service.ts) is the
-**only** thing that sends keys to the guest. A control deck key, the text dialog and anything added later
-submit tasks (`chord`, `altCode`, a whole text planned by `EmulatorKeyCodeHelper`, or tasks planned elsewhere through `send()`) to one FIFO
-with one consumer, so two senders can never overlap. `EmulatorControlService.sendKey` / `sendString` are the thin
-wrappers over it that the control deck (`DockComponent.press`) and the text dialog call; the page has no `sendKey` of its own.
+[guest-key-queue.service.ts](src/app/core/services/game/guest-key-queue.service.ts) is the **only** thing that sends keys to the guest. The control deck (`DockComponent.press`), the text dialog (`GamePage.sendTextToGame`) and the live type bar submit tasks (`chord`, `altCode`, a text planned by `EmulatorKeyCodeHelper.planText`, or tasks planned elsewhere through `send()`) to one FIFO with one consumer, so two senders can never overlap. `EmulatorControlService.sendKey` / `sendString` / `sendTasks` are thin wrappers over it; the page has no `sendKey` of its own.
 
 Load-bearing invariants — each of these was a bug, or a measured trap:
 
-- **Never call `dosCI.simulateKeyPress`; the queue is the only key sender.** It stamps the release
-  16 ms in the future, so a second call within 16 ms loses its key and leaves the guest keyboard
-  dead until a reload (5 of 5 repros) — and a reload costs everything since the last save. It was
-  easy to hit: the old `sendString` was not awaited, so a FAB tap mid-text did it. The queue sends
-  only `sendKeyEvent` down then up, `EMULATOR_CONTROL_CONFIG.KEY_PACING_MS` (10 ms) between groups,
-  and never more than `MAX_SYNC_KEY_EVENTS` (14) events without a gap, because DOSBox's keyboard
-  buffer drops the rest without an error (129 characters in one burst delivered 14). **It is enforced, not just
-  documented:** js-dos's own on-screen keyboard was the last other caller (its keys bind to `simulateKeyPress`
-  internally) and it is no longer built, so `no-restricted-syntax` in [eslint.config.mjs](eslint.config.mjs) rejects
-  any member access, destructuring or object property named `simulateKeyPress` in app code (checked: `dosCI.simulateKeyPress(1)`,
-  `dosCI['simulateKeyPress']`, `const { simulateKeyPress } = x` and `{ simulateKeyPress: … }` each fail). The one declaration
-  that has to exist, `@deprecated` in [jsdos.d.ts](src/app/core/typings/jsdos.d.ts), is a property *signature*, which the
-  selectors do not match. A spec that needs a fake emulator must not give it that method.
-- **A task is atomic.** Once its first key is down it is carried through to the release, so
-  neither `cancel()` nor a failure can leave Alt or Shift held in the guest; `cancel()` drops only
-  tasks that have not started, and `GamePage.ngOnDestroy` calls it.
-- **A submission wakes a sleeping guest first, and so does every task.** The battery saver (*Letting the guest sleep*) pauses the
-  emulator on a still screen; keys sent to a paused guest are not lost, but they pile up in the worker and land in one burst on
-  resume, which is what the 14-event rule above exists to prevent. `submit` calls `EmulatorPowerService.wake('keys')` before it
-  queues anything and `run` calls it again before each task, so a text that takes seconds never sees the guest fall asleep under it.
-- **Every code point is one visible character in the guest.** `EmulatorKeyCodeHelper.planText` is
-  the pure, specced step that turns a string into tasks: ASCII is a plain or Shift chord,
-  U+00A1–U+00FF are Alt+0nnn on the keypad (four digits, zero-padded, which selects ANSI over the
-  OEM page), typographic quotes, dashes, the ellipsis and exotic spaces fold to ASCII, and
-  **everything else becomes a visible `?` — never a space, never a drop**, so the host's string and
-  the guest's field stay 1:1 and Backspace stays correct. The guest is a plain US layout with no
-  dead keys and no way to install ABNT2, so accents can only be composed. The euro sign and the
-  rest of Windows-1252's 0x80–0x9F block (Š, ™…) are `?` on purpose: Alt+0128 is accepted, but the
-  fields' font has no glyph there and draws a solid box. Count with `Array.from`; UTF-16 units
-  would turn one emoji into two `?`. Elifoot's 8-letter filename field takes the accents too (and
-  upper-cases them).
-- **CapsLock is guarded, NumLock is not.** Before a text that types letters, the queue reads the
-  BIOS keyboard flags byte (`0040:0017`, through `readMemory`) and taps CapsLock off if it is set:
-  Shift-for-uppercase inverts under it, and a host with a hardware keyboard forwards its own
-  CapsLock to the guest, so the host cannot know. The byte does track both toggles under Windows
-  3.1, but Alt+0nnn composes the same character with NumLock on or off, so there is nothing to
-  guard there. The guard is best effort — `readMemory` has no deadline of its own and the consumer
-  is single, so a read is raced against `KEYBOARD_STATE_TIMEOUT_MS`, and a failed one is logged and
-  the text goes out as it is.
-- **A refused key says so.** With no emulator a submission rejects with `KeyQueueError` (its
-  message is Portuguese, meant for `showErrorAlert`) instead of becoming a tap that does nothing.
-- **The text dialog sets its field's attributes on the DOM, not through the input's
-  `attributes` option.** Ionic hands those to Stencil, which assigns an element *property* wherever
-  one exists, and `autocorrect` is a boolean property in WebKit and Chromium: `'off'` is truthy and
-  writes `autocorrect="on"`. `enterkeyhint` is `enter`, not `send`: the field is a textarea where
-  that key inserts a line break, which is how several game fields are filled in one go.
-- **Guest hazard to know before sending any Enter.** On Elifoot's first dialog, Enter before a
-  radio is chosen raises "List index out of bounds", and Esc or Cancelar quits; either way the game
-  exits to Program Manager (the FAQ says so). Anything that sends Enter on its own — a "next field"
-  button — must not do it on that screen. The control deck's **Enter** and **Esc** keycaps are one
-  tap on exactly that hazard (reproduced on the real game: Enter twice from Acerca left Program Manager and the
-  recovery dialog came up 3 s later), which is why Alt+F4 has a confirm and these two have P5's recovery. The live
-  type bar's strip has the same two keys, and a hardware Enter in its field is one too (see *The live type bar*).
+- **Never call `dosCI.simulateKeyPress`; the queue is the only key sender.** It stamps the release 16 ms in the future, so a second call within 16 ms loses its key and leaves the guest keyboard dead until a reload (5 of 5 repros), which costs everything since the last save (it was easy to hit: an un-awaited text racing another key tap did it). Enforced, not just documented: `no-restricted-syntax` in [eslint.config.mjs](eslint.config.mjs) rejects any member access, destructuring or object property named `simulateKeyPress` in app code (the `@deprecated` property *signature* in [jsdos.d.ts](src/app/core/typings/jsdos.d.ts) is not matched), so a spec's fake emulator must not give it that method. js-dos's own on-screen keyboard, whose keys bind to it, is deliberately never built (`game.js`).
+- **Raw events only, paced, and never a long burst (the 14-event rule).** The queue sends `sendKeyEvent` down then up with `EMULATOR_CONTROL_CONFIG.KEY_PACING_MS` between groups, and never more than `MAX_SYNC_KEY_EVENTS` events without a gap (so a longer chord is refused), because DOSBox's keyboard buffer drops the rest without an error (129 characters in one burst delivered 14). The pacing is a lower bound: a late timer only widens the gap, the safe direction.
+- **A task is atomic.** Once its first key is down it is carried through to the release, so neither `cancel()` nor a failure can leave Alt or Shift held in the guest; `cancel()` drops only tasks that have not started. The queue is a root service that outlives the page, so `GamePage.ngOnDestroy` cancels what is left (typing meant for that page's emulator).
+- **A submission wakes a sleeping guest first, and so does every task.** Keys sent to a paused guest are not lost but pile up in the worker and land in one burst on resume, which the 14-event rule exists to prevent. `submit` calls `EmulatorPowerService.wake('keys')` before queueing and `run` before each task, so a text that takes seconds never sees the guest fall asleep under it (see *Letting the guest sleep*).
+- **Every code point is one visible character in the guest** (an ellipsis folds to three dots, the one exception). `EmulatorKeyCodeHelper.planText` is the pure, specced step: ASCII is a plain or Shift chord; U+00A1–U+00FF are Alt+0nnn on the keypad, four digits zero-padded (selects ANSI over the OEM page; the coach-name and 8-letter filename fields draw them, the latter upper-casing them); typographic quotes, dashes and exotic spaces fold to ASCII; **everything else becomes a visible `?` — never a space, never a drop**, so the host's string and the guest's field stay 1:1 and Backspace stays correct. The guest is a plain US layout with no dead keys and no way to install ABNT2, so accents can only be composed. The euro sign and the rest of Windows-1252's 0x80–0x9F block (Š, ™…) are `?` on purpose: Alt+0128 is accepted but the fields' font has no glyph and draws a solid box. Count with `Array.from` (UTF-16 units would turn one emoji into two `?`); input is NFC-normalised first and CR/CRLF become one Enter.
+- **CapsLock is guarded, NumLock is not.** Before a text that types letters (`typesLetters`) the queue reads the BIOS keyboard flags byte (`0040:0017`, `readMemory`) and taps CapsLock off if set: Shift-for-uppercase inverts under it, and a host hardware keyboard forwards its own CapsLock, so the host cannot know. Alt+0nnn composes the same character with NumLock on or off. The guard is best effort: `readMemory` has no deadline and the consumer is single, so the read is raced against `KEYBOARD_STATE_TIMEOUT_MS` and a failure is logged and the text goes out as it is. A sender that submits keystroke by keystroke (the type bar) decides how often to ask via `guardCapsLock`, since each read is a round trip.
+- **A refused key says so.** With no emulator (or a malformed task) a submission rejects with `KeyQueueError`, whose Portuguese message is meant for `showErrorAlert`, instead of becoming a tap that does nothing. An emulator that throws mid-send also marks the queue `faulted$` for `KEY_FAULT_COOLDOWN_MS`, or until a submission goes out whole (the deck greys its keys meanwhile); a refusal is the caller's doing and is not a fault.
+- **`activity$` fires once per accepted submission, synchronously inside the call that submits and before any key goes out; a refused one is not activity.** `EmulatorControlService.keyActivity$` (a re-export) feeds the unsaved-input mark (*Save safety nets*), and the live type bar subscribes to the queue's `activity$` itself and tells its own sends from everyone else's by a flag around the call: emitting later would make the bar abandon its own text.
+- **The text dialog sets its field's attributes on the DOM (`turnOffTextAssists`), not through the input's `attributes` option.** Ionic hands those to Stencil, which assigns an element *property* wherever one exists, and `autocorrect` is a boolean property in WebKit and Chromium: `'off'` is truthy and writes `autocorrect="on"`. `enterkeyhint` is `enter`, not `send`: the field is a textarea where that key inserts a line break, which is how several game fields are filled in one go.
+- **Guest hazard to know before sending any Enter.** On Elifoot's first dialog, Enter before a radio is chosen raises "List index out of bounds", and Esc or Cancelar quits; either way the game exits to Program Manager. Anything that sends Enter on its own (a "next field" button) must not do it on that screen. The control deck's **Enter** and **Esc** keycaps, the type bar strip's, and a hardware Enter in the bar's field are one tap on exactly that hazard, which is why Alt+F4 has a confirm and these have the exit recovery (*Save safety nets*; the bar's side is in *The live type bar*). Test harnesses cite this bullet by name.
+- **Still unverified on real phones (Galaxy A07, iPhone 15 Pro Max passes pending):** `KEY_PACING_MS` on a low-end Android (the diagnostics `key` flush line reports how far a device stretches it) and iOS/Android keyboard behaviour in the dialog.
+
+Details, measurements and the review history: [docs/mobile-ux/typing.md](docs/mobile-ux/typing.md).
 
 ### Touching the guest (direct touch)
 
-A tap lands where the finger is. js-dos cannot do that against this guest: it treats a user agent that matches
-`/iPhone|iPad|iPod|Android/` as a phone and gives it a touchpad (a tap clicks at the OLD cursor position, a swipe moves
-the cursor two guest pixels per unit, no drag), gives anything else the desktop pointer-lock path, under which a touch
-does NOTHING (a default-UA iPad reports a Mac, so it is the second case), and its absolute mode lands 150-350 px off
-(DOSBox keeps its int33 range at 640x200 and Windows 3.1 consumes mickey deltas). So
-[touch-input.service.ts](src/app/core/services/game/touch-input.service.ts) takes the finger over before js-dos sees it
-and wires four helpers together, the first two of them testable without a DOM:
+A tap lands where the finger is. js-dos cannot do that against this guest: its pointer binding is a user-agent test (`/iPhone|iPad|iPod|Android/` gets a touchpad, anything else gets desktop pointer lock, under which a touch does nothing; a default-UA iPad reports a Mac) and its absolute mode lands 150-350 px off. So [touch-input.service.ts](src/app/core/services/game/touch-input.service.ts) (`TouchInputService`, `attach()`/`detach()`; `clicks$` says where each click it sent landed) takes the finger before js-dos sees it and drives the guest's mouse with relative motion through [gesture-recognizer.helper.ts](src/app/core/helpers/gesture-recognizer.helper.ts) (samples in, intents out, no timer, no DOM: the hold is a `deadline` the caller schedules), [guest-pointer.helper.ts](src/app/core/helpers/guest-pointer.helper.ts) (`GuestPointerMath`, the guest's rules as pure functions; `GuestPointer`, a serial queue that needs only `DosCI` and a clock), [touch-mode.helper.ts](src/app/core/helpers/touch-mode.helper.ts) (the setting, pure) and [touch-feedback.helper.ts](src/app/core/helpers/touch-feedback.helper.ts) (the ring). Every tunable is in `TOUCH_INPUT`.
 
-- [gesture-recognizer.helper.ts](src/app/core/helpers/gesture-recognizer.helper.ts): samples in, intents out, no timer
-  and no DOM (the hold is a `deadline` the caller schedules and answers with `advance()`).
-- [guest-pointer.helper.ts](src/app/core/helpers/guest-pointer.helper.ts): the engine, `GuestPointerMath` (the guest's
-  rules as plain functions) and `GuestPointer` (a serial queue that drives the guest's mouse, with a clock it is
-  handed). Depends on nothing but the `DosCI` interface.
-- [touch-mode.helper.ts](src/app/core/helpers/touch-mode.helper.ts): the setting, and what the device can run (pure).
-- [touch-feedback.helper.ts](src/app/core/helpers/touch-feedback.helper.ts): the ring (DOM, see below).
+Load-bearing invariants — each of these was a bug, or a measured trap:
 
-**The guest's rules, measured with the RAM oracle in [scripts/touch-harness/](scripts/touch-harness/README.md) at
-640x480** (the pointer constants live in `TOUCH_INPUT` and must be measured again after any change to the video mode,
-the Windows mouse settings, js-dos or the disk image):
+- **The guest's rules are measured, and they are `GuestPointerMath`'s contract.** Per axis 1 px per unit for an event of 1 or 2 units, 2 px per unit from 3; clipped to the frame; a single positive event of 256 units or more wraps modulo 256 (a big negative one does something else again), so nothing over `MAX_SEND_UNITS` is sent and a chunk is at most `MAX_CHUNK_UNITS` (two summed chunks must stay under the 256 that wraps); `HOME_SENDS` sends of `HOME_UNITS` clip into (0, 0), the one position the model knows. Measured at 640x480 with the RAM oracle in [scripts/touch-harness/](scripts/touch-harness/README.md): **re-measure after any change to the video mode, the Windows mouse settings, js-dos or the disk image**, because nothing in the app reads the cursor back and a change shows up only as taps that miss.
+- **Blind dead reckoning, no `readMemory`.** The model adds exactly what the guest applies and clips as it does, after homing. *Why:* the oracle couples to addresses that may move, and `readMemory` rejects concurrent calls, which the Cheat 'O Matic would hit; it is a harness tool only.
+- **One motion send per frame, never two in a tick: `SEND_SPACING_MS`, counted from the previous send's real time (a late timer only widens the gap) and also between the last send and a button event.** *Why:* the guest sums sends that arrive within a frame (~16.7 ms) and applies the gain to the sum, so two 2-unit sends move 8 px, not 4, and sends in one tick are summed before the wrap. 24 ms is the boundary plus margin, not the smallest passing value; if a phone's slower emulator shows summed sends, raise it first.
+- **The guest has a 2 px quantum:** now and then a send lands 2 px further on one axis, at any gap, and it does not accumulate. A tap is graded against 3 px, not 1. Elifoot and Windows do not warp the cursor when a menu, tab or modal opens (not checked: the loan and auction prompts and the live match's dialogs).
+- **The listeners are on `layers.root`, or on the clip around it (`TouchSurface.stage`, `.game-stream-container`, which `GamePage` always gives), in the capture phase, chosen by `pointerType` (`touch`, `pen`), never by user agent.** They `stopPropagation()` for touches aimed at js-dos's overlay, its canvas or the clip itself, so js-dos's own handlers never see a finger; the clip is there because the camera's tall view has parts of it that are not the picture (*The camera*). **Nothing a finger has to reach may be put inside the clip.** A real mouse and js-dos's own controls are not touched (desktop pointer lock, a hybrid laptop, an iPad with a mouse behave as before; the control deck is outside the root). `layers.pointerDisabled` was rejected: it disables the mouse path too. Touch events and `gesturestart` are cancelled as well; js-dos's sheet already gives `.emulator-root` `touch-action: none`, and `#game-container` adds `overscroll-behavior: none` so a drag never chains into pull-to-refresh.
+- **A mouse event within `COMPAT_MOUSE_WINDOW_MS` of a touch is the browser's copy of it and is dropped.** *Why:* on a default-UA iPad js-dos answers a stray `mousedown` with a pointer lock. **A real mouse makes the model forget the cursor** (`invalidate()`): on a hybrid device both move one guest cursor and the engine only knows what it sent, so the next touch re-homes.
+- **Every finger moves the focus to `layers.root`, unless `TouchSurface.keepFocus` says a page text field keeps it (the live type bar).** *Why:* cancelling the touch cancels the browser's focus change and js-dos reads the keyboard from that element, so a hardware keyboard on an iPad would stop reaching the game; but taking it would close the OS keyboard over the field being tapped. Page px reach the guest through the canvas's own `getBoundingClientRect` (`ViewportTransform.clientToGuest`), so the letterbox and the camera's zoom and pan are one formula.
+- **Every way a gesture can end releases the button, synchronously: `GuestPointer.abort()`.** It drops the queue and bumps an epoch so an op in flight stands down (a late timer must not press or release for a cancelled gesture). It runs on the recognizer's cancel, `pointercancel`, a `touchend` with no `pointerup` (checked 80 ms later, and called off by any finger that lands in between, or a fast second tap is lost), any `visibilitychange`, `freeze`, `blur`, `pagehide`, a finger silent for `GESTURE_STALL_MS`, and `detach()`. *Why:* a hidden page's timers are throttled or frozen, so the release cannot wait for one, and a stuck button drags what is under the cursor. A press whose position is lost (the frame changed, a real mouse moved the cursor) is released, never homed (a home with the button down drags what is under the cursor to the corner). A real background/foreground switch could not be reproduced (CDP delivers no lifecycle event).
+- **The click is at release, at the point where the finger landed** (the cursor was sent there at touch-down, `preAim`). *Why:* that is what lets a second finger cancel a touch before anything happened.
+- **A double tap is a real `WM_LBUTTONDBLCLK`:** a second tap within `DOUBLE_TAP_MS` and `DOUBLE_TAP_SLOP_PX` clicks again without moving the cursor, and its touch-down says `preAim: false`, because re-aiming at a finger that landed 20 px away could leave Windows' double-click rectangle. A tap that clicked nothing (outside the picture) is taken back with `forgetTap()`, or the retry would click wherever the cursor was last left. **Known risk:** two quick taps on adjacent list rows read as a double tap on the first; the thresholds are one line each in `TOUCH_INPUT`. There is no double-tap zoom, for the same reason.
+- **A drag presses where the finger landed** (past `TAP_SLOP_PX` before `HOLD_MS`), follows at the engine's pace (latest target wins) and releases where it lifted. **Holding still `HOLD_MS` is aim mode:** the cursor is parked `AIM_OFFSET_PX` above the finger (the sprite is smaller than a fingertip), follows it, and the click is at release; `HOLD_MODE: 'none'` turns it into a slow tap.
+- **A second finger cancels the gesture and the touch stays dead until every finger is up.** The cancel is this layer's and comes first (the press is released before a pinch starts); what two fingers mean is the camera's (`CameraGesture`, fed the same samples; with the camera off they mean nothing). A palm (contact radius over `PALM_RADIUS_PX`) is ignored outright. No right click: no tested Elifoot screen reacts to one.
+- **Scrolling is the scrollbar** (drag the thumb, tap the trough). Mapping a drag to Up/Down was rejected: in the country list the arrow and page keys SELECT as they move.
+- **A move is one op whose target is replaced while it runs, and `GuestPointerMath.isSendable` refuses anything that is not a whole number in range.** *Why:* a NaN poisons the guest's mouse until the page reloads.
+- **Re-homing is rare and in place.** *Why:* the cursor is part of the stream spectators watch, so a re-home flings it to the corner. It happens only after `IDLE_REHOME_MS` of quiet and more than `REHOME_AFTER_MOVES` moves, or on a frame-size change, `invalidate()` or the `FORCED_REHOME_SENDS` safety net, and the cursor walks back to where it was, as an ordinary move a landing finger redirects. **Never while a finger is down** (aim mode looks idle to the engine; the layer says otherwise with `setFingerDown()`) **and never with the button held** (the budget waits for the release). It also homes once on attach, only where `any-pointer: coarse` (on a plain desktop it would move the guest's cursor for nothing).
+- **A lifted finger wakes the game's audio:** `pointerup` and `touchend` of a handled touch call `resume()` on `getDosAudioNode()`'s context when it is not running. *Why:* js-dos wakes its `AudioContext` from a document-level one-shot `click`/`touchstart`/`keydown`, which this layer stops, so on iOS the game (and a hosting phone's stream) would stay silent.
+- **The tap ring is DOM on the host, never pixels in the guest's frame:** `.touch-feedback` nodes in `#game-container`, absolute, `pointer-events: none`, transform and opacity only. *Why:* spectators' stream and every `dosCI.screenshot()` scraper must not see them, and a resize makes js-dos re-letterbox. Neutral look, not Win9x; it fades under `prefers-reduced-motion`.
+- **The engine wakes a sleeping guest before every send** (`GuestPointerOptions.beforeSend`, from `TouchSurface.beforeSend`, which the page wires to `EmulatorPowerService.wake('touch')`). *Why:* its timers keep sending after the finger has gone, and motion that reaches a paused guest is applied in one go on resume, so the model is off by hundreds of pixels. `TouchInputService.busy` is one of the things that keep the guest awake.
+- **The layer runs outside Angular's zone** (pointer events arrive at the display rate), holds the emulator only between `attach()` and `detach()` (`GamePage.ngOnDestroy`, "Voltar ao menu" and a switch to classic detach), and sends no keys: all keys go through the key queue.
+- **"Modo de toque": Direto (default) | Touchpad (clássico)** (`STORAGE_KEY.TOUCH_MODE`, cleared by "Apagar todos os dados"). Classic means the layer is not installed, so stock js-dos takes the finger; it switches live. **Classic is only real where js-dos itself calls the device a phone** (`TouchModeHelper.stockTouchWorks`, a copy of its test): on a default-UA iPad or a phone asking for its desktop site it would be a dead screen, so `effective()` turns a stored `classic` into `direct` there and the entry is not offered (it needs `(pointer: coarse)`, `touchModeChoice$`); the layer itself is installed everywhere, because it reacts only to fingers and pens. An unreadable stored choice is `direct`.
+- **Still unverified:** everything above was checked with synthetic touches in headless Chromium on a desktop CPU; the gesture thresholds are recalled, not tuned on a finger, and iOS Safari, a phone emulator's speed (sums sends?), the real app lifecycle and a hosting phone with a spectator watching the cursor await the Galaxy A07 / iPhone 15 Pro Max passes ([docs/mobile-ux-device-pass.md](docs/mobile-ux-device-pass.md)).
 
-- *Per axis, 1 px per unit for an event of 1 or 2 units and 2 px per unit from 3,* the axes independent; clipped to
-  [0, width-1] x [0, height-1]. A single positive event of 256 units or more wraps modulo 256 (and -300 does something
-  else again), so nothing over 255 is ever sent, and a chunk is at most 90 units. Home = four sends of (-200, -200),
-  which clip into the corner: (0, 0) 60 times of 60. A single -2000 worked once and is unproven.
-- *The guest sums sends that arrive close together and applies the gain to the sum.* Two 2-unit sends are 1x each, but
-  summed they are 4 units and move 8 px. Pairs were summed 40 of 40 times at 14 ms, 11 of 40 at 16 ms, 0 of 40 from
-  18 ms: the boundary is the frame, ~16.7 ms. Sends in one tick are summed outright, and then the wrap applies to the
-  sum. **Hence one send per frame: `SEND_SPACING_MS` = 24**, counted from the previous send's real time (a late timer
-  only widens the gap), and also between the last send and a button event. Over 18 screens x 144 taps every spacing
-  from 16 to 40 ms stayed within 3 px (worst 3 at 16, 2 from 18); **24 is not the smallest that passes (18), it is the
-  boundary plus 7 ms**, because the margin costs nothing a person can feel (the click follows the lift by 0.1 ms,
-  because the cursor walks during the touch; at 40 ms it is 9 ms) and the phone's emulator is unmeasured.
-- *There is a 2 px quantum.* Now and then a send lands 2 px further than the rules say, on one axis, at any gap. It
-  comes and goes and does not accumulate (160 far and 250 short taps with re-homing off: model error 0 throughout;
-  across the 108 short sweep runs it left 0 in 14), and it is why a tap is graded against 3 px, not 1.
-- *Elifoot and Windows never warp the cursor* when a menu, tab or modal opens (12 steps, 0 px). Not reached: the loan
-  and auction prompts and the live match's dialogs.
-
-Load-bearing invariants, each measured or a bug waiting:
-
-- **Blind dead reckoning, no `readMemory`.** The model adds exactly what the guest applies and clips as it does; it
-  is homed to (0, 0) first. The RAM oracle (the cursor as two `uint16`s, found by verify-then-scan) is a harness tool: it
-  couples to addresses that may move, and `readMemory` rejects concurrent calls, which the Cheat 'O Matic would hit.
-- **The listeners are on `layers.root`, or on the clip around it (`TouchSurface.stage`, `.game-stream-container`) where the page gives one, in the capture phase, and chosen by `pointerType`, never by user agent.** They
-  `stopPropagation()` for `touch` and `pen` pointers aimed at js-dos's overlay or canvas, or at the clip itself, so its own handlers (on the
-  overlay, bubbling) never see a finger. GamePage always gives the clip, so the camera-off page is on it too: it IS the picture there (landscape: exactly
-  the stage; portrait: the 4:3 box), and the only reason to listen on it is the camera's tall view, where part of the clip is not the picture
-  (*The camera*). **Nothing may be put inside the clip that a finger has to reach**: a touch aimed at the clip itself is swallowed like one aimed at the canvas. A real mouse is not touched (desktop pointer lock, a hybrid laptop, an iPad
-  with a mouse all behave as before), and neither is anything else inside the root (js-dos's own controls; the control deck is
-  outside it, a sibling of `#game-container`).
-  `layers.pointerDisabled` was rejected: it disables the mouse path too. A mouse event within 500 ms of a touch is the
-  browser's copy of it and is dropped (on a default-UA iPad js-dos would answer a stray `mousedown` with a pointer
-  lock). Touch events are cancelled too, `gesturestart` as well; `touch-action`, `user-select` and `-webkit-touch-callout`
-  are js-dos's own on `.emulator-root`, and `#game-container` adds `overscroll-behavior: none`.
-- **A real mouse makes the model forget the cursor** (`invalidate()`): both can move one guest cursor on a hybrid
-  device, and the engine only knows what it sent, so the next touch re-homes.
-- **Every way a gesture can end releases the button, synchronously.** `GuestPointer.abort()` drops the queue, makes any
-  op in flight stand down (an epoch counter: a late timer cannot press or release for a cancelled gesture) and
-  releases at once. It runs on the recognizer's cancel, `pointercancel`, a `touchend` with no `pointerup` (checked
-  80 ms later, and called off by any finger that lands in between: what is down by then is a NEW gesture, and cancelling
-  it lost every fast second tap), any `visibilitychange`, `freeze`, `blur`, `pagehide`, a finger silent for 20 s, and
-  `detach()`. A press whose position is lost (the frame changed, a real mouse moved the cursor) is released rather than
-  homed, because a home with the button down drags what is under the cursor to the corner. A
-  hidden page's timers are throttled or frozen, so the release of a held button cannot be left to one. Checked in
-  `stuck-button.mjs`; a real background/foreground switch could not be reproduced (CDP delivers no lifecycle event).
-- **The click is at release, at the point where the finger LANDED** (the cursor was sent there at touch-down, so the
-  click follows the lift by ~0.1 ms). That is what lets a second finger cancel a touch before anything happened.
-- **A double-tap is a real `WM_LBUTTONDBLCLK`:** the second tap (within 400 ms of the first lifting and 32 px of where it
-  landed) clicks again WITHOUT moving the cursor, and its touch-down says `preAim: false` so the cursor is not sent to a
-  finger that landed 20 px away, which could leave Windows' double-click rectangle. Measured on the country list, where
-  each click toggles a row: a double tap leaves the row selected, two taps 900 ms apart toggle it on and off. A tap that
-  clicked nothing (it landed in the strip beside the picture) is taken back with `forgetTap()`, or the retry would be a
-  "double-tap" that clicks wherever the cursor was last left. **Known
-  risk:** two quick taps on adjacent rows (within 400 ms and 32 px, ~50 guest px) read as a double-tap on the first; the
-  thresholds are one line each in `TOUCH_INPUT` and are on the device checklist.
-- **A drag presses where the finger landed** (movement past 10 css px before 450 ms), follows at the engine's pace
-  (latest target wins) and releases where it lifted. **Holding still 450 ms is aim mode:** the cursor is parked 56 css px
-  above the finger, follows it, and the click is at release (`HOLD_MODE: 'none'` turns it into a slow tap).
-- **A second finger cancels the gesture, and the touch stays dead until every finger is up.** What two fingers MEAN is the
-  camera's (*The camera*, `CameraGesture`, fed the same samples; with the camera off they mean nothing, as before), but the
-  cancel is this layer's and comes first: any press is released, synchronously, before the pinch starts. A palm (contact radius over 48 css px) is ignored
-  outright, not tracked. There is no right click: no tested Elifoot screen reacts to one. **There is no double-tap zoom**: a double tap is a
-  `WM_LBUTTONDBLCLK` (measured with the camera on: two quick taps are `down,up,down,up` and the scale does not move).
-- **Scrolling is the scrollbar.** Dragging the 16 px thumb scrolls a list without touching the selection, and a tap in
-  the trough pages it (both on the country list). Mapping a drag to Up/Down was tested and rejected: in that list the
-  arrow and page keys SELECT as they move (the counter went 20, 25, 38, 40, 43).
-- **A move is one op whose target is replaced while it runs, and nothing is ever sent twice in a tick.** Chunks of at
-  most 90 units so that two summed chunks stay under 256. `GuestPointerMath.isSendable` refuses anything that is not a
-  whole number in range: a NaN poisons the guest's mouse until the page reloads (found in P4).
-- **Re-homing is rare and in place.** The cursor is part of the stream the spectators watch, so a re-home flings it to
-  the corner. It happens only after 900 ms of quiet AND more than 12 moves since the last home, or when the frame size
-  changes, or after `invalidate()`, or (a safety net) 600 sends; and the cursor walks back to where it was, as an ordinary
-  move, so a finger that lands meanwhile redirects it. **Never while a finger is down** (aim mode holds one still, which
-  from the engine's side looks exactly like idle; the layer tells it with `setFingerDown()`), and the 600-send budget
-  never fires with the button held, it waits for the release. It also homes once when the layer attaches, before anyone is touching, but only on a device with a touch screen (`any-pointer: coarse`): on a plain desktop it would move the guest's cursor for nothing.
-- **A lifted finger wakes the game's audio.** js-dos builds its `AudioContext` inside `run()`, before any gesture, and wakes
-  it from a one-shot `click`/`touchstart`/`keydown` listener on `document`. This layer stops the touch at `layers.root` (or at the clip around it) and
-  cancels the click the browser would have made of it, so on iOS (a context made outside a gesture stays suspended) the game
-  would stay silent, and a hosting phone would stream silence, until the person tapped something outside the game. So
-  `pointerup` and `touchend` of a handled touch call `resume()` on `getDosAudioNode()`'s context when it is not running.
-  **Why:** stock js-dos on a phone stopped `touchstart` at the overlay too, but the click still reached `document`. The
-  headless shell used by the harness resumes a context once per boot and then leaves `resume()` pending, so the check
-  grades the request, not the state.
-- **The tap ring is DOM on the host, never pixels in the guest's frame.** `.touch-feedback` nodes are appended to
-  `#game-container` (absolute, `pointer-events: none`, transform and opacity only), so the stream the spectators get and
-  every screen-scraper (`dosCI.screenshot()`) never see them, and they cannot resize the surface. The look is neutral on
-  purpose, not Win9x (it is feedback, not a window), and survives `prefers-reduced-motion` as a fade.
-- **The engine wakes a sleeping guest before every send** (`GuestPointerOptions.beforeSend`, wired from `TouchSurface.beforeSend`; the
-  page passes `EmulatorPowerService.wake('touch')`). Its timers keep sending after the finger has gone (the cursor walking to its
-  target, the idle re-home), and mouse motion that reaches a paused guest is applied in one go when it resumes: the guest sums sends
-  that arrive close together, so a dead-reckoning model fed that way is off by hundreds of pixels. The document-level capture
-  listeners of the service wake it for the finger itself before this layer sees the event; this hook is for what happens later.
-  `TouchInputService.busy` (a finger down, a button held, motion queued) is one of the things that keep the guest awake.
-- **The layer runs outside Angular's zone** (pointer events arrive at the display rate), holds the emulator only
-  between `attach()` and `detach()`, and `GamePage.ngOnDestroy`, "Voltar ao menu" and a switch to classic detach it.
-  All keys still go through the key queue; this layer sends none.
-
-**The setting is "Modo de toque": Direto (default) | Touchpad (clássico)** (`STORAGE_KEY.TOUCH_MODE`, cleared by "Apagar
-todos os dados"). Classic means the layer is not installed, so stock js-dos, whose handlers are always bound, takes the
-finger; it switches live, with no reload. **It is only real where js-dos itself calls the device a phone** (its UA test,
-copied into `TouchModeHelper.stockTouchWorks`): on a default-UA iPad, or a phone asked for its "desktop site", classic
-would be a dead screen (the harness has the control), so `effective()` turns a stored `classic` into `direct` there and
-the entry is not offered. It is offered only under `(pointer: coarse)` (the options menu, `touchModeChoice$`); the layer
-itself is installed everywhere, because it only reacts to fingers and pens.
-
-**Verified only in headless Chromium with synthetic touches on a desktop CPU.** Real fingers err by 25-40 css px
-(recalled), so the thresholds are untested where they matter; iOS Safari (compat events, `touch-action`, edge swipes,
-pull-to-refresh, callouts), a phone's emulator speed (which could sum sends the desktop never did), the real lifecycle
-and a hosting phone with a spectator watching the cursor are not. The PR carries the device checklist.
+Details, measurements and the review history: [docs/mobile-ux/touch.md](docs/mobile-ux/touch.md).
 
 ### The control deck (the keys of a phone)
 
-One docked panel of keycaps replaced three `ion-fab` clusters, the header's keyboard / text / O Matic buttons, the options
-menu's "Teclado Virtual" and js-dos's own keyboard: four copies of the same dozen actions that collided with each other, the
-header and the chat. It is `app-dock` ([dock.component.ts](src/app/core/components/dock/dock.component.ts)), with
-[deck-key.directive.ts](src/app/core/components/dock/deck-key.directive.ts) for the keycaps, the pure helpers
-[deck-keys](src/app/core/helpers/deck-keys.helper.ts), [deck-layout](src/app/core/helpers/deck-layout.helper.ts),
-[deck-panel](src/app/core/helpers/deck-panel.helper.ts), [key-repeat](src/app/core/helpers/key-repeat.helper.ts),
-[modifier-latch](src/app/core/helpers/modifier-latch.helper.ts) and [layout-shape](src/app/core/helpers/layout-shape.helper.ts)
-(all specced), `DECK` in [constants.ts](src/app/core/models/constants.ts), the layout in [_deck.scss](src/theme/_deck.scss) and
-the skin in the "Control deck" block of [_win9x.scss](src/theme/_win9x.scss): `.deck-key` (every keycap and taskbar button) and
-`.deck-face` (the grey the panels stand on) with their states. Decision D3's Win9x look is a **CSS-only flip** to flat, but not a
-two-rule one: `_deck.scss` also names Win9x tokens in a handful of declarations (the band's face and its seam, the taskbar's seam, the
-sheet's title bar and border, the unread flash), and `grep -n 'win9x-' src/theme/_deck.scss` lists every one a flip must touch. The
-design record is [docs/mobile-ux-study.md](docs/mobile-ux-study.md) (P10).
+One docked panel of keycaps is the phone's keyboard for a game made for one with keys. It replaced the three `ion-fab` clusters, the header's keyboard / text / O Matic buttons and js-dos's own on-screen keyboard (never attached now, see the bridge section). It is `app-dock` ([dock.component.ts](src/app/core/components/dock/dock.component.ts)) with [deck-key.directive.ts](src/app/core/components/dock/deck-key.directive.ts) for the keycaps; the pure helpers [deck-keys](src/app/core/helpers/deck-keys.helper.ts) (the one key table), [deck-layout](src/app/core/helpers/deck-layout.helper.ts), [deck-panel](src/app/core/helpers/deck-panel.helper.ts), [key-repeat](src/app/core/helpers/key-repeat.helper.ts), [modifier-latch](src/app/core/helpers/modifier-latch.helper.ts) and [layout-shape](src/app/core/helpers/layout-shape.helper.ts) (all specced); `DECK` in [constants.ts](src/app/core/models/constants.ts); the layout in [_deck.scss](src/theme/_deck.scss) and the skin in the "Control deck" block of [_win9x.scss](src/theme/_win9x.scss) (`.deck-key`, `.deck-face`). Design record: [docs/mobile-ux-study.md](docs/mobile-ux-study.md) (P10).
 
-**The layout contract, which no new control may break: the deck is a SIBLING of `#game-container`, never a child, never over
-the picture, and the picture's box does not depend on its contents** (in landscape the picture's box is the stage plan's, which counts a rail's WIDTH and
-nothing that is in it; see *The stage*). js-dos re-lays-out its canvas whenever that element changes size,
-and the cursor overlay and every remote cursor are measured against it. In portrait the picture is already pinned to its 4:3
-height (75vw, `flex: 0 0`) and the band under it is free, so the deck is a flex item after it. `DeckLayoutHelper.presentation`
-is a pure function of the viewport, the primary pointer and the player's setting, and it returns one of four things:
+- **The layout contract, which no new control may break: the deck is a SIBLING of `#game-container`, never a child, never over the picture, and the picture's box does not depend on its contents.** Portrait: the picture is pinned to its 4:3 height (75vw, `flex: 0 0`) and the deck is a flex item after it. Landscape: the stage plan sizes the picture and counts a rail's WIDTH, never what is in it (*The stage*). The launcher's sheet is `position: absolute` and takes no space. *Why:* js-dos re-lays-out its canvas whenever that element changes size, and the cursor overlay and every remote cursor are measured against it. The type bar and the boot screen obey the same rule; `scripts/touch-harness/deck.mjs layout` grades it.
+- **`DeckLayoutHelper.presentation` is a pure function of the viewport, the primary pointer and the player's setting, and it must not read the OS keyboard** (`LayoutShapeHelper.settle` ignores a keyboard-sized drop of `innerHeight` while a field is focused, or the deck would flip between band and launcher on every focus). It returns one of four things:
+  - `none`: no deck. Automático follows the PRIMARY pointer, so a desktop and a touch laptop get none; the floating chat toggle is untouched there.
+  - `band`: portrait only, and only where the band under the picture is at least `DECK.MIN_BAND_HEIGHT` (Táticas needs it for 44 px formation keys; a spec derives it from the constant; a phone in a browser tab, with its bars, falls to the launcher). A **taskbar** pinned to the bottom with `margin-top: auto` (without it a folded deck rode up under the picture and the tabs jumped 440 px) and **one panel at a time** above it: Táticas, Setas, Mais teclas, Zoom (only while "Zoom e movimento" is on) or the page's chat. A second tap on the open tab folds it; the picture never grows into the band. Texto is a taskbar button (the compose dialog, or the live type bar when "Teclado ao vivo" is on); Chat appears only while hosting.
+  - `rails`: a landscape phone (`landscape-compact`, at most `LANDSCAPE_COMPACT_MAX_HEIGHT` px tall, no toolbar): keys in the two gutters beside the picture, sized by `StageHelper` so they never cost it. The LEFT rail exists even with the deck off (it holds the menu, room code and chat button the missing toolbar had), and the "Teclas" sheet opens beside it for what a rail cannot hold. The deck's keys are pinned to the bottom, so they never move when the room, sound chip or chat comes and goes.
+  - `launcher`: every other shape without a band (landscape tablet or laptop, a portrait window with no room): the same panels as a sheet over the page from a "Teclas" toolbar button; it covers part of the picture while open. A portrait tablet gets the band, a landscape one the launcher.
+- **While the picture is magnified the band holds only its taskbar (or the Zoom panel), so the camera's tall view keeps the free band** (*The camera*): in the band, `DeckPanelHelper.withZoom` folds the open panel of keys and brings it back at the fit if nobody chose another meanwhile. The Zoom panel is the one that does not take the band (`flex: 0 0 auto`, as tall as its keys), so the picture can be watched while it is used.
+- **A keycap presses on `pointerdown` and never takes the focus**: `preventDefault()` on pointerdown and mousedown plus `tabindex="-1"` keep it in `.emulator-root` (where js-dos reads the physical keyboard) and the OS keyboard shut. The pressed look is the `deck-key--down` class, not `:active` (iOS Safari applies `:active` only when something listens for touches).
+- **It releases exactly once, however the press ends** (`pointerup`, `pointercancel`, `lostpointercapture`, window blur, page hidden, key disabled or destroyed under the finger): a held arrow hangs its stop on `deckRelease`, and a lost release is a key that types by itself.
+- **Keys inside a panel that can scroll press on release (`deckKeyOn="up"`); keys that repeat keep the landing and carry `.deck-key--landing` (`touch-action: none` on the key itself).** A scroll gesture starts as a touch on a key, and the browser stops intersecting `touch-action` at the nearest scroll container, so the deck's `none` never reaches a key in "Mais teclas" or the sheet and the panel's `pan-y` does: a thumb drifting on a held arrow became a scroll, `pointercancel` stopped the hold, and a drag from Apagar typed and then scrolled. The panel still scrolls from its gaps and from every key that presses on release.
+- **A `click` is trusted only when no keycap's pointer released in the last `CLICK_AFTER_POINTER_MS`, and that clock is shared by every keycap (a static).** TalkBack, VoiceOver, switches and keyboards activate with a click and no pointer, so a lone click is a press and a release; but the browser makes a tap's click after the lift and aims it at whatever is under the finger then.
+- **Nothing the deck shows may change the keys' geometry between a press and its release.** A "next key carries Shift" bar moved every key up 44 px and the tap's click landed on Tab (Shift sent Shift+Tab); a latched modifier is therefore a lit key, a label on the "Mais" tab and a screen-reader-only live region, never a bar.
+- **Keys are disabled until an emulator exists, while the page is leaving and while the key queue is faulted** (`GuestKeyQueueService.faulted$`, for `KEY_FAULT_COOLDOWN_MS` or until a submission goes out whole), so a held arrow does not raise the same error every tick; `GamePage.onKeyFailure` still rate-limits the alert. Every key goes through `EmulatorControlService.sendKey`, a thin wrapper over `GuestKeyQueueService`, which is the only sender to the guest (*Typing into the guest*).
+- **The key table is one place** (`DeckKeyHelper`; formation captions from `GAME_INPUT_FN_BTNS`). **Alt+F4 ("Sair") is the only guarded key**: a `win9x-alert` confirm, because it leaves for the Program Manager. D8: Num `*` is "Craque" (player search) and Num `-` is "Registro" (serial key), labelled from the owner's word; what they do on every screen of the game is unchecked.
+- **A scroll panel's children must not shrink** (`flex-shrink: 0` in `_deck.scss`): with the default they squeezed into a panel shorter than the keys, the 44 px rows overflowed their boxes and Num `*`, O Matic and Sair were painted over the F keys, so a tap aimed at F7 hit one of them. Under `(pointer: coarse)` every keycap must stay at least 44x44.
+- **Hold-to-repeat** (`KeyRepeatScheduler`; arrows, Backspace, Del, PgUp, PgDn): a tick that finds the queue holding `REPEAT_MAX_PENDING` tasks is skipped, not queued, so a slow device never types on after the finger lifts; `REPEAT_MAX_HOLD_MS` ends a hold nobody released; `stop()` is the only thing to call and clears every timer; the timers run outside Angular's zone. A hold also ends on blur, a hidden page, a panel switched under the finger, the page leaving and the queue faulting.
+- **Sticky modifiers** (`ModifierLatch`): a tap latches Shift, Ctrl or Alt for the next key (which lets it go), a second tap within `LATCH_DOUBLE_TAP_MS` locks it, a tap on a lock lets it go. **Nothing is ever held down in the guest**: the latch is put round the next key's chord, which the queue presses and releases whole, so a forgotten latch is only a lit button, never a stuck Shift. Blur, a hidden page, a layout change, the sheet closing and destroy clear it; a panel switch does NOT (the "Mais" tab names a waiting modifier from any panel).
+- **The chat stays the page's.** The page mounts `#chat-panel` above the deck and keeps its open state, unread count and focus; the deck mirrors them and asks for changes through `(chatToggle)`, so a chat opened from the options menu shows in the taskbar too. A panel of keys closes the chat; the chat opens over whatever panel was up (`DeckPanelHelper`). Under the OS keyboard the chat lifts by `--kb-inset` less `--deck-taskbar-total` (`.has-deck-band`), because the taskbar sits in the flow below it; that variable must keep matching the folded dock's real height.
+- **Settings** (options menu, Entrada section; both `STORAGE_KEY`s, wiped by "Apagar todos os dados", read before the boot so the deck does not come and go behind the boot screen): `DECK_MODE` ("Mostrar painel de teclas": Automático, Sempre mostrar, Nunca mostrar) and `DISABLE_KEY_VIBRATION` ("Vibração nas teclas", stored as the OFF flag so every existing install means on, offered only where `navigator.vibrate` exists; a repeat does not buzz).
+- **Safe areas:** the taskbar's face continues under the home indicator, a rail paints to the screen's edge with the notch's inset in its width and padding, and the launcher's sheet adds the left inset to its width (a sheet that opens from a rail needs none).
+- **Win9x is a CSS-only flip to flat, but not a two-rule one** (decision D3): `_deck.scss` also names `--win9x-` tokens (the band's face and seam, the taskbar's seam, the sheet's title bar and border, the unread flash); `grep -n 'win9x-' src/theme/_deck.scss` lists every one a flip must touch. `DockComponent` logs presses, modifiers, repeats and panel changes into the diagnostics categories `key` and `page`.
+- **Not verified on a real phone:** thumb reach and mis-taps, haptics, iOS Safari (callout, double-tap zoom, `:active`), real safe-area insets, the OS keyboard over the chat, TalkBack and VoiceOver on the keycaps; the Galaxy A07 and iPhone 15 Pro Max passes are pending.
 
-- `none`: no deck. A desktop with a mouse and a keyboard is not cluttered by default, and a touch laptop (touch is only its
-  `any-pointer`) is the same. The floating chat toggle is untouched there.
-- `band`: portrait only, and only where the band under the picture is at least `DECK.MIN_BAND_HEIGHT` (225 px: Táticas needs about
-  220 for its two rows of formation keys to be 44 px, and `deck-layout.helper.spec.ts` derives that from the constant. A 360x640
-  phone has 314, but the same phone in a Chrome tab with its URL and navigation bars is ~512 tall and has ~186, and an iPhone SE
-  in a Safari tab has 216: both got 32-42 px formation keys under the first threshold of 150 and now get the launcher). A **taskbar** that
-  stays at the bottom (it is pushed there with `margin-top: auto`; without it a folded deck rode up under the picture and the
-  tabs jumped 440 px on the tap that folded them) and **one panel at a time** above it: Táticas, Setas, Mais teclas, or the
-  page's chat. Texto is a taskbar button that opens the P1 compose dialog (or, with the experimental "Teclado ao vivo" setting on, the live type bar: see *The live type bar*), and Chat appears only while hosting. A second tap on
-  the open tab folds the panel; the picture does not grow into the band.
-- `rails`: a landscape phone (`landscape-compact`, a viewport at most 500 px tall: no toolbar, the picture takes the whole height). The keys live in
-  the two gutters the height-fitted picture leaves, one rail each, sized by `StageHelper` so that they never cost the picture; see *The stage*. A landscape
-  phone has the LEFT rail whether or not the deck is shown (`DeckPresentation.rails`): the toolbar is gone and the menu, the room code and the chat button
-  live there, projected into the dock by the page. The sheet below opens from the rail's edge for what a rail has no room for ("Mais teclas", and Táticas
-  in a one-column rail).
-- `launcher`: every other shape without a band: a landscape tablet or laptop (the picture takes the height and the gutters are too thin for keys) and a
-  portrait window with no room under the picture. The same panels open as a **sheet** over the page from a "Teclas" button in the toolbar. The sheet is
-  `position: absolute` and takes no space, so it never resizes the container; it does cover the left part of the picture while it is open.
-
-**Tablets** follow the shape: a portrait iPad (768x1024, 820x1180) gets the band, which fits all three panels with room to spare
-(the keys are capped at 290 px of height there, and rest at the bottom where the thumbs are); a landscape one has no band and
-gets the launcher. Both were compared on screenshots; a sheet in portrait would have thrown away a 450-510 px band for nothing.
-
-**The picture's box was measured with and without the deck, and with the sheet open, at 13 viewports** (360x640, 375x667,
-393x852, 412x915, 430x932, 844x390, 932x430, 667x375, 820x1180, 1180x820, 1024x768, 768x1024, 1280x800; touch emulation;
-chrome-headless-shell 143): `#game-container` and the canvas inside it had the same rectangle every time. In portrait every
-keycap of every panel is at least 44x44 css px under `(pointer: coarse)`, none is over the picture and none is outside the
-viewport, and "Mais teclas" (five rows) fits the 254 px panel of a 360x640 phone without scrolling. **The short windows are
-measured too** (375x553, 360x512, 320x460 in portrait: the launcher; 667x340, 667x320, 852x340, 800x290 in landscape: the
-sheet, whose "Mais teclas" scrolls): no two keycaps overlap in any panel and every key is inside the viewport or reachable by
-scrolling. A scroll panel's children must not shrink (`flex-shrink: 0` in `_deck.scss`): with the default they squeezed into a panel
-shorter than the keys, the 44 px rows overflowed their boxes and `Num *`, O Matic and Sair were painted over the F keys, so a tap
-aimed at F7 would have landed on one of them (measured as overlapping boxes, not tapped). `deck.mjs layout` asserts the overlap,
-and fails with that rule undone.
-
-**What the keycap promises** ([DeckKeyDirective](src/app/core/components/dock/deck-key.directive.ts)):
-
-- **It presses on `pointerdown`**, not `click`, with `preventDefault()` on the pointerdown and the mousedown and
-  `tabindex="-1"`, so the focus stays in `.emulator-root` (checked: after five taps on keys and tabs the active element was
-  still `.emulator-root`) and the OS keyboard never opens. The pressed look is the `deck-key--down` class, not `:active`.
-- **It releases exactly once, however the press ends**: `pointerup`, `pointercancel`, `lostpointercapture`, the window losing
-  focus, the page being hidden, the key being disabled or destroyed under the finger. A held arrow hangs its stop on that.
-- **A key inside a panel that can scroll presses on release** (`deckKeyOn="up"`), because the scroll gesture starts as a touch
-  on a key. Keys that repeat cannot do this and keep the landing, so they take no part in panning instead: `.deck-key--landing`
-  is `touch-action: none` on the key itself. *Why:* the browser stops intersecting `touch-action` at the nearest scroll container,
-  so the deck's `none` never reaches a key inside "Mais teclas" or the sheet and the panel's `pan-y` did: 40 px of vertical
-  drift (a thumb holding an arrow in the sheet) became a scroll, the browser sent `pointercancel` and the hold stopped, and a drag
-  that began on Apagar typed a Backspace and then scrolled (reproduced in headless Chrome 143 with touch emulation: `pointercancel`
-  at 40 px without the class, never with it). The panel still scrolls from its gaps and from every key that presses on release.
-- **A `click` is only trusted when no keycap's pointer released in the last `CLICK_AFTER_POINTER_MS` (700 ms).** TalkBack,
-  VoiceOver, a switch and a keyboard activate a button with a click and no pointer at all, so a click with nothing before it is a
-  press and a release. But the browser makes the click of a tap *after the lift and aims it at whatever is under the finger then*.
-  **The first version showed a bar when a modifier was tapped, which moved every key up 44 px; the click landed on Tab and Shift
-  sent Shift+Tab** (reproduced on the real game: a stray plain Tab 500 ms after every modifier tap). Two fixes, both needed: the
-  guard's clock is shared by every keycap (a static), and **nothing the deck shows may change the keys' geometry between a
-  press and its release**. That is why a latched modifier is a lit key and a label on the "Mais" tab, with a
-  screen-reader-only live region, and not a bar.
-- **The keys are disabled until an emulator exists, while the page is leaving, and while the key queue is faulted**
-  (`GuestKeyQueueService.faulted$`: the emulator itself threw while a task went out; for `KEY_FAULT_COOLDOWN_MS` or until a
-  submission goes out whole). A held arrow therefore does not raise the same error on every tick; `GamePage.onKeyFailure`
-  still rate-limits the alert.
-
-**The key table is one place** ([DeckKeyHelper](src/app/core/helpers/deck-keys.helper.ts)): F1-F12 with the formation caption of
-each from `GAME_INPUT_FN_BTNS` (the only table; the reversed copy for the old portrait FAB column died with the FABs), `A`
-Automático, `M` Melhores, the cross, Enter, Esc, Tab, Shift+Tab, Backspace, Space, Del, PgUp/PgDn, Home/End, and the keypad `*`
-and `-`. **Decision D8: `*` is the player search for the "craque" attribute and `-` is where the serial registration key is
-typed, and they are labelled "Craque" and "Registro"**; the key codes are right (332, 333) but no visible effect was seen on the
-screen they were pressed on (the squad selection), so what they do in the game is on the device checklist. Every key was pressed
-on the real game: the codes reach the guest (F1-F12 are 290-301; F5, F6 and F8-F12 each give a different formation screen, F1-F4 and F7 repeat the
-previous frame, which was not investigated), Enter closes Acerca, Tab moves the focus between Registo's fields, the arrows move the
-squad and country lists, `A` selects the automatic squad, Backspace deletes, and "Texto" typed "Zé" and "João". **Alt+F4 ("Sair") is
-the only guarded key**: a `win9x-alert` says it leaves for the Program Manager and that the app offers the restart, Cancelar sends
-nothing, "Fechar o jogo" sends Alt+F4 and the recovery dialog was up within 3.5 s.
-
-**Hold-to-repeat** ([KeyRepeatScheduler](src/app/core/helpers/key-repeat.helper.ts); the arrows, Backspace, Del, PgUp, PgDn): the
-press as the finger lands, `REPEAT_DELAY_MS` 380, then every `REPEAT_INTERVAL_MS` 55. **A tick that finds the queue holding
-`REPEAT_MAX_PENDING` (2) tasks is skipped, not queued**, so a slow device never keeps typing after the finger lifts; `maxHoldMs`
-(30 s) ends a hold nobody released; `stop()` is the only thing that has to be called and it clears every timer. The timers run
-outside Angular's zone. Measured on the country list: a 1.5 s hold sent 22 presses, the first repeat 380 ms after the landing and
-the rest 55-57 ms apart, each one landed (24 countries after 2 + 22), and the repeat stopped on a release, `touchcancel`, a
-window `blur`, the page being hidden, a panel switched under the finger, the page leaving and the queue faulting (9 presses at
-800 ms and 9 at 1.5 s, in every case).
-
-**Sticky modifiers** ([ModifierLatch](src/app/core/helpers/modifier-latch.helper.ts)): a tap latches Shift, Ctrl or Alt for the next
-key (and the next key lets it go); a second tap within `LATCH_DOUBLE_TAP_MS` locks it; a tap on a lock lets it go. **Nothing is
-ever held down in the guest**: the latch is put round the next key's chord, which the queue presses and releases whole, so a
-latch the page forgets can only be a lit button, never a stuck Shift in the game. It is cleared by a window blur, the page being
-hidden, the layout changing and the deck being destroyed. Checked on the real game: Shift then Tab sent Shift+Tab once; a Ctrl lock
-sent Ctrl+Home and Ctrl+End and stayed lit, the "Mais" tab named it from another panel, and a `blur` cleared it (Ctrl+Esc opened
-Windows 3.1's Task List, which is also the proof that a chord reaches the guest).
-
-**The chat stays the page's.** The page mounts `#chat-panel` above the deck and keeps its open/closed state, unread count and
-focus; the deck mirrors them and asks for changes through `(chatToggle)`, so a chat opened from the options menu shows in the
-taskbar too. Opening a panel of keys closes the chat and the chat opens over whatever panel was up (`DeckPanelHelper`). Under the
-OS keyboard the chat lifts by `--kb-inset` less the taskbar (`.has-deck-band` in `_deck.scss`), because the taskbar sits in the
-flow below it. Checked in a real two-peer session (the host a 393x852 phone emulation, the spectator a desktop browser, public
-nostr relays): the spectator's video was live and 640x480 for 248 s, its chat message arrived (the Chat tab showed 1 unread),
-opening it docked the chat above the taskbar, and the host's picture rectangle did not move. The OS keyboard over the chat is
-**not** verified (headless has none).
-
-**Settings** (both `STORAGE_KEY`s, both wiped by "Apagar todos os dados"): `DECK_MODE`, "Mostrar painel de teclas" in the options
-menu (Automático, Sempre mostrar, Nunca mostrar; it applies at once, and its subtitle says what Automático comes to on this
-device, including the touch laptop whose mouse is the primary pointer), and `DISABLE_KEY_VIBRATION`, "Vibração nas teclas"
-(stored as the OFF flag so that every existing install means on; offered only where `navigator.vibrate` exists, so not on iOS; a
-buzz is 8 ms on the landing of a key, and a repeat does not buzz). Both are read before the boot, so the deck does not come and go
-behind the boot screen.
-
-**Safe areas:** the taskbar's face continues under the home indicator (bottom padding is `env(safe-area-inset-bottom)` on top
-of its own 4 px), a rail's face paints to the screen's edge with the notch's inset in its width and its padding, and the launcher's sheet adds the left inset to its
-width so a notch does not eat the keys (a sheet that opens from a rail needs none). Emulated at 430x932 (59 px top,
-34 px bottom) and 932x430 (59 px left and right, 21 px bottom); real insets are on the device checklist.
-
-**Diagnostics:** `key` / `deck press` (key id, latched modifiers, queue depth, tap or repeat or confirmed), `deck modifier`,
-`deck modifiers cleared` (with the reason), `deck repeat stopped` (reason, repeats, skipped) and `deck guarded key asked`; `page` /
-`deck panel`, `deck layout`, `deck sheet` (also from a rail's key), `deck chat`, `deck text`, `deck setting chosen` and `stage view chosen`; the stage's own plans are category `layout`.
-
-**Not verified:** any phone or finger (mis-taps, thumb reach, the 380/55 ms feel), haptics, iOS Safari (callout on a long press of a
-keycap, double-tap zoom, `:active`), real safe-area insets, the OS keyboard over the chat, a low-end CPU, TalkBack and VoiceOver on
-the keycaps, and scrolling "Mais teclas" with a thumb on a short landscape screen (the synthetic drag is graded, a real one is not).
-All of them are on the device checklist of the PR.
+Details, measurements and the review history: [docs/mobile-ux/control-deck.md](docs/mobile-ux/control-deck.md).
 
 ### The stage (the picture's box, the rails and the chat dock)
 
-The page's layout used to be a by-product. In landscape `.game-stream-container` was `flex: 1`, js-dos fitted its canvas into whatever width the
-siblings left, and the gutters on either side of a height-fitted picture belonged to the container, so anything that lived in them was an overlay on it. It
-is phase P12 (decision D12); the design record is [docs/mobile-ux-study.md](docs/mobile-ux-study.md). Now **the picture's container IS the picture**, its size is
-a pure function ([`StageHelper`](src/app/core/helpers/stage.helper.ts)), and what is beside it is a sibling in the flex row.
+In landscape the picture's container IS the picture, and everything beside it is a sibling in the page's flex row. Its size is a pure function, `StageHelper.plan` ([stage.helper.ts](src/app/core/helpers/stage.helper.ts)); [`StageLayoutService`](src/app/core/services/shared/stage-layout.service.ts) measures the page, runs it and writes the answer to `<html>`; the host's page and the spectator's both use it (phase P12, decision D12; design in [docs/mobile-ux-study.md](docs/mobile-ux-study.md)).
 
-**THE CONTRACT, which no new control, panel or setting may break.** The stage's size depends on **the box, the shape of the window (viewport and orientation), the
-safe areas, whether the deck is shown (key rails), whether the chat is docked open, and the view mode**; and on nothing else: **not on what is inside a panel or a rail, not on
-the OS keyboard, not on the chat's own state (its scroll, its roster), not on a transform.** (*Why:* js-dos re-letterboxes its canvas whenever `#game-container`'s box changes, and the
-cursor overlay and every remote cursor are placed from that box; a stage that followed the keyboard or a panel would redraw the game and misplace the cursors each time a field was focused.
-"Not the OS keyboard" holds for BOTH kinds of browser: Chrome and Safari leave the layout viewport alone when it opens, and a browser that resizes it for the keyboard (older Android WebViews, some OEM
-browsers: the case `LayoutShapeHelper.settle` exists for) shrinks the page's element with the window while the settled shape holds, so `StageLayoutService` adds back the height the window lost against
-the settled viewport (`covered` in the `layout` log line) and measures the box the page had before the keyboard.) `#game-container` keeps `position: relative` and has no padding and no
-border (the cursor overlay is its child and `OverlaySyncHelper` reads `offset*`); zoom is by `transform` only and is the camera's (*The camera*: the picture's box is never touched by it, which is why this clause holds with it on). In landscape the
-container is exactly `--stage-w` x `--stage-h` (whole pixels, exactly 4:3: a multiple of 4x3, never 521x390.75) at an integer offset (`--stage-mx`, `--stage-my`), so the
-canvas fills it and its offset inside it is zero. Portrait is untouched: the 4:3 box is still pinned in CSS (`flex: 0 0 75vw`, which needs no JavaScript to be right on
-the first frame) and the plan only mirrors it for the log. **Proved in a browser** (`stage.mjs layout`, 19 windows, 248 checks, 0 failures; headless Chrome 143 with touch
-emulation, CDP safe-area insets): the container is the canvas to the pixel, is the size and place the plan wrote, and its rect is IDENTICAL with the launcher's sheet
-open, with the simulated OS keyboard (`visualViewport` shrunk and `--kb-inset` written: this one only proves the stage reads neither), with the layout viewport REALLY halved while a field has the focus
-(`Emulation.setDeviceMetricsOverride`, the second kind of browser above: the check fails with the compensation removed, `[162,0,520,390] -> [292,0,260,195]`; it also held on the host and the spectator with the chat
-open), with the deck on and off, with a room starting (the pill and the Chat key appearing), and after the chat opens and closes; it differs only for the documented inputs (the chat docked, the view mode).
-**The limit of that clause:** in PORTRAIT such a window (360x340 with the keyboard up) is also `(orientation: landscape)` to the stylesheets, which are not keyed on the settled shape, so the page flips to its row layout
-while a field has the focus, as it always did in those browsers; the picture stays right (the portrait plan mirrors the CSS) but the chat, whose landscape width is the plan's and a portrait plan has none, is 0 px
-wide for as long as the keyboard is up. Not fixed: it needs every `(orientation)` query in `global.scss` and `_deck.scss` moved onto an attribute the service writes.
+- **THE CONTRACT, which no new control, panel or setting may break: the stage's size depends on the box, the shape of the window (viewport and orientation), the safe areas, whether the deck is shown (key rails), whether the chat is docked open, and the view mode; on nothing else: not what is inside a panel or a rail, not the OS keyboard, not the chat's own state (scroll, roster), not a transform.** Why: js-dos re-letterboxes its canvas whenever `#game-container`'s box changes, and the cursor overlay and every remote cursor are placed from that box, so a stage that followed a keyboard or a panel would redraw the game and misplace the cursors each time a field was focused. `scripts/touch-harness/stage.mjs layout` checks it on the real page.
+- **"Not the OS keyboard" holds for both kinds of browser.** Chrome and Safari keep the layout viewport when it opens; browsers that resize it (older Android WebViews, some OEM browsers: the case `LayoutShapeHelper.settle` exists for) shrink the page's element while the settled shape holds, so `recompute` adds back the height the window lost against the settled viewport (`covered` in the `layout` log line). Without that, a focused field halves the stage.
+- **`#game-container` keeps `position: relative`, no padding and no border; zoom is `transform` only and is the camera's** (the cursor overlay is its child and `OverlaySyncHelper` reads `offset*`; see *The camera*). In landscape it is exactly `--stage-w` x `--stage-h` at an integer offset (`--stage-mx`, `--stage-my`): whole pixels, exactly 4:3 (a multiple of 4x3, never 521x390.75), so the canvas fills it with zero offset. Portrait is untouched: the 4:3 box is pinned in CSS (`--game-box-height`) so it is right on the first frame without JavaScript, and the plan only mirrors it for the log.
+- **Known limit of the keyboard clause.** In PORTRAIT such a window (360x340 with the keyboard up) also matches `(orientation: landscape)` in the stylesheets, which are not keyed on the settled shape, so the page flips to its row layout while a field has focus: the picture stays right, but the chat (its landscape width is the plan's, and a portrait plan has none) is 0 px wide until the keyboard goes. Not fixed: it needs every `(orientation)` query in `global.scss` and `_deck.scss` moved onto an attribute the service writes.
+- **One answer to every size.** Stylesheets and components read the plan's numbers (`--stage-left/-right`, `--chat-panel-width`, `--chat-dock-w`, the rails' columns); a width or an offset written in CSS that the plan does not know about is a cost to the picture. The plan is pure (no DOM, clock or setting), `fitStage` is the shared ratio fit, and the spectator's `fitVideoToContainer` stays ratio-based, never intrinsic pixels.
+- **The service writes nothing for a page that measures 0x0** (the spectator's until it has a room), **keeps the last plan when a landscape stage would be under `MIN_STAGE_WIDTH`, removes every property on `stop()` and leaves nothing scheduled** (its close timer is `epoch`-guarded), so a page that is gone leaves no stage to the next one. The page feeds it the rest of the plan's inputs (`setKeys`, `setChat`, `setView`); the shape comes from the settled `LayoutHelperService.viewport$`; one `ResizeObserver` on the page's row hears an address bar, a rotation and fullscreen as a resize. Both pages start it from `queueMicrotask` in `ngAfterViewInit`: the plan changes what the view binds, and a change during the check is NG0100 in dev mode. Safe areas come from a hidden probe whose padding is `env(safe-area-inset-*)`, observed by its border box (Safari before 15.4 cannot, and relies on the resize and the rotation). Every plan change is one `layout` diagnostics line.
+- **Rails (a landscape phone: `landscape-compact`, a viewport at most 500 px tall, no toolbar).** The gutters beside the height-fitted picture hold them. The left rail exists whether or not the deck is shown: from the top the page's own controls (menu button, sound, room code), pinned to the bottom the deck's (Chat, Texto and the "Teclas" key; with two columns also the arrows, Enter, Esc and Tab). The right one only with the deck: Táticas with two columns, Enter/Esc/Tab/arrows with one (Táticas is then in the sheet). Widths are `STAGE.RAIL_*` plus the notch's inset on that side; the face paints to the screen's edge and the padding keeps the keys clear (`max(env(), 0px)`). Two columns each where both fit without costing the picture, otherwise one, and always one in Ampliar.
+- **A key never moves when the room, the sound chip or the chat comes and goes**: the page's block grows down from the top, the deck's block is pinned to the bottom, at most seven rows of `--deck-key-dense-h` (44 px with a finger), which the shortest phone (667x375) holds. Rail keys are the same `DeckKeyDirective` keycaps, `DeckKeyHelper` table and `GuestKeyQueueService` path as the sheet; a rail on a short window scrolls, so non-repeating keys press on release and arrows on landing (`.deck-key--landing`).
+- **Known limit: "never cost the picture" holds for the phones of the matrix (aspect 1.67 or wider).** Nothing falls back to the "Teclas" launcher below one column, and every window at most 500 px tall and wider than tall is a landscape phone: in a short, nearly square window (half of a 915x412 split screen, 457x412) the one-column rails take 136 px of 457 and the picture is 320x240 where a width-fit one would be 456x342 (a deck-off host or a spectator there gets 388x291, so the guest's picture is the larger). `stage.helper.spec.ts` pins it.
+- **The chat in landscape REPLACES the right rail, and the left rail folds to icons** (`foldedRailWidth`; the room's code leaves it, because the chat's title bar says it). On a phone the dock takes what the gutters leave, `CHAT_PHONE_MIN` to `CHAT_PHONE_MAX` plus the notch's inset (its face paints under the notch); the picture is the one thing that may shrink, by 0% to about 20% depending on the window (table in the docs file). A tablet or laptop has no rails and keeps the chat's old widths (`wideDock`). A phone's Chat button is a key in the left rail, not a tab over the picture.
+- **Closing the chat gives its width back only after the slide-out (`CHAT_CLOSE_DELAY_MS`, none under reduced motion); opening is immediate.** Why: the stage must never grow into a panel still on screen. `--chat-dock-w` is what the dock holds now, `--chat-panel-width` what it has when open (the slide-out's distance); in landscape the CSS does not delay the width itself.
+- **Ampliar ("Tamanho da imagem", `STORAGE_KEY.STAGE_VIEW`, offered only on a landscape phone) gains NOTHING on any phone measured, and the words must keep saying so.** Why: a 4:3 picture seen whole is already as tall as the screen, so narrower rails have nowhere to give it room; a bigger one needs a stage taller than the screen, cropped and panned. The camera ("Zoom e movimento") magnifies and pans inside the stage whatever the rails are and never changes its box, so Ampliar still gains nothing. `describeView`, the dialog and the manual say only "same size, fewer columns of keys" (the setting and the plan's support for it stay for the camera to build on). Whether the entry is worth its cost (the one-tap F-keys) is the owner's call.
+- **The spectator** (`join-game.page`): on a landscape phone that is watching (`railed`; not the joining, waiting and failure cards, which keep the way back) the toolbar is dropped for a one-column left rail with the room's pill, "Sala", Chat, Som and "Sair" pinned to the bottom, away from the rest. Its container is the same stage, so at the same window the two pictures are the same size and in the same place, and `#stream-target`'s border box still equals it. Rejoining is unchanged: a spectator only ever joins from a fresh page load.
+- **Layout traps.** `.game-stream-container` must not carry the page's `.full` class (`width: 100%` in each page's stylesheet outweighs the stage's size). A flex item is placed by `--stage-mx`, an integer margin from the end of the left rail, with the right margin `auto`, so a rail or the chat on the right stays at the screen's edge. The toggles (chat tab, spectator's sound button) are children of the row, never of the container: the container is the picture. The chat panel's inset padding is `min(var(--chat-dock-w), inset)`, because a padding is a floor under a border-box width and a plain inset made the CLOSED chat a 47 px grey strip down a notch phone's edge.
+- **The room pill in a rail.** No `background` shorthand (it resets `background-clip: padding-box` and a 24 px capsule becomes 44). In a ONE-column rail (56 px keys; the spectator's always is) the pill turns its borders and clip off so the capsule is the whole 44 px row, dot and lock in its corners, or `ELI-` over `RVWA` hangs outside it as white on grey (1.8:1); `stage.mjs rails` checks containment.
+- **Known and left:** on a tablet or laptop the chat tab still overlays the picture's edge by 34 px, as it always did; in dev mode a host with unread messages that opens the chat logs NG0100 (the chat's input setter resets the count mid-pass; not in a production build).
+- **Unverified on real devices** (the Galaxy A07 and iPhone 15 Pro Max passes are pending): real notches, `env()` and the probe's border-box observation in Safari, thumb reach beside the picture, a real address bar and Android's navigation bar, rotating with the chat open, the guest's picture next to the host's on a real pair, and screen readers on the rails (DOM order is picture first, screen order rails first).
 
-**The plan and who writes it.** `StageHelper.plan` takes `{ box, shape, insets, keys, chat, view }` and returns the columns of keys in each rail, the width each side takes
-(the notch's inset included), the chat's width, the stage and its offset; `fitStage(box, ratio, reserved)` inside it is the shared ratio fit (the spectator's
-`fitVideoToContainer` is the same idea on the frame's ratio, and stays ratio-based: do not switch it to intrinsic pixels). [`StageLayoutService`](src/app/core/services/shared/stage-layout.service.ts)
-reads the page for it and writes the answer to `<html>`: `--stage-w`, `--stage-h`, `--stage-mx`, `--stage-my` (the picture), `--stage-left`, `--stage-right` (what each
-side takes, which is the rails' width), `--chat-panel-width` (the width the chat dock has when open) and `--chat-dock-w` (what it holds now). It measures the page's flex row with
-one `ResizeObserver` (the address bar collapsing, a rotation and a fullscreen change all arrive as a resize), takes the shape from `LayoutHelperService.viewport$` (settled: the OS keyboard
-does not change it), reads the safe areas from a hidden probe whose padding is `env(safe-area-inset-*)` (observed by its border box, so an inset that changes without the window
-changing size is heard where the browser can observe one; Safari before 15.4 relies on the resize and the rotation), and is told the rest by the page (`setKeys`, `setChat`,
-`setView`). It writes nothing for a page that measures 0x0 (the spectator's, until it has a room) or a window too small to hold a stage, removes everything on `stop()` and
-keeps nothing scheduled. Both pages start it after their first change-detection pass (`queueMicrotask` in `ngAfterViewInit`): the plan changes what the view binds, and a change made
-while the view is being checked is NG0100 in dev mode. Every change of the plan is one `layout` line in the diagnostics log.
-
-**Rails (a landscape phone).** `DeckLayoutHelper` gave `rails` to `landscape-compact` (a viewport at most 500 px tall); the left rail exists whether or not the deck is shown (it holds
-what the missing toolbar did), the right one only with the deck. A rail is `112 px` of padding, keys and gaps with two columns (48 px keys) and `68 px` with one (56 px keys), plus the
-notch's inset on its side; its face paints to the screen's edge and its padding keeps the keys clear (`max(env(), 0px)`). **Columns:** two in each rail where both fit in the gutters
-without costing the picture, otherwise one, and always one in Ampliar. Measured: two at 844x390 (with or without a notch), 915x412, 932x430 and 812x375; one at 852x393 (the
-Dynamic Island's 59 px a side leaves 510 px for a 524 px picture), 667x375 and 640x360. **Known limit: "never cost the picture" holds for the phones of the matrix, whose aspect ratio is 1.67 or wider.** Nothing
-falls back to the "Teclas" launcher below one column, and every window at most 500 px tall and wider than it is tall is a landscape phone: in a short, nearly square window (half of a 915x412 split screen, 457x412) the
-one-column rails take 136 px of 457 and the picture is 320x240 where a width-fit one would be 456x342 (a spectator or a deck-off host there gets 388x291, so the guest's picture is the larger one). `stage.helper.spec.ts` pins it. **Contents:** left, from the top, what the page projects (the round menu button, "Ativar som", the room
-code), and pinned to the bottom, where the thumbs rest, the deck's own Texto, Chat and, with two columns, the arrows, Enter, Esc, Tab and the "Teclas" key that opens the sheet; right, Táticas
-(F1-F12, A, M: seven rows of two) or, with one column, Enter, Esc, Tab and the four arrows (Táticas is then in the sheet). **A key never moves when the room, the sound chip or the chat
-comes and goes** (the page's block grows down, the deck's block is pinned up): at most seven rows, which `--deck-key-dense-h` (44 px with a finger) makes 344 px, so the shortest phone
-there is (667x375) has room to spare. The keys are the same `DeckKeyDirective` keycaps, the same table (`DeckKeyHelper`, plus a `shortCaption` for the one label too long for 48 px,
-"Auto") and the same `GuestKeyQueue` path; non-repeating keys press on release (a rail on a short window scrolls, like the sheet) and the arrows on landing with `.deck-key--landing`.
-Measured at 10 windows (`stage.mjs rails`, 55 checks, 75 with the pill's): every control at least 44x44, no two overlapping, none over the picture, all inside the window or reachable by scrolling; a real
-tap on each safe key is one key down and one up; a held arrow's first repeat is 381 ms after the landing and the next ones 55-60 ms apart, nothing after the lift, and in a 300 px tall
-window (the rail scrolls) it survives 40 px of vertical drift with no `pointercancel`. The sheet opens beside the rail, not over it, and moves nothing.
-
-**The chat in landscape (D12): it REPLACES the right rail, and the left rail folds to icons.** On a phone the chat takes what the gutters leave, 200 to 240 px plus the notch's inset
-(its face paints under the notch); the left rail folds to 56 px of icons (the room's code is not on it, because the chat's own title bar says it); the picture is the one thing that
-may shrink. A tablet or laptop (no rails) keeps the widths the chat always had (320 px, or 40% of the window up to 300 px under 900 px). The plan holds the chat's width for the 220 ms
-of its slide-out before it gives it back (`CHAT_CLOSE_DELAY_MS`), so the stage never grows into a panel that is still on screen; opening is immediate. **What the chat costs the picture,
-measured** (the wireframe's "about 3%" did not count the notch on the chat's side; only the roomiest notch phone reaches it): 0% at 844x390 without a notch, 915x412 and 1366x768; **2.8%** at 932x430 with the
-Dynamic Island (the iPhone 15 Pro Max); **5.4%** at 844x390 with a 47 px notch; 6.4% at 812x375; 9.2% at 852x393; 18.4% at 667x375 (408x306 where the old 267 px chat left a 400x300 picture) and 20% at 640x360;
-on a tablet 15.4% at 1180x820 and 25.7% at 1024x768, the same as before (the container shrank by the same width). The Chat button of a landscape phone is a key in the left rail, not a tab over the picture.
-
-**Ampliar ("Tamanho da imagem", `STORAGE_KEY.STAGE_VIEW`, only offered on a landscape phone) gains NOTHING on any phone measured, and that is the finding.** It makes the rails one column. But a 4:3 picture
-that must be seen whole is already as tall as the screen on every landscape phone (the toolbar is gone and the rails live in the gutters), so a narrower rail has nowhere to give the
-picture room. The 8% to 52% the roadmap modelled needs a stage TALLER than the screen, cropped and panned: that is the camera's phase, not a layout's, and shipping it here would have hidden
-part of the game behind a pan that does not exist yet. The setting, the plan's support for it and the harness stay, so the camera can build on them. The review found the entry's label promising what it does not
-deliver, so the dialog now says what the choice is and is not ("A imagem fica do mesmo tamanho nas duas: muda só quantas colunas de teclas as laterais usam"; the radios read "Ajustar: duas colunas de teclas onde
-cabem" and "Ampliar: uma coluna de teclas"). It still costs a player the one-tap F-keys for nothing, so decide with the owner whether it is worth keeping in the menu. **The camera shipped (P11) without
-cropping it**: "Zoom e movimento" magnifies and pans the picture inside the stage, whatever the rails are, and `Ampliar` still gains nothing; the entry is the owner's call as before.
-
-**The spectator.** [join-game.page](src/app/pages/join-game/join-game.page.html) drops its toolbar on a landscape phone that is watching (not on the joining, waiting and failure cards, which
-keep the way back) and has a left rail instead: the room's pill, "Sala" (the room window), Chat, Som, and "Sair" pinned to the bottom, away from the rest, with the same Win9x keycaps and safe-area
-padding as the host's. Its container is the same stage the host's is, so **at the same window the two pictures are the same size and in the same place** (`stage.mjs guest`, 9 windows, 45 checks:
-within 1 px, `#stream-target`'s border box equal to the stage, the cursor overlay exactly on the picture; before, a landscape phone's guest saw a picture 14-18% smaller). A remote cursor lands where the
-guest pointed, to 0.5 px, at 7 windows (`stage.mjs room`), and the chat works both ways with each picture's box as the plan says; a confirmed leave still reloads the page (`stage.mjs leave`). Rejoining
-is unchanged: a spectator only ever joins from a fresh page load.
-
-**Layout rules that cost an afternoon.** `.game-stream-container` must not carry the page's `.full` class: it is `width: 100%` in each page's stylesheet and outweighs the stage's size (the container
-painted the whole row, with the right rail pushed off screen). A flex item is positioned by `--stage-mx`, an integer margin counted from the end of the left rail, with the right margin `auto`, so that a
-rail or the chat on the right stays at the screen's edge. The toggles (the chat tab, the spectator's sound button) are children of the row, never of the container, because the container is the picture;
-a rail's inset padding on the chat panel is `min(var(--chat-dock-w), inset)`, because a padding is a floor under a border-box width and a plain inset made the CLOSED chat a 47 px grey strip down a notch
-phone's edge (found on the spectator's page). A `background` shorthand on the pill in the rail reset its `background-clip: padding-box` and made a 24 px capsule 44 px tall. The opposite trap in a ONE-column rail (56 px wide, and the spectator's rail is always one):
-the toolbar pill's transparent 10 px borders and padding-box clip paint a 24 px capsule, and `ELI-` over `RVWA` plus the dot is 41 px of content, so the dot floated above the capsule and the second line hung below it as white
-text on the rail's grey (1.8:1). In the rail the one-column pill turns the borders and the clip off, so the capsule is the whole 44 px row, with the dot and the lock in its corners; `stage.mjs rails` checks that every child of
-the pill lies inside the capsule that is painted, with and without the lock, at five windows (a check that was missing: all the 224+55+45+63 earlier ones passed with the bug).
-
-**Verified in headless Chrome 143 against the dev server and the real game, two browsers for the room** (the public nostr relays were reachable; a fresh room code per run, see `room.mjs`; both browsers need
-`--disable-features=WebRtcHideLocalIpsWithMdns`, which `driver.mjs` takes from `CHROME_FLAGS`). Also: a rotation round trip with the chat open returned the exact same rect, and twenty address-bar flaps (390 to 342 px of height)
-settled on the exact stage with no console line. **Not verified, and on the device checklist:** any real notch or home indicator (the insets are `Emulation.setSafeAreaInsetsOverride`'s), `env()` and the probe's
-`ResizeObserver` border-box observation in Safari, thumb reach and mis-taps beside the picture's edge, the browser tab's real address bar and an installed app's, Android's navigation bar, rotating with the chat open on a
-phone, TalkBack and VoiceOver on the rails (they come AFTER the picture in the DOM and BEFORE it on screen, so the Tab order is not the visual one), and the picture's size next to the host's on a real pair of devices. **Known and left:**
-the chat's tab on a tablet or laptop with no gutter still overlays the picture's edge by 34 px, as it always did; a dev-mode NG0100 when a host with unread messages opens the chat (the panel's own input setter resets the count in the middle of a change-detection pass, after a
-parent-level binding read it; it was there before this phase and does not exist in a production build).
+Details, measurements and the review history: [docs/mobile-ux/stage.md](docs/mobile-ux/stage.md).
 
 ### The camera (zoom and pan of the host's picture, experimental)
 
-A transform on the picture's root that magnifies and moves it inside the stage, so that the game's 8 to 12 px text and 6 to 11 px targets can be read and hit on a phone: about 1.67x brings
-a 640x480 frame to the 12 px equivalent that P4's 1.25x left short (phase P11; the design record, the as-built numbers and the conflict it settled are in
-[docs/mobile-ux-study.md](docs/mobile-ux-study.md)). **It is behind a setting and off as shipped**: `STORAGE_KEY.CAMERA_ENABLED`, "Zoom e movimento" in "Dados e avançado" > "Recursos experimentais" (offered where
-`(pointer: coarse)` holds, like "Modo de toque"; once on, the menu's Exibição section gains a **Zoom row**: Ajustar, "-" and "+"), stored as an explicit boolean so that flipping `CAMERA.DEFAULT_ENABLED` reaches only people who never chose; the menu's text and the FAQ say it has not been tried on a phone.
-*Why off:* **every measurement below is Chromium's**, and WebKit's behaviour with a transform on a WebGL canvas, with two-finger gestures and with edge swipes is unseen (decision D9: the
-device pass first). Files: `ViewportTransform` ([viewport-transform.helper.ts](src/app/core/helpers/viewport-transform.helper.ts): the maths, pure), `CameraGesture`
-([camera-gesture.helper.ts](src/app/core/helpers/camera-gesture.helper.ts): two fingers to steps, pure), `CameraService` (the element, the observers, what is remembered), `CameraPanelComponent`
-([camera-panel/](src/app/core/components/camera-panel/camera-panel.component.ts): the deck's Zoom tab), `CAMERA` in [constants.ts](src/app/core/models/constants.ts), and the rules in
-[global.scss](src/global.scss) (`.camera-on`, `.camera-tall`, the tap ring's size) and [_deck.scss](src/theme/_deck.scss) (the panel).
+A transform on the picture's root that magnifies and moves it inside the stage, so the game's 8 to 12 px text and 6 to 11 px targets can be read and hit on a phone (presets 1.5x and 2x; `CAMERA.MAX_SCALE` is 3x, past which it is only a bigger blur). **Off as shipped**: `STORAGE_KEY.CAMERA_ENABLED`, "Zoom e movimento" in "Dados e avançado" > "Recursos experimentais", offered only where `(pointer: coarse)` holds and stored as an explicit boolean so that flipping `CAMERA.DEFAULT_ENABLED` reaches only people who never chose. *Why off:* every measurement is Chromium's; WebKit with a transform on a WebGL canvas and with two-finger gestures is unseen (decision D9: device pass first); the menu's text and the FAQ say it is untried, and change with the default. Files: `ViewportTransform` ([viewport-transform.helper.ts](src/app/core/helpers/viewport-transform.helper.ts), the maths, pure), `CameraGesture` ([camera-gesture.helper.ts](src/app/core/helpers/camera-gesture.helper.ts), two fingers to steps, pure), `CameraService` ([camera.service.ts](src/app/core/services/game/camera.service.ts), the element, observers and memory), `CameraPanelComponent` ([camera-panel/](src/app/core/components/camera-panel/camera-panel.component.ts), the deck's Zoom tab), `CAMERA` in [constants.ts](src/app/core/models/constants.ts), `.camera-on` / `.camera-tall` in [global.scss](src/global.scss), the panel in [_deck.scss](src/theme/_deck.scss), harness `scripts/touch-harness/camera.mjs`.
 
-**THE CONTRACT, which no later change to the camera may break.**
+**The contract, which no later change to the camera may break** (code comments cite it):
 
-- **The transform is on `#game-container` (js-dos's `layers.root`) and nowhere else: `translate(x, y) scale(s)`, `transform-origin: 0 0`.** Never the canvas alone (js-dos sizes the canvas inside the
-  root), never a rotation (the page-to-guest mapping and `OverlaySyncHelper` would both break), and `CameraService.write` is the only writer. **At the fit there is NO transform**: the property is
-  removed (not `scale(1)`, which would still make a compositing layer) and the root gets back the `style` attribute it had. Measured (`camera.mjs identical`): with the camera off and with it on
-  at the fit, the root's attributes, its computed transform and every rectangle (picture, canvas, clip, taskbar, js-dos's overlay) are equal to the last digit, and 2x and back leaves them so.
-- **The picture's own box is never resized by the camera.** The root's size is still what the stage plan (or the portrait CSS) says, so js-dos, whose resize detector watches that box, does not
-  re-letterbox, and the stage plan does not move. Measured (`camera.mjs layout`: 12 windows from a 360x640 phone to a 1280x800 laptop, at 1.5x, 2x and 3x, 318 checks, 0 failures): `offsetWidth`,
-  `offsetHeight`, `offsetLeft` and `offsetTop` of the root and the canvas, the canvas's inline `width`, `height`, `left` and `top`, and `stagePlan` are identical to their values at the fit, in the portrait
-  windows where the clip grows into the band as well, and the rectangle is the box times the scale at the place the camera says (the translation on the device pixel grid).
-- **The clip is `.game-stream-container`**, whose `overflow: hidden` was already there; its content box is the camera's view. The camera re-clamps from a `ResizeObserver` on the clip and on the root (a
-  rotation, the address bar, fullscreen, the stage plan changing, the clip growing or folding), and a transform does not wake that observer or js-dos's (checked in a real browser by
-  `overlay-sync.helper.spec.ts`: three camera changes, no callback).
-- **A page point reaches the guest through the canvas's own rectangle in the page**: `x = floor((clientX - rect.left) / rect.width * frameWidth)` (likewise y), `rect = canvas.getBoundingClientRect()`, which
-  already holds the letterbox, the zoom and the pan. `TouchInputService.toGuest` is `ViewportTransform.clientToGuest`; a point on the right or bottom edge is the last pixel, not one past it.
-  Round-tripped for every column and row of 640x480 at 1x, 1.5x, 2x and 3x and over a sweep of scales and focal points (specs), driven through the real layer at those four zooms (spec), and graded
-  against the guest's RAM (`camera.mjs accuracy`, 130 taps, four places of the picture at each zoom, the camera following the clicks): **worst error 1 px, median 0**. A 12 px radio that a finger
-  5 css px to its left misses at the fit is selected by the same finger at 2x (`camera.mjs radio`).
-- **`OverlaySyncHelper` is unchanged and still reads untransformed `offset*`** of the canvas and the overlay, which scale together. The cost is rounding (the integers `offset*` returns), times the
-  scale: measured with a hosting phone and fake spectators, the overlay is within 0.25, 0.38, 0.5 and 0.75 px of the canvas at 1x, 1.5x, 2x and 3x and every remote cursor within 0.1 to 0.3 px of
-  the fraction its spectator pointed at (the multiplayer study measured 1.25 px at 2.5x, and `overlay-sync.helper.spec.ts` bounds it at half a pixel of the picture's own space per edge, times the scale).
-  Remote cursors and click pings are children of the root, so they zoom with the picture; the tap ring is not allowed to (below).
-- **Host only.** `canvas.captureStream()` follows the canvas's backing store, which a transform cannot reach: **the stream is the whole 640x480 frame at every zoom**, equal to the guest's framebuffer
-  at 600 sample points (mean difference 0 at 1x, 1.5x, 2x and 3x) and, over a real `RTCPeerConnection` pair inside the page, the same picture at 1x and at 3x (mean difference 8.18 and 8.18, the
-  codec's, at the 320x240 the encoder starts at). A spectator's cursor stays normalised to the full picture. The spectator's page does not import the camera, and the menu's text, the Zoom panel
-  ("Quem assiste à sala sempre vê o jogo inteiro") and the FAQ say so in Portuguese. **A real spectator was never connected**: the sandbox's Chrome could not resolve the public relays.
+- **The transform is `translate(x, y) scale(s)`, `transform-origin: 0 0`, on `#game-container` (js-dos's `layers.root`) and nowhere else; `CameraService.write` is the only writer.** Never the canvas alone (js-dos sizes the canvas inside the root), never a rotation (the page-to-guest mapping and `OverlaySyncHelper` would both break). The translation is rounded to the device pixel grid but never past the limits, so no hairline of clip shows.
+- **At the fit there is NO transform**: the property is removed (not `scale(1)`, which would still make a compositing layer) and the root gets back the `style` attribute it had, so camera off, at the fit and 2x-and-back are the page as it was before the camera. Switching the setting off applies the identity and keeps the stored camera.
+- **The picture's own box is never resized by the camera**: js-dos's resize detector watches that box and would re-letterbox, and the stage plan would move. "Zoomed" is an input of the camera's VIEW (the clip, `.game-stream-container`, `overflow: hidden`), never of the stage. The camera re-clamps from a `ResizeObserver` on the clip and the root (rotation, address bar, fullscreen, the clip growing or folding); a transform wakes neither that observer nor js-dos's, so the camera never feeds itself.
+- **A page point reaches the guest through the canvas's own `getBoundingClientRect()`** (`ViewportTransform.clientToGuest`, via `TouchInputService.toGuest`), which already holds letterbox, zoom and pan: one formula at every scale. A point on the right or bottom edge is the last pixel, not one past it.
+- **`OverlaySyncHelper` is unchanged and reads untransformed `offset*`** of the canvas and overlay, which scale together; the only cost is integer rounding times the scale (bounded in `overlay-sync.helper.spec.ts`). Remote cursors and click pings are children of the root and zoom with it; the tap ring must not, so `TouchFeedbackHelper` divides by the scale and `--camera-unscale` (written on the root) keeps it a fingertip big.
+- **Host only.** `captureStream` follows the canvas's backing store, which a transform cannot reach: spectators always get the whole 640x480 frame and their cursors stay normalised to the full picture. The spectator page never imports the camera; the menu, the Zoom panel and the FAQ say so in pt-BR.
+- **Quiet when idle.** It runs outside Angular's zone; `view$` emits only when something a view shows changes (the label only when the fingers lift); an unchanged state costs no style write; the only timer is the debounced save; `detach()` flushes it and takes the transform, `--camera-unscale` and the observers off the page. It logs to the `touch` diagnostics category (`camera …`, pinch steps throttled by `LOG_PINCH_EVERY_MS`).
 
-**Controls.** Every one has a single-pointer twin, because a two-finger gesture alone fails WCAG 2.5.1 and is unreliable on some devices.
+**Controls and behaviour.**
 
-- **Two fingers pinch and pan** (`CameraGesture`, fed by `TouchInputService` with the same samples as the recognizer, so the second finger's cancel still comes first and synchronously: the button is
-  released and nothing is clicked, measured with a drag in progress, no stuck button). The first two fingers are the pinch; a third and a palm are ignored; when either of the two lifts the pinch ends and the
-  touch is dead until every finger is up (a finger put back after a pan neither zooms nor clicks); a `pointercancel`, the page hidden and a detach end it. Each step is the change since the last one, not since
-  the start, so the camera owes nothing for the distance it overshot at an edge. A **dead band** of 8 css px on the spread keeps a two-finger pan from shimmering the scale, counted from where it ends so there is no
-  jump, and the distance a ratio is measured from is never under 40 px. **No double-tap zoom** (a double tap is a Windows double click: measured, `down,up,down,up` and the scale unchanged). No inertia.
-  The layer listens on the clip when the page gives it one (`TouchSurface.stage`), so a finger on the part of the view the picture does not cover is still the layer's: it clicks nothing, and a second finger there still pinches.
-- **Presets and buttons** (the deck's **Zoom** tab, `CameraPanelComponent`): Ajustar (the fit), 1,5x, 2x, "+" and "-" (one rung of 1, 1.25, 1.5, 1.75, 2, 2.5, 3), and a pad that moves the VIEW a quarter of itself per press
-  and repeats while held (the deck's repeat scheduler: 380 ms, then 90 ms, nothing after the lift). They zoom about the last click when it was under 15 s ago and is on the view, otherwise the middle. The maximum is
-  3x (a 16 guest px scrollbar thumb is 29 css px on a 393 px phone). A pinch that ends under 1.06x is the fit. The tab says the scale while the picture is magnified.
-- **It follows the click.** After a tap, a double tap or the end of aim mode, if the click is within 22% of an edge of the view the camera moves the least that gives it that margin (menus and lists open below and
-  beside what was tapped); never during a drag. Taps at the corners of a magnified picture graded 1 px at worst with it following. **Never under a finger that has landed since:** the click settles after the cursor's paced walk (on a slow
-  phone, long after the lift), so the layer tells the camera `clicked(point, { follow: false })` when a finger is down by then, and the camera also refuses while its own pinch is running; the click is still remembered for the buttons' focal point. *Why:* a drag's
-  press was mapped through the picture as it stood, and sliding it now would send the held thumb's next move somewhere else.
-- **Per orientation, and remembered.** `STORAGE_KEY.CAMERA_VIEWS`: `{ portrait?, landscape? }` of `{ scale, cx, cy }`, the centre of the view as a FRACTION of the picture, so a different window (a rotation, another phone)
-  restores the same part of it. Written 600 ms after the last change and at once on detach, never at a step of a pinch; read defensively (storage is an input); a rotation stores the camera it leaves against the window it was made for and
-  swaps the other in (measured: portrait 2x, landscape 1.5x, back, and across a reload); a camera at the fit is not stored. Both keys are in `STORAGE_KEY_HOMES` and wiped by "Apagar todos os dados" (the registry spec proves it).
-  A camera restored while the game is still hidden (no `.full`, no box) waits for the first layout that has one.
+- **Every gesture has a single-pointer twin** (WCAG 2.5.1): the deck's Zoom tab (Ajustar, presets, "+" and "-" up the `CAMERA.STEPS` ladder, a pad that moves the VIEW `NUDGE_FRACTION` of itself per press and repeats while held) and the options menu's Zoom row (Ajustar, "-", "+"; no pad), shown whenever the camera is on, deck or no deck. Buttons zoom about the last click if under `FOCUS_CLICK_MS` old and on the view, otherwise the middle.
+- **Two fingers pinch and pan (`CameraGesture`), fed by `TouchInputService` the same samples as the recognizer, so the second finger's cancel of the click or drag still comes first and synchronously** (no stuck button). The first two fingers are the pinch, a third and a palm are ignored, and when either lifts the touch is dead until every finger is up. Each step is the change since the last, not since the start (the camera owes nothing for the distance it overshot at an edge); a dead band (`PINCH_SLOP_PX`, counted from where it ends so nothing jumps; base never under `PINCH_MIN_BASE_PX`) keeps a pan from shimmering the scale; a `pointercancel`, a hidden page or a detach also ends the pinch; a pinch ending under `SNAP_TO_FIT` is the fit.
+- **No double-tap zoom** (a double tap is a Windows double click), no inertia, no animation between states (a transition would make the mapping wrong mid-frame). The touch layer listens on the clip (`TouchSurface.stage`), so a finger on the part of the view the picture does not cover still counts; `.camera-on` gives the clip `touch-action: none` for that.
+- **The camera follows the click** (`clicked(point, { follow })`; within `FOLLOW_MARGIN` of an edge it moves the least that restores the margin). **Never under a finger that has landed since, nor during a drag or a pinch:** the click settles after the cursor's paced walk, long after the lift on a slow phone, and a drag's press was mapped through the picture as it stood, so sliding it would send the held thumb's next move elsewhere. The click is still remembered as the buttons' focal point.
+- **Per orientation, and remembered**: `STORAGE_KEY.CAMERA_VIEWS` is `{ portrait?, landscape? }` of `{ scale, cx, cy }`, the view's centre as a FRACTION of the picture, so another window restores the same part of it. Written `SAVE_DEBOUNCE_MS` after the last change and on detach, never per pinch step; read defensively (storage is an input); a camera at the fit is not stored; a rotation stores the camera it leaves against the window it was made for and swaps the other orientation's in; one restored while the game is hidden waits for the first layout with a box. `CAMERA_ENABLED` and `CAMERA_VIEWS` are both in `STORAGE_KEY_HOMES` ("Apagar todos os dados" reaches them from it), and the wipe `detach()`es first so the debounced write cannot land after it.
+- **Portrait: the tall view.** While the picture is magnified, the band holds only its taskbar (or the Zoom panel) and the chat is closed, the clip grows down into the band (`.camera-tall`, from `GamePage.cameraTall` / `ViewportTransform.tallView`), because the 4:3 stage of a phone is a strip. The picture does not change size (its height is rewritten in `.camera-tall`, since its `.full` height was a percentage of the clip) and grows from the clip's top-left corner, the transform's origin. In landscape the clip IS the stage and never grows. The deck folds to its taskbar while magnified (`DeckPanelHelper.withZoom`, restored at the fit unless another tab was chosen); the Zoom panel does NOT take the band (`flex: 0 0 auto`) so the picture can be watched while it is used.
+- **The live type bar and the chat never move the camera**; the bar reads the VISIBLE bottom of the picture, `min(picture, clip)`, since the magnified root runs past the screen. A pinch and every camera button wake a sleeping guest (`CameraOptions.activity` -> `EmulatorPowerService.wake('camera')`).
+- **Known, left on purpose.** While the picture is shorter than the view (the tall view below about 2.5x at 393x852), pinching away from the top does not keep the content under the fingers vertically (nowhere to put the picture's top edge but the top; each step is owed nothing for the distance it could not go), and the 1.5x preset leaves a large band of empty green at 393x852; `camera.mjs pinch` therefore grades against what the clip allows, not the fingers. If the device pass finds that disorienting, let the picture float during the gesture and settle at its end (not built). A browser that resizes the LAYOUT viewport for the OS keyboard shrinks the tall clip. The hardware mouse has no zoom; `Ampliar` is unchanged.
 
-**Portrait: the tall view.** The 4:3 stage of a portrait phone is 295 px of a 700 px column, and a 2x zoom of it would be a window 393x295 onto a quarter of the game. So while the picture is magnified, the deck's band holds
-nothing but its taskbar (or the Zoom panel) and the chat is closed, the clip **grows down into the free band** (`.camera-tall`, decided by the page: `GamePage.cameraTall`): 736 px at 393x852, 524 at 360x640, 816 at 430x932,
-1064 at 820x1180 (587 with the Zoom panel open at 393x852). **The picture does not change size** (its height is written again as the same `75vw`, since its `.full` height was a percentage of the clip, which is what grew), so
-js-dos and the overlay never notice (`camera.mjs layout`, above). *Decided with screenshots*, not measured on a person: the picture grows from the clip's top-left corner (that is the transform's origin) and a picture
-shorter than the view sits at the top, so at 393x852 a 2x picture (589 px) leaves 146 px of empty green below it (the same green the band had before) and has no vertical room until about 2.5x. **The 1.5x preset, the first one on the panel, is worse**: a 442 px picture in a 736 px clip leaves
-294 px (40% of the screen) of flat green at 393x852, and about 330 px at 430x932; with the Zoom panel open instead of folded there is no void at 2x (589 px in a 587 px clip). Capping the clip at the magnified picture's height would NOT remove it (the green is the page's either side of the clip's edge);
-what would is using the leftover for something, which is a decision for the device pass (see the fallback list below), not a measurement. **Known:** pinching away from the top
-therefore does not keep the content under the fingers vertically while the picture is shorter than the view (measured: a spread of about 2.2x at y 150 moved the guest pixel under the fingers from y 153 to y 71), because there is nowhere to put the picture's top edge but at the top; horizontally it does.
-It does not when the picture is only just taller than the view either (the Zoom panel open, a 587 px view: 2.15x gave 153 to 77), because each step is owed nothing for the distance it could not go and the room opens only at the end of the gesture; `camera.mjs pinch` therefore grades the picture's top edge against what the clip allows, not against the fingers. If the device pass finds
-that disorienting, the fix is to let the picture float during the gesture and settle at its end (a follow-up, not built). **The deck collapses to its taskbar while magnified**: `DeckPanelHelper.withZoom` folds the open panel of keys
-(and remembers which) when the picture is first magnified and brings it back at the fit if the band is still folded and the player chose nothing else meanwhile; a tab tapped while magnified is a choice and forgets it. The Zoom panel is as tall as its
-keys and does NOT take the band (`flex: 0 0 auto`; every other panel does), so the picture can be watched while it is used. Opening a panel of keys or the chat gives the band back and the clip is the stage again
-(the camera is re-clamped to the smaller view; nothing else moves). In landscape the clip IS the stage and never grows: the rails and the chat dock are where they were, the chat narrowing the stage (a documented input) re-clamps the camera and closing it gives the box back exactly.
-**The stage contract is intact**: the picture's box depends on the same inputs as before; "zoomed" is an input of the camera's VIEW (the clip), not of the stage.
+**Unverified on any phone** (the Galaxy A07 and iPhone 15 Pro Max passes are pending): a transform on the WebGL canvas in WebKit, the installed-app pinch and edge swipe, a real spectator, and the feel of the pan and dead band. **Fallback:** if WebKit mis-draws or mis-hits under the transform (blank or torn canvas, taps off by the zoom, `getBoundingClientRect` lying), do NOT patch around it: switch to the investigation's LAY-3 design (a preview transform while fingers are down, committed on the lift by resizing the container to `z*W x z*H`), which was not built because two mechanisms is one too many. Lifting `user-scalable=no` is a separate, later commit that needs an iOS test (D11).
 
-**Interactions.** *The deck, the rails and the sheet* work while magnified (a deck key sends one key down and one up; the rails are siblings, untouched). The Zoom tab is in the taskbar and in the sheet's tabs, so on a
-landscape phone the camera's buttons are one tap further, behind the rail's "Teclas" key (the sheet covers part of the picture while it is open, as it does for every panel). *The live type bar and the chat do not move the camera* (`camera.mjs bar`: opened over the deck with a simulated OS keyboard at 3x, the camera,
-the clip and the picture are the same rectangles; the bar's fold decision reads the VISIBLE bottom of the picture, `min(picture, clip)`, since the magnified root runs past the screen). *The tap ring* is drawn at the finger in
-the root's own space (`TouchFeedbackHelper` divides by the scale) and is kept a fingertip big on the screen by `--camera-unscale`, which the camera writes on the root. *The battery saver*: a pinch (a
-`pointerdown` the page's document listeners see, and `busy` while the recognizer is not idle) and every camera button (`CameraOptions.activity` -> `EmulatorPowerService.wake('camera')`) wake a sleeping guest (`camera.mjs power`). *Rotation while
-zoomed*: above. *Fullscreen, the address bar*: the observer. *Diagnostics*: category `touch`: `camera attached/detached/setting/restored/rotation/reclamp`, `two fingers`, `camera pinch start/end` (steps, clamps, the scale
-it began and ended at), `camera pinch` (at most every 250 ms) and `camera clamp` (the same throttle), `camera preset`, `camera nudge`, `camera follow`, `camera pad held`.
-
-**Not verified, and on the device checklist of the PR.** Everything on a phone: iPhone Safari AND the installed app (a pinch on the canvas against page zoom, `gesturestart`, the edge-swipe back, `touch-action: none` on the clip,
-pull-to-refresh), **a transform on the WebGL canvas in WebKit** (tearing, blur, a blank canvas, memory), the overlay with a real spectator watching on a real pair of devices, the pan's feel and the dead band with real fingers
-(a thumb rolls, fingers are uneven), the nudge pad, the Galaxy A07's frame rate while magnified, legibility at 1.5x and 2x on both phones, rotation while magnified, the tall view's empty green and the vertical slide described above, a hardware keyboard on an iPad.
-**The fallback, and its trigger:** if WebKit mis-draws or mis-hits under the transform (blank or torn canvas, taps landing off by the zoom, `getBoundingClientRect` lying), do NOT patch around it: switch to the investigation's
-LAY-3 design, a *preview* transform while the fingers are down that is committed on the lift by resizing the container to `z*W x z*H` and moving it with a pure translate (js-dos re-letterboxes once per commit; the stage plan,
-the overlay and the type bar's bottom would then have to learn that the container is bigger than the picture). It was not built: two mechanisms is one too many for something nobody has seen on a phone, and this one's evidence is Chromium's.
-**Known and left:** a browser that resizes the LAYOUT viewport for the OS keyboard (older Android WebViews) shrinks the tall clip with it and re-clamps the camera when it grows back (the P12 clause "not the OS keyboard" has the same limit in
-portrait). With the deck forced off ("Nunca mostrar", the one configuration where `layout.kind` is `none` on a touch device) there is no Zoom tab, which left a pinch as the only way and **the single-pointer twin of the gesture missing** (WCAG 2.5.1);
-P13 closed it: the options sheet's Exibição section has a **Zoom row** (Ajustar, "-" and "+", the same `CameraService` calls as the tab, leaving the menu open) whenever the camera is on, with the deck shown or not (`menu.mjs`/`camera.mjs deck`: a real tap on "+" zooms one rung). It has no pad, so *moving* a magnified picture is still two fingers, or the tab's pad when the deck is on.
-The hardware mouse and the trackpad have no zoom; `Ampliar` is unchanged.
-**Lifting `user-scalable=no` is a separate, later commit that needs an iOS test (D11).** The viewport meta was not touched by this phase.
+Details, measurements and the review history: [docs/mobile-ux/camera.md](docs/mobile-ux/camera.md).
 
 ### The live type bar (experimental)
 
-A real, visible, one-line field above the OS keyboard whose text appears in the guest as it is typed: the player
-sees what they write instead of typing blind into a dialog (phase P8). **It is behind a setting and off by default**:
-`STORAGE_KEY.LIVE_KEYBOARD`, "Dados e avançado" > "Recursos experimentais" > "Teclado ao vivo (experimental)", whose description says that it has not been
-tried on real phones; wiped by "Apagar todos os dados" like every key. Off, the deck's Texto button opens the P1 compose dialog
-exactly as before and nothing of this is mounted or running. On, Texto opens the bar, and the dialog is still the way to
-paste a list ("Lista" on the bar, "Digitar texto" in the menu): a list of names is several lines and the bar is one. Decision
-D7: the dialog is the default, the bar is built behind a flag, and the owner decides after the device pass. **The mirroring
-has been run only against synthetic IME events in desktop Chrome** (what exactly is under *Not verified* below).
+A real, visible one-line field above the OS keyboard (`TypeBarComponent`) whose text appears in the guest as it is typed, so a phone player sees what they write instead of typing blind into the compose dialog. **Off by default**, behind `STORAGE_KEY.LIVE_KEYBOARD` (menu "Dados e avançado" > "Recursos experimentais" > "Teclado ao vivo (experimental)"): off, the deck's Texto button opens the compose dialog exactly as before and neither the bar nor the field hint is mounted or running; on, Texto opens the bar and the dialog stays the way to paste a list ("Lista" on the bar: a list is several lines and the bar is one). Decision D7: dialog by default, bar behind a flag, the owner decides after the device pass.
+Files: the window is `TypeBarComponent` ([type-bar/](src/app/core/components/type-bar/type-bar.component.ts)) but the rules live in pure helpers in `src/app/core/helpers/`: [`TypeMirror`](src/app/core/helpers/type-mirror.helper.ts) (what the guest holds, and the diff), [`TypeKeyHelper`](src/app/core/helpers/type-key.helper.ts) (which keydowns are the game's), [`TypeBarSession`](src/app/core/helpers/type-bar-session.helper.ts) (the field's events wired to the mirror and the queue), [`TypeBarLayoutHelper`](src/app/core/helpers/type-bar-layout.helper.ts); for the hint `CaretWatcher` ([caret-watch.helper.ts](src/app/core/helpers/caret-watch.helper.ts)), [`IBeamHelper`](src/app/core/helpers/ibeam.helper.ts), [`FieldHintHelper`](src/app/core/helpers/field-hint.helper.ts) and `FieldHintService`; `TYPE_BAR` and `FIELD_HINT` in [constants.ts](src/app/core/models/constants.ts); the layout and its seams in [_type-bar.scss](src/theme/_type-bar.scss).
 
-Files: `TypeBarComponent` ([type-bar/](src/app/core/components/type-bar/type-bar.component.ts); the window), the pure
-[`TypeMirror`](src/app/core/helpers/type-mirror.helper.ts) (what the guest holds, and the diff), [`TypeKeyHelper`](src/app/core/helpers/type-key.helper.ts)
-(which keydowns are the game's), [`TypeBarSession`](src/app/core/helpers/type-bar-session.helper.ts) (the field's events wired to the
-mirror and the queue), [`TypeBarLayoutHelper`](src/app/core/helpers/type-bar-layout.helper.ts), and for the hint
-[`CaretWatchHelper`/`CaretWatcher`](src/app/core/helpers/caret-watch.helper.ts), [`IBeamHelper`](src/app/core/helpers/ibeam.helper.ts),
-[`FieldHintHelper`](src/app/core/helpers/field-hint.helper.ts) and `FieldHintService`; `TYPE_BAR` and `FIELD_HINT` in
-[constants.ts](src/app/core/models/constants.ts); the layout and its seams in [_type-bar.scss](src/theme/_type-bar.scss).
-Everything that types goes through `GuestKeyQueueService.send()` (one atomic submission of already planned tasks: the
-Backspaces and the planned text of one step); the queue stays the only key sender.
+- **Everything that types goes through `GuestKeyQueueService.send()`**, one atomic submission of already planned tasks (the Backspaces and the planned text of one step): the queue stays the only key sender and there is no second planner.
+- **The bar is a SIBLING of `#game-container` and never changes the picture's box.** `position: fixed` to the bottom, lifted by `--kb-inset` (`KeyboardInsetService`, started and stopped with the bar), it takes no room: it COVERS the band under the picture and, with a tall keyboard, the picture's lower edge. Resizing the page for the keyboard would make js-dos re-lay-out its canvas and break the overlay sync and the stage (see *The stage*). It never moves the camera either, and its fold decision reads the VISIBLE bottom of the picture, `min(picture, clip)`. Mounted only where the deck is (`layout.kind !== 'none'`).
+- **It is never opened by itself, and `open()` renders the view and focuses the field in the same synchronous call as the tap** (iOS counts only a focus made in the gesture). Texto presses on the LIFT in this mode (`deckKeyOn="up"`), a lift being likelier than a landing to be a gesture iOS counts (unverified). The field hint never opens the keyboard.
+- **One DOM, a class for the fold: the field is never re-created while the keyboard is up** or it loses the focus and closes the keyboard. Full window (title with badge, field with "123" and "x", two rows of five keys on a phone, one of ten from `WIDE_STRIP_MIN_WIDTH`) unless the keyboard leaves less than `FULL_HEIGHT_*` between the picture and itself; then one row: the field and the keys that fit (Tab, Enter and the way out always, Esc from 400 px, "123" and Backspace from 560, the OS keyboard having a Backspace and a number page of its own; the field must stay 120 px wide, so a 360 px phone with its keyboard up has no Esc and the FAQ says the keys shown are the ones that fit). The px tiers are `@media` queries in `_type-bar.scss`, whose 520 must match `WIDE_STRIP_MIN_WIDTH`. **Landscape is always one row, on purpose**: the OS keyboard covers 55-60% of the screen, a taller bar only covers more, and the compose dialog would cover the same pixels and put its buttons under the keyboard; panning the picture above the keyboard was left out (a transform on `#game-container` against the overlay sync).
+- **The strip's keys are `appDeckKey` keycaps** (no focus taken, so the keyboard stays up under a tap) and send through the same session as the field, so a key always follows the text before it. Look is Win9x (D3), one skin (`.deck-face`, `.deck-key`, `.win9x-input`); 16 px in the field (iOS zooms the page on less), keys of 44 px or more under a coarse pointer. The field's `autocapitalize/autocorrect/autocomplete=off`, `spellcheck=false` and `enterkeyhint` are static template attributes, because `autocorrect` is a boolean property in WebKit/Chromium where "off" is truthy. **"123" sets `inputmode="numeric"` and blurs and refocuses the field inside the tap**, or the keyboard does not notice.
+- **Text comes from the field's VALUE, never from a key.** Every `input` and `compositionend` runs `TypeMirror.sync(value)`: NFC, in code points, "N Backspaces from the first difference, then the rest", one `send()`. A letter, an autocorrect, a swipe, a dictation, a suggestion tap and a paste are the same operation, and a doubled event finds nothing left to send (Chrome and Safari order `compositionend` and the last `input` differently). It assumes the guest's caret is at the END and that its field takes everything the bar holds; `maxlength` is 300 and Elifoot's fields are shorter (the 8-letter filename field), nothing knows a field's limit, and text the guest drops makes later Backspaces delete too much (known; a per-field limit is a follow-up).
+- **The bar empties itself, and the mirror with it, whenever the guest leaves its field (`TypeBarSession.abandon`)**: after a key that moves it (Enter, Tab, arrows, F-keys), a tap on the game, and a key sent from elsewhere (the deck, seen through `GuestKeyQueueService.activity$`, which fires inside the submission, so the bar's own sends are told apart by a flag). Otherwise the bar reads "FelipeSilva" over a field holding "Silva" and Backspaces delete text the bar never wrote. Empty is the safe direction (the next text appends, a Backspace is the guest's own; a touch that clicks nothing costs only the bar's text). The tap flushes first (the click is still to come); keys from elsewhere do not (the guest has already moved and text sent now would land in the new field).
+- **A tap on the game keeps the OS keyboard.** The touch layer moves the focus to `.emulator-root` on every touch (a hardware keyboard needs it), which would close the keyboard on each tap on the game's own field; `TouchSurface.keepFocus` is asked first, at every finger, and the bar answers whether it holds the focus (and abandons). The tap still clicks.
+- **A composition is mirrored when it ends, not while it runs.** An IME may rewrite a word it holds (suggestion, dictation's interim result, conversion), and each rewrite is Backspaces plus a retype in a slow guest, with a stale burst landing on whatever the guest has focused by then; mirroring mid-composition was NOT shown to be safe. `input` events inside one only arm a settle timer (`COMPOSITION_SETTLE_MS`, so an IME that never ends one does not leave the bar mute); a strip key, a blur and closing mirror the text as it stands.
+- **Leaving a field ends a composition at once.** A keyboard that keeps a word underlined until a space does not end it for a strip key or a tap on the game, and waiting for it left the old field's word in the bar for good. `abandon`, only while a composition is active, blurs and refocuses the field inside the gesture (the browser commits on blur) and ignores what the browser commits or reports on the way (`abandoning`: it belongs to the old field). **The bar never writes the value of a field the IME is composing in** (how text is resurrected on some keyboards), so the strip's Backspace ends the composition first. A cut or failed send (`desync`: the guest then holds an unknown part) clears the bar too, but waits for the composition instead of ending it, because it asks nothing of the keyboard.
+- **A pasted control character types as a space, a trailing space is held back until something follows it, and every code point is one guest character except the ellipsis** (`TypeMirror.settled`, `guestWidth`). `<input type=text>` strips only CR/LF, so a pasted Tab or U+2028/2029 would make the planner press Tab/Enter behind a mirror that believes it is one field; the held space absorbs the keyboard's auto-space (Gboard, QuickType) without guessing which spaces were its own (price: no space at the very end of a field, which no field of this game wants); "…" is three dots in the guest, so the mirror asks the planner how many Backspaces a code point takes.
+- **Named keys are authoritative from `keydown`** (`TypeKeyHelper`: Enter, Tab, Shift+Tab, Esc, arrows, Home, End, Del, PgUp, PgDn, F1-F12) and their default is cancelled (Tab would leave the field, F5 would reload the page); `keyCode 229`, `key: "Unidentified"` and `isComposing` are the IME's and fall through to the input events, and Ctrl/Alt/Meta chords are the browser's. **Backspace is the game's only in an EMPTY field** (the strip's too): iOS fires no `input` for it, only the keydown, while in a field with text the `input` carries it and a keydown too would delete twice. A held Enter, Esc or Tab does not repeat; an arrow does unless the queue is backed up (`REPEAT_MAX_PENDING`). The strip's Enter/Esc and a hardware Enter are the hazard keys of *Typing into the guest*.
+- **The CapsLock guard is asked once**, when the bar first types letters and again after `CAPS_GUARD_REARM_MS` without typing any, not per keystroke or on a fixed timer: each read is a round trip to the emulator, a first version re-armed during continuous typing (a read mid-word), and nothing on a phone can toggle the guest's CapsLock. The clock is the last send of letters, guarded or not.
+- **Mutually exclusive with the chat and the compose dialog** (the page closes whichever is not being opened). Closing mirrors what the field holds, blurs it and hands the focus back to `ChatPanelHelper.focusEmulator()`; **closing in the middle of a paste cancels the rest of it and says so (a toast)**, because the paste's Cancelar is on the bar and a bar that closed while the queue went on typing would leave no way to stop it.
+- **The shortcut hazard.** Letters are game commands on a screen without a text field (A is Seleccionar > Automático, M is Melhores), and the bar sends what is typed, so typing with no field focused FIRES them (measured on the real game). The bar says what it thinks (badge in words, "campo detectado" / "nenhum campo detectado", and a lamp; Texto pulses and keeps a lamp), and **nothing ever gates a key or opens the keyboard on it**: "nenhum campo" means *not seen* (a field whose text is selected, most fields a form walks into, blinks no caret), and iOS opens a keyboard only from a tap while both signals arrive after it.
+- **`FieldHintService` combines two hints and runs only while the setting is on.** *A caret blinking* (`CaretWatcher`, from js-dos's `onFrame`, which fires only when the framebuffer changed): a blink cadence (`FIELD_HINT.BLINK_*`) suspects it and two frames taken AT consecutive frame events (never a fixed delay apart, which lands both in one half of the blink half the time) differing by one thin bar confirm it; ~2 s latency, misses selected text, cannot see which field. js-dos cannot remove a frame listener, so one is registered per emulator and kept inert (a null check per frame) while stopped. *An I-beam under the tap* (`IBeamHelper`, one screenshot `IBEAM_LOOK_DELAY_MS` after a click from `TouchInputService.clicks$`, valid `IBEAM_TTL_MS`): Windows' I-beam is an XOR cursor, so it is found by SHAPE, never colour, and the serif is what rejects the arrow over a white list. Pixel-sensitive like the other scrapers (see *Screen-scraping*); checked at 640x480 only.
+- **Diagnostics:** category `ime` (every field event with `inputType`, `data`, `isComposing`, `keyCode`; every step sent; a `bar layout` snapshot on open and on every keyboard change) only while the bar is open, `frame` for the hint; **typed text appears in this log by design** (the panel's warning says so; see *Diagnostics log*). `KeyboardInsetService` writes `--kb-inset`/`--kb-open` BEFORE it tells `inset$` (a spec pins the order), or the snapshot the device pass reads to judge where iOS put the bar would be one step behind.
+- **Known and left:** a tap on the game is not ordered behind keys still queued (the pointer engine and the key queue are separate serial queues; the fix is an ordering gate in `GuestPointer`, the P2 engine's hot path), so after a long paste on a slow phone the click can land before the tail is typed and the tail goes to the field just tapped; a paste shows its progress.
+- **Not verified on any real keyboard or phone** (Galaxy A07 and iPhone 15 Pro Max passes pending, [docs/mobile-ux-device-pass.md](docs/mobile-ux-device-pass.md) P8): everything above ran against Chromium's CDP IME events, a keyboard simulated by shrinking `visualViewport`, and unit specs. Unobserved: what Gboard, Samsung Keyboard and iOS actually send (`keyCode 229`, `compositionend` on a suggestion tap, the auto-space, Backspace in an empty field on Android), whether `abandon`'s blur and refocus keeps the OS keyboard open (if not, the bar stays docked and a tap on the field brings it back), `focus()` on a lift counting as a gesture on iOS, and `visualViewport` offsets when iOS pans to reveal a field (the bar is fixed against the layout viewport).
 
-**The contract with the page, which is the deck's: the bar is a SIBLING of `#game-container` and the picture's box does not
-depend on it.** It is `position: fixed` to the bottom of the screen, lifted by `--kb-inset` (`KeyboardInsetService`, started
-and stopped with the bar; it gained `inset$` for the one consumer that decides from the number), and takes no room in the page:
-it COVERS the band under the picture and, with a tall keyboard, the picture's lower edge. Measured at twelve viewports with a
-simulated keyboard (phones, tablets, both orientations), `#game-container` and the canvas had the same rect with the bar open,
-folded, and closed, and the bar's bottom was the keyboard's top. It is **never opened by itself**: `open()` renders the view and
-focuses the field in the same synchronous call as the tap (iOS counts only a focus made in the gesture), and Texto presses on the
-LIFT in this mode (`deckKeyOn="up"`, a lift being likelier than a landing to be a gesture iOS counts; unverified). It cannot be
-opened with the setting off, and it is mounted only where the deck is.
-
-- **Layout: the full window, or one row.** Title (the badge), the field with "123" and "x", and a strip of keys: two rows of five
-  on a phone (Tab, Shift+Tab, Enter, Esc, Apagar / the four arrows and "Lista"), one row of ten from 520 px. It needs
-  `FULL_HEIGHT_*` of room between the picture's bottom and the keyboard's top (190 px measured at 393 px wide, 196 asked for);
-  with less it **folds into one row** (the field and the keys that fit: Tab, Enter and the way out always, Esc from 400 px,
-  "123" and Backspace from 560, the OS keyboard having a Backspace and a number page of its own; the field must stay 120 px wide, so a
-  360 px phone with its keyboard up has **no Esc** on the bar, and the FAQ says the keys that fit are the ones shown). **In landscape it is always the
-  one row, which is the documented choice**: the OS keyboard covers 55-60% of the screen, so the picture's lower half is gone
-  whatever is done and a taller bar would only cover more of what is left; the compose dialog (the other option) would cover
-  the same pixels and put its buttons under the keyboard (BASE-8). Rotating the keyboard open therefore costs the middle of the
-  picture to a 56 px strip; panning the picture above the keyboard was considered and left out (a transform on `#game-container`
-  against the overlay sync is another phase's risk). **One DOM, a class for the fold**: the field is never re-created while the
-  keyboard is up or it would lose the focus and close the keyboard.
-- **A tap on the game keeps the keyboard, and empties the bar.** The touch layer moves the focus to `.emulator-root` on every touch (a
-  hardware keyboard needs it), which would close the OS keyboard on each tap the player makes on the game's own field;
-  `TouchSurface.keepFocus` is asked first, at every finger that lands on the game, and the bar answers "I have it". The tap still clicks.
-  It is also the moment the bar learns the guest is about to leave its field, so it **mirrors what it holds and lets go of it**
-  (`TypeBarSession.abandon`): typed on, the bar would read "FelipeSilva" over a game field holding "Silva", and Backspaces past what
-  was typed in it would delete text the bar never wrote. A key sent from anywhere but the bar (the deck's keycaps, through
-  `GuestKeyQueueService.activity$`, which fires inside the submission, so the bar's own sends are told apart by a flag around them)
-  does the same, without mirroring first: the guest has already moved and text sent now would land in the new field. Emptying is the
-  safe direction: an empty bar means "I hold nothing of this field", so the next text appends and a Backspace is the guest's own. A
-  touch that clicks nothing (a scrollbar drag, a palm) costs only the text on the bar. Checked: a tap on Jogador 2 after "Felipe"
-  left the bar empty with the focus still in it, and "Silva" typed next went to Jogador 2 alone; so did a deck Tab.
-- **Mutually exclusive with the chat** (the page closes whichever is not being opened), and closing blurs the field, mirrors what
-  it holds, and hands the focus back to `ChatPanelHelper.focusEmulator()`. **Closing in the middle of a paste cancels the rest of it**
-  and says so (a toast): the paste's Cancelar is on the bar, so a bar that closed and let the queue go on typing would leave the
-  player no way to stop it. Checked: an 80-character paste closed after 15 keys typed nothing more and the toast came. The strip's keys
-  are `appDeckKey` keycaps: they take no focus, so the keyboard stays up under a tap.
-- **Look: Win9x (decision D3), one skin.** `.deck-face` and `.deck-key` (the deck's, `_win9x.scss`), `.win9x-input` +
-  `.win9x-element-bevel` for the field, and the title bar, lamp and progress chip in `_type-bar.scss`
-  (`grep -n 'win9x-' src/theme/_type-bar.scss` lists the flip points). 16 px in the field (iOS zooms the page on less), 44 px or more
-  on every key under a coarse pointer (checked at the twelve viewports, no two keys overlap, none leaves the bar).
-
-**Mirroring rules.** Each is there because a real keyboard would otherwise misbehave, and all were written from what such
-keyboards are known to do, not from having held one.
-
-- **Text comes from the field's VALUE, never from a key.** Every `input` and `compositionend` runs `TypeMirror.sync(value)`: the
-  value (NFC, in code points via `Array.from`) is compared with what the guest holds, and the step is "N Backspaces from the first
-  difference, then the rest", one `send()`. A plain letter, an autocorrect, a swipe, a dictation, a suggestion tap and a paste are
-  the same operation, and an event that comes twice finds nothing left to send, so the order of `compositionend` against the last
-  `input` (Chrome and Safari differ) does not matter. It assumes the guest's caret is at the END, so the bar **clears itself, and
-  the mirror with it, whenever the guest leaves the field**: after any key that moves it (Enter, Tab, the arrows, F-keys...), a tap on the game
-  and a key from the deck (above): from there the text no longer describes the field the guest is on. It also assumes **the guest's field takes
-  everything the bar holds**: `maxlength` is 300 and Elifoot's fields are shorter (the 8-letter filename field), so text the guest drops
-  makes the bar longer than the field, and the Backspaces that follow delete too much in the guest. Nothing knows a field's limit; this is
-  on the device checklist and a per-field limit is a follow-up. A paste is one step, with the queue's progress ("Enviando n/N", from
-  24 keys) and a Cancelar that calls `cancelKeys()`; a send that is cut or fails clears the bar too (`desync`), because the guest then
-  holds an unknown part.
-- **A composition is mirrored when it ends, not while it runs.** An IME holding a word may rewrite it (a suggestion, a dictation's
-  interim result, a conversion), and each rewrite is Backspaces and a retype in a guest that spends 20 ms a character, with a stale
-  burst landing on whatever the guest has focused by then. Mirroring the middle of it was NOT shown to be safe, so `input` events
-  inside a composition only arm a settle timer (`COMPOSITION_SETTLE_MS`, 700): an IME that never ends one must not leave the bar mute,
-  and after the quiet the text as it stands is mirrored, with a later rewrite a plain diff on top. A key from the strip, a blur and
-  closing mirror the text as it stands too.
-- **Leaving a field ends a composition at once.** A keyboard that keeps a word underlined until a space does not end it for a key
-  tapped on the strip or a tap on the game, and waiting for it left the old field's word in the bar for good (found in review: the first
-  cut deferred the clear until the composition ended, and a spec locked that in). So `abandon` ends the composition itself, inside the
-  gesture: the field is blurred (the browser commits a composition when its field loses the focus) and focused again, and whatever
-  the browser commits or reports on the way is ignored, because it belongs to the old field. It does this only when a composition is
-  active, and **the bar never writes the value of a field the IME is composing in** (how text is resurrected on some keyboards): the
-  strip's Backspace ends the composition the same way before it edits the value. A send that is cut or fails (`desync`) clears the bar
-  without ending anything, because it asks nothing of the keyboard: that clear waits for the composition to end, and the mirror keeps
-  describing the field exactly as it is until then. Checked with CDP `imeSetComposition`: "Leu" being composed, then the strip's Tab,
-  sent L e u and Tab, left the bar empty with the focus in it, and "Ze" typed next went to the next field alone; the strip's Backspace
-  on a composing "Ab" sent A, b and ONE Backspace and left "A". **Not verified: that the blur and focus keeps the OS keyboard open.**
-  If a keyboard closes there, the bar stays docked with its keys and a tap on the field brings it back; it only happens while a word
-  is underlined.
-- **A pasted control character is a space.** An `<input type=text>` strips only CR and LF from a paste, so a Tab (a spreadsheet cell, a
-  tab-separated note), a backspace character or U+2028/2029 reach the value, and the planner would press the key each one names: Tab
-  and Enter move the guest to another field behind the mirror's back, which still believes it is one field. `TypeMirror.settled` types
-  them as the space they look like (a trailing one is held back like any). Checked: "Zé", a Tab and "Silva" pasted sent Z, the accent,
-  Space and S i l v a, no Tab, and the guest field read "FelipeZé Silva".
-- **A trailing space is held back until something follows it** (`TypeMirror.settled`), which is the answer to the keyboard's
-  auto-space (Gboard after a suggestion tap, iOS after a QuickType word): "Felipão " sends "Felipão", the space goes out when "Silva"
-  follows it (as " Silva"), a space taken back sends nothing, and iOS taking a space away before a full stop costs nothing. It does
-  not try to know which spaces were the keyboard's; the price is that a space the player does want at the very end of a field is not
-  in the game (no field of this game wants one).
-- **Every code point is one guest character, except the ellipsis**: the mirror asks the planner how wide each is (the "…" iOS Smart
-  Punctuation makes of "..." is three dots there, and deleting it is three Backspaces), accents are Alt codes, quotes and dashes
-  fold, and the rest is "?". NFC first, so "a" plus a combining tilde is one "ã".
-- **Named keys are authoritative from `keydown`** (`TypeKeyHelper`): Enter, Tab, Shift+Tab, Esc, the arrows, Home, End, Del, PgUp, PgDn
-  and F1-F12 go to the guest and their default is cancelled (Tab would leave the field, F5 would reload the page: checked). `keyCode
-  229`, `key: "Unidentified"` and `isComposing` are the IME's and fall through to the input events; Ctrl, Alt and Meta chords are the
-  browser's. **Backspace is the game's only in an EMPTY field** (iOS fires no `input` for it, only the keydown; in a field with text the
-  input event carries it and a keydown too would delete twice). A held Enter, Esc or Tab does not repeat; an arrow does, unless the
-  queue is backed up.
-- **The CapsLock guard is asked once**, when the bar first types letters and again after `CAPS_GUARD_REARM_MS` without typing any, not per
-  keystroke and not on a timer (each read is a round trip to the emulator; nothing on a phone can toggle the guest's CapsLock). The clock
-  is the last send of letters, guarded or not: a first version re-armed every 15 s of continuous typing, a read in the middle of a word.
-- **"123"** sets `inputmode="numeric"` and blurs and refocuses in the tap so the keyboard notices. The field is `type=text`,
-  `autocapitalize/autocorrect/autocomplete=off`, `spellcheck=false`, `enterkeyhint=enter`, `maxlength` 300; they are static template
-  attributes (Angular writes those with `setAttribute`), because `autocorrect` is a boolean property in WebKit and Chromium where "off"
-  is truthy (see the compose dialog).
-
-**The shortcut hazard, and what is done about it.** Letters are game commands on a screen without a text field (A is Seleccionar >
-Automático, M is Melhores), and the bar sends what it is typed, so typing with no field focused FIRES THEM. Measured on the real
-game: on the main window, with the badge reading "nenhum campo detectado", a typed "a" selected the automatic squad. So the bar says
-what it thinks, in words and a lamp, and the deck's Texto button pulses and keeps a lamp when a field seems focused; **neither ever
-gates a key or opens the keyboard** (iOS opens one only from a tap, and both signals arrive after it). `FieldHintService` combines
-two hints, both off unless the setting is on:
-
-- *A caret blinking* (`CaretWatcher`, from js-dos's `onFrame`, which fires only when the framebuffer changed): measured at 640x480,
-  frames 528-600 ms apart with a field focused and none on a still screen, and consecutive frames differ by exactly one bar 1 px wide
-  and 14 tall (the font fixes it, so none of the thresholds depends on the frame size; 17 tall in the sale-price field was seen at
-  800x600). Three frames of that cadence suspect a caret, and the pair taken AT the next two frame events (the prototype took them
-  290 ms apart, which lands both in one half of the blink half the time) confirms and locates it. **Latency measured: 2.0 s** from a
-  cold start with a caret already blinking. It misses a field whose text is selected (no caret blinks; Tab and Enter select), and
-  it cannot see which field. js-dos has no way to remove a frame listener, so one is registered per emulator and kept, inert (a null
-  check) while the hint is stopped; the service holds no timer and does no work per frame otherwise.
-- *An I-beam under the tap* (`IBeamHelper`, one screenshot 150 ms after a click the touch layer sent, `TouchInputService.clicks$`): the
-  guest draws its cursor into the frame, and Windows' I-beam is an XOR cursor, 17 rows (a stem 15 tall between two serifs 7 wide) in the
-  inverse of what is under it: blue on the focused yellow field, black on a white one. It is found by shape against any background; **the
-  serif is what rejects the arrow**, whose black left edge is a 15-row stem with white on both sides over a white list. Valid for 4 s
-  after the tap. Costs 0.2 ms. Checked at 640x480 only (the sprite is the cursor's own and should be the same at 800x600, which
-  was not run). The splash text also shows an I-beam (TOUCH-10), so it is a hint.
-
-**Diagnostics** (category `ime`, only while the bar is open; `frame` for the hint): every `beforeinput`, `input`, `compositionstart`,
-`compositionupdate`, `compositionend`, `keydown`, `keyup`, `focus`, `blur` and `paste` of the field with `inputType`, `data`,
-`isComposing`, `key`, `code`, `keyCode`, `repeat` and the value; every step sent (`sync`: why, Backspaces, the text, the tasks, what the
-guest holds) and every key, clear, deferred clear, composition ended by the bar, cut-short send and settle; and on open and on every keyboard
-change a `bar layout` snapshot (shape, fold, inset, `innerWidth x innerHeight`, `visualViewport` size, offset and scale, the bar's and the
-picture's rects). The bar's position in it is the new inset's, because `KeyboardInsetService` writes `--kb-inset` and `--kb-open` BEFORE it
-tells `inset$` (the other order logged the previous inset's rect, which is what a device pass would have read to judge where iOS put the
-bar), but its height is read before the fold it may have just decided on is rendered: the `bar folds` line says that.
-**Typed text appears in this log by design** (the panel's warning says so); it is what the device pass needs. Off, each call is one
-boolean check.
-
-**Not verified: any real keyboard.** Everything above was run against Chromium's CDP (`Input.imeSetComposition`, `insertText`,
-`dispatchKeyEvent`) on the real game at 393x852 with touch emulation, a keyboard simulated by shrinking `visualViewport.height`, and
-unit specs. Recalled and unobserved, and on the device checklist: what Gboard and Samsung Keyboard actually send (`keyCode 229`
-everywhere? does a suggestion tap fire `compositionend`? is the auto-space what is assumed?), Backspace in an empty field on Android
-(does it fire a keydown at all, and as `Backspace`?), iOS Smart Punctuation, swipe typing and dictation (interim results, the settle timer),
-autocorrect not fully off, `focus()` on a lift counting as a gesture on iOS, the keyboard staying open under a keycap and under a canvas
-tap, Android Back, rotation with the keyboard open, `visualViewport` offsets when iOS pans to reveal a field (the bar is fixed against
-the layout viewport and would be off-screen if it does), whether the blur and focus that ends a composition (a strip key, a Backspace,
-a tap on the game) leaves the OS keyboard open, whether the browser then commits and reports what is assumed, and the timing of all of
-it on a low-end phone. **Known and left, because the fix is in the P2 pointer engine:** a tap on the game is not ordered behind the keys
-still queued, so after a long paste on a slow phone the click can land before the tail of the text has been typed and the tail goes to
-the field just tapped (a paste shows its progress, and the window is the cursor's walk to the tap, at least ~200 ms of 10 ms keys).
+Details, measurements and the review history: [docs/mobile-ux/type-bar.md](docs/mobile-ux/type-bar.md).
 
 ### Letting the guest sleep (battery saver)
 
-DOSBox pins one core at about 100% even on a menu that never changes (measured: 101.9% of an Apple-silicon core on a still screen, and
-lowering `cycles` changes nothing), and a manager game is mostly still menus, so on a phone that is battery and heat.
-[`EmulatorPowerService`](src/app/core/services/game/emulator-power.service.ts) calls `dosCI.pause()` when the picture has been still long
-enough and `resume()` the moment anything wants the guest. It is phase P9 (decision D6); the design record is
-[docs/mobile-ux-study.md](docs/mobile-ux-study.md). The rule itself is [`IdlePowerMachine`](src/app/core/helpers/emulator-power.helper.ts)
-(no clock, no timer, no emulator: every call carries the time), the numbers are `EMULATOR_POWER` in [constants.ts](src/app/core/models/constants.ts),
-and everything outside the service reaches the guest through [`GuestAccessHelper`](src/app/core/helpers/guest-access.helper.ts).
+DOSBox pins a core at ~100% even on a menu that never changes (lowering `cycles` changes nothing), and a manager game is mostly still menus, so on a phone that is battery and heat. [`EmulatorPowerService`](src/app/core/services/game/emulator-power.service.ts) calls `dosCI.pause()` when the picture has been still long enough and `resume()` the moment anything wants the guest. The rule is [`IdlePowerMachine`](src/app/core/helpers/emulator-power.helper.ts) (no clock, timer or emulator: every call carries the time, so a spec can run a minute of idling in microseconds), the numbers are `EMULATOR_POWER` in [constants.ts](src/app/core/models/constants.ts), and bulk work outside the service (a persist, a backup, a memory scan) holds the guest through [`GuestAccessHelper`](src/app/core/helpers/guest-access.helper.ts), which does nothing without a running service (the key queue and the page call `wake()` directly). The service runs outside Angular's zone, hooks js-dos's `onFrame` once per emulator (it cannot be removed), and lives only while the setting is on and `GamePage`'s safety nets are up (`syncIdlePause`; `stopSafetyNets` stops it first).
 
-**Off by default, and one constant from on.** The setting is `STORAGE_KEY.IDLE_PAUSE` ("Economizar bateria quando parado" in "Dados e avançado" > "Recursos experimentais"), stored as an explicit boolean so that changing `EMULATOR_POWER.DEFAULT_ENABLED` reaches only people who never touched the switch;
-the window says it has not been tried on real phones, and the FAQ has an entry. *Why off:* the rule the roadmap proposed, asleep after 2 s
-without a frame or an input, was played on real Elifoot rounds and it made the game's own computations **1.8 times slower on average and 2.7 in the worst round**, because
-Elifoot spends whole seconds with the picture untouched while it works (on this desktop a 6 to 7.4 s stretch two seconds after the key that
-starts a round, and a 9 to 10.3 s one 38 s after the last key, the end of the match) and a guest put to sleep in the middle of that runs the
-rest at the probe's duty cycle (about a ninth of its speed). With the idle time at 20 s the saver never slept in play (0 sleeps in 20 ON rounds over four runs; the longest gap 10.3 s with the saver on and
-the same with it off), and with the learning below it costs one stretched computation at most, but every number here is a desktop's: the
-feature exists for a phone whose silent stretches are unmeasured, and a computation that outlasts the idle time on a slow phone is stretched
-for as long as it takes to be seen once. The owner flips `DEFAULT_ENABLED` after the Galaxy A07 pass, or does not; the FAQ entry follows the constant (and `IDLE_MS`) by binding, but the
-experimental group's "Ainda não foram testados em celulares de verdade" (`AdvancedMenuHelper`) is prose about that pass and is revised by hand in the same commit.
+- **Off by default, one constant from on.** `STORAGE_KEY.IDLE_PAUSE` ("Economizar bateria quando parado", Dados e avançado > Recursos experimentais) is stored as an explicit boolean, so flipping `EMULATOR_POWER.DEFAULT_ENABLED` reaches only people who never touched the switch. *Why off:* at the roadmap's 2 s idle time the scripted Elifoot rounds ran 1.8x slower, because the game computes for whole seconds with the picture untouched and a guest put to sleep mid-computation finishes at the probe's duty cycle (about a ninth of its speed). `IDLE_MS` is 20 s, above the longest such stretch seen on a desktop (~10 s); a phone's are unmeasured. The FAQ entry follows `DEFAULT_ENABLED` and `IDLE_MS` by binding (the menu description only `IDLE_MS`); the "Ainda não foram testados em celulares de verdade" prose (`AdvancedMenuHelper`'s experimental group, the manual's accordion) is revised by hand in the commit that flips it.
+- **Anything that talks to the guest calls `wake()` first, or `hold()` for the length of a job** (both are no-ops when the service is not running, i.e. whenever the setting is off). *Why:* `pause()` is a flag that stops the guest's clock; input sent to a paused guest is not lost but piles up and lands in one burst on resume, and the guest sums close mouse motion and applies its gain to the sum (the pointer engine's pacing exists for that) while DOSBox's key buffer drops what a burst overruns (the 14-event rule); waking first means the guest is already running when the first event lands, so every sender's pacing holds. Each of these must keep doing it: the page's capture-phase passive listeners on `document` (`EMULATOR_POWER.INPUT_EVENTS`, capture so they run before the touch layer stops the event on the emulator's root; `pointermove` only with a button down or the pointer locked, because a hovering mouse sends the guest nothing); `GuestKeyQueueService` (`submit`, and `run` before each task, so a long text never sees the guest fall asleep under it); `GuestPointer.beforeSend`, wired as `TouchSurface.beforeSend` (before every motion and button, its timers outlive the finger); the camera's gestures and buttons (`CameraOptions.activity`); the Cheat 'O Matic sweep and write (`hold`: memory access works on a paused guest, but a written value is not seen until it wakes). A missed path degrades to "delayed until the next probe", not "lost", and that probe's frame is then misread as a stall (below); a send that bypasses `wake`, like the harness's direct RAM oracle, shows exactly that.
+- **Every persist holds the guest awake.** `saveGameFileSystem()` in `game.js` calls `globalThis.holdGuestAwake`, which the service registers in `start()` and clears in `stop()` only if it is still its own (the update prompt in the main bundle cannot import a game-chunk service, and every persist meets in that one function); `PatchService` and `SaveGameService` call `dosCI.persist()` through `GuestAccessHelper.whileAwake`. A persist works on a paused guest, but a probe resuming it halfway was never run in this app. Flows that rewrite the saved disk, exit the emulator or leave (patch, import, resolution switch, restart, leaving) stop the service first; `stop()` resumes a sleeper.
+- **Only the emulator, and its sound with it, is paused.** No `cycles`, stream or audio node is touched. `screenshot()`, `persist()` and `readMemory()` work on a paused guest, so the auto-saver, the exit watcher and the OCR keep looking and never wake it.
+- **Never paused: a hosting browser, a hidden page, a boot.** Hosting (v1 is conservative: what a paused guest does to the encoder and to a spectator who joins meanwhile is unlooked-at; a room that starts while asleep wakes it on the next tick). Hidden: js-dos pauses and resumes the emulator itself on `visibilitychange`, so the service adds no pause, probe or `resume()` meanwhile (`apply` skips them) and `visible()` resets its belief to awake with the idle time restarted. Boot: nothing sleeps until the exit watcher or the page has seen the game's own screen, because DOS, Windows and the game load quietly.
+- **Asleep needs all of: no frame for `IDLE_MS`, no input for `INPUT_QUIET_MS`, no blocker** (hosting, game not seen, a hold, keys queued, a finger or held button or pending motion in the touch layer; a blocker also counts as activity and wakes a sleeper). The input window guards the one thing a frame counter cannot see, a computation that starts with a tap. A caret blinking in a focused text field is a frame every ~0.55 s and keeps the guest awake for as long as it has focus.
+- **Sleeping is a handshake: it asks `SaveSafetyService.gameSavingVerdict()` whether the game's "A gravar o jogo…" dialog is up, and only a definite `false` sleeps.** *Why:* a static dialog is what a slow save looks like to a frame counter, and a guest asleep mid-write is the truncated `.e98` the auto-saver waits for the dialog to close to avoid. `true` and `null` (no OCR, auto-save off, a failed or slower-than-`LOOK_TIMEOUT_MS` read) stay awake and are asked again after `LOOK_RETRY_MS`, a repeating `null` doubling up to `LOOK_RETRY_MAX_MS` (the page cannot tell, and it would otherwise ask and log once a second); an answer overtaken by a frame, input or blocker is dropped. So the feature is inert with auto-save off or no OCR, which the menu says.
+- **Asleep, the policy is `probe`:** resume for `PROBE_MS` every `SLEEP_MS`, awake the moment a frame arrives, so work that never redraws still advances. `POLICY: 'hard'` never resumes by itself and is not enabled: it would freeze each silent computation until the next touch.
+- **A frame from a guest that was asleep is a stall, and the machine learns:** idle and input-quiet times grow to twice the quiet stretch that ended, up to `MAX_IDLE_MS`, and are kept for the page's life (the service singleton keeps them across toggles; a reload starts from the constants), so the first stall on a slow phone costs one stretched computation, not one per round.
+- **Log category `power`, and only the first probe of a sleep is written:** a still screen probes every ~2.25 s, which would fill the ring and rewrite its persisted tail.
+- **Unverified:** any real phone (the Galaxy A07 pass is pending): how long Elifoot's silent computations last there, the probe's cost, iOS Safari's worker, a real hidden tab or screen lock, the real battery, and a sound that outlasts `IDLE_MS` with no frame (it is paused with the emulator). Every measurement so far is a desktop's.
 
-**The invariant: anything that talks to the guest calls `wake()` first** (or `hold()` for the length of a job; both are no-ops when the
-service is not running, which is the case whenever the setting is off). *Why:* `pause()` is a flag and the guest's clock stops with it.
-Input sent to a paused guest is not lost (0 frames while paused and 7 after the resume, measured) but it piles up in the worker and is applied
-in one go on resume, and that is not harmless here: the guest sums mouse motion that arrives close together and applies its gain to the sum
-(the pointer engine's whole pacing exists because of it), and DOSBox's keyboard buffer drops what a burst overruns (the 14-event rule).
-Waking first means the guest is already running when the first event lands, and every sender paces itself against a guest that is. The
-paths, each of which must keep doing it:
-
-- *The page's own listeners* on `document`, capture phase, passive (`pointerdown`, `pointerup`, `keydown`, `keyup`, `touchstart`, `wheel`,
-  and `pointermove` only with a button down or the pointer locked: a hovering mouse sends the guest nothing). They run before the touch
-  layer stops the event on the emulator's root. This is the finger itself and a hardware keyboard.
-- *`GuestKeyQueueService`*: `submit` before anything is queued, and `run` before each task, so a text that takes seconds never sees the guest
-  fall asleep under it. Every key of the deck, the compose dialog and the type bar goes through there.
-- *`GuestPointer`*: `beforeSend`, wired from the page through `TouchSurface.beforeSend`, runs before every motion and every button, the
-  home and the walk back included. Its timers keep sending after the finger has gone.
-- *Every persist*: `saveGameFileSystem()` in `game.js` calls `globalThis.holdGuestAwake` (which the service registers while it runs, and
-  clears only if it is still its own), because the update prompt in the main bundle cannot import a service of the game chunk and every
-  persist meets in that one function; `PatchService` (`getLocalChanges`, `existingSaveNames`) and `SaveGameService` (the backup, the disk
-  copy) go through `GuestAccessHelper.whileAwake`. A persist works against a paused guest (measured: 5.4 MB in 1.05 s) but was never run
-  against anything else in this app, and a probe resuming it halfway is not worth finding out about.
-- *The Cheat 'O Matic*: the search sweep and the write are held (`readMemory` and `writeMemory` both work on a paused guest, but a value
-  written into one is not seen until it wakes).
-- *Flows that rewrite the saved disk, exit the emulator or leave* (a patch, the import, the resolution switch, the restart, leaving) stop the
-  service first: `GamePage.stopSafetyNets` stops it before anything else, and `stop()` resumes a sleeping guest.
-
-A path that was missed degrades to "delayed", not "lost": with the probe policy the input waits for the next probe (at most 2.25 s), which
-then sees a frame and is read as a stall (the idle time grows, below). That was reproduced by accident with the harness's RAM oracle, whose
-direct sends do not wake anything: its calibration failed ("cursor address not found") while the guest slept, and the nudges were applied at
-the next probe.
-
-**What is paused and what is not.** Only the emulator, and its sound with it (nothing else is touched: no `cycles`, no stream, no audio node;
-a host's audio fan-out keeps running and carries silence). `screenshot()`, `persist()` and `readMemory()` keep working on a paused guest
-(measured), so the auto-saver's looks, the exit watcher and the OCR are unchanged and never wake it. **Never paused:** a hosting browser
-(v1 is conservative: a stream is the guest's picture, and what a paused guest does to the encoder and to a spectator who joins meanwhile has
-not been looked at; a room that starts while the guest sleeps wakes it on the next tick); a page that is not visible (js-dos pauses the
-emulator on `visibilitychange` and resumes it when the page comes back, so the service adds neither a pause nor a probe, sends no `resume()` meanwhile, and `visible()` puts its belief right afterwards: the guest is awake, the idle time starts over); a boot (nothing
-sleeps until the exit watcher or the page has seen the game's own screen).
-
-**The rule** (checked every `TICK_MS`, 250 ms). Asleep needs, all at once: no frame for `IDLE_MS`; no input for `INPUT_QUIET_MS` (the guard
-against the one thing a frame counter cannot see, a computation that starts with a tap); no blocker (hosting, game not seen, a hold, keys
-queued or a finger, a held button or motion in the touch layer, each of which also counts as activity and wakes a sleeper); and then it
-**asks before it sleeps** whether the game's own "A gravar o jogo…" dialog is up (`SaveSafetyService.gameSavingVerdict()`, the auto-saver's
-cached OCR verdict). A static dialog is exactly what a slow save looks like to a frame counter, and a guest asleep in the middle of the write
-is the truncated `.e98` that the auto-saver waits for the dialog to close to avoid. **Only a definite `false` sleeps:** `true` and `null` (no
-OCR, auto-save off, a failed read, a look slower than `LOOK_TIMEOUT_MS`) keep it awake and are asked again after `LOOK_RETRY_MS` (a `null`
-that repeats doubles the wait, up to `LOOK_RETRY_MAX_MS`: it is the page that cannot tell, not the screen, and it would otherwise ask, and log,
-once a second for as long as the screen is still), and an answer overtaken by a frame, an input or a blocker while the look was out is dropped. So the feature is inert on a page with auto-save off or
-no OCR, which the menu says. Asleep, the default policy (`probe`; `hard` never resumes by itself and is not enabled) resumes the guest for
-`PROBE_MS` (250 ms) every `SLEEP_MS` (2 s) and keeps it awake the moment a frame arrives. **A frame from a guest that was asleep is a
-stall** (it was working): the idle and input-quiet times grow to twice the quiet stretch that ended, up to `MAX_IDLE_MS` (120 s), and are
-kept for the rest of the page's life (not across loads), so the first stall on a slow device costs one stretched computation and not one per
-round. A caret blinking in a focused text field is a frame every ~0.55 s and keeps the guest awake for as long as the field has the focus.
-
-**Measured** (headless Chrome 143 and Apple silicon, 640x480, synthetic input, the real game, auto-save on with the real OCR;
-`scripts/touch-harness/idle-pause.mjs`, whose header lists the commands):
-
-*CPU on a still screen* (the main window; the busiest renderer process over 20 s; the page's own main thread is 0.6-1.2% in all of them):
-
-| | saver off | duty-cycle probe (default) | hard pause (`POLICY: 'hard'`, not enabled) |
-| --- | --- | --- | --- |
-| idle time 1.5 s | 101.7, 102.0% | 14.9, 14.6% | 2.9% |
-| idle time 20 s (shipped), asleep within 24.5 s | 101.9, 101.8% | 14.8, 14.9% | 3.1% |
-
-The roadmap's lab page read 101.8 / 14.6 / about 1%; the extra two points of the hard pause are this app's own looks (the auto-saver's
-screenshot every 300 ms, the exit watcher's every second).
-
-*Elifoot rounds played through the real app* (a person's rhythm: Enter on every new screen, the injury and penalty pickers answered, the auction
-skipped; one game, the setting flipped every round; gaps between js-dos `onFrame` events). **Wall time varies about 2x with a round's content (an
-injury, a penalty shootout, an auction), so compare the gaps and the CPU and the sleeps, not single rounds:**
-
-| idle time | learning | rounds ON / OFF | wall per round, mean ON / OFF | longest gap ON / OFF | gaps over 5 s ON / OFF | emulator CPU ON / OFF | sleeps |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 1.5 s | off | 4 / 4 | 236 s / 133 s | **61 s** / 10.2 s | 13 / 4 | 59% / 102% | 51 |
-| 2 s | on | 4 / 4 | 114 s / 122 s | 11.8 s / 10.3 s | 6 / 5 | 101% / 102% | 1 (6 s asleep, round 1) |
-| **20 s (shipped)** | on | 8 / 8 | 112 s / 123 s | 10.1 s / 9.9 s | 9 / 11 | 102.2% / 102.2% | 0 |
-
-The first row is the roadmap's rule (its first run, at 2 s with three ON rounds only, read 177-209 s a round, 52 s gaps and 63-69% CPU): rounds
-twice as long, gaps of 18 to 61 s that the OFF rounds do not have (their longest is 10 s): computations that started awake and finished at a
-ninth of their speed, the longest only ending because the harness's 60 s nudge woke the guest. The second row is the same 2 s with the learning: one stall, in the first round (a 5.9 s stretch became 11.8 s),
-and the idle time grew from there; the three rounds after it never slept and their gaps are the OFF rounds'. The third row is what ships, in a
-pseudo-random order of 16 rounds so that neither side is always the later one. Three alternations of 4 + 4 before it (one with the setting off
-first) read the same on everything but wall time: 0 sleeps, longest gaps 10.1 to 10.3 s on both sides, and ON rounds 17 to 25% longer than OFF
-ones, which is what those rounds held (their ON rounds had 6 to 36% more frames, and the balanced run gives the opposite sign). So
-the sleeps in the third row are zero because nothing in play is quiet for 20 s, and a saver that does not sleep does not cost anything; that it
-*does* sleep a still menu on the shipped number is the CPU table above.
-
-*Input to a sleeping guest* (`idle-pause.mjs wake`: the saver given 1.5 s to put the guest to sleep before every send): 24 taps landed within
-1 px, exactly as the 24 awake ones of the control did (0 / 1 / 2 px: 12 / 12 / 0 in both), the engine's own idea of the cursor off by 0 on all of
-them, each tap costing exactly one resume; 40 taps with the same seeds gave the same errors to the pixel awake and asleep; 30 first taps after the
-model forgot the cursor (home, then walk) left the model 2 px off in 1 case asleep and 2 awake (the guest's own 2 px quantum, see *Touching the
-guest*); six arrow keys changed the screen exactly as awake; ten digits through the key queue were ten presses and ten releases, one resume, 1 ms
-before the first key event, no more than one event without a gap, 10 ms between groups. The cursor first moved a median 14 ms after a finger landed
-on a sleeping guest (max 20) and 14 ms awake (max 22).
-
-*The game's save dialog*: with the idle time cut to 150 ms, on the first kickoff of a new game the service asked as soon as the dialog was up
-(`not sleeping: save dialog up`), the auto-saver saw it appear and go (1.0 s) and persisted after it, and the save is on the disk. *A hidden page*
-(the property overridden and `visibilitychange` dispatched): js-dos paused the emulator (2% CPU), the service ran no probe, a key sent
-meanwhile did not resume it, and when the page was shown the guest was awake (100.8%) with a fresh idle time, and asleep again after it (12.9%).
-*Auto-save off*: in 48 s the guest was never put to sleep (100.9% CPU) and the look was asked 7 times, 1.0, 2.3, 4.0, 8.0, 15 and 15 s apart; with
-auto-save back on it slept within 4 s. *Sound*: no pause landed within 300 ms of a loud chunk in any run (0 of 51 sleeps in the 1.5 s run); the
-game does play sound in stretches with no frames (about a second of crowd noise inside a 1.5 to 5 s gap), which end long before 20 s.
-
-**Not measured, and what the numbers do not say.** Any phone: the A07's CPU, how long Elifoot's silent computations last on it (the 20 s
-rests on a desktop's longest, 10.3 s; on a phone five times slower that stretch is 50 s, the saver would put the guest to sleep 20 s into it
-and the other 30 s would run at a ninth of their speed, about four and a half minutes once, before the learning raises the idle time),
-what the probe costs there, how much of the app's own polling (the auto-saver's screenshot every 300 ms and the exit watcher's every second, which keep
-looking at a framebuffer that cannot change while the guest sleeps: about two of the hard pause's three points here, and a cost that grows on a slow core where the
-probe's does not; skipping them while asleep is a follow-up), iOS Safari's worker, the real battery. A real hidden tab, a screen lock and
-a real background/foreground switch (the harness overrides `document.hidden` and dispatches `visibilitychange`; CDP delivers no lifecycle
-event to a headless page). A sound long enough to span the idle time (every pause that landed within 300 ms of a loud chunk is counted: none
-did). A host and a spectator (hosting is excluded by rule). Elifoot screens the walk never reached. The idle time is set so the saver stays
-out of the way of what was seen, which is not a proof about what was not; that is the reason it is off.
-
-**Diagnostics** (category `power`, the state indicator the roadmap asked for): `service started` (the numbers in force) and `service stopped`
-(the books: sleeps, probes, wakes, time asleep, probing and awake, the longest awake gap, stalls), `setting chosen`, `asleep` (why, the longest
-awake gap so far), `probe` and `asleep again` (the first probe of a sleep only: a still screen probes every 2.25 s and the log would otherwise fill with it and rewrite its persisted tail
-every few seconds; the count is in `awake` and in `service stopped`), `awake` (what woke it: the input's own name, `keys`, `touch`, `persist`..., or the machine's reason,
-with the time asleep and the probes it took), `not sleeping` (why: dialog up, unreadable), and `stall: the guest was working while asleep;
-idle time raised`. Every line carries the log's timestamps.
+Details, measurements and the review history: [docs/mobile-ux/idle-pause.md](docs/mobile-ux/idle-pause.md).
 
 ### Mobile platform polish (screen lock, fullscreen, sound, install, storage)
 
-What a phone does to the app that the game did not ask for, and what the app does about it. It is phase P14 (decisions D4 and D10); the
-design record is [docs/mobile-ux-study.md](docs/mobile-ux-study.md), and the checks are [scripts/platform-harness/](scripts/platform-harness/README.md).
-**Everything is feature-detected and degrades to nothing**: the build's floor (Safari 14.1, iOS 14.5) is untouched, an API a browser lacks
-means the menu does not offer the entry (or says so), and no code path depends on an answer. Every decision lands in the diagnostics log under
-`platform`. The pure rules are helpers ([wake-lock](src/app/core/helpers/wake-lock.helper.ts), [fullscreen](src/app/core/helpers/fullscreen.helper.ts),
-[audio-health](src/app/core/helpers/audio-health.helper.ts), [install](src/app/core/helpers/install.helper.ts),
-[nudge](src/app/core/helpers/nudge.helper.ts), [storage-health](src/app/core/helpers/storage-health.helper.ts)), all specced; the services own the
-listeners; `WAKE_LOCK`, `AUDIO_HEALTH`, `FULLSCREEN`, `PLATFORM_NUDGES` and `JSDOS_STORAGE` in [constants.ts](src/app/core/models/constants.ts) hold the numbers.
+What a phone does to the app that the game did not ask for, and what the app does about it (decisions D4 and D10). One service per concern, each with its rules in a specced pure helper: `WakeLockService`, `FullscreenService`, `AudioHealthService` (+ `SoundChipComponent`), `InstallService`, `NudgeStateService`, `StorageHealthService`; helpers are `*.helper.ts` in `core/helpers`, numbers are `WAKE_LOCK`, `AUDIO_HEALTH`, `FULLSCREEN`, `PLATFORM_NUDGES` and `JSDOS_STORAGE` in [constants.ts](src/app/core/models/constants.ts), checks are [scripts/platform-harness/](scripts/platform-harness/README.md). **Everything is feature-detected and degrades to nothing**: the build's floor (Safari 14.1, iOS 14.5) is untouched, a missing API hides the menu entry (or the entry says so), and no code path may depend on an answer. Decisions are logged under the diagnostics category `platform`. Wake lock, audio and fullscreen hold something of the browser, so the page starts them and stops them in `ngOnDestroy`; none has per-room state, so none has a `clear()`.
 
-- **Keeping the screen on** ([`WakeLockService`](src/app/core/services/shared/wake-lock.service.ts), "Manter a tela ligada",
-  `STORAGE_KEY.KEEP_AWAKE`, **on by default** (`WAKE_LOCK.DEFAULT_ENABLED`, stored as an explicit boolean like the battery saver, so flipping
-  the constant reaches only people who never chose)). Asked for when the game is up (`loadConfig`), when the page becomes visible
-  again (the browser releases the lock when it hides), and when the sentinel's own `release` event arrives on a visible page; let go when the
-  switch goes off and when the page is left (`leaveGameToMenu`, after the save, and `ngOnDestroy`). **A room overrides the switch**: a hosting phone
-  that locks freezes the picture of everyone watching, and a watching one leaves, so `wanted = running && (inRoom || setting)`, with `inRoom` =
-  `MultiplayerService.isInRoom`, refreshed on every `gameStateSubject` emission (the room exists before IN_ROOM is announced and is gone
-  before NOT_IN_ROOM). **The spectator page holds the screen too**, with no setting (it has no menu), and refreshes *last* in its state handler:
-  the `HOST_LEFT` branch drops the room itself and announces nothing more. **A refusal is a state, not an error**: `NotAllowedError` (battery saver; in the
-  headless shell, always) waits for something that could change the answer (the page returning, a new wish, or a tap, at most every
-  `GESTURE_RETRY_MIN_MS`, and the tap listener exists only while such a refusal is waiting), any other failure only for the page returning or a new wish, and a
-  browser that grants and takes back within `QUICK_RELEASE_MS` three times in a row is not asked in a loop. A grant that lands after the wish
-  went away, or after the page was left, is handed straight back. The menu's subtitle is what the browser did, not what was asked.
-  The wake lock keeps the screen on and the battery saver keeps the CPU quiet; they do not interact.
-- **Fullscreen** ([`FullscreenService`](src/app/core/services/shared/fullscreen.service.ts), "Tela cheia"). **The document element goes fullscreen, never
-  `#game-container`**: the browser paints only the fullscreen element and its descendants, and the Ionic alerts, popovers and toasts, the key
-  panel and the chat would vanish (js-dos has a fullscreen of its own that does exactly that, which is why it is not exposed). Nothing about the layout
-  depends on it: the viewport changes and the resize observers that already watch `#game-container` (js-dos's relayout, `OverlaySyncHelper`) do the rest;
-  measured, the canvas followed the viewport and a live room's cursor overlay still covered the canvas to the pixel. The request is made before anything is
-  awaited and before the menu closes (it needs the tap's user activation). **The orientation lock is part of the action**: after a fullscreen that
-  worked, on a device whose primary pointer is a finger, `screen.orientation.lock('landscape')` inside a try/catch (Chromium allows it in fullscreen and
-  an installed app, iOS has no call, a desktop rejects it), and `unlock()` from the `fullscreenchange` that ends fullscreen however it ends. The
-  entry's subtitle says it turns the screen. **No manifest `orientation`, no lock taken unasked** (D4). Hidden where `document.fullscreenEnabled` is
-  not true (iPhone Safari), where the way to chrome-free play is the install entry. **`(display-mode: fullscreen)` also matches the Fullscreen API**, so
-  `InstallHelper.isStandalone` asks only for `standalone`: the first version asked for all three and pressing "Tela cheia" took the install entry away.
-- **The game's sound** ([`AudioHealthService`](src/app/core/services/game/audio-health.service.ts)). **The context is js-dos's** (`getDosAudioNode()?.context`); nothing
-  here creates one. After a call, a lock or a Bluetooth change it can be `suspended` or (WebKit) `interrupted`; the decision table is `AudioHealthHelper`:
-  `resume()` on start, when the page becomes visible and on a gesture (`pointerup`, `touchend`, `click`, `keydown`; the listener exists only while the
-  context is asleep on a visible page; a tap is three events and each asks, because which of them carries the activation WebKit counts is not knowable
-  from here, but the log writes one line), **never on the context's own `statechange`** (a resume answered by a state change is a loop with the
-  browser) and never for a hidden page. `status$` says `blocked` once the context has been asleep on a visible page for `BLOCKED_GRACE_MS`, and the
-  **"Ativar som" chip** ([`SoundChipComponent`](src/app/pages/game/components/sound-chip/sound-chip.component.ts), `.sound-chip`) shows then: shell, **flat**,
-  in the toolbar's end slot (the speaker alone under 600 px, because the title slot holds the room pill: measured at 360 and 402 px with a live room, the pill is not
-  clipped), and a round button in the left rail where a landscape phone has no toolbar. A tap resumes inside the tap. A host's accessible name says that the room
-  is silent too. `evaluate` queues re-entrant looks: `resume()` may change the state before it returns, and the `statechange` that follows would be overwritten by the
-  reading of the look that asked. **Volume** ("Volume do jogo", "Silenciar o jogo", `STORAGE_KEY.GAME_VOLUME` and `GAME_MUTED`): `dosInstance.setVolume`, a gain on the
-  node js-dos puts between its script processor and the speakers; **a mute is a gain of 0 on a context that keeps running**, so muted-by-the-player and
-  blocked-by-the-browser cannot be mistaken for each other, and moving the slider above zero unmutes. **It does not change what spectators hear**:
-  `MultiplayerAudioService` connects the script processor itself to its `MediaStreamAudioDestinationNode`, BEFORE that gain (`capture()` was observed connecting
-  exactly one node, the destination), and the host's "Enviar o som do jogo" switch is the track's own `enabled`. `dosCI.mute()` is not used for the same reason:
-  it stops the emulator pushing samples, and the stream would go silent. The level of that stream could not be measured (the headless shell has no audio device, see
-  the harness README); the claim rests on the topology. **`navigator.audioSession.type = 'playback'`** ("Som no modo silencioso", `STORAGE_KEY.AUDIO_PLAYBACK`,
-  offered only where `navigator.audioSession` exists, **off unless chosen**) makes the game audible with the iPhone's ringer on silent, at the cost of interrupting other
-  apps' audio.
-- **Installing** ([`InstallService`](src/app/core/services/shared/install.service.ts), main bundle). **It starts with the app** (`AppComponent` injects it), not
-  with the game page: Chromium fires `beforeinstallprompt` once, early, and a listener added by a lazy page misses it. The event's default (the browser's own
-  mini-bar) is cancelled and the event held; `prompt()` is called from the tap (menu entry "Instalar o app", or the banner's button, before anything is
-  awaited), the event is spent either way, and Chromium's next one is picked up. `InstallHelper.mode`: `installed` (the `standalone` display mode,
-  `navigator.standalone`, or `appinstalled`; **not** the `android-app://` referrer, which Chrome also sets on an ordinary tab opened from another app and
-  which would hide the offer from people arriving by a link) offers nothing; `prompt`; `ios` (an iPhone, iPod or iPad, including the iPad that asks
-  for the desktop site: a "Macintosh" with a touch screen) shows **a how-to dialog** (`win9x-alert`) whose point is the warning, not the steps: **an app on the Home Screen
-  keeps its own storage, apart from Safari's, so the saves made in the browser are not in it**, and the dialog has a button straight to "Exportar jogos salvos" (and names
-  "Importar jogos salvos" for the other side); `none` offers nothing. Only iOS gets the warning: on Android and the desktop an installed app shares the browser profile's storage (recalled,
-  unverified: on the device checklist).
-- **One-time nudges** ([`NudgeStateService`](src/app/core/services/shared/nudge-state.service.ts), [`NudgeHelper`](src/app/core/helpers/nudge.helper.ts); the install
-  banner and the "Gire o aparelho" hint, beside the backup reminder, which keeps its own answer in `SaveStatusService`). **Each is shown once in the life of the install, and
-  at most one per page load, in this order: backup, install, rotate** (the order of the calls in `GamePage.maybeNudge`, each of which returns true when it showed
-  something; no list of kinds is kept elsewhere to drift from it), after the first-run coach and the room dialog. **"Never again after it was
-  on screen" is the rule, and it holds when storage fails**: the answer is kept in memory before the write is tried, and a store that cannot be READ counts as answered (a
-  nudge that cannot remember it was shown would nag on every visit). Showing is answering: unlike the backup reminder (a dialog the player must answer), a toast that runs
-  out by itself is spent; the menu entries are the permanent way. The install banner is never due on a first visit (`firstPersistedAt` must exist: an earlier session saved something), in an
-  installed app, with nothing to offer, or in a room; it is a **stacked** toast (two buttons beside a sentence squeeze it into a column a few words wide, the lesson of the
-  backup reminder), and its button calls the prompt from its own tap. The rotate hint is for a phone held upright (`FullscreenHelper.phoneInPortrait`: a finger is the
-  primary pointer, short side under `PHONE_MAX_SHORT_SIDE_PX`, taller than wide); it goes away by itself when the phone is turned, and a tablet, a landscape phone and
-  a desktop never get it. Both toasts are `position: 'top'` and cover the toolbar until they go; neither resizes `#game-container`.
-- **Storage** ("Armazenamento", first line of the "Backup" group of "Dados e avançado", read when the window opens; [`StorageHealthService`](src/app/core/services/shared/storage-health.service.ts)).
-  **It only reads** `navigator.storage.persisted()` and `estimate()`, each raced against a deadline and "unknown" when it fails: the one request to protect the storage is
-  `SaveStatusService`'s, made once after the first save that worked, and `saveStatus.durable` stands in when `persisted()` is missing. The line never promises protection:
-  "Protegido" is the browser's answer to `persist()`, "Não protegido" adds that the browser may clear the data if space runs short and the backup is the copy that survives.
-- **Decided against: `contentHint = 'detail'` on the host's video track.** Measured in a same-page loopback of a 640x480 animated canvas under a 120 kbps cap
-  (`scripts/platform-harness/content-hint.mjs`): `detail` kept 640x480 at 5-6 fps, `motion` fell to 320x240 at 12 fps, and no hint to 480x360 at 10 fps. It trades smoothness for
-  sharpness under a weak link, which is a product call about every spectator's picture that no two-device session has informed; the app sets none.
+- **Wake lock** ("Manter a tela ligada", `STORAGE_KEY.KEEP_AWAKE`, **on by default** via `WAKE_LOCK.DEFAULT_ENABLED`, stored as an explicit boolean so flipping the constant reaches only people who never chose). **A room overrides the switch** (`wanted = running && (inRoom || setting)`): a hosting phone that locks freezes every spectator's picture, a watching one leaves. The lock is asked for when the game is up, when the page becomes visible (the browser releases it when the page hides) and when the sentinel's own `release` arrives on a visible page. `refresh()` runs on every `gameStateSubject` emission (the room exists before IN_ROOM is announced and is gone before NOT_IN_ROOM); **the spectator page holds the screen too** (no setting, no menu) and refreshes *last* in its state handler, because the `HOST_LEFT` branch drops the room itself and announces nothing more. Released after the save in `leaveGameToMenu`, and in `ngOnDestroy`.
+- **A wake-lock refusal is a state, not an error.** `NotAllowedError` (battery saver; always in the headless shell) waits for something that could change the answer: the page returning, a new wish, or a tap at most every `GESTURE_RETRY_MIN_MS` (the tap listener exists only while such a refusal waits); any other failure waits only for the page returning or a new wish. A browser that grants and takes back within `QUICK_RELEASE_MS` `QUICK_RELEASE_LIMIT` times in a row is not asked in a loop. A grant that lands after the wish went away or the page was left is handed straight back (`run` counter). The menu subtitle says what the browser did, not what was asked.
+- **Fullscreen** ("Tela cheia"): **the document element goes fullscreen, never `#game-container`** — the browser paints only the fullscreen element's subtree, so Ionic alerts, popovers, toasts, the key panel and the chat would vanish (js-dos's own fullscreen does exactly that, so it is not exposed); the existing resize observers follow the viewport. The request is made before anything is awaited and before the menu closes (it needs the tap's user activation). **The orientation lock belongs to that action**: after a fullscreen that worked, on a finger-primary device, `screen.orientation.lock('landscape')` in a try/catch (iOS has no call, a desktop rejects it), and `unlock()` from the `fullscreenchange` that ends it however it ends. **No manifest `orientation`, no lock taken unasked** (D4: it would take portrait play from people who never asked). Hidden where neither `fullscreenEnabled` nor WebKit's prefixed one is true (iPhone Safari; iPad has the prefixed); installing is the way to chrome-free play there.
+- **The sound's `AudioContext` is js-dos's; nothing here creates one** (`getDosAudioNode()?.context`). After a call, a lock or a Bluetooth change it is `suspended` or (WebKit) `interrupted`. `resume()` is asked on start, on the page becoming visible and on a gesture (`AUDIO_HEALTH.GESTURE_EVENTS`, not `touchstart`, which does not unlock iOS audio; a tap is three events and each asks; the listener exists only while the context sleeps on a visible page), **never on the context's own `statechange`** (a resume answered by a state change is a loop with the browser) and never for a hidden page. `evaluate` queues re-entrant looks: `resume()` can change the state before it returns, and the older reading would overwrite the newer. After `BLOCKED_GRACE_MS` asleep on a visible page the **"Ativar som" chip** appears (`.sound-chip`: shell, **flat, not Win9x**; toolbar end slot, the speaker alone under 600 px because the title slot holds the room pill; a round button in the rail of a landscape phone; a host's accessible name says the room is silent too). `activate()` must call `resume()` synchronously inside the tap, the only activation WebKit counts.
+- **Volume never reaches the stream.** "Volume do jogo" / "Silenciar o jogo" (`GAME_VOLUME`, `GAME_MUTED`) go through `dosInstance.setVolume`, a gain on the node js-dos puts between its script processor and the speakers. **A mute is a gain of 0 on a context that keeps running**, so muted-by-the-player and blocked-by-the-browser cannot be mistaken for each other; moving the slider above zero unmutes. `MultiplayerAudioService` connects the script processor itself to its destination BEFORE that gain, and the host's "Enviar o som do jogo" switch is the track's own `enabled`. **Never use `dosCI.mute()`**: it stops the emulator pushing samples and the stream goes silent. js-dos keeps its own copy at `emulators.ui.volume` (`JSDOS_STORAGE.VOLUME_KEY`) and applies it at boot, so "Apagar todos os dados" must remove it too. **"Som no modo silencioso"** (`navigator.audioSession.type = 'playback'`, `AUDIO_PLAYBACK`) exists only where `audioSession` does and is **off unless chosen**: it interrupts other apps' audio.
+- **Installing** (`InstallService`, main bundle): **it starts with the app (`AppComponent` injects it), not with the game page** — Chromium fires `beforeinstallprompt` once, early, and a lazy page's listener misses it. The mini-bar is cancelled and the event held; `prompt()` is called from the tap before anything is awaited, and the event is spent either way (Chromium's next one is picked up). `InstallHelper.mode` is `installed` for `(display-mode: standalone)`, `navigator.standalone` or `appinstalled` **and nothing else**: not the `android-app://` referrer (Chrome also sets it on an ordinary tab opened from another app, which hid the offer from people arriving by a link; re-add only if the app becomes a TWA), and not `(display-mode: fullscreen)`, which also matches the Fullscreen API, so pressing "Tela cheia" took the install entry away. `ios` (including an iPad posing as a "Macintosh" with a touch screen) gets a how-to `win9x-alert` whose point is the warning: **a Home Screen app has its own storage, apart from Safari's, so the saves made in the browser are not in it**, with a button to "Exportar jogos salvos". Only iOS gets it (Android and desktop installs share the profile's storage: recalled, unverified). Manifest decisions: see *PWA*.
+- **One-time nudges** (`NudgeStateService`, `NudgeHelper`: the install banner and the "Gire o aparelho" hint, beside the backup reminder, which keeps its own answer in `SaveStatusService`). **Each is shown once in the life of the install and at most one per page load, in this order: backup, install, rotate** — the call order in `GamePage.maybeNudge` (each returns true when it showed something; no list of kinds elsewhere to drift from it), after the first-run coach and the room dialog. **"Never again once on screen" must hold when storage fails**: the answer is kept in memory before the write is tried, and a store that cannot be READ counts as answered (a nudge that cannot remember would nag on every visit); a toast that runs out by itself is spent, since the menu entries stay the permanent way. The install banner is never due on a first visit (`firstPersistedAt` must exist), in an installed app, with nothing to offer, or in a room; it is a **stacked** toast (two buttons beside a sentence squeeze it into a column a few words wide) whose button calls the prompt from its own tap, because the toast's dismissal is too late to carry the activation. The rotate hint is for a phone held upright (`FullscreenHelper.phoneInPortrait`: finger-primary, short side under `PHONE_MAX_SHORT_SIDE_PX`, taller than wide; a tablet, a landscape phone and a desktop never get it), never in a room, and goes away when the phone is turned. Both are `position: 'top'` `ion-toast.platform-toast` (shell, flat), cover the toolbar until they go and never resize `#game-container`.
+- **Storage** ("Armazenamento", first line of the "Backup" group of "Dados e avançado", read when the window opens; `StorageHealthService`) **only reads** `persisted()` and `estimate()`, each raced against a deadline and "unknown" on failure; the one `persist()` request is `SaveStatusService`'s, made once after the first save that worked, and `saveStatus.durable` stands in when `persisted()` is missing. **The line never promises protection**: "Protegido" is the browser's answer, "Não protegido" adds that the browser may clear the data and the backup is the copy that survives.
+- **No `contentHint` on the host's video track** (decided against; [content-hint.mjs](scripts/platform-harness/content-hint.mjs) is the measurement): `detail` trades smoothness for sharpness under a weak link, a product call about every spectator's picture that no two-device session has informed.
+- **Still unverified on real devices** (so far only headless Chrome with faked APIs; the Galaxy A07 and iPhone 15 Pro Max passes are pending): iOS `interrupted` and `resume()` from `pointerup`/`touchend`, the wake lock in an installed iOS web app and under the A07's battery saver, the orientation lock on Android and the Back gesture, `audioSession` on the silent switch, the install prompt and app id, the maskable icon in a real launcher, `persist()` outcomes, and the spectators' stream level while the host is muted.
 
-**Verified in headless Chrome 143 against the dev server, with the APIs the shell lacks faked** (see the harness README): the wake lock state machine on the real page, the room
-override, the release on leaving, the spectator page, the chip's appearance, recovery by tap and by chip and its layout at 360, 402 and 844x390, fullscreen through a real tap
-(real `requestFullscreen` and a real orientation lock, which this shell grants), the canvas and the cursor overlay after the resize, the install entry, the stacked
-banner and its flows on Android and iOS user agents, the maskable icon under three masks, the manifest as Chrome reads it (no errors, no installability errors), the volume
-through the real slider and toggle, the reload and the wipe. **Not verified, and on the device checklist:** any real device. Whether iOS Safari delivers `statechange` with
-`interrupted` and takes a `resume()` from `pointerup`/`touchend`; the wake lock in an installed iOS web app (versions 16.4 to 18.x had bugs, recalled); whether the A07 grants a lock under
-its battery saver; the orientation lock on Android, and what the Back gesture does to it; `navigator.audioSession` on the silent switch; the install prompt and the app id Chrome
-resolves for an already-installed copy (`Page.getAppId` answers nothing in the shell); the maskable icon in a real launcher; `storage.persist()` outcomes; and the level of the spectators' stream
-while the host is muted.
+Details, measurements and the review history: [docs/mobile-ux/platform-polish.md](docs/mobile-ux/platform-polish.md).
 
 ### The options menu, "Dados e avançado", and the first minute
 
-Phase P13 (decision D13; the design record is [docs/mobile-ux-study.md](docs/mobile-ux-study.md)). What it replaced: one popover of 13 rows (15 while hosting) with three
-nested popovers behind it, the same action in up to four places, the rare beside the common and "Apagar todos os dados" one row under "Importar jogos salvos"; a 643-character
-welcome alert that sent people to a FAQ that does not teach the game; an `ion-loading` that said "Carregando game…" for the whole boot; a room form that appeared only after
-the game had booted; and a spectator's wait behind a loader nobody could dismiss.
+P13 (decision D13; plan and as-built in [docs/mobile-ux-study.md](docs/mobile-ux-study.md)) is the app's front door: the options menu, the Win9x "Dados e avançado" window that holds everything rare or dangerous, the first-run coach, the boot screen, `?host=1` with its quick host form, and the spectator's waiting card. The rules live in pure, specced helpers in `src/app/core/helpers/` and the components only draw them; `scripts/touch-harness/menu.mjs` drives the lot (modes in the harness README).
 
-**The menu is a model, drawn twice.** [`MenuHelper`](src/app/core/helpers/menu.helper.ts) (pure, specced) turns what the page knows (`MenuContext`: a room, what the browser can do, each
-setting's state and the summary lines) into five sections, in the order they are needed — **Jogo, Multiplayer, Entrada, Exibição, Ajuda** — of `MenuEntry` rows;
-[`OptionsMenuComponent`](src/app/pages/game/components/options-menu/options-menu.component.ts) draws them and tells the page which row was pressed (`MenuEvent`), and `GamePage.onMenuAction` is the one switch
-that acts on them. Where a finger is the primary pointer (`MenuHelper.presentation`) the menu is a **bottom sheet** (an `ion-modal` with breakpoints), anywhere else it is the popover
-under the mouse's button. `GamePage.menuSections` is memoised by the *content* of the context (a fresh array each pass would be a dev-mode NG0100 and a re-render per pass), so it is
-only evaluated, and only changes, while the menu is open. The rules `menu.helper.spec.ts` pins:
+- **The menu is a pure model drawn twice, acted on in one switch.** [`MenuHelper`](src/app/core/helpers/menu.helper.ts) turns `MenuContext` into five sections (Jogo, Multiplayer, Entrada, Exibição, Ajuda); [`OptionsMenuComponent`](src/app/pages/game/components/options-menu/options-menu.component.ts) draws them and `GamePage.onMenuAction` is the one place that acts (a new row is a `MenuEntryId` plus a case there). A finger as primary pointer (`MenuHelper.presentation`) gets a bottom sheet (`ion-modal` with breakpoints, a 560 px column on tablets), anything else the popover. `GamePage.menuSections` is memoised by the *content* of the context: a fresh array per pass is a dev-mode NG0100 and a re-render per pass.
+- **Content rules, pinned by `menu.helper.spec.ts`.** "Salvar agora" is the first row of the first section. No row lives in two places, and nothing of "Dados e avançado" is in the menu (its window is the one row, second of Jogo; the deck may repeat "Digitar texto" and the O Matic key, the menu repeats neither). A row this browser cannot do is not there; a row that cannot work *now* says why ("Resolução do jogo": "Encerre a sala para trocar"). Nothing in the menu is destructive: "Salvar e recarregar" and "Voltar ao menu" ask first, in the page.
+- **Only an `action` row closes the menu.** A switch, the volume slider and the zoom keys change a setting where it stands, because the person is usually about to change the next one. A switch is the *whole row* (label inside the `ion-toggle`, so the target is 48 px, not the switch at the end); every tappable row and each section's "?" is at least 44 px. Fullscreen and install requests, and the file pickers of "Dados e avançado", need the tap's own call stack: `onMenuAction` calls them synchronously and `onAdvancedAction` awaits nothing before `input.click()`.
+- **The Zoom row is the camera's single-pointer twin (WCAG 2.5.1):** fit, "-" and "+" whenever the camera is on, whether or not the key panel is. See *The camera*.
+- **The sheet is an overlay of the app and moves nothing: `#game-container`'s rectangle is identical with it open and closed.** It is shell and flat, in the toolbar's family (decision D3: the retro boundary is *companion windows*). It opens at 60% of a portrait phone (the picture stays in view) and at the top on a landscape one (`MenuHelper.initialBreakpoint`; 60% of 390 px would show one row), where it covers the whole picture, so a zoom rung or the smoothing switch (which keep it open on purpose) show their result only after a drag down or a close: accepted. "Voltar ao menu" is the sixth row, below the fold there; rows below the fold are reachable only once expanded (a thumb drags, a script's `scrollIntoView` cannot: `setCurrentBreakpoint(1)`, `nav.mjs tapMenuRow`).
+- **Back closes the window first.** `NavigationGuardHelper` verdict `close-window` dismisses the top modal (sheet, "Dados e avançado", guide) and cancels the navigation; the *next* Back asks about leaving. It holds with no emulator too: `?host=1` has the room dialog up while the game boots, and a Back that left stranded it over the landing page, where it starts nothing. Nothing is pushed on the history (it rests on `canceledNavigationResolution: 'computed'`); an alert or a loader over the window is not the window's to close, so then the guard answers as it always did.
+- **"Dados e avançado" is a Win9x companion window** ([`AdvancedMenuHelper`](src/app/core/helpers/advanced-menu.helper.ts), [`AdvancedModalComponent`](src/app/pages/game/components/advanced-modal/advanced-modal.component.ts)): six groups from safe to unsafe (Backup: the "Armazenamento" line, export, import; Salvamento automático; Patches; Ferramentas: O Matic, "Diagnóstico", and the disk copy only while the diagnostics are on; Recursos experimentais: live keyboard, battery saver, camera; and, last and alone, the **Zona de perigo**, a dashed maroon box so the wipe differs in *shape* as well as colour); every row has a sentence on what it does and each group a "?". What ends in a reload (import, both patch rows, the wipe) is disabled while a room is live, with the reason (`roomBound`): a host's reload ends the room for everyone. The O Matic and diagnostics rows (`closes`) close the window first.
+- **Three settings changed their words, never their keys** ([`InvertedSettingHelper`](src/app/core/helpers/inverted-setting.helper.ts)): "Suavizar a imagem", "Salvar ao gravar o jogo", "Salvar a cada 5 min" (never inverted). `STORAGE_KEY.DISABLE_SMOOTH_FILTER` and `DISABLE_AUTO_SAVE` still store the OFF flag (stored `true` reads as off, an absent key as on), because a migration (read old, write new, delete old) leaves a window where a failed write reverses a player's choice, and an upgrade that changes nothing on disk cannot. Read them through the helper, where the direction lives (vibration and the spectators' sound already do).
+- **The wipe asks twice** ([`WipeFlowHelper`](src/app/core/helpers/wipe-flow.helper.ts), `GamePage.confirmWipe`). The first dialog says why a backup matters and offers "Baixar backup agora" (it leaves the dialog up: the backup is done on the way) before "Continuar"; the last has an `alert-danger` button that does nothing until "Entendo que vou perder meus jogos salvos" is ticked, and says so when pressed without (a silent destructive button reads as broken) — a checkbox, not a typed word: a soft keyboard is the hardest thing on the device this is for. The boot-failure dialog's "Apagar todos os dados…" (same name as the menu, FAQ and manual) goes through the same two questions and stays up under them; with no emulator its backup is the disk copy read straight out of IndexedDB.
+- **The first-run coach** ([`FirstRunCoachComponent`](src/app/pages/game/components/first-run-coach/first-run-coach.component.ts), `FirstRunHelper.due`) replaced the welcome alert: three cards (tap, type, save and back up) written for the device (a finger is told "Toque", a mouse "Clique") and describing the real controls, in a Win9x dialog whose title bar and buttons stay put while the card scrolls. Shown once, only after the game's own screen is seen, and not on a visit that came to host and now has a room on the air (it is still due next time). It reuses `STORAGE_KEY.HIDE_TUTORIAL` (whoever answered the old welcome has answered this), written when the coach goes by any way; an unreadable store counts as answered, or it would greet every visit. "Primeiros passos" in Ajuda brings it back.
+- **Contextual help is a name table** ([`HelpTopicHelper`](src/app/core/helpers/help-topic.helper.ts)): each "?" (menu section, "Dados e avançado" group, room dialog, a coach card's "Saiba mais") names a topic = guide tab + accordion `value` + id `guide-<tab>-<value>`; renaming an accordion in the FAQ or manual means editing the table, and `guide-topics.spec.ts` fails otherwise. The guide scrolls at the modal's `ionModalDidPresent`, **not after a delay**: `ion-segment-view` pans to a tab once, by `index * offsetWidth`, before Ionic lifts the modal's `display: none`, so from the second open of a page load it measured 0 and the Manual button was lit over the FAQ's text; the guide asks again (`setContent`). The room dialog's "?" is lent by the caller: the spectator's page does not carry the guide.
+- **The boot screen** ([`BootScreenComponent`](src/app/pages/game/components/boot-screen/boot-screen.component.ts), `BootScreenHelper`) replaced the `ion-loading`: four steps (Baixar, Preparar, Windows 3.1, Elifoot), the stage text, "Voltar ao menu". **The bar never makes up a number:** determinate only while js-dos reports a percentage (download, unpacking), otherwise it moves without a length; weighting four steps into one figure would look better and be wrong. Hints after `BOOT_SCREEN.SLOW_AFTER_MS` / `LONG_AFTER_MS`; it promises no time. It is `position: fixed`, out of the layout, at the root of the page template (not inside `ion-content`, which contains descendants), and the picture's container behind it stays as hidden and boxless as it was behind the loader. "Voltar ao menu" reloads to the landing page without saving or asking, since nothing has been played (a download or boot in flight cannot be cancelled from outside, so the reload is what stops it). Its 1 s hint interval runs inside the component, outside the zone, cleared on destroy.
+- **`?host=1` shows the room dialog while the game boots** (`askForRoomWhileBooting`, `startRoomAskedForWhileBooting`): the dialog needs no emulator and hosting does, so the room goes on the air when the game is up, **never by reloading the host page** (a reload ends the room). The flag is stripped from the address at once (`replaceUrl`), or every patch or failure-retry reload would reopen the dialog forever. A dialog answered early leaves a line on the boot screen; one still open is waited for, so the coach never lands on it. **Quick host** ([`QuickHostHelper`](src/app/core/helpers/quick-host.helper.ts)): "Transmitir agora" plus one summary line, the fields behind "Alterar nome, código, senha, limite e cor"; the password is a flag in the summary and is never stored (a share link omits it too).
+- **A spectator's wait is a card, not a loader** (`JoinGamePage.waitingForRoom`): the room being entered, hints at `JOIN_HINT_AFTER_MS` and `JOIN_LONG_HINT_AFTER_MS` (the join times out at `STREAM_WAIT_TIMEOUT`), and a 44 px "Cancelar" (the only way out of a bad wait; Ionic's own is 36) that leaves the room and **reloads** to the join page with the code on the address, so the dialog comes back filled in: the fresh page load every way back into a room needs (*A spectator only ever joins from a fresh page load*).
+- **Loaders are shell (WIN9X-1).** `ion-loading` is neither a window nor a companion, only the app saying it is busy, so it is not skinned Win9x (that would also need a `loadingController.create` parity check beside the alert one, for nothing a player feels). The boot screen and the spectator's waiting card are shell too; the room dialog is the Win9x dialog it always was. The seam (a Material loader, then a Win9x alert) is accepted.
+- **Not verified on a real phone (the device pass is pending):** thumb reach of the sheet and its handle, taps near the danger zone, whether a newcomer understands the coach, Android Back and an iOS edge swipe with the sheet open (only `history.back()` in headless Chrome), iOS swipe-to-dismiss, notch and home indicator, a real keyboard in the room dialog, an upgrader's old switches.
 
-- **"Salvar agora" is the first row of the first section.** "Voltar ao menu" is in that section too, so it comes before every other section's rows; it is the sixth row (the seventh where the iPhone's silent-mode switch is offered), so on a 390 px tall
-  landscape phone (where the sheet opens at the top and shows about four rows) it needs a scroll (`menu.mjs layout`, 844x390).
-- **No row is in two places in the menu, and nothing of "Dados e avançado" is in it** (its window is one row, the second of Jogo). The deck may repeat "Digitar texto" and the O Matic key; the menu repeats neither
-  (the O Matic is in the window and the deck's "Mais": two places).
-- **A row that cannot work on this browser is not there** (fullscreen, install, the touch mode, vibration, the wake lock, the iPhone's silent-mode sound, the rails' size, the zoom row), **and a row that cannot work *now* says why**
-  ("Resolução do jogo": "Encerre a sala para trocar"). Nothing in it is destructive; "Salvar e recarregar" and "Voltar ao menu" ask first, in the page.
-- **Only an `action` row closes the menu**; a switch, the volume slider and the zoom keys change a setting where it stands, because the person is usually about to change the next one.
-  A switch is the **whole row** (the label is inside the `ion-toggle`), so the target is 48 px and not the 36 px switch at its end; every row is at least 44 px under a finger, and so is each section's "?"
-  (`menu.mjs layout`, 8 windows).
-- **The Zoom row is the camera's single-pointer twin** (WCAG 2.5.1): Ajustar, "-" and "+", whenever the camera is on, whether or not the key panel is. See *The camera*.
-
-**The sheet is an overlay of the app, so it moves nothing: `#game-container`'s rectangle is identical with it open and closed** (`menu.mjs layout`, 8 windows from a 360x640 phone to a 1280x800 laptop; `stage.mjs layout` still 0 failures at 19). The
-sheet is shell, flat, in the toolbar's family (decision D3: the retro boundary is *companion windows*, and a menu is the app's own); on a tablet it is a 560 px column, not full width. It opens at 60% of a portrait phone (the picture,
-a quarter to a third of the screen, stays in view) and at the top on a landscape one (`MenuHelper.initialBreakpoint`), where it covers the whole picture: a zoom rung or the smoothing switch (which keep the sheet open on purpose) show their result only once
-the sheet is dragged down or closed. Left as is: a sheet that left part of a 390 px tall picture visible would show one row (why it opens at the top). **The rows below the fold are only reachable once it is expanded**: a thumb drags it up (Ionic's `expandToScroll`),
-but `scrollIntoView` from a script cannot, so the harness calls `setCurrentBreakpoint(1)` first (`nav.mjs tapMenuRow`). **Back closes the window first**: the route guard (`NavigationGuardHelper`, verdict `close-window`) dismisses the top modal
-and cancels the navigation, so the Android Back button and an iOS edge swipe close the sheet, "Dados e avançado" or the guide before the *next* Back asks about leaving (also while the game is still booting, when the only window is the room dialog `?host=1` opens: with no emulator there is no question to ask, but a Back that left with that dialog up stranded it over the landing page, where it starts nothing); nothing is pushed on the history (the `'computed'` restoration the dialog already
-relies on does the rest: `history.length` and the address were constant across the whole sequence), and an alert or a loader over the window is not the window's to close, so then the guard answers as it always did. Checked with `history.back()`
-after arriving through the landing page's own link — a hash set by hand gives the router no page ids and cannot be restored (the harness trap).
-
-**"Dados e avançado" is the second tier** ([`AdvancedMenuHelper`](src/app/core/helpers/advanced-menu.helper.ts), [`AdvancedModalComponent`](src/app/pages/game/components/advanced-modal/advanced-modal.component.ts)), a **Win9x companion window**
-(the first place the player leaves the shell for a window with its own look): six groups, from what is safe to what is not — Backup (the storage line, export, import), Salvamento automático, Patches, Ferramentas (the O Matic, the diagnostics,
-and the disk copy while the diagnostics are on), Recursos experimentais (the live keyboard, the battery saver, the camera) and, last, alone, the **Zona de perigo** (a dashed maroon box, so the wipe is a different *shape* as well as a colour). Every row has a sentence
-about what it does. What ends in a reload (import, both patch rows, the wipe) is disabled while a room is live, with the reason: a host's reload ends the room for everyone (the page did not guard these before; only the resolution was). The file pickers live in the
-page and open from the tap's own call stack (`onAdvancedAction` awaits nothing before `input.click()`); the O Matic and the diagnostics close the window first. Each group has a "?" that opens the guide (below).
-
-**Three settings changed their words and not their keys** ([`InvertedSettingHelper`](src/app/core/helpers/inverted-setting.helper.ts), specced): "Suavizar a imagem" (was "Desativar Suavização"), "Salvar ao gravar o jogo" (was "Desativar Sync Save") and "Salvar a cada 5 min" (was "Save
-Periódico (5min)"; this one was never inverted). `STORAGE_KEY.DISABLE_SMOOTH_FILTER` and `DISABLE_AUTO_SAVE` still store the OFF flag under the same names, because a migration (read the old key, write a new one, delete the old) leaves a window where a failed write reverses a
-player's choice, and an upgrade that changes nothing on disk cannot. A stored `true` reads as "off", an absent key as "on" (the default every install has); `menu.mjs data` seeds the two old flags, reloads, and sees both switches off, the canvas unsmoothed and the auto-saver not running, then
-flips them with real taps and reads the stored flags back. Vibration and the spectators' sound read through the same helper (they were already worded as a positive over an inverted key).
-
-**The wipe asks twice** ([`WipeFlowHelper`](src/app/core/helpers/wipe-flow.helper.ts)). The first dialog offers **"Baixar backup agora"** before **"Continuar"** and says why (the button leaves the dialog up: the backup is one thing done on the way); the last has an `alert-danger` button that
-does nothing until **"Entendo que vou perder meus jogos salvos"** is ticked, and says so when pressed without (a checkbox and not a typed word: a soft keyboard is the hardest thing on the device this is for). The boot-failure dialog's "Apagar todos os dados…" (named like the menu's row; it was "Limpar todos os dados") goes through the same two
-questions and stays up under them; with no emulator its backup is the disk copy read straight out of IndexedDB. `menu.mjs data` stops at the last question without confirming it; `menu.mjs wipe` goes all the way and sees the data gone after the reload.
-
-**The first-run coach** ([`FirstRunCoachComponent`](src/app/pages/game/components/first-run-coach/first-run-coach.component.ts), [`FirstRunHelper`](src/app/core/helpers/first-run.helper.ts)) replaced the welcome alert: three cards — tap, type, save and back up — of two
-sentences each, written for the device (a finger is told "Toque" and "Texto", a mouse "Clique", Esc and the menu), in a small **Win9x** dialog whose title bar and buttons stay put while the card between them scrolls (a 390 px tall phone). It says nothing about "learning to play" and
-describes the real controls (direct tap, the key panel, "Digitar texto", the backup). It is **shown once, after the game's own screen is seen** and reuses `STORAGE_KEY.HIDE_TUTORIAL` (so a player who answered the old welcome has answered this), written when the coach goes by any way
-("Pular", "Entendi", the X, Back); an unreadable store counts as answered, the nudges' rule. "Primeiros passos" in Ajuda brings it back. A visit that came to host and now has a room on the air does not get it (it is still due next time).
-
-**Contextual help is a name table** ([`HelpTopicHelper`](src/app/core/helpers/help-topic.helper.ts)): the "?" beside a section of the menu, a group of "Dados e avançado", the room dialog and a coach card's "Saiba mais" open the guide **at a topic** — the right tab, the accordion open
-through its `value`, and scrolled to its `id` (`guide-<tab>-<value>`) **at the modal's `ionModalDidPresent`, not after a delay**: `ion-segment-view` pans to a tab by `index * offsetWidth` once, as it loads, and Ionic removes the modal's `display: none` only after that, so on every open but the first of a page
-load the width it measured was 0 and the Manual button was lit over the FAQ's text; the guide asks the view again (`setContent`, instant) once the window has a width (`menu.mjs coach` opens a Manual topic twice and checks the pan). `guide-topics.spec.ts` renders the FAQ and the manual and fails when a topic names an accordion that does not exist (or a label is quoted that the menu no longer has). The room dialog's "?" is lent by the caller, because the
-guide is a window of the game page's module and the spectator's page does not carry it.
-
-**The boot screen** ([`BootScreenComponent`](src/app/pages/game/components/boot-screen/boot-screen.component.ts), [`BootScreenHelper`](src/app/core/helpers/boot-screen.helper.ts)) replaced the `ion-loading`: the app's name on the game's green, **four steps** (Baixar, Preparar, Windows 3.1, Elifoot) marked
-done, active or to do, the P6 stage text unchanged under the title, and "Voltar ao menu". **The bar does not make up a number**: it is determinate only while js-dos reports a percentage (the download and the unpacking) and moves without a length otherwise; weighting four steps into one figure would
-have looked better and been wrong. After 15 s it says that slow phones and networks take longer, after 60 s that leaving is allowed; it promises no time (how long Windows 3.1 takes on a phone is unknown). It is `position: fixed` and out of the layout, at the root of the page's template (not inside
-`ion-content`, which contains its descendants); the picture's container behind it is as hidden and as boxless as it was behind the loader (`menu.mjs boot` asserts that its rectangle is the same before and after). "Voltar ao menu" reloads to the landing page — nothing has been played, and a download or a boot in flight cannot be
-cancelled from outside, so the reload is what stops them. Its elapsed-time hints run on a 1 s interval **inside the component, outside the zone**, cleared on destroy.
-
-**`?host=1` shows the room dialog while the game boots** (`GamePage.askForRoomWhileBooting`, `startRoomAskedForWhileBooting`): the dialog needs no emulator and hosting does, so the dialog goes first (the address is stripped of the flag at once, as before: a patch reload must not reopen it) and the room goes
-on the air when the game is up — **never by reloading the host page**. A dialog answered before the game is up leaves a line on the boot screen ("Sua sala entra no ar assim que o jogo carregar"); one still open when the game is up is waited for, so nothing stacks on it. **Quick host**
-([`QuickHostHelper`](src/app/core/helpers/quick-host.helper.ts)): the room dialog's host form is **"Transmitir agora"** and one line (`ELI-XK3P · sem senha · até 6 espectadores`; "Você aparece como Leu" above it, or just the name field for a host who has none); **"Alterar nome, código, senha, limite e cor"** opens the
-name, code, password, limit and colour. The password is a flag in the summary and is never stored, here or anywhere (a share link leaves it out on purpose).
-
-**A spectator's wait is a card, not a loader** (`JoinGamePage.waitingForRoom`): the room being entered, a hint at 8 s ("Redes móveis podem demorar um pouco mais") and at 15 s (it points at Cancelar; the timeout is 20 s), and **"Cancelar"** (44 px tall: the only way out of a bad wait; Ionic's own button is 36), which leaves the room and **reloads** to the join page with the code on
-the address — the same fresh page load every other way back into a room needs (*A spectator only ever joins from a fresh page load*), so the dialog comes back filled in.
-
-**Loaders are shell.** The question (WIN9X-1) was whether `ion-loading` joins the Win9x list. It does not: the rule is that *companion windows* are Win95 and the shell stays Elifoot green, and a loader is neither window nor companion, it is the app saying it is busy (nothing to operate, nothing to dismiss);
-skinning it would also need a `loadingController.create` parity check beside the alert one, for no gain a player can feel. The boot screen and the spectator's waiting card are shell too (the first is the app's splash on the app's green before there is a game for a companion to accompany, the second a card of the join page, which is a shell page);
-the one boot-time surface that asks something, the room dialog, is the Win9x dialog it always was. The seam WIN9X-1 noted (a Material loader then a Win9x alert) is accepted and written down here instead of fixed.
-
-**Not verified (the device checklist of the PR):** thumb reach of the sheet on both phones and its drag handle's discoverability; accidental taps near the danger zone; whether a person who has never seen the app understands the three cards; Android Back and an iOS edge swipe with the sheet open (checked only as `history.back()` in
-headless Chrome); iOS swipe-to-dismiss of the sheet; the sheet and the boot screen over a real notch and home indicator; a real keyboard in the room dialog's name field; and that an upgrading player's old switches survive on a real device (checked by seeding the old keys in headless Chrome).
+Details, measurements and the review history: [docs/mobile-ux/options-menu.md](docs/mobile-ux/options-menu.md).
 
 ### Screen-scraping instead of emulator events
 
-Two flows read the framebuffer because js-dos exposes no game-level state (and the guest is a 16-bit
-Windows app, so there is nothing to hook):
+Two flows read the framebuffer because js-dos exposes no game-level state (and the guest is a 16-bit Windows app, so there is nothing to hook):
 
-- **Load detection** — `GamePage.waitForGameScreen()` polls `dosCI.screenshot()` every 500 ms for up
-  to 45 s (each look raced against 5 s, because `screenshot()` has no deadline) and
-  `BootStageHelper.isGameScreen` samples four hardcoded pixels for the game's green background
-  (tolerance 25). Note this waits for the *game's* screen, i.e. it also covers the DOS + Windows 3.1
-  boot time, and the same frames label the boot screen's stage (see *Booting the emulator*). Failures
-  increment `STORAGE_KEY.FAIL_COUNT`, timeouts and an undetected screen do not; the wipe is
-  offered from the third failure of the emulator itself.
-- **Auto-save** — [auto-saver.service.ts](src/app/core/services/game/auto-saver.service.ts) samples
-  the framebuffer every 300 ms and [emulator-control.service.ts](src/app/core/services/game/emulator-control.service.ts)
-  OCRs one 132x20 strip with tesseract.js (`por` model) looking for "a gravar o jogo…" via
-  sliding-window Levenshtein distance. When the game finishes its own save, the VM is persisted so
-  progress survives a browser reload.
+- **Load detection** — `GamePage.waitForGameScreen()` polls `dosCI.screenshot()` (`GAME_BOOT`: 500 ms looks, 45 s window, each look raced against `SCREENSHOT_TIMEOUT_MS` because `screenshot()` has no deadline) and `BootStageHelper.isGameScreen` samples four hardcoded pixels (`GAME_SCREEN_PROBE`, tolerance 25) for the game's green. It waits for the *game's* screen, so it also covers the DOS + Windows 3.1 boot, and the same frames label the boot screen's stage (see *Booting the emulator*). `STORAGE_KEY.FAIL_COUNT` counts rejections of `elifootMain` only (never a timeout; an undetected screen resets it), and the wipe is offered from the third in a row, for a failure of the emulator itself only.
+- **Auto-save** — [auto-saver.service.ts](src/app/core/services/game/auto-saver.service.ts) samples the framebuffer every `DEFAULT_TICK_INTERVAL_MS` and [emulator-control.service.ts](src/app/core/services/game/emulator-control.service.ts) OCRs one strip with tesseract.js (`por`) for "a gravar o jogo…" by sliding-window Levenshtein distance. When the game finishes its own save, the VM is persisted so progress survives a reload. Helpers: `OcrRegionHelper`, `RegionVerdictCache`, `OcrWorkerHost`, `TimeoutHelper`.
 
-Both are coordinate- and color-sensitive: changing the emulator canvas size, the Windows 3.1 video
-mode/resolution, or the game's language will silently break them. Constants live in
-[constants.ts](src/app/core/models/constants.ts). The load-detection pixels are absolute and pass at
-800x600 and 640x480, **for different reasons.** They sample Elifoot's green BACKDROP form, not the
-game window: at 800x600 the window is centred with a margin all round, so the backdrop shows for as
-long as the game runs; at 640x480 the window fills the frame, and in play the four points read the
-menu bar and the squad list (measured in play: 1 match of the 3 needed, only the `x = 0` point
-stays green; on the splash, the new-game dialog and the Registo screen it is 4 of 4). The probe
-passes at boot only because the splash (Acerca, or Registo on a later visit) is smaller than the
-frame and sits on the backdrop, and "green lost" is the normal state afterwards. That is fine for
-`waitForGameScreen`, which runs only at boot; anything built on "the green went away" must use
-Windows' desktop blue `(0, 64, 128)` and the Program Manager icon instead, which is what the exit watcher
-does (see *Save safety nets*).
-Confirmed on a real boot at 640x480 in the app: `Green check passed`, and the boot screen reads "Iniciando
-o DOS…" then "Carregando o Elifoot…" ("Abrindo o Windows 3.1…" is shorter than the 500 ms between
-looks, as in P6). The OCR strip is **centre-relative** (`OcrRegionHelper.savingDialogRegion`:
-left = round(W/2 − 68), top = round(H/2 − 25), 132x20, so (332, 275) at 800x600 and (252, 215) at
-640x480), because the dialog is centred and its crop is byte-identical in both modes. Confirmed on
-a real save at 640x480 through the app's own service and tesseract: the region resolved to
-(252, 215), the strip held the 1892 navy and 352 white pixels it holds at 800x600, `isGameSaving`
-answered `true` for the length of the dialog, and the auto-saver persisted `QA640.E98`.
+Load-bearing invariants:
 
-Load-bearing invariants of the auto-save — each of these was a bug, or a measured trap:
+- **Both are coordinate-, colour- and language-sensitive.** Changing the canvas size, the Windows 3.1 video mode or the game's language silently breaks them; constants are in [constants.ts](src/app/core/models/constants.ts) (`GAME_SCREEN_PROBE`, `EMULATOR_CONTROL_CONFIG`, `AUTO_SAVER`). Re-check any retune of the probe at both video modes (next bullet).
+- **The green probe is a boot-only signal; at 640x480 "green lost" is the normal state.** The four points sample Elifoot's green BACKDROP form, not the game window: at 800x600 the window is centred and the backdrop shows for the whole run, at 640x480 the window fills the frame and in play the points read the menu bar and the squad list. It passes at boot only because the splash is smaller than the frame and sits on the backdrop. Nothing may read a missing green as "the game exited": that is told by Windows' desktop blue `(0, 64, 128)` plus the Program Manager icon (`GameExitHelper`, see *Save safety nets*).
+- **The OCR strip is centre-relative** (`OcrRegionHelper.savingDialogRegion`, `SAVING_DIALOG_REGION`), because the dialog is centred and byte-identical at both video modes; the old absolute rectangle silently matched nothing at 640x480.
+- **The save dialog is brief, and only a real save shows it.** It is up 0.6 s to 1.7 s depending on the machine (the video mode does not change it), which is what the 300 ms tick must catch on a phone whose OCR pass is slow: never slow the tick back down. A loaded game's later kickoffs and end of round show none, so not every "Jogar" saves; "A iniciar o jogo…" and "A carregar o jogo…" sit in the same place and read `false` only because their edit distance is above `DEFAULT_TOLERANCE_GAME_SAVING_DETECTION`, as do the half-time and end-of-round screens.
+- **Persist only AFTER the dialog is gone.** The game writes the `.e98` while it is up, and a persist that lands mid-write stores a truncated save over a good one; `monitor()` waits for it to disappear (`MAX_WAITING_TIME_FOR_GAME_SAVE_DETECTED`), then persists. A persist that fails is owed and retried by the next tick that finds no dialog, a few times, then dropped.
+- **`isGameSaving` answers `true`, `false` or `null` ("OCR could not read the strip"), and `null` is never the all-clear.** Once the dialog has been seen, a `null`, a throwing `screenshot()` and a look that overruns the heartbeat all count as "still saving"; before, `null` is "not saving". Folding OCR failures into `false` would persist mid-write when the worker dies under the save's memory spike. A `null` is not remembered. Other askers (the manual, leave and hidden-page saves and the idle pause) go through `SaveSafetyService`'s look, which counts `null` the same way and checks `AutoSaverService.running` first, because asking with the loop stopped starts the 5 MB worker download for a page that switched auto-save off.
+- **OCR is a cache keyed by a hash of the strip, never a gate in front of it.** A look is `screenshot()` plus an FNV-1a of the strip; OCR runs only for a strip it has not read, and an unchanged one gets the verdict it got last time (`RegionVerdictCache`) — remembered, not just "unchanged", because while the dialog is up the strip is static and the caller asks whether it is *still* up. A moving guest cursor changes the hash and costs one more pass; it cannot suppress one. **A future pixel-signature matcher must mask the cursor sprite**, which is drawn into the framebuffer.
+- **No caller ever waits for the OCR worker.** `createWorker()` has no deadline (with the language file unreachable it stays pending for ever), so `OcrWorkerHost` hands out the worker or `null` at once; a start is one memoised attempt raced against `OCR_WORKER_TIMEOUT_MS`, retried on `OCR_RETRY_BACKOFF_MS`, then abandoned until auto-save is switched off and on. tesseract.js returns the `Worker` only once initialised, so a stalled start leaves a thread nobody can terminate (a late one is adopted if nothing is ready, terminated if something is) and the bounded retry count is what bounds the leak: **do not "fix" it into an unbounded retry.** The worker starts when the auto-saver does (after the game loaded), never in a constructor, and `stop()` terminates it; `createWorker` gets an `errorHandler` or a failed start is also an uncaught exception.
+- **The loop never dies, and a failure is never silent.** `tick()` reschedules in `finally` (a throw once set `ERROR` and ended auto-save while the menu still showed it on); a failed tick is retried on `RETRY_BACKOFF_MS`, then every 60 s. Each look is guarded by `HEARTBEAT_MS` (`isGameSaving` has no deadline), the tick as a whole is not (it lasts as long as the save). The "Salvando máquina virtual…" loader is dismissed in `finally` and its present/dismiss bounded by `OVERLAY_TIMEOUT_MS` (a page Chrome counts as hidden never finishes those animations); `persist()` is serialised and bounded by `PERSIST_TIMEOUT_MS`; the periodic save is awaited and caught.
+- **When OCR is unavailable the 5-minute periodic save is forced and the user is told once** (a toast from `AutoSaverService`, because only it knows the fallback is on). It is a separate flag from the user's own periodic save, so OCR coming back, or `stop()`, ends the forced one without touching theirs.
+- **Hidden pages are skipped unless hosting.** A host keeps streaming and playing from a tab behind another, so `start()` takes `keepRunningWhileHidden` (the page passes `MultiplayerService.isHosting`). The loop runs outside the Angular zone (several ticks a second would each cost a change-detection pass), and `GamePage.ngOnDestroy` stops it: the services are root singletons that survive errors by design.
+- **Known, not fixed:** the tesseract worker, core and `por` model (~5.4 MB) come from jsDelivr at runtime (decision D5: self-host later). Offline or with the CDN blocked, OCR is unavailable and the forced periodic save is all that saves the game; the fixed worker deadline can be shorter than a slow mobile link needs (the retries and a late worker's adoption mostly absorb that).
+- **Unverified on real devices** (the Galaxy A07 / iPhone 15 Pro Max passes are pending): the OCR and 3.3 Hz screenshot cost and heat on a phone, auto-save at 640x480 on a real kickoff, and the tesseract assets loading over mobile data.
 
-- **The game's save dialog is up for about 1.7 s, and only a real save shows it.** Measured on a real
-  save at 800x600 (the ROI frames are in the research captures): "A gravar o jogo…" appeared at the
-  first kickoff of a *new* game, stayed 1.70 s, and was byte-identical to the baseline capture.
-  Timed again for the 640x480 change, with a 10 ms recorder on a new game each, same machine and
-  minute: **0.61 s at 800x600 and 0.62 s at 640x480.** The video mode does not change it; the
-  machine does, and a quicker one has well under 1.7 s, which is what the 300 ms tick has to catch
-  on a phone whose OCR pass is slow. A loaded game's next two kickoffs and the end of its round
-  showed no dialog at all, so do not assume every "Jogar" saves. The progress dialogs "A iniciar o jogo…" and "A carregar o jogo…" sit in the same place
-  and are read as `false` (edit distance above the tolerance of 4), and so were the half-time window
-  and the end-of-round screens over a whole round.
-- **Persist only AFTER the dialog is gone.** The dialog is up while the game writes the `.e98`; a
-  persist that lands mid-write stores a truncated save over a good one. `monitor()` therefore waits for
-  the dialog to disappear (up to 2 min, polling once a second), then persists. A look has three
-  answers: `isGameSaving` resolves `true`, `false` or `null` ("OCR could not read the strip": no frame,
-  no worker, a `recognize()` that rejected, a canvas that would not encode). Once the dialog has been
-  seen, a `null`, a `screenshot()` that throws and a look that overruns the heartbeat all count as
-  "still saving", never as the all-clear. Before it has been seen, `null` is "not saving". **Why:** OCR
-  failures used to be folded into `false`, so a worker dying under the memory spike of the save would
-  have persisted mid-write. A persist that fails is *owed* and retried by the next tick that
-  finds no dialog, a few times and then dropped.
-- **OCR is a cache keyed by a hash of the strip, never a gate in front of it.** Each look is
-  `screenshot()` plus a 32-bit FNV-1a of the 10,560 bytes (~0.1 ms); OCR runs only for a strip it has
-  not read, and an unchanged strip gets the verdict it got last time (`RegionVerdictCache`). The
-  verdict is remembered, not just "unchanged", because while the dialog is up the strip is static and
-  the caller is asking whether it is *still* up. A moving guest cursor over the strip changes the hash
-  and costs one more OCR pass; it cannot suppress one. **A future pixel-signature matcher must mask the
-  cursor sprite**, which is drawn into the framebuffer. Measured over one whole round (235 s): ten OCR
-  passes, where the old loop ran one per 1.5 s tick.
-- **No caller ever waits for the OCR worker.** `createWorker()` has no deadline (with the language file
-  unreachable it stays pending for ever, measured), so the old `await getWorker()` froze the loop.
-  `OcrWorkerHost` hands out the worker or `null` immediately; a start is one memoised attempt raced
-  against 20 s (`TimeoutHelper`), then retried after 5 s, 15 s and 60 s, then abandoned until
-  auto-save is switched off and on. tesseract.js returns the `Worker` only once fully initialised, so a
-  start that stalls leaves a thread that cannot be reached to terminate: one that lands late is adopted
-  if nothing is ready and terminated if something is, and the bounded retry count is what bounds the
-  leak. Do not "fix" this into an unbounded retry. The worker is created when the auto-saver starts
-  (after the game has loaded), not in a constructor, and terminated by `stop()`; `createWorker` gets
-  an `errorHandler` because without one a failed start is also an uncaught exception.
-- **The loop never dies, and a failure is never silent.** `tick()` reschedules in `finally`; a tick that
-  throws is retried after 5 s, 15 s, 60 s and then every 60 s (it used to set `ERROR`, which ended
-  auto-save for the session while the menu still showed it on). Each look is guarded by a 10 s
-  heartbeat (`isGameSaving` has no deadline of its own), the tick as a whole is not, because it lasts
-  as long as the save. The "Salvando máquina virtual…" loader is dismissed in `finally`, and its
-  present/dismiss are bounded to 2 s because a page Chrome counts as hidden never finishes those
-  animations. `persist()` is serialised and bounded to 30 s. The periodic save is awaited and caught.
-- **When OCR is unavailable the 5-minute periodic save is forced and the user is told once** (a toast,
-  from `AutoSaverService`, because only it knows the fallback is on). It is a separate flag from the
-  user's own periodic save, so OCR coming back, or `stop()`, ends the forced one without touching
-  theirs.
-- **Hidden pages are skipped unless hosting.** A hosting browser keeps streaming and playing from a
-  tab behind another, so `start()` takes `keepRunningWhileHidden` (the game page passes
-  `MultiplayerService.isHosting`). The loop runs outside the Angular zone: at several ticks a second it
-  would otherwise cost the whole app a change-detection pass each time. `GamePage.ngOnDestroy` stops
-  it, since the services are root singletons and now survive errors by design.
-- **Still true and not fixed here:** the tesseract worker, 3.9 MB core and 1.4 MB model come from
-  jsDelivr at runtime (decision D5: self-host later). Offline, or with the CDN blocked, OCR is
-  unavailable and the fallback above is all that saves the game. The fixed 20 s deadline can be shorter
-  than a slow mobile link needs for 5.4 MB; the retries and late adoption mostly absorb that.
+Details and measurements: [docs/mobile-ux/screen-scraping.md](docs/mobile-ux/screen-scraping.md).
 
 ### Diagnostics log (opt-in, for real-device passes)
 
-[diagnostics.service.ts](src/app/core/services/shared/diagnostics.service.ts) is a bounded record of
-what the app did on THIS device, built so a phone can hand evidence back: pointer, touch, key, ime,
-frame, boot, ocr, save, update, error, `page` (lifecycle and viewport; added to the plan's list, because it is
-the evidence an iOS tab eviction leaves), `power` (the emulator going to sleep and waking, see *Letting the
-guest sleep*) `platform` (what the browser and the operating system did that the game did not ask for: the screen lock, the audio
-context put to sleep, fullscreen, the install prompt, a one-time banner; see *Mobile platform polish*) and `layout` (the stage plan each time it changes: the window
-it was made from, the columns of keys, the width of each side, the picture's box and place, and what the chat cost it; see *The stage*). **Off by default.**
+[`DiagnosticsService`](src/app/core/services/shared/diagnostics.service.ts) is a bounded record of what the app did on THIS device, built so a phone can hand evidence back. **Off by default.** Entries are `{t, w, cat, msg, data?}` in a ring buffer ([`DiagnosticsLog`](src/app/core/helpers/diagnostics-log.helper.ts), `DIAGNOSTICS.CAPACITY`) that overwrites the OLDEST (the last minutes before a failure are what a report is for); `t` is `performance.now()`, which may not advance while a page is suspended, so only `w` (`Date.now()`) says how long a gap really was. `cat` is the closed set `DIAGNOSTICS_CATEGORIES` in [diagnostics.models.ts](src/app/core/models/diagnostics.models.ts), which the window filters by (a new area adds a category and its label, never an ad-hoc string): pointer, touch, key, ime, frame, boot, ocr, save, update, error, `page` (lifecycle and viewport: the trace an iOS tab eviction leaves), `power`, `platform` (what the browser or OS did that the game did not ask for) and `layout` (one line per change of the stage plan); each subsystem's own section says what it writes.
+Switch: "Dados e avançado" > "Ferramentas" > "Diagnóstico" ([diagnostics-modal](src/app/pages/game/components/diagnostics-modal/diagnostics-modal.component.ts)) persists it in `STORAGE_KEY.DIAGNOSTICS`; `?diag=1` (before or after the `#`) turns it on for that tab's session only, `?diag=0` forces it off. `GamePage.debugMode` (which gates "Baixar disco virtual") just reads `DiagnosticsService.enabled`: one switch, no second mechanism. The service is root with no `clear()` on purpose (no per-room state; `clearEntries()` is the window's "Limpar").
 
-**How to turn it on:** "Dados e avançado" > "Ferramentas" > "Diagnóstico" opens the window
-([diagnostics-modal](src/app/pages/game/components/diagnostics-modal/diagnostics-modal.component.ts));
-its switch persists the choice in `STORAGE_KEY.DIAGNOSTICS`. Or put `?diag=1` on the address (before
-or after the `#`), which turns it on for that **tab's session** (`?diag=0` forces it off for one).
-`GamePage.debugMode`, the old hard-coded `false` that gated "Baixar Disco Virtual", now reads
-`DiagnosticsService.enabled`: one switch, no second mechanism.
+- **Log through `DiagnosticsService.log(cat, msg, data?)`; never `console.log` in a hot path.** Off, `log()` is one boolean check, a `data` thunk is never called and nothing is serialized, so a call may sit on a pointer or key path; a console line costs a string and a write whether anyone looks and cannot be exported from a phone. When on, `data` becomes bounded text at the call (`DiagnosticsSerializer`: depth, key and length limits, cycles marked, never throws), because the log runs on code that is already misbehaving and must not add a failure. Log counts, kinds and timings, not what the player typed; the exception is `ime`, which records every event of the type bar's field while it is open, so typed text DOES appear and the window warns of it.
+- **Off means no listeners and no timers.** `DiagnosticsCapture.install` (window `error`, `unhandledrejection`, `visibilitychange`, `pagehide`/`pageshow`, `freeze`/`resume` where they exist, resize/orientation/`visualViewport` coalesced into one `viewport` entry) and the persistence interval exist only between `enable()` and `disable()`; `install` is the only place a listener is added. Count them through zone.js's task lists: DevTools shows one native listener per type under zone.js and cannot see these.
+- **Window listeners alone miss almost every app error.** Angular catches template and zone errors, and zone.js's `Promise` never raises the native `unhandledrejection`. [`DiagnosticsErrorHandler`](src/app/core/services/shared/diagnostics-error-handler.ts), provided in `AppModule`, logs `error` / `ErrorHandler` and then calls the default handler; keep both.
+- **`?diag=1` does not survive in the address.** `<base href="/">` makes the router's first `replaceState('#/game')` drop the query, so the request lives in `sessionStorage` (`DIAGNOSTICS.SESSION_KEY`), which a reload and a restored tab keep, and a person's own choice in the window clears it (`?diag=` after the `#` stays in the URL). The address wins over the stored choice and never writes it, so a test link does not leave the log on for the next visit.
+- **The tail of the log outlives the page, in two copies.** An evicted tab leaves nothing in memory, so while on, the last `PERSIST_ENTRIES` entries (also capped by `PERSIST_MAX_CHARS`) go to Ionic Storage every `PERSIST_INTERVAL_MS` when there is something new (a tab killed in the foreground gets no event at all) AND to `localStorage` when the page is hidden, frozen or going away (`STORAGE_KEY.DIAGNOSTICS_LOG` is homed in both): a transaction started in `pagehide` is not guaranteed to commit, and a reload lost everything after the last interval write. The next page with the log on reads both, keeps the newer, shows it as "página anterior"; writing waits for that read (`tailRestored`) so the old tail is never overwritten unread, and a clear during it wins (`clearEpoch`). A `?diag=1` visit stores no choice but writes a tail like any other, which stays until "Limpar", switching off or "Apagar todos os dados" (it is what explains an eviction of that same tab).
+- **"Apagar todos os dados" must be final.** `LocalStorageService.clearAllData` removes the `localStorage` copy through `STORAGE_KEY_HOMES` (Ionic Storage does not know it), and `GamePage.wipeEverything` calls `diagnostics.disable({ persist: false })` BEFORE `storageService.clearAllData` empties storage: with the log on, the reload fires `pagehide`, which wrote the tail straight back.
+- **Copy and share read a report built BEFORE the tap.** Safari honours `clipboard.writeText()` and `navigator.share()` only while the tap is the current user gesture, and the header (storage estimate, service-worker lookup) is asynchronous: the window collects it on open and on "Atualizar", a tap only appends the live log synchronously, and [`DiagnosticsExportHelper`](src/app/core/helpers/diagnostics-export.helper.ts) is routing only, with no `await` before the call. Share hands over a `.txt` file where the browser takes files (long text arrives truncated on iOS targets) and the text otherwise; a dismissed sheet is not an error. The report is always the whole log; the category filter changes only what is shown.
+- **State in `main`, presentation in the lazy game chunk.** Service, ring buffer, serializer, capture and tail are in `main` (`AppComponent` injects the service so it exists before any page); the header, report and export helpers and the window are not, and the service must not import them.
+- **The report header never carries the query** (a share link holds a room code): the route only, nothing that identifies a person. It records what js-dos itself decided (`dom.pointers.bind.mobile`, `canLock`, `autolock`, its user-agent regex tested against this device), the guest framebuffer, both viewports and the pointer capabilities; every fact is read on its own, a missing API prints `n/d`, and each asynchronous probe has its deadline (`HEADER_PROBE_TIMEOUT_MS`).
+- **Unverified on real devices:** the Galaxy A07 and iPhone 15 Pro Max passes are pending, in particular that an iPhone's eviction leaves its `visibilitychange` line in the tail.
 
-**Log through `DiagnosticsService.log(cat, msg, data?)`; never `console.log` in a hot path.** A console
-line costs a string and a write whether anyone looks, and cannot be exported from a phone. `data` is a
-value or a thunk, and a thunk is not called while the log is off: `log()` is one boolean check and a
-return, so a call may sit on a hot path (the pointer/touch/type-bar/camera phases are expected to log
-there). When on, `data` is turned into bounded text at the call (`DiagnosticsSerializer`: depth, key and
-length limits, cycles marked, `NaN`/`Infinity` named, never throws), and the ring buffer holds 5000
-entries and overwrites the OLDEST. Call sites log counts, kinds and timings, not what a player typed; the
-panel still warns that typed text may appear, because later phases will log input.
-
-Load-bearing, each measured or a decision that looks wrong without its reason:
-
-- **Off means no listeners and no timers.** `DiagnosticsCapture.install` (window `error`,
-  `unhandledrejection`, `visibilitychange`, `pagehide`/`pageshow`, `freeze`/`resume` where the document has
-  them, and `resize`/`orientationchange`/`visualViewport` resize coalesced into one `viewport` entry) and
-  the persistence interval exist only between `enable()` and `disable()`. Checked in a browser through
-  zone.js's own task lists, because DevTools counts one native listener per type under zone.js and so
-  cannot see an added one.
-- **The window listeners alone miss almost every app error.** Angular catches template and zone errors,
-  and zone.js's `Promise` never raises the native `unhandledrejection` (of four rejections only the
-  native `async` one reached a listener).
-  [`DiagnosticsErrorHandler`](src/app/core/services/shared/diagnostics-error-handler.ts) is provided in
-  `AppModule`, logs `error` / `ErrorHandler`, and then calls the default handler.
-- **`?diag=1` does not survive in the address.** The document has `<base href="/">`, so the router's
-  first `history.replaceState('#/game')` resolves against the base and drops the query. The request is
-  therefore kept in `sessionStorage` (`DIAGNOSTICS.SESSION_KEY`), which a reload and a restored tab keep;
-  a person's own choice in the window clears it. `?diag=` after the `#` is the form that stays in the URL.
-- **The tail of the log outlives the page, in two copies.** An evicted tab leaves no memory behind and the
-  events that explain it are in the page that dies, so while on, the last 1000 entries (at most 200K
-  characters) go to Ionic Storage every 5 s when there is something new, and ALSO to `localStorage` when
-  the page is hidden, frozen or going away: with only IndexedDB a reload lost everything after the last
-  interval write, because a transaction started in `pagehide` does not finish. The next page that has the
-  log on reads both, keeps the newer, and shows it as "página anterior". That includes a `?diag=1`
-  visit: it stores no *choice*, but it writes a tail like any other, and the tail stays until "Limpar",
-  switching the log off or "Apagar todos os dados" (the copy is what explains an eviction of that same
-  tab, so it is kept while the visit is alive and not guessed at afterwards). Not verified: that an
-  iPhone's eviction leaves its `visibilitychange` line (it is on the device checklist).
-- **"Apagar todos os dados" must be final.** `LocalStorageService.clearAllData` also removes the
-  `localStorage` copy (Ionic Storage does not know it), and `GamePage.clearAllData` switches the log off
-  FIRST: with it on, the reload fires `pagehide`, which wrote the tail straight back (measured).
-- **Copy and share read a report built BEFORE the tap.** Safari honours `clipboard.writeText()` and
-  `navigator.share()` only while the tap is the current user gesture, and the header (storage estimate,
-  service-worker lookup) is asynchronous, so the window collects it on open and on "Atualizar" and a tap
-  only appends the live log, synchronously. Share hands over a `.txt` file where the browser takes files
-  and the text otherwise; a dismissed sheet is not an error. The report is always the whole log: the
-  window's category filter changes only what is shown.
-- **The state lives in the main bundle, the presentation in the lazy game chunk.** The service, ring
-  buffer, serializer, capture and tail are in `main` (`AppComponent` injects the service so it exists
-  before any page); the header, report and export helpers and the window are not. Do not import the
-  report or header helpers into the service.
-- **The header never carries the query** (a share link holds a room code): the route only. It names
-  js-dos's own detection (`dom.pointers.bind.mobile`, `canLock`, `autolock`, and its user-agent regex
-  tested against this device), the guest framebuffer, the viewports, pointer capabilities, the service
-  worker and the storage estimate, each asynchronous probe with its own deadline.
-
-Hooked today (one-line calls, no behaviour change): `GuestKeyQueueService` (`key`: enqueue, start, flush
-with how far the device stretched the 10 ms pacing, cancel, fail, refused, the CapsLock read), the boot
-(`boot`: js-dos's loading text once per phase and ten percent, the stage changes, detection, failures;
-`frame`: the guest's size), `OcrWorkerHost` and `EmulatorControlService` (`ocr`: the worker's life, each
-recognition pass, the saving verdict when it changes), `AutoSaverService` and `SaveGameService` (`save`:
-the dialog seen and gone, each persist with its reason and duration, tick failures, hidden-page pauses,
-`layers.save()` time) and `AppComponent` (`update`: the prompt, the choice, the save before the reload).
-`TouchInputService` and `GuestPointer` log into `touch` (the layer attached or detached; each finger landing with its
-guest position and whether the cursor was sent ahead; every decision: tap, double-tap, drag start and end, aim start
-and end, cancel with its reason, a palm or an extra finger ignored; the first compat mouse event dropped) and `pointer`
-(each move with its from, to, sends, units, duration and the smallest and largest gap between sends, which is the
-number that says whether a device stretches the spacing; each home with its reason; each click with how long it waited
-behind the cursor and how long it held; each abort with what it dropped; a refused send). `CameraService` logs the camera into `touch` too (its attach and detach, a pinch's start, throttled steps, clamps and end, the presets, the pad, the follow, a rotation, a restore; see *The camera*). `EmulatorPowerService` logs every change of state into `power` (see *Letting the guest sleep*). `DockComponent` logs the control deck's presses, modifiers, repeats and panel changes into `key` and `page` (see *The control deck*). The live type bar logs every event of its field into `ime` while it is open,
-and the field hint into `frame` (see *The live type bar*); typed text therefore does appear in the log, and the panel says so.
+Details, measurements and the review history: [docs/mobile-ux/diagnostics.md](docs/mobile-ux/diagnostics.md).
 
 ### Multiplayer (watch-together, not play-together)
 
@@ -1916,7 +620,6 @@ breakpoint. Where the deck is a band (a touch device in portrait) the toggle is 
 the same `aria-controls`/`aria-label` from `ChatPanelHelper`, the unread badge and the taskbar flash, and the panel it opens is
 still the page's own `#chat-panel`, docked above the taskbar; on a landscape phone it is the **Chat** key of the left rail, for the host and for the
 spectator alike (all three carry `data-chat-toggle`, which is what `ChatPanelHelper.focusToggle` finds). A desktop without the deck keeps the floating toggle.
-
 
 - [cheat-omatic.service.ts](src/app/core/services/game/cheat-omatic.service.ts) — a Cheat-Engine-style memory
   scanner over `readMemory`/`writeMemory`, sweeping the 8 MB address space in 1 MB chunks and
@@ -2105,67 +808,19 @@ button that closes a Win9x titlebar.
 
 ### PWA
 
-`@angular/service-worker` with [ngsw-config.json](ngsw-config.json). `AppComponent` watches
-`SwUpdate.versionUpdates`, records `STORAGE_KEY.PENDING_UPDATE`, and applies updates by reloading
-(immediately or on next launch).
+`@angular/service-worker` with [ngsw-config.json](ngsw-config.json), enabled only outside dev mode (test it on a production build) and registered `registerWhenStable:30000`, which stays (the app is stable long before the emulator starts, so the worker registers within about a second). `AppComponent` watches `SwUpdate.versionUpdates`, sets `STORAGE_KEY.PENDING_UPDATE` on `VERSION_READY` and applies updates by reloading (now or on next launch).
+- **The manifest's identity is pinned.** `id: "/"` (what Chrome derives from `start_url: "/#/main"`), `scope` and `start_url` stay as they are so installed copies keep their identity; `theme_color`/`background_color` are the game green `#008000` (a dark splash showed before the green app painted), `lang` is `pt-BR`; `index.html` carries `mobile-web-app-capable` beside the Apple spelling (Chromium warns about the Apple one alone) and `apple-mobile-web-app-title` (the label iOS prints under the icon instead of the long `<title>`).
+- **No `orientation` and no `display_override` in the manifest (decision D4).** A lock would take portrait play from people who never asked; "Tela cheia" locks landscape as its own action, never the manifest.
+- **Maskable icons** (`android-maskable-512-512.png`, `-192-192.png`) come from [scripts/pwa-icons/make-maskable.mjs](scripts/pwa-icons/make-maskable.mjs): the shipped 512 icon shrunk onto a canvas of its own green so the lettering stays inside the 40% safe-zone circle (under a round mask the old icon loses "ELIFOOT"/"WEBPLAY"). The ~110 older entries are left alone (the Windows tile sizes are Edge's). An installed copy changes icon only when the browser refreshes its manifest (Chrome updates a WebAPK's), otherwise on reinstall.
+- **One online visit must be enough for the installed app to start offline.** The `app` group prefetches the shell and `assets/elifoot/**`; the `jsdos` group *prefetches* exactly five files, listed by name, never a `js-dos*` wildcard (it would drag in the 1.8 MB `js-dos.js.map` and `wdosbox.js.symbols`): `js-dos.js`, `js-dos.css`, `wdosbox.js`, `wdosbox.wasm`, the loader png. Why: js-dos starts `wdosbox.js` itself with `new Worker(...)`, it was once missing, and an uncached URL offline is a 504 that killed the emulator even on the second visit; it is prefetch, not lazy, because lazy caches only what the page asks for through the worker, which is nothing on a first visit. A new file js-dos fetches at runtime must be added to that list.
+- **Icons are a `dataGroups` entry (`/svg/**`, cache-first), not an asset group.** Ionic fetches `ion-icon` files from `/svg/` at runtime (over a thousand in the build, about ten used) and an asset group would put them all in `ngsw.json`'s hash table. So an icon is cached only once it has been drawn online, from the second online visit on: a glyph that only an unopened panel draws can be a blank keycap offline (why `deck-keys.helper.ts` uses text faces there).
+- **Release check after touching `ngsw-config.json`:** production build, serve over http on localhost (a worker needs localhost or https), load `/#/game`, wait for the worker to install, then *stop the server* (CDP's offline switch does not reach the worker's own fetches and can hide a gap) and cold-load `/#/game`: it must boot to the game with no failed request. Still not cached offline: the tesseract worker, core and model (jsDelivr, decision D5), so auto-save falls back to its periodic mode.
+- **An update reload saves first.** The auto-saver persists only after it sees the game's own save, so a bare `location.reload()` threw away everything since, on every release's prompt. `AppComponent.installUpdate()` waits (at most `APP_UPDATE.IDLE_WAIT_MS`) for a game save the auto-saver saw in progress (a persist landing mid-write stores a truncated `.e98` over the last good one), awaits `saveGameFileSystem()` through `TimeoutHelper.withTimeout` and `APP_UPDATE.SAVE_TIMEOUT_MS`, calls `SaveStatusService.allowExit()` (no second "leave site?") and reloads **regardless**: a persist that hangs must not hold an update hostage, and cutting one short loses only what it was writing (one IndexedDB put). `saveGameFileSystem` is a no-op without an emulator, so the landing page and the launch-time install share the path.
+- **A hosting browser is asked before "Instalar agora" reloads** (`MultiplayerService.isHosting` → the "Fechar a sala?" confirm), because a reload ends the room for every spectator; a spectator is not asked. "Atualizar depois" leaves `PENDING_UPDATE` set, so the next launch installs it before any room exists.
+- **`AppComponent` reaches `MultiplayerService` through a dynamic `import()` plus `Injector`, never a constructor dependency.** A static import drags trystero out of the lazy game chunk into the main bundle every visitor downloads (free for a host: `/game` and `/join-game` already load that chunk). Do not "simplify" it into an injected service.
+- Unverified on real devices (Galaxy A07, iPhone 15 Pro Max): the offline cold launch of the installed app, a real `VERSION_READY` update (dev mode has no worker, so only its handlers ran), `SAVE_TIMEOUT_MS` on a phone's persist time, and a first visit on a slow link (worker prefetch racing the page's own bundle download).
 
-**The manifest's decisions** ([manifest.webmanifest](src/manifest.webmanifest), [index.html](src/index.html)): `id: "/"` is what Chrome derives
-from `start_url: "/#/main"` (the fragment is dropped), written down so that it cannot drift, and so the installed copies keep their identity;
-`scope` and `start_url` are untouched for the same reason. `theme_color` and `background_color` are the game green `#008000` (they were
-`#008200` and `#252329`, a dark splash before the green app painted; the `theme-color` metas were already `#008000`), `lang` is `pt-BR`.
-**No `orientation` and no `display_override`** (decision D4: a lock would take portrait play from people who never asked; the "Tela cheia"
-entry locks landscape as its own action, never the manifest). Two **maskable** icons were added beside the ~110 existing entries, which are
-left alone (the Windows tile sizes are Edge's): `android-maskable-512-512.png` and `-192-192.png`, made from the shipped 512 launcher icon by
-[scripts/pwa-icons/make-maskable.mjs](scripts/pwa-icons/make-maskable.mjs) (artwork shrunk to 0.66 on a canvas of its own green, so the lettering
-sits inside the 40% safe-zone circle: 0.387 of the width from the centre at its farthest; the old icon under a circular mask loses the edges of
-"ELIFOOT" and "WEBPLAY"). **An installed copy may change its icon** when the browser refreshes its manifest (Chrome updates a WebAPK's), and
-otherwise on reinstall. `mobile-web-app-capable` was added beside the Apple spelling (Chromium warns about the Apple one alone) and
-`apple-mobile-web-app-title` ("Elifoot 98", what iOS prints under the icon instead of the long `<title>`).
-
-**One online visit is enough for the installed app to start offline, and that is a property to
-keep.** The `app` group prefetches the shell and `assets/elifoot/**` (the bundle), and the `jsdos`
-group *prefetches* exactly five files: `js-dos.js`, `js-dos.css`, `wdosbox.js`, `wdosbox.wasm`
-and the loader png. They are listed by name, not by a `js-dos*` wildcard, so neither the 1.8 MB
-`js-dos.js.map` nor `wdosbox.js.symbols` can ride along. `wdosbox.js` is the one that was
-missing: js-dos starts it with `new Worker(pathPrefix + 'wdosbox.js')`, no wildcard matched it,
-and the service worker answers an uncached URL offline with a 504, so even a second visit left
-the emulator dead at "Unable to download 'assets/js-dos/wdosbox.js', code: 504". It is also why
-the group is prefetch and not lazy: lazy only caches what the page asks for *through* the worker,
-which is nothing on the first visit. Icons are a `dataGroups` entry (`/svg/**`, cache-first),
-not an asset group: Ionic fetches `ion-icon name=…` files at runtime from `/svg/` (1,356 files,
-5.3 MB in the build, about ten used), an asset group would list all of them in `ngsw.json`'s hash
-table, and the data group caches what is actually requested, from the second online visit on.
-**Release check:** build, serve over http (a service worker needs localhost or https), load
-`/#/game`, wait for it to install, then *stop the server* (CDP's offline switch does not reach
-the worker's own fetches, so it can hide a gap in the cache) and cold-load `/#/game`: it must
-boot to the game with no failed request. Still not cached offline: the tesseract worker, core
-and model (jsDelivr, decision D5), so auto-save falls back to its periodic mode.
-
-`registerWhenStable:30000` stays. The worry was that a reload loop would never let the worker
-register; measured on a production build with a direct `/#/game` load, it registers 0.3 s after
-load at normal speed and 0.9 s at 6x CPU throttling, with the prefetch complete at 1.3 s and
-1.7 s, because the application is stable long before the emulator starts. The bundle is requested
-once on a first visit, not twice. What was not measured is a first visit on a slow link, where
-the worker's prefetch and the page's own download could compete (CDP throttling does not reach
-the worker).
-
-**An update reload saves first, and a hosting browser is asked before it reloads.** The
-auto-saver persists only after it sees the game's own save, so everything since then lives in
-memory and a bare `location.reload()` threw it away, on every release's update prompt.
-`installUpdate()` therefore awaits the global `saveGameFileSystem()` (a no-op without an
-emulator, so the landing page and the launch-time install share the path) through
-`TimeoutHelper.withTimeout` and `APP_UPDATE.SAVE_TIMEOUT_MS`, logs a failure or a timeout, and
-reloads regardless: a persist that hangs must not be able to hold an update hostage. Before it writes it
-waits (at most `APP_UPDATE.IDLE_WAIT_MS`) for a game save the auto-saver has seen in progress, and it calls
-`SaveStatusService.allowExit()` so the game page's "leave site?" prompt does not ask a second time. Cutting a
-persist short loses only what it was writing, because the write is one IndexedDB put. "Instalar
-agora" first asks `MultiplayerService.isHosting` and, for a host, shows a confirm because a
-reload ends the room for every spectator; "Atualizar depois" leaves `PENDING_UPDATE` set, so the
-next launch installs it before any room exists. A spectator is not asked: it has nothing to lose.
-`AppComponent` reaches `MultiplayerService` through a dynamic `import()` plus `Injector`, not a
-constructor dependency: a static import drags trystero out of the lazy game chunk into the main
-bundle every visitor downloads. The import is free for a host, because `/game` and `/join-game`
-already load that chunk. Do not "simplify" it into an injected service.
+Details, measurements and the review history: [docs/mobile-ux/pwa.md](docs/mobile-ux/pwa.md).
 
 ### Leftover scaffolding
 
