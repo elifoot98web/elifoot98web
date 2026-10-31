@@ -3,7 +3,7 @@ import { SwUpdate } from '@angular/service-worker';
 import { AlertController, LoadingController, Platform } from '@ionic/angular/lazy';
 import { TimeoutError, TimeoutHelper } from './core/helpers/timeout.helper';
 import { APP_UPDATE, STORAGE_KEY } from './core/models/constants';
-import { DiagnosticsService, InstallService, LayoutHelperService, LocalStorageService, SaveStatusService } from './core/services/shared';
+import { AlertKeyboardService, DiagnosticsService, InstallService, LayoutHelperService, LocalStorageService, SaveStatusService } from './core/services/shared';
 
 @Component({
     selector: 'app-root',
@@ -27,7 +27,10 @@ export class AppComponent {
     private saveStatus: SaveStatusService,
     // Injected here for the same reason, and not left for the page that offers the install: Chromium
     // fires `beforeinstallprompt` once, early, and a listener added by a lazy page misses it.
-    private install: InstallService) {
+    private install: InstallService,
+    // Injected here for the same reason: its listeners must be on before the first alert that has a text field
+    // (see AlertKeyboardService), and an alert is not a page.
+    private alertKeyboard: AlertKeyboardService) {
 
     platform.ready().then(async () => {
       console.log('Platform ready', { 

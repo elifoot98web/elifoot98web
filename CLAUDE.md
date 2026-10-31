@@ -247,7 +247,8 @@ patch zips are flattened/validated in `processPatchFile()` (needs ≥34 `.EFT` t
 - **`activity$` fires once per accepted submission, synchronously, before any key goes out.** The type bar tells its own sends from others' by a flag around the call; emitting later makes it abandon its own text.
 - **Set text-assist attributes on the DOM (`turnOffTextAssists`), not via the input's `attributes` option.** Stencil assigns the property and `autocorrect='off'` is truthy, writing "on". `enterkeyhint` stays `enter`.
 - **Never auto-send Enter on Elifoot's first dialog before a radio is chosen.** It raises "List index out of bounds" and the game exits to Program Manager; Esc/Cancelar quits too.
-- Unverified on real phones: `KEY_PACING_MS` on low-end Android, and iOS/Android keyboard behaviour in the dialog.
+- **An alert with a text field stays above the OS keyboard, and `AlertKeyboardService` is what makes it.** iOS resizes neither the layout viewport nor `vh`, and Ionic centres `ion-alert` in them, so on a landscape iPhone (117 of 352px visible) the compose dialog's field and buttons sat under the keyboard. The service starts `KeyboardInsetService` and adds `alert-text-field` to any alert with a text input (a checkbox or radio raises no keyboard); `_win9x.scss` shrinks every Win9x alert by `--kb-inset` and, in a short window with `html.kb-open`, lays a text-field alert out as one row (field left, buttons right, message hidden). No call site passes the class. Re-run `scripts/touch-harness/alert-keyboard.mjs` after touching alert CSS or the inset service.
+- Unverified on real phones: `KEY_PACING_MS` on low-end Android, and iOS/Android keyboard behaviour in the dialog (including whether iOS scrolls the visual viewport, `offsetTop`, with the keyboard up: the layout assumes it does not).
 
 Before changing this area read the verified invariants in [docs/mobile-ux/typing.md](docs/mobile-ux/typing.md).
 
@@ -673,7 +674,7 @@ so route new error dialogs through those rather than hand-rolling another `creat
 `alert-danger` is a *button*-level class and is unaffected. Before opening a PR, check that
 `grep -rc 'alertController.create' src/` and `grep -rc "cssClass: 'win9x-alert" src/app`
 still agree (38 today; P13 removed two — the welcome and the one-step wipe — and added two, the wipe's questions) — a manual check, because `npm run lint` covers only `.ts`/`.html`
-and there is no stylelint setup to hang it on.
+and there is no stylelint setup to hang it on. A new alert with a text field needs nothing more: `AlertKeyboardService` keeps it above the OS keyboard (see *Typing into the guest*).
 
 The save status chip (`.save-chip`, see *Save safety nets*) is on the shell side too, for the same
 reason, and shares the pill's touch-floor trick (a transparent border, not an `::after`). So is the "Ativar som" chip

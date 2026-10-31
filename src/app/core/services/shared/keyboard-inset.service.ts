@@ -13,6 +13,8 @@ const MIN_KEYBOARD_INSET_PX = 60;
  *                `env(safe-area-inset-bottom)` padding the keyboard already covers,
  *                which cannot be derived from --kb-inset in plain CSS.
  *
+ * and the class `kb-open` on <html> while that inset is non-zero, for CSS that needs a selector.
+ *
  * Why measure instead of letting the layout resize: iOS Safari never shrinks the layout
  * viewport for the keyboard, and we must not make it. `interactive-widget=resizes-content`
  * or an Ionic scroll would resize `#game-container`, and js-dos re-lays-out its canvas
@@ -98,6 +100,10 @@ export class KeyboardInsetService implements OnDestroy {
     const style = document.documentElement.style;
     style.setProperty('--kb-inset', `${inset}px`);
     style.setProperty('--kb-open', inset > 0 ? '1' : '0');
+    // The same fact as a class, for the rules that need a selector and not a number: a custom property
+    // cannot be tested by a selector, and the compose dialog changes its LAYOUT (not only its offset) while
+    // the keyboard is up (_win9x.scss, "An alert while the OS keyboard is up").
+    document.documentElement.classList.toggle('kb-open', inset > 0);
     // Last, so that a subscriber that measures the page when it is told (the type bar logs where it
     // sits) reads the layout of the new inset and not of the one before it.
     this.insetSubject.next(inset);

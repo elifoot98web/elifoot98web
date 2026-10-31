@@ -1060,6 +1060,20 @@ not in the spec and exist for the reasons above. **Not verified:** any phone, a 
 a real soft keyboard, and the 5 s write cost on a low-end CPU (the write is a `JSON.stringify` of up to
 1000 entries, about 100 KB, on the main thread).
 
+## Fixes after the first device pass (2026-10-31)
+
+1. **The compose dialog hidden by the iOS keyboard in landscape** (found on an iPhone 15 Pro Max, Chrome on iOS). Only the title bar of
+   "Input" was visible: the page was 932x352 CSS px and the keyboard with its autofill strip left 117 of them, while Ionic centres
+   `ion-alert` in the full layout viewport (iOS resizes neither it nor `vh`) and the dialog is 256px tall, so the text field (from y=145) and
+   the buttons (y=239) were underneath. Reproduced in the harness at that geometry before the fix (wrapper 48..304 against 117 visible).
+   Fix: `AlertKeyboardService` starts `KeyboardInsetService` for any alert with a text input and tags it `alert-text-field`; `_win9x.scss`
+   shrinks every Win9x alert by `--kb-inset` and, in a short window with `html.kb-open` (a class the inset service now also sets), lays a
+   text-field alert out as one row. Compose dialog at 932x352: 9.6..107.4 of 117, field 52px, buttons 44px. The first cut handled only
+   the compose dialog and left the 'O Matic cheat-name alert squeezed (its buttons ran off the bottom edge); the harness picture showed it,
+   so the layout was generalised to every text-field alert. Portrait and tablets keep the stacked dialog. 29 harness checks
+   (`scripts/touch-harness/alert-keyboard.mjs`) and 11 specs. **Not verified:** iOS scrolling the visual viewport (`offsetTop`) to reveal
+   the field, which the harness cannot emulate; the device pass re-checks it.
+
 ## Rejected, with reasons
 
 - Absolute pointer mode for tap-to-click (measured wrong, see above).

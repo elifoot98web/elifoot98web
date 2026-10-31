@@ -5,6 +5,7 @@ describe('KeyboardInsetService', () => {
   afterEach(() => {
     document.documentElement.style.removeProperty('--kb-inset');
     document.documentElement.style.removeProperty('--kb-open');
+    document.documentElement.classList.remove('kb-open');
   });
 
   // The type bar logs where it sits the moment it is told the keyboard moved: the numbers are only
@@ -27,6 +28,20 @@ describe('KeyboardInsetService', () => {
     ]);
     subscription.unsubscribe();
     service.ngOnDestroy();
+  });
+
+  // A selector cannot test a custom property, and the compose dialog changes its layout (not only its offset) while the keyboard is up.
+  it('puts the kb-open class on <html> exactly while the inset is non-zero', () => {
+    const service = new KeyboardInsetService();
+    const open = () => document.documentElement.classList.contains('kb-open');
+    expect(open()).toBeFalse();
+    service['publish'](336);
+    expect(open()).toBeTrue();
+    service['publish'](0);
+    expect(open()).toBeFalse();
+    service['publish'](120);
+    service.ngOnDestroy();
+    expect(open()).withContext('stopping clears it, like the properties').toBeFalse();
   });
 
   it('tells a subscriber only when the inset changes', () => {

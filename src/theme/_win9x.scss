@@ -716,6 +716,74 @@ ion-alert.win9x-alert .alert-button.alert-danger {
 }
 
 /*
+ * An alert while the OS keyboard is up.
+ *
+ * Ionic centres `ion-alert` in the layout viewport (position: absolute, all four insets 0) and caps its wrapper at
+ * `min(100vh - 96px, 560px)`; iOS resizes neither for the keyboard (`vh` is the page without it). On a landscape iPhone in
+ * Chrome the page was 352px tall and 117px of it were left above the keyboard and its autofill strip, so the compose dialog,
+ * 256px tall and centred, showed its title bar and kept its text field and its buttons underneath the keyboard (the first
+ * device pass). --kb-inset is the strip the keyboard covers, measured by KeyboardInsetService (started for an alert that has a
+ * text field by AlertKeyboardService, and by the chat and the type bar) and 0 without a keyboard, so this costs nothing then.
+ * `bottom` is a longhand, which Safari 14.1 has; `inset` is not. 100% in --max-height is the shrunk overlay, which is what the
+ * wrapper has to fit in now. (0,1,1) beats Ionic's host rule (0,1,0); the second rule is (0,2,2) against its custom property.
+ */
+ion-alert.win9x-alert {
+  bottom: var(--kb-inset, 0px);
+}
+
+html.kb-open ion-alert.win9x-alert {
+  --max-height: 100%;
+}
+
+/*
+ * An alert with a text field (`alert-text-field`, put on it by AlertKeyboardService; the compose dialog is the one that matters
+ * most) cannot just be shrunk. Stacked, the compose dialog needs about 125px (title 23, text field 88, buttons 68, frame 10)
+ * and a landscape phone with the keyboard up leaves 117 or fewer; shrunk by the rules above alone, Ionic squeezes the field to
+ * a sliver and the buttons run off the bottom edge under the keyboard. And a field the person cannot see is a field they cannot
+ * type into. So in a short window, while the keyboard is up, such an alert becomes one row under its title bar: the fields on
+ * the left, the buttons on the right, the message gone (the title and the placeholder remain). That is ~93px, and the buttons
+ * keep their 44px height. `max-height` is the LAYOUT viewport's, which iOS leaves at the full page: a portrait phone (700px+)
+ * keeps the stacked dialog, which fits there. Each rule names `.alert-text-field` and `html.kb-open` so it beats the earlier
+ * alert rules (0,2,1)-(0,2,2) outright.
+ */
+@media screen and (max-height: 460px) {
+  html.kb-open ion-alert.win9x-alert.alert-text-field .alert-wrapper {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+  }
+
+  html.kb-open ion-alert.win9x-alert.alert-text-field .alert-head {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  html.kb-open ion-alert.win9x-alert.alert-text-field .alert-message {
+    display: none;
+  }
+
+  html.kb-open ion-alert.win9x-alert.alert-text-field .alert-input-group {
+    grid-column: 1;
+    grid-row: 2;
+    padding: 4px;
+  }
+
+  /* Two lines of 16px text. 16px stays: iOS zooms the page when a focused field is smaller. */
+  html.kb-open ion-alert.win9x-alert.alert-text-field textarea.alert-input {
+    min-height: 52px;
+    height: 52px;
+  }
+
+  html.kb-open ion-alert.win9x-alert.alert-text-field .alert-button-group {
+    grid-column: 2;
+    grid-row: 2;
+    flex-wrap: nowrap;
+    align-items: center;
+    padding: 4px 8px 4px 4px;
+  }
+}
+
+/*
  * Control deck skin.
  * ---------------------------------------------------------------------------
  * The Win9x look of the deck (DockComponent, layout in _deck.scss) lives here, on purpose: decision

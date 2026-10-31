@@ -1,6 +1,7 @@
 export * from './diagnostics.service';
 export * from './diagnostics-error-handler';
 export * from './keyboard-inset.service';
+export * from './alert-keyboard.service';
 export * from './layout-helper.service';
 export * from './stage-layout.service';
 export * from './local-storage.service';
