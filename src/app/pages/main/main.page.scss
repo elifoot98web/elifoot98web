@@ -1,0 +1,96 @@
+/*
+ * Vertical centring that cannot clip.
+ *
+ * `top: 50%` + `translateY(-50%)` offsets the grid down by half the viewport and up by
+ * half of its OWN height, so once the content is taller than the viewport the grid's top
+ * edge lands above the scroll origin — and the scrollable overflow region never extends in
+ * the block-start direction, so that part is unreachable. Scrolling IS enabled here
+ * (ion-content with scrollY defaulting to true), so the bottom overflow was always
+ * reachable and the card pushed out of reach is the FIRST one, "Jogar Agora!" with
+ * gamescreen.png. Triggers below 768px (size-md stops applying and the two size="9"
+ * columns stack) or on any short viewport.
+ *
+ * A flex column with min-height: 100% grows with its content: there is then no free space
+ * for justify-content: center to distribute, so nothing can overflow either edge, and
+ * short content still centres exactly as before.
+ */
+.center-vertical {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 100%;
+    /* ion-grid centres itself with logical margins and declares display: block; restate
+       the physical margins so a `fixed` grid stays centred regardless of order. */
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.home-options-row {
+  align-items: center;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.home-option-col {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.home-main-card {
+  min-width: 260px;
+  max-width: 420px;
+  width: 100%;
+  border: 2px solid var(--ion-color-secondary);
+}
+
+.home-join-card {
+  min-width: 200px;
+  max-width: 340px;
+  width: 100%;
+  /*
+   * NOT --ion-color-primary: that is #008000, the exact page background, so the border was
+   * invisible by construction while the sibling card's read clearly.
+   *
+   * Matching the sibling's yellow rather than picking a second accent: #008000 sits at mid
+   * luminance, so anything in the shell's navy family lands near 2.8:1 against it — under the
+   * 3:1 non-text floor — and only a much lighter or much darker colour clears it. The two
+   * cards are a matched pair anyway, which is what card parity was asking for; their
+   * difference in weight comes from size and content, not from accent colour.
+   */
+  border: 2px solid var(--ion-color-secondary);
+}
+
+/*
+ * The host entry point is deliberately secondary to the two cards, but `color="light"` put
+ * #d5d5d5 text on #008000 — 3.5:1, under the 4.5:1 AA floor for normal text, and it read as
+ * disabled. White clears 5.1:1 on the same background.
+ */
+.host-action {
+  --color: var(--ion-color-primary-contrast);
+  --color-hover: var(--ion-color-primary-contrast);
+  --color-focused: var(--ion-color-primary-contrast);
+  --color-activated: var(--ion-color-secondary);
+  font-weight: 600;
+}
+
+.big-icon {
+    font-size: 72px;
+}
+
+/*
+ * Landscape phones: ~390px of height for a header, two cards and a footer carrying two
+ * lines of legal text. The screenshot is pure decoration and the only element big enough
+ * to matter, so it goes first — which also means it is never downloaded here (ion-img
+ * lazy-loads via IntersectionObserver). `size-sm="6"` would not rescue a 568x320 phone
+ * (Ionic's sm is 576px); this query is what buys the space.
+ */
+@media (max-height: 500px) {
+    .home-main-card ion-img {
+        display: none;
+    }
+
+    .big-icon {
+        font-size: 48px;
+    }
+}

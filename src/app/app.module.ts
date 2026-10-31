@@ -1,4 +1,4 @@
-import { NgModule, isDevMode } from '@angular/core';
+import { ErrorHandler, NgModule, isDevMode } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
 import { RouteReuseStrategy } from '@angular/router';
 
@@ -11,6 +11,7 @@ import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http'
 import { ServiceWorkerModule } from '@angular/service-worker';
 
 import { IonicConfig } from '@ionic/core';
+import { DiagnosticsErrorHandler } from './core/services/shared/diagnostics-error-handler';
 
 const ionicConfig: IonicConfig = {
   mode: 'md' // Use Material Design mode on all platforms
@@ -30,6 +31,11 @@ const ionicConfig: IonicConfig = {
             registrationStrategy: 'registerWhenStable:30000'
         })
     ], 
-    providers: [{ provide: RouteReuseStrategy, useClass: IonicRouteStrategy }, provideHttpClient(withInterceptorsFromDi())] 
+    providers: [
+        { provide: RouteReuseStrategy, useClass: IonicRouteStrategy },
+        // The default handler plus a line for the diagnostics log: see DiagnosticsErrorHandler.
+        { provide: ErrorHandler, useClass: DiagnosticsErrorHandler },
+        provideHttpClient(withInterceptorsFromDi())
+    ]
 })
 export class AppModule { }

@@ -1,0 +1,216 @@
+<ion-content>
+  <!--
+    Every accordion has a `value` and an `id` (guide-faq-<value>): a "?" opens the guide at one of them (HelpTopicHelper). The group is
+    `multiple`, so its value is a list. Renaming a value here means renaming it there; help-topic.helper.spec.ts renders this file.
+  -->
+  <ion-accordion-group [multiple]="true" [value]="opened">
+    <ion-accordion value="menu-info" id="guide-faq-menu-info">
+      <ion-item slot="header" color="light">
+        <ion-label>Onde ficam as opções? Cadê o backup?</ion-label>
+      </ion-item>
+      <div class="ion-padding" slot="content">
+        No menu <ion-icon name="ellipsis-vertical-outline"></ion-icon>. Nos aparelhos de toque ele abre de baixo para cima, e no computador é uma janela ao lado do botão. Ele tem cinco seções: <strong>Jogo</strong> (salvar, volume, voltar ao menu), <strong>Multiplayer</strong>, <strong>Entrada</strong> (digitar texto, toque, painel de teclas), <strong>Exibição</strong> (suavizar a imagem, tela cheia, resolução, zoom) e <strong>Ajuda</strong>.
+        <p class="ion-padding-top">
+        O backup, os patches, o 'O Matic, o diagnóstico, os recursos experimentais e o <strong>Apagar todos os dados</strong> ficam numa janela à parte: <strong>Dados e avançado</strong>, a segunda linha da seção <strong>Jogo</strong>. O <strong>?</strong> ao lado do nome de uma seção abre o manual nela.
+        </p>
+      </div>
+    </ion-accordion>
+    <ion-accordion value="patch-info" id="guide-faq-patch-info">
+      <ion-item slot="header" color="light">
+        <ion-label>É possível atualizar os times?</ion-label>
+      </ion-item>
+      <div class="ion-padding" slot="content">
+        <p>
+        O Elifoot 98 conta uma comunidade bastante ativa. É possível baixar patches com times atualizados e campeonatos especiais, como o Campeonato Brasileiro, Copa do Mundo, entre outros. <br>
+        Esses patches podem ser encontrados em sites especializados, como os dos nossos amigos do <strong><a href="https://turboelifoot.com" target="_blank">Turbo Elifoot <ion-icon name="open-outline"></ion-icon></a></strong>. <br>
+        <p class="ion-padding-top">
+        Há ainda a opção de editar manualmente as equipes com o editor de times integrado do Elifoot 98, que permite a atualização dos elencos, para fazê-lo, saia do jogo, e ainda no emulador, abra o <strong>Program Manager > File Manager</strong>, navegue até a pasta <strong>D:\eli98</strong> e abra o programa <strong>editeq.exe</strong>. Ao sair do jogo, o aplicativo pergunta <strong>Reiniciar jogo?</strong>: toque em <strong>Agora não</strong> para continuar no Windows. <br>
+        Após salvar as edições, não se esqueça de salvar a máquina virtual pelo menu <ion-icon name="ellipsis-vertical-outline"></ion-icon> > <strong>Salvar agora <ion-icon name="save"></ion-icon></strong>. 
+        </p>
+        <p class="ion-padding-top">
+        Para aplicar um patch pronto, use <strong>Dados e avançado</strong> > <strong>Carregar patch</strong>; <strong>Remover patch</strong> volta aos times originais.
+        </p>
+      </div>
+    </ion-accordion>
+    <ion-accordion value="save-info" id="guide-faq-save-info">
+      <ion-item slot="header" color="light">
+        <ion-label>Meus jogos ficam gravados de uma jogatina para outra?</ion-label>
+      </ion-item>
+      <div class="ion-padding" slot="content">
+        O jogo é salvo automaticamente no armazenamento local do navegador. Porém, esses dados podem ser perdidos caso você limpe o armazenamento do navegador, use ferramentas como CCleaner, ative a navegação anônima ou em algumas situações de atualização do navegador.
+        <br>
+        <p class="ion-padding-top">
+        Para evitar a perda de dados, recomendamos que você faça backups regularmente. É possível baixar seus jogos salvos acessando o menu <ion-icon name="ellipsis-vertical-outline"></ion-icon> > <strong>Dados e avançado</strong> > <strong>Exportar jogos salvos</strong>. No celular, o aplicativo oferece também <strong>Compartilhar</strong>, que envia o arquivo para o Drive, o WhatsApp ou a pasta <strong>Arquivos</strong>. Para restaurar, use <strong>Importar jogos salvos</strong> e escolha o arquivo .zip do backup ou os arquivos .e98.
+        </p>
+        <p class="ion-padding-top">
+        No alto da tela, o aviso <strong>Salvo às 14:32</strong> mostra quando o jogo foi salvo pela última vez neste navegador; tocar nele salva na hora. Se você ficar muito tempo sem salvar, ele avisa. O navegador pode apagar os dados de sites que ficam semanas sem uso, principalmente no iPhone, por isso o backup vale mesmo quando o aviso diz que está tudo salvo.
+        </p>
+      </div>
+    </ion-accordion>
+    <ion-accordion value="mouse-info" id="guide-faq-mouse-info">
+      <ion-item slot="header" color="light">
+        <ion-label>Como funcionam os controles de mouse?</ion-label>
+      </ion-item>
+      <div class="ion-padding" slot="content">
+        No computador, o mouse é automaticamente capturado pelo emulador ao clicar na tela do jogo. Para liberar o mouse, basta pressionar a tecla <strong>ESC</strong>.
+        <br>
+        <p class="ion-padding-top">
+        Em celulares e tablets, é só tocar onde quiser clicar. Toque duas vezes rápido para dar um clique duplo. Para segurar o botão do mouse, como nas barras de rolagem e nas janelas, arraste o dedo: o botão fica apertado enquanto você arrasta e é solto quando você levanta o dedo.
+        </p>
+        <p class="ion-padding-top">
+        O dedo cobre alvos pequenos, como os botões redondos e as barras de rolagem. Nesses casos, segure o dedo parado por meio segundo para entrar no <strong>modo de mira</strong>: o cursor aparece acima do dedo, acompanha o seu movimento e o clique só acontece quando você solta. Em uma lista, tocar na barra de rolagem acima ou abaixo do marcador rola a lista uma página.
+        </p>
+        <p class="ion-padding-top">
+        Um círculo branco mostra onde o toque foi registrado. Quem prefere o jeito antigo, em que o dedo move o cursor como em um touchpad de notebook, pode escolher <strong>Touchpad (clássico)</strong> em <strong>Modo de toque</strong>, no menu <ion-icon name="ellipsis-vertical-outline"></ion-icon>. Essa opção só aparece nos aparelhos em que ele funciona.
+        </p>
+      </div>
+    </ion-accordion>
+    <ion-accordion value="resolution-info" id="guide-faq-resolution-info">
+      <ion-item slot="header" color="light">
+        <ion-label>O jogo mudou de tamanho. Dá para voltar ao anterior?</ion-label>
+      </ion-item>
+      <div class="ion-padding" slot="content">
+        O Elifoot 98 foi feito para a resolução 640x480. Antes, o Windows 3.1 deste emulador rodava em 800x600 e o jogo aparecia como uma janela menor no meio de um fundo verde. Agora ele roda em 640x480 e ocupa a tela toda, o que deixa as letras 25% maiores, principalmente no celular.
+        <br>
+        <p class="ion-padding-top">
+        No computador, a área do jogo continua com o mesmo tamanho, então a mesma imagem é ampliada um pouco mais (1,25 vez): o texto fica maior, porém mais suave. Quem prefere a imagem mais nítida pode voltar ao tamanho clássico em <strong>Resolução do jogo</strong> (menu <ion-icon name="ellipsis-vertical-outline"></ion-icon>), escolhendo <strong>800x600 (clássico)</strong>, ou desligar <strong>Suavizar a imagem</strong> (em <strong>Exibição</strong>) para ver pixels quadrados.
+        </p>
+        <p class="ion-padding-top">
+        A troca reinicia o jogo: os jogos já gravados são mantidos, mas o que não foi salvo dentro do próprio jogo é perdido. Por isso ela fica indisponível enquanto você hospeda uma sala multiplayer. A escolha é guardada junto com os dados do jogo neste navegador, e <strong>Apagar todos os dados</strong> volta ao padrão, 640x480.
+        </p>
+      </div>
+    </ion-accordion>
+    <ion-accordion value="keyboard-info" id="guide-faq-keyboard-info">
+      <ion-item slot="header" color="light">
+        <ion-label>Como funciona o teclado?</ion-label>
+      </ion-item>
+      <div class="ion-padding" slot="content">
+        No computador, o teclado pode ser utilizado normalmente, mas o Windows 3.1 que roda o jogo enxerga um teclado americano, sem teclas de acento: letras como ã, é e ç digitadas direto no teclado não saem corretas. Para escrever nomes com acento, use <strong>Digitar texto</strong> (pelo menu <ion-icon name="ellipsis-vertical-outline"></ion-icon>, seção <strong>Entrada</strong>), que envia cada letra acentuada ao jogo do jeito certo.
+        <br>
+        <p class="ion-padding-top">
+        Em celulares e tablets, o teclado do jogo é o <strong>painel de teclas</strong> embaixo da imagem (veja a pergunta abaixo). Para escrever, há duas formas: <br>
+        <ol class="ion-padding-start">
+          <li>- Pela aba <strong>Texto</strong> do painel, ou pela opção <strong>Digitar texto</strong> do menu <ion-icon name="ellipsis-vertical-outline"></ion-icon>. Ela abre uma caixa em que você escreve com o teclado do celular e envia tudo ao jogo. Os acentos funcionam, e cada quebra de linha equivale a apertar Enter, o que permite preencher vários campos de uma vez. O que o jogo não consegue mostrar (emojis, por exemplo) é enviado como "?".</li>
+          <li>- Pelas teclas do painel (<strong>Setas</strong> e <strong>Mais</strong>), que enviam as teclas de um teclado americano, sem acentos: Backspace, Espaço, Tab, Del e as demais.</li>
+        </ol>
+        <p class="ion-padding-top">
+        <strong>Teclado ao vivo (experimental).</strong> No menu <ion-icon name="ellipsis-vertical-outline"></ion-icon> > <strong>Dados e avançado</strong> > <strong>Recursos experimentais</strong>, ligue <strong>Teclado ao vivo (experimental)</strong> para que a aba <strong>Texto</strong> abra um campo logo acima do teclado do celular, no lugar da caixa: o que você digita aparece no jogo na hora, com acentos, e uma fileira de teclas fica junto do campo (Tab e Enter sempre; Esc, Apagar e as setas quando cabem na largura da tela). Tocar no jogo ou usar uma tecla do painel esvazia o campo, porque o jogo mudou de lugar. Cuidado: o jogo só tem campo de texto em algumas telas, e nas outras as letras são comandos (A escolhe Automático, M escolhe Melhores). O aviso <strong>campo detectado</strong> ou <strong>nenhum campo detectado</strong> ajuda, mas pode errar, e nada é bloqueado por ele. Ainda não foi testado em celulares de verdade: se algo sair errado, desligue. Para colar uma lista de nomes, use <strong>Lista</strong>, no próprio campo, ou <strong>Digitar texto</strong>, no menu.
+        </p>
+        <p class="ion-padding-top">
+        Em pé, o painel fica embaixo da imagem. Com o celular deitado não sobra espaço embaixo, mas sobra dos lados: as teclas ficam em duas colunas laterais (uma de cada lado da imagem), sem cobrir o jogo. Em telas estreitas as colunas têm uma coluna de teclas só, e o botão <strong>Teclas</strong> abre as demais por cima da tela. Em tablets e computadores deitados, o <strong>Teclas</strong> fica na barra superior.
+        </p>
+      </div>
+    </ion-accordion>
+    <ion-accordion value="program-manager-info" id="guide-faq-program-manager-info">
+      <ion-item slot="header" color="light">
+        <ion-label>O jogo fechou e apareceu o Program Manager. O que aconteceu?</ion-label>
+      </ion-item>
+      <div class="ion-padding" slot="content">
+        Na tela inicial do Elifoot 98, a que oferece <strong>Quero começar um jogo do início</strong> e <strong>Quero continuar um jogo</strong>, o jogo fecha sozinho se você apertar <strong>Enter</strong> antes de marcar uma das duas opções, ou se apertar <strong>Esc</strong> ou o botão <strong>Cancelar</strong> da própria tela. Sobra então a tela azul do Windows 3.1, com o ícone do Program Manager no canto. <br>
+        <p class="ion-padding-top">
+        Alguns segundos depois o aplicativo percebe e pergunta <strong>Reiniciar jogo?</strong>. Ao confirmar, ele salva os dados e recarrega a página. Se você tocar em <strong>Agora não</strong>, é só usar <strong>Salvar e recarregar</strong> no menu quando quiser voltar. Da próxima vez, marque uma das opções com o cursor antes de confirmar com Enter.
+        </p>
+        <p class="ion-padding-top">
+        O mesmo vale para as teclas <strong>Enter</strong> e <strong>Esc</strong> do painel de teclas: elas são teclas de verdade do jogo. O fechamento de propósito é a tecla <strong>Sair (Alt+F4)</strong>, em <strong>Mais</strong>, que pede confirmação antes.
+        </p>
+      </div>
+    </ion-accordion>
+    <ion-accordion value="key-panel-info" id="guide-faq-key-panel-info">
+      <ion-item slot="header" color="light">
+        <ion-label>O que é o painel de teclas embaixo da imagem?</ion-label>
+      </ion-item>
+      <div class="ion-padding" slot="content">
+        É o teclado do Elifoot no celular e no tablet. Ele fica embaixo da imagem do jogo, nunca por cima, e tem uma barra de abas:
+        <ol class="ion-padding-start">
+          <li>- <strong>Táticas</strong>: as teclas <strong>F1 a F12</strong>, cada uma com a formação que escolhe (de 3-3-4 a 6-4-0), mais <strong>A</strong> (Seleccionar &gt; Automático) e <strong>M</strong> (Seleccionar &gt; Melhores).</li>
+          <li>- <strong>Setas</strong>: as setas <ion-icon name="caret-back-outline"></ion-icon> <ion-icon name="caret-up-outline"></ion-icon> <ion-icon name="caret-forward-outline"></ion-icon> <ion-icon name="caret-down-outline"></ion-icon>, <strong>Enter</strong> <ion-icon name="return-down-back-outline"></ion-icon>, <strong>Esc</strong> e <strong>Tab</strong>. Segure uma seta para ela se repetir.</li>
+          <li>- <strong>Texto</strong>: abre a caixa para escrever com o teclado do celular, com acentos.</li>
+          <li>- <strong>Chat</strong>: aparece enquanto você hospeda uma sala, e mostra o número de mensagens não lidas.</li>
+          <li>- <strong>Mais</strong>: Shift, Ctrl e Alt, Espaço, Backspace, Del, Tab e Shift+Tab, PgUp, PgDn, Home e End, F1 a F12, as teclas <strong>Num *</strong> (Craque, a procura de jogadores craque) e <strong>Num -</strong> (Registro, onde se digita o código de registro), o O Matic e o <strong>Sair (Alt+F4)</strong>.</li>
+        </ol>
+        <p class="ion-padding-top">
+        Shift, Ctrl e Alt valem para a próxima tecla: toque uma vez, e a aba <strong>Mais</strong> mostra o nome do que está esperando. Toque duas vezes para travar, e toque de novo para soltar. Eles também se soltam sozinhos se você sair do aplicativo.
+        </p>
+        <p class="ion-padding-top">
+        O painel aparece sozinho em aparelhos de toque e fica escondido no computador. Para mudar isso, use <strong>Mostrar painel de teclas</strong> no menu <ion-icon name="ellipsis-vertical-outline"></ion-icon>, seção <strong>Entrada</strong>. Nos aparelhos que vibram, dá para desligar a <strong>Vibração nas teclas</strong> no mesmo lugar.
+        </p>
+      </div>
+    </ion-accordion>
+    <ion-accordion value="zoom-info" id="guide-faq-zoom-info">
+      <ion-item slot="header" color="light">
+        <ion-label>As letras estão pequenas. Dá para ampliar a imagem?</ion-label>
+      </ion-item>
+      <div class="ion-padding" slot="content">
+        No menu <ion-icon name="ellipsis-vertical-outline"></ion-icon> > <strong>Dados e avançado</strong> > <strong>Recursos experimentais</strong> existe <strong>Zoom e movimento</strong>, {{ zoomByDefault ? 'ligado' : 'desligado' }} por padrão e só nos aparelhos de toque. Com ele ligado, <strong>pince com dois dedos</strong> na imagem para ampliar (até 3 vezes) e <strong>arraste com dois dedos</strong> para mover. Depois de tocar em algo perto da borda, a imagem anda sozinha para mostrar o que se abre ali (menus e listas). O que você escolhe fica guardado, uma vez para o aparelho em pé e outra para o aparelho deitado. O pinçar só funciona no <strong>Modo de toque</strong> Direto, que é o padrão.
+        <p class="ion-padding-top">
+        Quem não consegue pinçar usa os botões. Com o zoom ligado, o menu <ion-icon name="ellipsis-vertical-outline"></ion-icon> ganha a linha <strong>Zoom</strong>, em <strong>Exibição</strong>, com <strong>Ajustar</strong> (a imagem inteira), <strong>&minus;</strong> e <strong>+</strong>; ela funciona com o painel de teclas ligado ou desligado. A aba <strong>Zoom</strong> do painel de teclas (ele precisa estar ligado em <strong>Mostrar painel de teclas</strong>) tem também <strong>1,5x</strong>, <strong>2x</strong> e quatro setas que movem a imagem (segure para repetir). Com o aparelho em pé, a imagem ampliada ganha o espaço livre embaixo dela e o painel de teclas se recolhe até a barra de abas; ao voltar para <strong>Ajustar</strong>, o painel volta.
+        </p>
+        <p class="ion-padding-top">
+        O zoom é só da sua tela. Quem assiste à sala multiplayer sempre vê o jogo inteiro, e o cursor de cada um continua no lugar certo. Ainda não foi testado em celulares de verdade: se algo sair errado, desligue a opção e a imagem volta ao normal. Dar dois toques rápidos <em>não</em> amplia, porque dois toques são um clique duplo do Windows.
+        </p>
+      </div>
+    </ion-accordion>
+    <ion-accordion value="battery-info" id="guide-faq-battery-info">
+      <ion-item slot="header" color="light">
+        <ion-label>O celular esquenta e a bateria acaba rápido. Dá para economizar?</ion-label>
+      </ion-item>
+      <div class="ion-padding" slot="content">
+        O Windows 3.1 e o Elifoot rodam dentro de um emulador que trabalha o tempo todo, mesmo numa tela que não muda. Por isso o aparelho usa um núcleo do processador sem parar enquanto o jogo está aberto.
+        <p class="ion-padding-top">
+        No menu <ion-icon name="ellipsis-vertical-outline"></ion-icon> > <strong>Dados e avançado</strong> > <strong>Recursos experimentais</strong> existe <strong>Economizar bateria quando parado</strong>, {{ savingByDefault ? 'ligado' : 'desligado' }} por padrão. Com ele ligado, se a tela do jogo fica parada por cerca de {{ idleSeconds }} segundos, o emulador descansa e só acorda por instantes, de tempos em tempos, para ver se o jogo está fazendo alguma coisa. Ao tocar na tela ou digitar, ele acorda na hora.
+        </p>
+        <p class="ion-padding-top">
+        Ele não age enquanto você hospeda uma sala (quem hospeda precisa do jogo sempre ativo) nem com <strong>Salvar ao gravar o jogo</strong> desligado, porque é ele que confirma que o jogo não está gravando. Foi medido só em computador. Se algum cálculo do Elifoot, como passar a rodada, ficar mais lento sem a tela se mexer, desligue a opção.
+        </p>
+      </div>
+    </ion-accordion>
+    <ion-accordion value="screen-info" id="guide-faq-screen-info">
+      <ion-item slot="header" color="light">
+        <ion-label>A tela do celular apaga no meio da partida. Dá para evitar?</ion-label>
+      </ion-item>
+      <div class="ion-padding" slot="content">
+        Sim. No menu <ion-icon name="ellipsis-vertical-outline"></ion-icon>, em <strong>Exibição</strong>, existe <strong>Manter a tela ligada</strong>, ligado por padrão, que impede o aparelho de apagar a tela enquanto o jogo está aberto. Quem hospeda uma sala, e quem assiste a uma, tem a tela mantida acesa de qualquer forma, porque um celular que bloqueia tira o anfitrião do ar. A tela volta a poder apagar assim que você sai do jogo.
+        <p class="ion-padding-top">
+        O navegador pode recusar: o modo de economia de bateria faz isso, e navegadores antigos nem têm o recurso (o menu só mostra a opção onde ela existe, e diz o que o aparelho respondeu). Nesse caso, aumente o tempo de tela ligada nas configurações do aparelho.
+        </p>
+        <p class="ion-padding-top">
+        Para ganhar espaço, gire o celular: deitado, a imagem do jogo fica bem maior, com as teclas, o menu e o código da sala nas colunas ao lado dela. <strong>Tela cheia</strong>, na mesma seção, esconde a barra do navegador e, no celular, deita a tela junto; ela não existe no Safari do iPhone, onde o caminho é instalar o app na Tela de Início.
+        </p>
+      </div>
+    </ion-accordion>
+    <ion-accordion value="sound-info" id="guide-faq-sound-info">
+      <ion-item slot="header" color="light">
+        <ion-label>O jogo ficou sem som no celular. O que fazer?</ion-label>
+      </ion-item>
+      <div class="ion-padding" slot="content">
+        Depois de uma ligação, de bloquear a tela ou de trocar de fone Bluetooth, o navegador pode pôr o som do jogo para dormir. Quando isso acontece o botão <strong>Ativar som</strong> (um alto-falante cortado, ao lado do aviso de salvamento) aparece; toque nele para voltar. Um toque em qualquer lugar do jogo também acorda o som.
+        <p class="ion-padding-top">
+        No iPhone, a chave de toque no silencioso também cala o jogo. Em <strong>Som no modo silencioso</strong>, no menu, seção <strong>Jogo</strong>, o jogo passa a tocar mesmo assim (isso pode interromper a música de outros apps, por isso fica desligado até você ligar).
+        </p>
+        <p class="ion-padding-top">
+        <strong>Volume do jogo</strong> e <strong>Silenciar o jogo</strong>, na seção <strong>Jogo</strong>, mexem só no som do seu aparelho. Quem assiste à sua sala continua ouvindo o jogo normalmente; para calar a sala, use <strong>Enviar o som do jogo aos espectadores</strong>.
+        </p>
+      </div>
+    </ion-accordion>
+    <ion-accordion value="install-info" id="guide-faq-install-info">
+      <ion-item slot="header" color="light">
+        <ion-label>Como instalo o app, e meus jogos salvos vão junto?</ion-label>
+      </ion-item>
+      <div class="ion-padding" slot="content">
+        No Android e no computador, o menu mostra <strong>Instalar o app</strong> quando o navegador permite. No iPhone e no iPad, o caminho é o botão Compartilhar do navegador e depois <strong>Adicionar à Tela de Início</strong>; o mesmo item do menu mostra o passo a passo. O app instalado abre em tela cheia, sem a barra do navegador.
+        <p class="ion-padding-top">
+        <strong>No iPhone e no iPad, os jogos salvos não passam do Safari para o app instalado</strong>: cada um guarda os seus dados em separado. Antes de instalar, use <strong>Dados e avançado</strong> &gt; <strong>Exportar jogos salvos</strong>; depois de abrir o app, use <strong>Importar jogos salvos</strong>. Em <strong>Dados e avançado</strong> a janela também mostra se o navegador aceitou proteger o armazenamento deste site e quanto espaço ele ocupa; "Não protegido" quer dizer que o navegador pode apagar os dados se faltar espaço no aparelho.
+        </p>
+      </div>
+    </ion-accordion>
+    <ion-accordion value="copyright-info" id="guide-faq-copyright-info">
+      <ion-item slot="header" color="light">
+        <ion-label>Não é pirataria jogar dessa forma?</ion-label>
+      </ion-item>
+      <div class="ion-padding" slot="content">
+        Jogar e compartilhar o Elifoot 98 é completamente legal. O jogo foi originalmente lançado como shareware, permitindo sua distribuição de forma livre e gratuita. <br>
+        Isso significa que você pode jogá-lo e compartilhá-lo sem problemas, desde que a cópia distribuída não inclua o registro ou seja vendida por terceiros sem a autorização do detentor dos direitos.
+      </div>
+    </ion-accordion>
+  </ion-accordion-group>
+</ion-content>

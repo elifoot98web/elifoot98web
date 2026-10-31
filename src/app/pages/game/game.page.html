@@ -1,0 +1,216 @@
+<!--
+  The toolbar is dropped only in landscape-compact (a landscape phone), where the height is the
+  scarce thing; see LayoutShapeHelper. It used to go in any landscape viewport under 768px tall,
+  which took it from every laptop window and every tablet in a Safari tab as well.
+-->
+<ion-header [translucent]="true" *ngIf="layout.hasHeader">
+  <ion-toolbar color="tertiary">
+    <!--
+      The control deck's launcher, where the deck is a sheet (landscape with a toolbar, or a portrait
+      window with no band under the picture). Shell, flat: it is a toolbar button. A native button
+      with the keycap behaviour and not an ion-button, so tapping it does not take the focus from
+      the game and a tablet's physical keyboard keeps working.
+    -->
+    <ion-buttons slot="start" *ngIf="layout.launcherHome === 'toolbar'">
+      <button type="button" class="toolbar-launcher" appDeckKey (deckPress)="toggleDeckSheet()"
+        [attr.aria-pressed]="deckSheetOpen" aria-label="Painel de teclas">
+        <ion-icon name="keypad-outline" aria-hidden="true"></ion-icon>
+        <span>Teclas</span>
+      </button>
+    </ion-buttons>
+    <!--
+      The pill is the ambient answer to "am I live, in which room, with how many people".
+      It sits in the title slot because that is the one piece of toolbar real estate that is
+      already empty on a phone (the app name is ion-hide-md-down), and because centring it
+      costs the canvas nothing — unlike an overlay, which after Phase 2 would sit on the
+      game's own title bar in portrait. A second instance covers mobile landscape, where
+      this whole header is suppressed.
+    -->
+    <ion-title>
+      <span class="ion-hide-md-down">Elifoot 98 Online</span>
+      <app-room-status-pill *ngIf="isStreaming" [roomCode]="hostRoomId" [locked]="!!hostPassword">
+      </app-room-status-pill>
+    </ion-title>
+
+    <ion-buttons slot="end">
+      <!--
+        What the player's progress looks like from the outside ("Salvo às 14:32"); a tap saves
+        now. Shell, not Win9x: it sits in the toolbar, like the room pill. Mobile landscape has
+        no toolbar, so the menu's "Salvar agora" carries the same words there.
+      -->
+      <app-save-status-chip [compact]="isStreaming" (activate)="saveNow()"></app-save-status-chip>
+      <!--
+        "Ativar som", only while the browser has put the game's audio to sleep and the page could not
+        wake it. Flat shell like the save chip, and only the speaker under 600px: the title slot has
+        the room pill to protect.
+      -->
+      <app-sound-chip [hosting]="isStreaming"></app-sound-chip>
+      <ion-button (click)="openMenu($event)" aria-label="Menu de opções">
+        <ion-icon slot="icon-only" name="ellipsis-vertical-outline"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<!--
+  [scrollY]="!isStreaming" is load-bearing beyond iOS. With scrollY on, `.inner-scroll` is
+  the nearest scrollable ancestor of the chat input, and iOS Safari scrolls it past its
+  bounds to reveal the focused field, dragging #game-container off-screen with no reliable
+  way back. Nothing here scrolls: the content is `.full`, and the menu carries its own
+  ion-content.
+-->
+<ion-content [fullscreen]="true" [scrollY]="!isStreaming" class="not-selectable" color="primary">
+  <!--
+    The options menu, in two forms that draw the same sections (app-options-menu, from MenuHelper): the popover under the mouse's button on a
+    desktop, and on a touch screen a bottom sheet (an ion-modal with breakpoints). Both are overlays of the app, so opening one moves
+    nothing in the page: the picture's box is the same with the menu open and closed. The sheet is shell, flat, like the toolbar that opens it.
+  -->
+  <ion-popover #popover [isOpen]="isPopoverOpen" triggerAction="click" class="menu-popover" (didDismiss)="isPopoverOpen = false">
+    <ng-template>
+      <ion-content>
+        <app-options-menu [sections]="menuSections" (act)="onMenuAction($event)" (help)="openGuide($event)"></app-options-menu>
+      </ion-content>
+      <ion-footer class="ion-no-padding ion-no-margin ion-text-center">
+        <ion-note class="ion-no-padding ion-no-margin not-selectable">v{{ versionConfig.versionName }}</ion-note>
+      </ion-footer>
+    </ng-template>
+  </ion-popover>
+  <ion-modal class="menu-sheet" [isOpen]="isSheetOpen" [breakpoints]="sheetBreakpoints" [initialBreakpoint]="sheetInitialBreakpoint"
+    [handle]="true" (didDismiss)="isSheetOpen = false">
+    <ng-template>
+      <ion-header>
+        <ion-toolbar color="tertiary">
+          <ion-title>Opções</ion-title>
+          <ion-buttons slot="end">
+            <ion-button (click)="isSheetOpen = false" aria-label="Fechar o menu">
+              <ion-icon slot="icon-only" name="close"></ion-icon>
+            </ion-button>
+          </ion-buttons>
+        </ion-toolbar>
+      </ion-header>
+      <ion-content>
+        <app-options-menu [sections]="menuSections" (act)="onMenuAction($event)" (help)="openGuide($event)"></app-options-menu>
+        <p class="menu-version not-selectable">v{{ versionConfig.versionName }}</p>
+      </ion-content>
+    </ng-template>
+  </ion-modal>
+  <input style="display:none;" type="file" accept=".zip" #patchFileInput (change)="onPatchFileSelected($event)" />
+  <!--
+    Saves (.e98) or a backup (.zip), several at once. Android's picker filters by MIME type and
+    does not know .e98, so the zip type is listed as well as the extension.
+  -->
+  <input style="display:none;" type="file" multiple accept=".e98,.zip,application/zip" #saveGameFileInput (change)="onSaveFileSelected($event)" />
+  <!--
+    The page's row (a column in portrait). `#stageHost` is what StageLayoutService measures; every size in it comes from
+    that service's plan (StageHelper) and the stylesheets that read it: the picture's container is EXACTLY the picture in
+    landscape, the rails and the docked chat are its siblings, and the toggle and the deck are not children of it.
+  -->
+  <div #stageHost class="full game-stream-flex-container" [class.has-deck-band]="layout.kind === 'band'"
+    [class.has-rails]="layout.rails" [class.camera-on]="cameraView.enabled" [class.camera-tall]="cameraTall">
+    <div class="game-stream-container">
+      <!--
+        role="application": keystrokes in here are the game's, so a screen reader should hand
+        them over rather than treat the page as a document. The canvas inside stays opaque to
+        assistive tech whatever this says; the label is only so the region can be found and named.
+      -->
+      <div [ngClass]="{ hidden: isHidden, full: !isHidden }" class="smooth-canvas not-selectable" id="game-container"
+        role="application" aria-label="Elifoot 98 (emulador). As teclas que você digitar vão direto para o jogo.">
+      </div>
+    </div>
+    <!--
+      Chat drawer handle. A child of the row and NOT of the picture's container, whose box is the picture in
+      landscape, and not inside the panel either: a closed panel is zero-sized with overflow:hidden and would clip the
+      only way to open it. Where the deck is a band (a touch device in portrait) the handle is the deck's Chat button
+      instead, in the taskbar; where it is a rail (a landscape phone) it is a key in the left rail. Everywhere else this
+      stays the one chat entry point, because it is the control that exists at every breakpoint. The object-literal
+      *ngIf is a view model, so ONE async subscription feeds both the badge and the button's accessible name — an
+      aria-label suppresses descendant text, so the unread count has to live inside the label itself.
+    -->
+    <ng-container *ngIf="{ unread: (unreadCount$ | async) || 0 } as chat">
+      <ion-button *ngIf="isStreaming && layout.kind !== 'band' && !layout.rails" fill="clear" class="chat-toggle-btn" data-chat-toggle
+        [class.chat-toggle-btn--unread]="!isChatOpen && chat.unread"
+        (click)="toggleChat()"
+        [attr.aria-label]="chatToggleLabel(chat.unread)"
+        [attr.aria-expanded]="isChatOpen"
+        aria-controls="chat-panel">
+        <ion-icon slot="start" [name]="isChatOpen ? 'close-outline' : 'chatbubble-ellipses-outline'"></ion-icon>
+        <span class="chat-toggle-label">Chat</span>
+        <ion-badge *ngIf="!isChatOpen && chat.unread" color="danger" aria-hidden="true">{{ chat.unread }}</ion-badge>
+      </ion-button>
+    </ng-container>
+    <!--
+      Chat docked beside (landscape) or below (portrait) the game, only while a room is
+      live. In portrait the game box is a fixed 4:3 height, so the chat growing into the
+      leftover letterbox space cannot resize it at all. In landscape its width is the stage
+      plan's (`--chat-dock-w`) and the picture is sized around it.
+    -->
+    <div *ngIf="isStreaming" id="chat-panel" class="chat-docked-panel"
+      [class.chat-open]="isChatOpen"
+      role="region" aria-label="Chat da sala" tabindex="-1"
+      [attr.aria-hidden]="!isChatOpen"
+      (keydown.escape)="onChatEscape($event)">
+      <app-chat [visible]="isChatOpen" [roomCode]="hostRoomId"></app-chat>
+    </div>
+    <!--
+      The control deck: a SIBLING of #game-container (the picture's box is not the deck's to
+      change), after the chat panel, so that in portrait the order under the picture is the chat
+      or a panel of keys, then the taskbar. Mounted wherever the layout says so (DeckLayoutHelper):
+      a touch device by default, anyone who turned it on, and always on a landscape phone, whose
+      left rail holds what the missing toolbar did even with the keys off (the three elements
+      projected into it). The chat's state stays the page's; the deck mirrors it and asks for
+      changes through (chatToggle).
+    -->
+    <app-dock *ngIf="layout.kind !== 'none' || layout.rails"
+      [presentation]="deckPresentation"
+      [keysShown]="layout.kind !== 'none'"
+      [leftColumns]="stageLeftColumns"
+      [rightColumns]="stageRightColumns"
+      [leftFolded]="!!stagePlan?.leftFolded"
+      [dosCI]="dosCI"
+      [disabled]="deckDisabled"
+      [vibrate]="keyVibration"
+      [liveKeyboard]="liveKeyboard"
+      [fieldHint]="fieldHint"
+      [cameraAvailable]="cameraView.enabled"
+      [cameraLabel]="cameraView.zoomed ? cameraView.label : 'Zoom'"
+      [zoomed]="cameraView.zoomed"
+      (shownChange)="deckShown = $event"
+      [chatAvailable]="isStreaming"
+      [chatOpen]="isChatOpen"
+      [unread]="(unreadCount$ | async) || 0"
+      [(sheetOpen)]="deckSheetOpen"
+      (chatToggle)="toggleChat($event)"
+      (textRequest)="onTextRequest()"
+      (omaticRequest)="showOmaticModal()"
+      (keyFailure)="onKeyFailure($event)">
+      <!-- Projected into the left rail of a landscape phone (see the dock): the toolbar's menu, "Ativar som" and the room. -->
+      <button railMenu type="button" class="rail-menu-btn" (click)="openMenu($event)" aria-label="Menu de opções">
+        <ion-icon name="ellipsis-vertical-outline" aria-hidden="true"></ion-icon>
+      </button>
+      <app-sound-chip railSound variant="rail" [hosting]="isStreaming"></app-sound-chip>
+      <app-room-status-pill railRoom *ngIf="isStreaming" [roomCode]="hostRoomId" [locked]="!!hostPassword" [compact]="true">
+      </app-room-status-pill>
+    </app-dock>
+    <!--
+      The live type bar (experimental, behind the "Teclado ao vivo" setting): fixed to the bottom of the
+      screen above the OS keyboard, so like the deck it is a SIBLING of #game-container and takes no space
+      from it. Mounted wherever the deck is, since the deck's Texto button is what opens it.
+    -->
+    <app-type-bar *ngIf="liveKeyboard && layout.kind !== 'none'"
+      [dosCI]="dosCI"
+      [hint]="fieldHint"
+      [shape]="layout.shape"
+      [disabled]="deckDisabled"
+      (pasteList)="promptInputText()"
+      (notice)="showTypeBarNotice($event)"
+      (keyFailure)="onKeyFailure($event)">
+    </app-type-bar>
+  </div>
+</ion-content>
+
+<!--
+  The boot screen, for as long as the emulator starts and the game's own screen has not been seen. A fixed overlay out of the page's
+  layout (the picture's container under it is hidden, as it was under the loader), at the root of the template and not inside
+  ion-content, which contains its descendants. It is the loader that used to be an ion-loading: see BootScreenComponent.
+-->
+<app-boot-screen *ngIf="booting" [status]="bootStatus" [hostWaiting]="hostWaitingForBoot" (leave)="leaveBoot()"></app-boot-screen>

@@ -1,0 +1,300 @@
+/*
+ * The live type bar (TypeBarComponent): a field above the OS keyboard whose text appears in the game.
+ * ---------------------------------------------------------------------------
+ * LAYOUT, plus the seams. The look is the deck's: `.deck-key` (every key) and `.deck-face` (the grey)
+ * from the "Control deck" block of _win9x.scss, the field's `.win9x-input` and `.win9x-element-bevel`,
+ * and the few declarations below that name a Win9x token (`grep -n 'win9x-' _type-bar.scss`: the face's
+ * seam, the title bar, the lamp, the progress chip's bevel). Decision D3 asked for the choice of skin to
+ * be a CSS-only flip, and it is this and those two classes, never the markup. Global rather than the
+ * component's stylesheet for the deck's reason: a component's budget is 2 kB.
+ *
+ * THE CONTRACT with the page, which is why nothing here may size anything but itself:
+ *
+ *  - The bar is `position: fixed` against the bottom of the screen and lifted by `--kb-inset`
+ *    (KeyboardInsetService, started and stopped with the bar). It takes no room in the page: the
+ *    picture, `#game-container` and the deck do not know it is there. It COVERS the band under the
+ *    picture and, with a tall keyboard, the picture's lower edge; the component folds it into one row
+ *    before it would cover more than that (TypeBarLayoutHelper).
+ *  - The full window and the one-row layout are the same DOM with a class: the field is never
+ *    re-created while the keyboard is up, or it would lose the focus and the keyboard would close.
+ *  - 16 px in the field (iOS zooms the page on a smaller one), 44+ px on every key under a coarse pointer
+ *    (--deck-key-h, _deck.scss).
+ */
+
+app-type-bar {
+  display: contents;
+}
+
+.type-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: var(--kb-inset, 0px);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  // A tablet's bar is not a plank.
+  max-width: 640px;
+  margin: 0 auto;
+  border-top: 2px solid var(--win9x-dark, #0a0a0a);
+  // The home indicator's strip, until the keyboard covers it (as the chat does).
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) * (1 - var(--kb-open, 0)));
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  // The keys are not text (the deck's keycaps say so too); the field turns selection back on.
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+// ---- the window ----
+
+.type-bar-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 3px max(8px, env(safe-area-inset-right, 0px)) 3px max(8px, env(safe-area-inset-left, 0px));
+  background: var(--win9x-titlebar-bg);
+  color: var(--win9x-titlebar-ink);
+  font-family: var(--win9x-font);
+  font-weight: bold;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.type-bar-title-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// What the field hint thinks. A hint: it never blocks a key, and it is words and a lamp, not colour alone.
+.type-bar-badge {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: normal;
+  font-size: 12px;
+}
+
+.type-bar-badge::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 5px;
+  background: var(--win9x-ink-disabled);
+  border: 1px solid var(--win9x-light);
+}
+
+.type-bar-badge--on::before {
+  background: #00ff00;
+}
+
+.type-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  padding: 6px max(8px, env(safe-area-inset-right, 0px)) 4px max(8px, env(safe-area-inset-left, 0px));
+}
+
+// Only the one-row layout has it: the title, and with it the badge, is gone there.
+.type-bar-lamp {
+  display: none;
+}
+
+.type-bar-field {
+  flex: 1 1 0;
+  width: 0;
+  min-width: 0;
+  height: var(--deck-key-h);
+  margin: 0;
+  box-sizing: border-box;
+  font-size: 16px;
+  line-height: normal;
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 0;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.type-bar-key {
+  flex: 0 0 auto;
+  height: var(--deck-key-h);
+  min-height: 36px;
+  padding: 0 2px;
+  font-size: 14px;
+}
+
+.type-bar-row .type-bar-key {
+  width: 52px;
+}
+
+.type-bar-close {
+  font-size: 22px;
+  line-height: 1;
+}
+
+// Two rows of five on a phone, one row of ten where there is the width for it.
+.type-bar-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+  flex: 0 0 auto;
+  padding: 0 max(8px, env(safe-area-inset-right, 0px)) 6px max(8px, env(safe-area-inset-left, 0px));
+}
+
+.type-bar-strip .type-bar-key {
+  width: auto;
+}
+
+@media (min-width: 520px) {
+  .type-bar-strip {
+    grid-template-columns: repeat(10, minmax(0, 1fr));
+  }
+}
+
+// ---- one row ----
+// The field and the keys that fit, in a single line. Tab, Enter and the way out are always there; Esc
+// from 400px, "123" and Backspace from 560px (the OS keyboard has both of its own). The arrows,
+// Shift+Tab and "Lista" are the full window's.
+
+.type-bar--compact {
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  padding: 4px max(8px, env(safe-area-inset-right, 0px)) calc(4px + env(safe-area-inset-bottom, 0px) * (1 - var(--kb-open, 0))) max(8px, env(safe-area-inset-left, 0px));
+}
+
+.type-bar--compact .type-bar-title {
+  display: none;
+}
+
+.type-bar--compact .type-bar-row,
+.type-bar--compact .type-bar-strip {
+  display: contents;
+}
+
+.type-bar--compact .type-bar-lamp {
+  display: block;
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  box-sizing: border-box;
+  background: var(--win9x-ink-disabled);
+  border: 1px solid var(--win9x-light);
+}
+
+.type-bar--compact .type-bar-lamp--on {
+  background: #00ff00;
+  border-color: var(--win9x-dark);
+}
+
+.type-bar--compact .type-bar-key {
+  width: 56px;
+  font-size: 13px;
+}
+
+// The row and the strip are one line here (`display: contents`), so the order is set, not inherited:
+// lamp, field, the keys in the strip's order, then "123" and the way out last.
+.type-bar--compact .type-bar-lamp {
+  order: -2;
+}
+
+.type-bar--compact .type-bar-field {
+  order: -1;
+}
+
+.type-bar--compact .type-bar-numeric {
+  order: 8;
+}
+
+.type-bar--compact .type-bar-close {
+  order: 9;
+}
+
+.type-bar--compact .type-bar-key--t3 {
+  display: none;
+}
+
+@media (max-width: 559px) {
+  .type-bar--compact .type-bar-key--t2 {
+    display: none;
+  }
+}
+
+@media (max-width: 399px) {
+  .type-bar--compact .type-bar-key--t1 {
+    display: none;
+  }
+}
+
+// ---- a long send ----
+// Above the bar and out of its flow, so the field does not move under the finger while it runs.
+
+.type-bar-progress {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 100%;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 6px;
+  box-sizing: border-box;
+  border: 2px solid;
+  border-color: var(--win9x-light) var(--win9x-shadow) var(--win9x-shadow) var(--win9x-light);
+  font-size: 13px;
+}
+
+.type-bar-progress .type-bar-key {
+  width: auto;
+  padding: 0 10px;
+}
+
+// ---- the deck's Texto button, when a field seems to have the focus ----
+// The cue that replaces opening the keyboard by itself, which no phone allows from a timer: the
+// button pulses a few times and keeps a lamp. Finite, like the unread flash, and still there without motion.
+
+.deck-tab--field::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 8px;
+  height: 8px;
+  background: #008000;
+  border: 1px solid var(--win9x-light);
+  pointer-events: none;
+}
+
+.deck-tab--field {
+  animation: deck-tab-field 1s steps(1, end) 4;
+}
+
+@keyframes deck-tab-field {
+  0%, 49% {
+    background: var(--win9x-titlebar-bg);
+    color: var(--win9x-titlebar-ink);
+  }
+  50%, 100% {
+    background: var(--win9x-face);
+    color: var(--win9x-ink);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .deck-tab--field {
+    animation: none;
+  }
+}

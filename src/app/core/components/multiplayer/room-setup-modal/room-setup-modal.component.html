@@ -1,0 +1,147 @@
+<!-- Win9x window chrome, matching the Cheat 'O Matic modal (see src/theme/_win9x.scss). -->
+<div class="win9x-element-border win9x-outer-window">
+  <div class="win9x-modal-container">
+    <ion-header class="ion-no-border">
+      <ion-toolbar class="win9x-titlebar">
+        <ion-title>{{ title }}</ion-title>
+        <ion-buttons slot="end" class="buttons-padding-end">
+          <!-- Only where the opener lent the guide (the spectator's page does not carry it). -->
+          <ion-button *ngIf="help" fill="clear" class="win9x-button win9x-titlebar-close" (click)="showHelp()" aria-label="Ajuda sobre salas multiplayer">
+            <ion-icon name="help"></ion-icon>
+          </ion-button>
+          <ion-button fill="clear" class="win9x-button win9x-titlebar-close" (click)="cancel()" aria-label="Fechar">
+            <ion-icon name="close"></ion-icon>
+          </ion-button>
+        </ion-buttons>
+      </ion-toolbar>
+    </ion-header>
+
+    <ion-content class="win9x-modal-content ion-padding">
+      <!-- Native inputs with real <label>s, not ion-input: this is a Win9x dialog, and
+           ion-input's shadow-encapsulated internals cannot take the sunken bevel. -->
+      <form (ngSubmit)="confirm()">
+        <!--
+          The host's short form (QuickHostHelper): what pressing "Transmitir agora" will do, in a line, and "Alterar" for the rest. The
+          name is asked for here only by a host who has none yet (the first time), because everything else is remembered or generated.
+          A guest, and a host who pressed "Alterar", get the whole form below.
+        -->
+        <ng-container *ngIf="isHost && !expanded && loaded">
+          <label *ngIf="askName" class="field">
+            <span class="field-label">Seu nome</span>
+            <input class="win9x-input win9x-element-bevel" type="text" name="playerName"
+              [(ngModel)]="playerName" maxlength="20" required autocomplete="off"
+              placeholder="Como os outros vão te ver">
+          </label>
+          <p *ngIf="!askName" class="win9x-summary">
+            <span class="win9x-summary-swatch" [style.background-color]="playerColor" aria-hidden="true"></span>
+            {{ identity }}
+          </p>
+          <p class="win9x-summary win9x-summary--room" role="status">{{ summary }}</p>
+          <button type="button" class="win9x-expander win9x-expander--box" (click)="expand()" aria-expanded="false" aria-controls="host-fields">
+            <ion-icon name="chevron-forward" aria-hidden="true"></ion-icon>
+            <span>Alterar nome, código, senha, limite e cor</span>
+          </button>
+        </ng-container>
+
+        <div id="host-fields" *ngIf="!isHost || (expanded && loaded)">
+        <label class="field">
+          <span class="field-label">Seu nome</span>
+          <input class="win9x-input win9x-element-bevel" type="text" name="playerName"
+            [(ngModel)]="playerName" maxlength="20" required autocomplete="off"
+            placeholder="Como os outros vão te ver">
+        </label>
+
+        <label class="field">
+          <span class="field-label">Código da sala</span>
+          <span class="field-row">
+            <!-- No maxlength: a pasted share link must survive long enough for
+                 RoomCodeHelper.sanitize() to reduce it to its code on blur. -->
+            <input class="win9x-input win9x-element-bevel" type="text" name="roomCode"
+              [(ngModel)]="roomCode" required autocapitalize="characters" autocomplete="off"
+              (blur)="onCodeBlur()" placeholder="ELI-XXXX ou cole o link">
+            <button *ngIf="isHost" type="button" class="win9x-button win9x-button--touch"
+              (click)="regenerateCode()" aria-label="Gerar outro código">Gerar</button>
+          </span>
+        </label>
+        <!--
+          Recent rooms live next to the field they fill, so joining is owned by one surface.
+          Guest-only: a host is creating a room, not returning to one.
+        -->
+        <div *ngIf="!isHost && recentRooms.length > 0" class="recent-rooms">
+          <span class="field-label">Salas recentes</span>
+          <div class="recent-rooms-list">
+            <button type="button" *ngFor="let code of recentRooms" class="win9x-button recent-room"
+              (click)="useRecentRoom(code)">{{ code }}</button>
+          </div>
+        </div>
+
+        <p *ngIf="showCodeError" class="field-error">
+          O código deve ter o formato ELI-XXXX (sem as letras I, O e sem os números 0 e 1).
+        </p>
+
+        <label class="field">
+          <span class="field-label">Senha da sala (opcional)</span>
+          <input class="win9x-input win9x-element-bevel" type="password" name="password"
+            [(ngModel)]="password" autocomplete="off" placeholder="Deixe vazio para sala aberta">
+        </label>
+        <p *ngIf="isHost" class="field-hint">
+          Use uma senha se quiser garantir que só quem você convidar entre. O link
+          compartilhado não inclui a senha.
+        </p>
+        <!--
+          Mirrors the host hint above. A guest arriving from a share link has no idea what
+          they are about to get, and the word "sala" alone suggests they will be playing.
+        -->
+        <p *ngIf="!isHost" class="field-hint">
+          Você vai assistir à partida do anfitrião ao vivo, com chat e cursor compartilhado —
+          quem joga é ele. Deixe a senha vazia se a sala não tiver uma.
+        </p>
+
+        <!--
+          Host only. The six buttons reuse the swatch group's bevel and pressed state: it is the
+          same kind of control (one of a few, shown pressed-in), and a select would be a second
+          widget to style for six options. The host is not counted, and the ceiling is
+          Elifoot's own limit of six players.
+        -->
+        <fieldset *ngIf="isHost" class="win9x-element-bevel swatch-group">
+          <legend class="field-label">Limite de espectadores</legend>
+          <div class="color-swatches">
+            <button
+              *ngFor="let limit of spectatorLimits"
+              type="button"
+              class="color-swatch limit-option"
+              [class.selected]="limit === maxSpectators"
+              [attr.aria-label]="limit === 1 ? 'Permitir 1 espectador' : 'Permitir ' + limit + ' espectadores'"
+              [attr.aria-pressed]="limit === maxSpectators"
+              (click)="selectSpectatorLimit(limit)">{{ limit }}</button>
+          </div>
+        </fieldset>
+
+        <fieldset class="win9x-element-bevel swatch-group">
+          <legend class="field-label">Cor do seu cursor</legend>
+          <div class="color-swatches">
+            <button
+              *ngFor="let color of colors"
+              type="button"
+              class="color-swatch"
+              [class.selected]="color === playerColor"
+              [style.background-color]="color"
+              [attr.aria-label]="'Escolher cor ' + color"
+              [attr.aria-pressed]="color === playerColor"
+              (click)="selectColor(color)"></button>
+          </div>
+        </fieldset>
+        </div>
+
+        <div class="dialog-actions">
+          <button type="submit" class="win9x-button win9x-button--touch" [disabled]="!isValid">
+            {{ isHost ? 'Transmitir agora' : 'Entrar' }}
+          </button>
+          <button type="button" class="win9x-button win9x-button--touch" (click)="cancel()">
+            Cancelar
+          </button>
+        </div>
+      </form>
+    </ion-content>
+  </div>
+</div>

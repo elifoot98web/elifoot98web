@@ -1,0 +1,39 @@
+.hidden {
+    opacity: 0.0001;
+}
+
+.full {
+    width: 100%;
+    height: 100%;
+    background-color: #008000;
+}
+
+// The cursor overlay is an absolutely-positioned child of #game-container, and it is
+// aligned using the canvas's offsetLeft/offsetTop. Making the container the positioned
+// ancestor means both resolve against the same box.
+#game-container {
+    position: relative;
+    // A drag that starts on the game must never chain into a scroll or a pull-to-refresh of the
+    // page behind it. js-dos's own sheet already gives .emulator-root (= this element)
+    // touch-action:none, user-select:none and -webkit-touch-callout:none, so those are not
+    // repeated here; overscroll-behavior is the one it leaves out.
+    overscroll-behavior: none;
+}
+
+/*
+ * The options sheet (shell, flat: it is the app's own menu, in the toolbar's family). An overlay of the app, so it moves nothing in
+ * the page. On a tablet a full-width sheet is a long way from the thumb, so it is a column in the middle, as wide as a phone.
+ */
+ion-modal.menu-sheet {
+    --max-width: 560px;
+    --border-radius: 14px 14px 0 0;
+    margin-inline: auto;
+}
+
+.menu-version {
+    margin: 0;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+    text-align: center;
+    font-size: 12px;
+    color: var(--ion-color-step-600, #666);
+}

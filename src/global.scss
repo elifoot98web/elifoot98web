@@ -9,6 +9,13 @@
  * https://ionicframework.com/docs/layout/global-stylesheets
  */
 
+/* Windows 95/98 design tokens, shared by the omatic modal and the multiplayer
+   surfaces. @use must precede every other rule in the file, which is also why this
+   is not a trailing @import. */
+@use './theme/win9x' as *;
+@use './theme/deck';
+@use './theme/type-bar';
+
 /* Core CSS required for Ionic components to work properly */
 @import "@ionic/angular/css/core.css";
 
@@ -65,6 +72,593 @@ canvas {
     user-select: none;
 }
 
+.pointer-overlay {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    pointer-events: none;
+    z-index: 2;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
+/*
+ * The name rides over live game pixels, so its legibility must not depend on them. This
+ * was `opacity: 0.35` on the whole element, which faded the pill and the ink together:
+ * measured text-against-pill contrast ran 3.35:1 over the pitch green, 3.04 over the
+ * brighter green, 2.84 over Win 3.1 grey and 2.44 over a white game dialog — under AA
+ * everywhere, and worst exactly where the game draws a dialog box.
+ *
+ * With the pill opaque, the only ratio that matters is ink-against-pill, which is fixed
+ * whatever is underneath. `color` is written per cursor from
+ * `ColorHelper.darkenForText(playerColor)` — the same helper the chat transcript uses,
+ * which holds the hue while clearing 4.5:1 against white (4.56–6.89 measured across the
+ * whole palette), so the name identifies its owner the way the sender lines do.
+ *
+ * The border reads from `currentColor`, so that one inline write colours both. It earns
+ * its keep on the game's own white dialogs, where an opaque white pill would otherwise
+ * have no edge at all. `color` below is only the fallback for a cursor rendered before
+ * the inline colour lands.
+ */
+.pointer-overlay-cursor-label {
+    background: #fff;
+    padding: 1px 5px;
+    border: 1px solid currentColor;
+    border-radius: 8px;
+    margin: 4px 2px;
+    color: #000;
+    font-weight: bold;
+    font-family: monospace;
+    white-space: nowrap;
+    /*
+     * Bounded footprint. `content-box` overrides Ionic's global `border-box` on purpose so
+     * `20ch` means twenty characters of *text*, with the padding and border outside it —
+     * under border-box the same number would start eliding around eighteen characters and
+     * clip legitimate names. Twenty matches MULTIPLAYER.CURSOR_LABEL_MAX_CHARS and the
+     * ingest cap, so nothing a peer can send today is elided; this is what keeps one
+     * label's occlusion bounded if that cap ever moves.
+     */
+    box-sizing: content-box;
+    max-width: 20ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /*
+     * A pointer in use moves; a parked one is either forgotten or deliberately covering
+     * the game. The name is only needed while its owner is doing something, so it fades
+     * out on idle and the arrow — which carries the colour — stays. See
+     * CursorRendererHelper: only a *changed* position re-shows it, so re-sending the same
+     * coordinates cannot pin a name over the canvas.
+     */
+    transition: opacity 300ms ease;
+}
+
+.pointer-overlay-cursor-label--idle {
+    opacity: 0;
+}
+
+.cursor-click-ping {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    mix-blend-mode: screen;
+    pointer-events: none;
+    animation: ping 1s cubic-bezier(0, 0, 0.2, 1);
+}
+
+/*
+ * Direct-touch feedback (TouchFeedbackHelper): a ring where a tap landed, and one that stays
+ * under a finger that is dragging or aiming. The guest cursor is a ~6x10 css px sprite hidden
+ * under the fingertip, so without this a tap that registered looks like one that was lost.
+ *
+ * These are DOM nodes inside #game-container, not pixels in the guest's frame: the stream the
+ * spectators get and every screen-scraper read the canvas, so neither sees them. They are
+ * absolutely positioned and pointer-events:none, so they take no space (js-dos re-letterboxes
+ * its canvas whenever the container resizes) and no touch. White with a hairline of black on both
+ * sides, because the game underneath is green, grey, white and navy in turn and no single colour
+ * reads on all of them. transform and opacity only: it has to be cheap on a low-end phone.
+ * Neutral on purpose, not Win9x: it is feedback, not a window.
+ */
+.touch-feedback {
+    // While the camera magnifies the picture (CameraService), the ring is a child of the magnified root and would grow with it: the
+    // camera writes the inverse scale on that root, and a ring is as big as a fingertip on the SCREEN. 1 without a camera.
+    --ring: var(--camera-unscale, 1);
+    position: absolute;
+    z-index: 20;
+    box-sizing: border-box;
+    width: calc(44px * var(--ring));
+    height: calc(44px * var(--ring));
+    margin: calc(-22px * var(--ring)) 0 0 calc(-22px * var(--ring));
+    border: calc(3px * var(--ring)) solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 0 calc(1px * var(--ring)) rgba(0, 0, 0, 0.7), inset 0 0 0 calc(1px * var(--ring)) rgba(0, 0, 0, 0.7);
+    pointer-events: none;
+}
+
+// 420ms is TOUCH_INPUT.FEEDBACK_RING_MS: the node is removed on animationend, and by a timer built on that constant when no animation runs.
+.touch-feedback--tap {
+    animation: touch-feedback-ring 420ms ease-out both;
+}
+
+// A double-tap is two clicks, so its ring is heavier.
+.touch-feedback--double {
+    border-width: calc(6px * var(--ring));
+    animation: touch-feedback-ring 420ms ease-out both;
+}
+
+.touch-feedback--hold {
+    opacity: 0.9;
+}
+
+@keyframes touch-feedback-ring {
+    from {
+        transform: scale(0.3);
+        opacity: 1;
+    }
+    to {
+        transform: scale(1.15);
+        opacity: 0;
+    }
+}
+
+@keyframes touch-feedback-fade {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+// The ring is information (the tap registered), not decoration, so reduced motion keeps it and
+// only stops it growing.
+@media (prefers-reduced-motion: reduce) {
+    .touch-feedback--tap,
+    .touch-feedback--double {
+        animation-name: touch-feedback-fade;
+    }
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Multiplayer chat — DOCKED beside/below the game, sized to the letterbox margin.
+ * Shared by the host (game) and guest (join-game) pages.
+ *
+ * The requirement was never "don't dock", it was "don't resize the canvas". A 4:3 frame
+ * (800x600 or 640x480, machine=svga_s3: only the ratio matters here, and the sizes below are
+ * CSS pixels) fitted into a non-4:3 box always leaves slack on one axis, and spending that
+ * slack on the chat costs the game nothing:
+ *
+ *   390x844 portrait phone   content 390x788, canvas 390x292  -> 496px of height free
+ *   360x640 portrait phone   content 360x584, canvas 360x270  -> 314px free
+ *   844x390 landscape phone  content 844x390, canvas 520x390  -> 324px of width free
+ *   1920x1080 desktop        content 1920x1024, canvas 1365x1024 -> 555px free
+ *   1280x800 laptop          content 1280x744, canvas 992x744 -> 288px free
+ *   1024x768 iPad landscape  content 1024x712, canvas 949x712 -> only 75px free
+ *
+ * PORTRAIT is the important case and it is completely free. `.game-stream-container` is
+ * pinned to exactly the 4:3 box the width-fitted canvas needs (height: 75vw — percentage
+ * of the WIDTH, which in portrait is the viewport width), so the game sits flush under
+ * the header with no letterbox at all, and the chat takes every remaining pixel. Because
+ * the game box is a fixed height, growing the chat does not resize it — js-dos's resize
+ * detector never even fires, so the height transition is safe to animate.
+ *
+ * LANDSCAPE docks as a row, and the picture's container has an EXPLICIT size. It used to be `flex: 1`: js-dos fitted its
+ * canvas into whatever width the siblings left, so the gutters beside a height-fitted picture belonged to the container
+ * and nothing could live in them except as an overlay on it. Now `.game-stream-container` is exactly the picture
+ * (`--stage-w` x `--stage-h`, written by StageLayoutService from StageHelper.plan), and what is beside it is a SIBLING in
+ * the flex row: the rails of a landscape phone (_deck.scss), then the chat. The plan knows the widths of both, so a rail
+ * or the chat costs the picture only when the plan says so (the chat on a phone, measured in CLAUDE.md, *The stage*). The
+ * chat's width still SNAPS (never animated), so it is one re-letterbox per toggle instead of the ~18 the old animated
+ * sidebar caused; the open/close motion is the chat sliding inside the panel, clipped by its overflow.
+ *
+ * Spectators are unaffected either way: canvas.captureStream() follows the canvas BACKING
+ * STORE, which js-dos pins to the DOS frame size, so displayed size never changes the
+ * captured track resolution. Both screen-scrapers read dosCI.screenshot() (the fixed
+ * render buffer) for the same reason, so nothing here can break green-pixel load
+ * detection or the tesseract auto-save OCR. (The frame's own size does matter to them: the
+ * OCR strip is found from the frame's centre, see OcrRegionHelper, and the green pixels hold
+ * at 800x600 and at 640x480.)
+ *
+ * Nothing overlays the game any more, so the old z-index ladder is gone; the toggle only
+ * needs to sit above the game surface. Where a rail holds the chat button (a landscape phone) there is no toggle at all.
+ * ---------------------------------------------------------------------------
+ */
+
+.game-stream-flex-container {
+    // Height of the 4:3 game box in portrait. 75% of the width == 3/4.
+    --game-box-height: 75vw;
+
+    position: relative;
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+}
+
+/*
+ * The picture's container. No `transition` on any box — see the header. `overflow: hidden` keeps a mid-toggle canvas
+ * from painting outside. Portrait pins it below; in landscape the stage plan gives it an exact size (until the first
+ * plan lands the fallback is the old whole-row container, which the plan replaces within the frame).
+ */
+.game-stream-container {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    // The game's own green, as the page's `.full` always painted it. Not that class: it is `width: 100%; height: 100%` in
+    // each page's stylesheet, which outweighs the stage's explicit size below (and it would be a second answer to the size).
+    background-color: #008000;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+@media (orientation: landscape) {
+    .game-stream-container {
+        flex: 0 0 auto;
+        width: var(--stage-w, 100%);
+        height: var(--stage-h, 100%);
+        // Where the plan puts it, in whole pixels (--stage-mx is from the end of the left rail): the right margin takes the
+        // rest, so that what is on the right (a rail, the chat) stays at the edge of the screen.
+        margin: var(--stage-my, 0px) auto 0 var(--stage-mx, 0px);
+    }
+}
+
+.chat-docked-panel {
+    flex: 0 0 auto;
+    width: 0;
+    // Closing: hold the width until the slide-out has finished, so the panel is seen leaving.
+    // Duration is 0s either way — this is a delayed snap, never an animated width. In landscape the
+    // width is the stage plan's (`--chat-dock-w`, below), which waits the same 220ms to give it back.
+    transition: width 0s linear 220ms;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    box-sizing: border-box;
+    // Grey, not the old --ion-color-primary-shade: that is nearly the game's own #008000
+    // and showed no seam. Grey is also where Phase 3 goes (Win9x window chrome).
+    background: var(--win9x-face, #c0c0c0);
+    // Only while open. `box-sizing: border-box` means a 2px border on a 0-width panel still
+    // occupies 2px, which left a permanent dark seam down the edge of the game with the chat
+    // closed — "a closed chat costs nothing" was the whole point of the docked layout.
+    border-left: 0;
+}
+
+.chat-docked-panel.chat-open {
+    width: var(--chat-panel-width, 320px);
+    border-left: 2px solid var(--win9x-dark, #0a0a0a);
+    // Opening: make room instantly, then slide the panel into it (see below).
+    transition: width 0s linear 0s;
+}
+
+/*
+ * LANDSCAPE: the width is the stage plan's, and nothing else. `--chat-dock-w` is what the dock holds NOW (0 until the chat
+ * is open, and 220ms after it closes, the time its slide-out takes), so the picture and the panel change size at the same
+ * instant and the stage never grows into a panel that is still on screen. `--chat-panel-width` is the width it has when
+ * open, which the slide-out travels. The notch's inset is part of that width on a landscape phone (the rails' page): the
+ * face paints under it and the content keeps clear.
+ */
+@media (orientation: landscape) {
+    .chat-docked-panel,
+    .chat-docked-panel.chat-open {
+        width: var(--chat-dock-w, 0px);
+        transition: none;
+        order: 1;
+    }
+
+    // Never more than the dock holds: a closed panel is 0 wide, and a padding is a floor under a border-box width, so a plain
+    // inset here made the closed chat a 47px grey strip down the edge of a notch phone (found on the spectator's page).
+    .has-rails .chat-docked-panel {
+        padding-right: min(var(--chat-dock-w, 0px), max(env(safe-area-inset-right, 0px), 0px));
+    }
+}
+
+.chat-docked-panel > app-chat {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+/*
+ * Landscape/desktop open-close animation.
+ *
+ * The naive version — `transition: width` on the panel — is what an earlier revision had and
+ * what Phase 2 removed: the game is the panel's flex sibling, so every animation frame resizes
+ * #game-container and js-dos re-letterboxes the canvas, ~18 times per toggle.
+ *
+ * This gets the same motion for one re-layout. The panel's WIDTH still snaps, so the canvas
+ * re-fits exactly once; what animates is the chat sliding within the space, clipped by the
+ * panel's own `overflow: hidden`. Closing delays the width snap by the slide duration (the
+ * `0s linear 220ms` above) so the panel is seen leaving rather than vanishing.
+ *
+ * Portrait overrides this below: there the game box has a fixed basis, so flex-grow is free
+ * to animate directly and the slide would double up.
+ */
+.chat-docked-panel > app-chat {
+    // The panel width, NOT translateX(100%). A percentage resolves against the chat's OWN
+    // width, and in a closed (zero-width) panel that is 0px — so the open transition had
+    // nowhere to travel from and only closing appeared to animate.
+    transform: translateX(var(--chat-panel-width, 320px));
+    transition: transform 220ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.chat-docked-panel.chat-open > app-chat {
+    transform: translateX(0);
+}
+
+/*
+ * PORTRAIT: column. The game box is exactly 4:3 and pinned to the top; the chat takes
+ * everything left over. `max-height: 100%` covers a near-square portrait viewport where
+ * 75vw would exceed the available height — there the canvas letterboxes as before and the
+ * chat simply gets nothing, which is correct.
+ */
+@media (orientation: portrait) {
+    .game-stream-flex-container {
+        flex-direction: column;
+    }
+
+    /*
+     * The 4:3 game box, top-aligned. The size is carried by flex-basis rather than
+     * `height`, so nothing downstream depends on a percentage resolving.
+     */
+    .game-stream-container {
+        flex: 0 0 var(--game-box-height);
+        height: auto;
+        max-height: 100%;
+    }
+
+    /*
+     * The chat takes the remainder via flex-grow — deliberately NOT a percentage height.
+     * `height: calc(100% - ...)` looks equivalent but is not: this panel is a flex item
+     * whose containing-block height is not reliably definite, so the percentage resolved
+     * to `auto`, and its only child (app-chat, `:host { height: 100% }`) then collapsed it
+     * to zero — the chat opened with no height at all. flex-grow needs no definite
+     * containing block, and animating grow 0 -> 1 still gives a smooth reveal.
+     */
+    .chat-docked-panel {
+        width: auto;
+        height: auto;
+        flex: 0 0 0px;
+        border-left: 0;
+        border-top: 0;
+        // Safe to animate: the game box has a fixed basis, so this cannot resize it and
+        // js-dos's resize detector never fires.
+        transition: flex-grow 220ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    // Portrait animates flex-grow directly (free: the game box has a fixed basis), so the
+    // landscape slide must be switched off or the panel would both grow and slide.
+    .chat-docked-panel > app-chat,
+    .chat-docked-panel.chat-open > app-chat {
+        transform: none;
+        transition: none;
+    }
+
+    .chat-docked-panel.chat-open {
+        width: auto;
+        flex: 1 1 0px;
+        border-left: 0;
+        border-top: 2px solid var(--win9x-dark, #0a0a0a);
+        // The panel is docked exactly where the iOS keyboard appears, so lift it clear.
+        // A margin shrinks the space flex hands it, keeping the game box untouched.
+        margin-bottom: var(--kb-inset, 0px);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+}
+
+/*
+ * THE CAMERA (CameraService, phase P11, behind the "Zoom e movimento" setting). The transform is written on `#game-container` by the
+ * service and nowhere else, and `.game-stream-container` (above) is what clips it; the rules here are only the ones the camera needs
+ * from the layout.
+ *
+ * `.camera-on`: a finger on the clip that is not on the picture (the part of the view a magnified picture does not cover, see below)
+ * must be the layer's, not the browser's, so the clip takes `touch-action: none` like js-dos's own root does. With the camera off the
+ * clip IS the picture and nothing is added.
+ *
+ * `.camera-tall` (portrait only; the page decides, game.page.ts `cameraTall`): while the picture is magnified and the deck's band
+ * holds nothing but its taskbar (or the camera's own panel), the clip grows DOWN into the band, so a magnified picture is seen in a view
+ * as tall as the phone allows instead of the 4:3 strip it was a window onto. **The PICTURE does not change size:** `#game-container`
+ * keeps the 4:3 height it had (the same `75vw`, written again here because its `.full` height was a percentage of the clip, which is
+ * what grew), so js-dos does not re-letterbox and `OverlaySyncHelper` and every remote cursor stay where they were (checked by
+ * `camera.mjs layout`: the container's `offsetWidth` x `offsetHeight` and the canvas's are identical with the clip at either height). The
+ * picture is at the clip's top-left corner and grows from it (`align-items: flex-start`), because the transform's origin is that corner.
+ * The stage plan does not read any of this: it measures the page's row, which the clip does not resize.
+ */
+.game-stream-flex-container.camera-on .game-stream-container {
+    touch-action: none;
+}
+
+@media (orientation: portrait) {
+    .game-stream-flex-container.camera-tall .game-stream-container {
+        flex: 1 1 0;
+        // Never less than the 4:3 box the picture itself is (a near-square window has less than 75vw to give).
+        min-height: min(var(--game-box-height), 100%);
+        max-height: none;
+        justify-content: flex-start;
+        align-items: flex-start;
+    }
+
+    .game-stream-flex-container.camera-tall .game-stream-container > #game-container {
+        flex: 0 0 auto;
+        width: 100%;
+        height: var(--game-box-height);
+    }
+}
+
+/*
+ * The toggle. A child of the page's flex row (NOT of .game-stream-container: in landscape that is exactly the picture
+ * now, and a handle inside it would sit on the picture), anchored to the edge the panel docks against, so it reads as
+ * the drawer's grip: in landscape at `--chat-dock-w` from the right edge, which is where the panel starts. It rides the
+ * page rather than the panel, so a closed (zero-sized, overflow:hidden) panel can never clip it — the bug that made the
+ * host chat unreachable. Where the picture has no gutter beside it the handle still overlays its edge, as it always did.
+ */
+.chat-toggle-btn,
+.sound-toggle-btn {
+    position: absolute;
+    z-index: 20;
+    margin: 0;
+    height: 44px;                 // coarse-pointer floor
+    min-width: 116px;
+    font-size: 13px;
+    font-family: var(--win9x-font);
+    font-weight: bold;
+    text-transform: none;
+    letter-spacing: 0;
+    // A Win9x taskbar button: square, face-coloured, bevelled via inset shadows. The
+    // transparency trio is required because .win9x-button only reads as Win9x on an
+    // ion-button with fill="clear" — otherwise Ionic's shadow-encapsulated .button-native
+    // paints its own background over the host.
+    --background: transparent;
+    --background-hover: transparent;
+    --background-focused: transparent;
+    --background-activated: transparent;
+    --ripple-color: transparent;
+    --border-radius: 0;
+    --color: var(--win9x-ink);
+    --padding-start: 10px;
+    --padding-end: 10px;
+    --box-shadow: none;
+    background: var(--win9x-face);
+    box-shadow:
+        inset -1px -1px var(--win9x-dark),
+        inset 1px 1px var(--win9x-light),
+        inset -2px -2px var(--win9x-shadow),
+        inset 2px 2px var(--win9x-bevel-light);
+}
+
+.chat-toggle-btn {
+    // Portrait: bottom-centre of the game box, just above the chat's top edge. The row is a column there and the box is
+    // its first item, so "the box's bottom" is its 4:3 height (clamped, as the box is, to a near-square window's height).
+    left: 50%;
+    top: calc(min(var(--game-box-height), 100%) - 52px);
+    transform: translateX(-50%);
+}
+
+/*
+ * The spectator's sound toggle. Bottom-left of the game box in every layout, because that
+ * corner is free in both: portrait puts the chat handle bottom-centre, landscape welds it to
+ * the right edge. It rides the game surface for the same reason the chat toggle does, and
+ * for the same reason it is not a toolbar button: short landscape has no header to hold it.
+ */
+.sound-toggle-btn {
+    left: 8px;
+    top: calc(min(var(--game-box-height), 100%) - 52px);
+    min-width: 44px;
+}
+
+.sound-toggle-btn .sound-toggle-label {
+    margin-inline-start: 6px;
+}
+
+.chat-toggle-btn:active,
+.sound-toggle-btn:active {
+    box-shadow:
+        inset -1px -1px var(--win9x-light),
+        inset 1px 1px var(--win9x-dark),
+        inset -2px -2px var(--win9x-bevel-light),
+        inset 2px 2px var(--win9x-shadow);
+}
+
+/*
+ * The browser refused to start the sound on its own, so the button carries the words
+ * "Ativar som" and flashes like a taskbar entry asking for attention — finite, for the
+ * reason the unread flash is.
+ */
+.sound-toggle-btn.sound-toggle-btn--blocked {
+    animation: win9x-taskbar-flash 1s steps(1, end) 6;
+}
+
+/*
+ * Unread: the taskbar button flashes, exactly as a background window did in Windows.
+ * Deliberately not infinite — six flashes then rest, so it draws the eye once instead of
+ * pulsing forever next to a game someone is trying to read.
+ */
+.chat-toggle-btn.chat-toggle-btn--unread {
+    animation: win9x-taskbar-flash 1s steps(1, end) 6;
+}
+
+@keyframes win9x-taskbar-flash {
+    0%, 49% {
+        background: var(--win9x-titlebar-bg);
+        --color: var(--win9x-titlebar-ink);
+    }
+    50%, 100% {
+        background: var(--win9x-face);
+        --color: var(--win9x-ink);
+    }
+}
+
+.chat-toggle-btn .chat-toggle-label {
+    margin-inline-start: 6px;
+}
+
+/* Non-negative offsets: ion-button clips slotted children with --overflow: hidden. */
+.chat-toggle-btn ion-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    // Squared, not a pill: Windows had no rounded corners.
+    border-radius: 0;
+    font-size: 10px;
+    padding: 2px 4px;
+    font-family: var(--win9x-font);
+}
+
+@media (orientation: portrait) and (max-width: 400px) {
+    .chat-toggle-btn {
+        min-width: 56px;
+    }
+    .chat-toggle-btn .chat-toggle-label {
+        display: none;
+    }
+}
+
+/* Landscape/desktop: a vertical tab welded to the chat's edge (the right edge of the page while it is closed). */
+@media (orientation: landscape) {
+    .sound-toggle-btn {
+        top: auto;
+        bottom: 8px;
+    }
+
+    .chat-toggle-btn {
+        left: auto;
+        bottom: auto;
+        right: var(--chat-dock-w, 0px);
+        top: 50%;
+        min-width: 0;
+        width: 34px;
+        height: 92px;
+        --padding-start: 0;
+        --padding-end: 0;
+        --border-radius: 10px 0 0 10px;
+        transform: translateY(-50%);
+    }
+    .chat-toggle-btn .chat-toggle-label {
+        display: none;
+    }
+    .chat-toggle-btn ion-icon {
+        margin-inline-end: 0;
+    }
+}
+
+/*
+ * Short landscape (windows 600px tall or less): the tab parks at the top of the right edge, not in the middle. It was
+ * the way round the host's always-open arrows FAB, which is gone, but the rule stays: a tab in the corner is where people
+ * already look for it. A landscape PHONE has no tab at all now (its chat button is a key in the left rail), so this serves
+ * the short tablet and laptop windows, and a spectator whose window is that tall.
+ */
+@media (orientation: landscape) and (max-height: 600px) {
+    .chat-toggle-btn {
+        top: calc(12px + env(safe-area-inset-top, 0px));
+        transform: none;
+    }
+}
+
 @media screen and (max-width: 599px), screen and (max-height: 700px) {
     .hidden-mob {
       display: none;
@@ -89,5 +683,526 @@ canvas {
 @media screen and (min-width: 768px) {
     .omatic-modal {
         --height: 480px;
+        // A landscape phone is >= 768px wide but only ~390px tall. Without a cap the 480px box
+        // is centred on a shorter viewport and its titlebar, close button included, lands above
+        // the top edge (measured at 844x390: toolbar at y = -41).
+        --max-height: 90vh;
     }
+
+    .multiplayer-room-setup-modal {
+        // Tall enough for the host form (name, code, password, limit, colour, buttons) without
+        // scrolling on an ordinary window; shorter screens scroll inside it instead.
+        --height: min(88vh, 600px);
+    }
+
+    // "Dados e avançado": six groups of rows, taller than the dialogs and scrolling inside.
+    .advanced-modal {
+        --height: min(88vh, 680px);
+    }
+
+    // Same treatment for the multiplayer dialogs: a Win9x dialog is a small fixed box,
+    // not a full-bleed sheet.
+    .win9x-modal {
+        --width: 470px;
+        --max-height: 90vh;
+    }
+
+    // The diagnostics window is mostly a log: wider than the dialogs so a line wraps less, and
+    // tall enough for the pane. After .win9x-modal, whose width it overrides at equal weight.
+    .diagnostics-modal {
+        --width: 640px;
+        --height: min(88vh, 680px);
+    }
+}
+
+// A touch tablet is a 768px+ viewport too, so it gets the 480px desktop box, with the 44px
+// controls of _win9x.scss's coarse block: four buttons in three rows, 8px taller each. In 480px
+// that content is 24px too tall for its scroll area (measured at 820x1180 and 1024x768: 440
+// against 416), which is the overflow the floor was made opt-in to avoid. 520px gives the room
+// back. --max-height above still wins on a short viewport, where scrolling inside is fine.
+@media screen and (min-width: 768px) and (pointer: coarse) {
+    .omatic-modal {
+        --height: 520px;
+    }
+}
+
+// The first-run coach: a dialog that is as tall as its card, on every screen. An Ionic modal is a full page on a phone; this one is
+// a small window in the middle of it (`--height: auto`, which needs the content to be in flow: the coach is made of divs for that).
+// On a short landscape phone the card is taller than the screen: the window's body scrolls between its title bar and its buttons.
+ion-modal.first-run-modal {
+    --width: 92vw;
+    --max-width: 420px;
+    --height: auto;
+    --max-height: 92vh;
+}
+
+ion-modal.first-run-modal .ion-page {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    contain: content;
+    max-height: 92vh;
+}
+
+// The Win9x window paints its own chrome, so the Ionic modal shell must not add rounded
+// corners or a light background behind it at any breakpoint.
+.win9x-modal {
+    --border-radius: 0;
+    --background: var(--win9x-face);
+}
+
+@keyframes ping {
+  75%,
+  100% {
+    transform: scale(8);
+    opacity: 0;
+  }
+}
+
+/*
+ * Every animated multiplayer surface, in one place. The cursor overlay animates
+ * continuously while a room is live, so this matters more here than in most apps.
+ * Remote cursors keep their positions — only the interpolation is dropped, so they
+ * jump between updates instead of gliding.
+ */
+@media (prefers-reduced-motion: reduce) {
+    /* .game-stream-container is gone from this list because its size is now
+       unconditional and never transitions. `transition: none` kills both halves of the
+       panel's transition at once: the transform no longer slides AND the delayed
+       visibility flip becomes immediate, so a closed panel stays hidden, unfocusable and
+       click-transparent. Do NOT add a `visibility: visible` override here. */
+    .chat-docked-panel,
+    .chat-docked-panel > app-chat,
+    .chat-toggle-btn,
+    .color-swatch {
+        transition: none !important;
+    }
+
+    // Without this the panel would stay translated off its own edge forever, since the
+    // transition that would have brought it back is gone.
+    .chat-docked-panel > app-chat {
+        transform: none !important;
+    }
+
+    .pointer-overlay .cursor {
+        transition: none !important;
+    }
+
+    // The label still hides on idle — that is decluttering, not decoration, and it is what
+    // bounds how much of the game a wall of parked cursors can cover. Only the crossfade goes.
+    .pointer-overlay-cursor-label {
+        transition: none !important;
+    }
+
+    .cursor-click-ping {
+        animation-duration: 1ms !important;
+    }
+
+    // The unread flash is an attention cue, not information: drop it entirely rather
+    // than speed it up. The badge still carries the count.
+    .chat-toggle-btn.chat-toggle-btn--unread {
+        animation: none !important;
+    }
+
+    // Same reasoning: the dot's colour and the pill's accessible name already say which
+    // state we are in, so the pulse is pure decoration.
+    .mp-status-dot[data-state='live'],
+    .mp-status-dot[data-state='reconnecting'] {
+        animation: none !important;
+    }
+}
+
+/*
+ * Ambient room status pill.
+ *
+ * Deliberately flat rather than Win9x. The retro boundary in CLAUDE.md keeps the page
+ * toolbars as app shell, and this renders inside one — a half-retro toolbar reads as a
+ * mistake. The landscape phone's instance stands in a Win9x rail but keeps the same look, because
+ * a component that changes identity by position is worse than one that does not.
+ */
+.mp-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    min-width: 0;
+    margin: 0;
+    padding: 3px 10px;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.28);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.4;
+    cursor: pointer;
+    // Tapping copies the link, so it must never be a text-selection target instead.
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.mp-status-pill:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+}
+
+/*
+ * A finger-sized hit area without a finger-sized pill. The pill is ~24px tall and it is a
+ * button (it copies the link), so on a coarse pointer it gets 10px of transparent border above
+ * and below: the capsule is painted on the padding box only (background-clip), the rest is a
+ * hit area 44px tall. Only the height grows: the pill is already wider than 44px. It stays
+ * here, in the shell's own sheet, and uses literals rather than --win9x-hit-target: this is
+ * not a Win9x control (see the scope rule above).
+ *
+ * It is a real border and not an `::after` laid over the pill because of where the pill lives.
+ * In both toolbars it sits in an `ion-title`, whose shadow `.toolbar-title` is `overflow:
+ * hidden` and exactly one line box tall (~31px), so anything that overflows the pill's own box
+ * is clipped to that, for painting and for hit testing alike: the first version of this was
+ * measured at 7px of hit area above the capsule and none below. A border is part of the box,
+ * so it grows the title's line box (the 56px toolbar absorbs it) and nothing is clipped.
+ * Physical sides and not `border-block`, to stay clear of the Safari 14.1 floor's gaps.
+ *
+ * The radius is the same capsule, restated: with a 10px border the padding box's corners are
+ * `outer radius - 10px` on the vertical axis only, so `999px` (clamped to 22px) would paint
+ * stretched ellipses. 12px across and 22px down leaves 12px on both axes inside.
+ *
+ * In a landscape phone's rail (_deck.scss) the pill is a grid item 44px tall, so the hit area IS the row: nothing is
+ * clipped there either, and nothing overlaps the picture.
+ */
+@media (pointer: coarse) {
+    .mp-status-pill {
+        border-top: 10px solid transparent;
+        border-bottom: 10px solid transparent;
+        border-radius: 12px / 22px;
+        background-clip: padding-box;
+    }
+
+    // The ring would otherwise hug the invisible 44px box instead of the capsule.
+    .mp-status-pill:focus-visible {
+        outline-offset: -8px;
+    }
+}
+
+.mp-status-dot {
+    flex: 0 0 auto;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--ion-color-medium, #92949c);
+}
+
+.mp-status-dot[data-state='live'] {
+    background: #2dd36f;
+    animation: mp-status-breathe 2s ease-in-out infinite;
+}
+
+.mp-status-dot[data-state='reconnecting'] {
+    background: #ffc409;
+    animation: mp-status-breathe 0.8s ease-in-out infinite;
+}
+
+@keyframes mp-status-breathe {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+}
+
+// The code is the one part that must survive truncation intact, so it never shrinks.
+.mp-status-code {
+    flex: 0 0 auto;
+    letter-spacing: 0.02em;
+}
+
+.mp-status-lock {
+    flex: 0 0 auto;
+    font-size: 12px;
+}
+
+// The host's name is the first thing to go when the pill runs out of room.
+.mp-status-host {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 400;
+    opacity: 0.85;
+}
+
+.mp-status-count {
+    flex: 0 0 auto;
+    padding-inline-start: 6px;
+    border-inline-start: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+/*
+ * Save status chip ("Salvo às 14:32"), in the game page's toolbar.
+ *
+ * Flat, like the room pill above and for the same reason: it renders inside a page toolbar, which
+ * is app shell, and half a retro toolbar reads as a mistake. The state is the words; the dot is
+ * a redundant cue (green saved, amber warning, pulsing while saving), never the only one.
+ *
+ * It has no clipping parent (an `ion-buttons` slot, not an `ion-title`), so the touch floor is
+ * plain: the capsule is ~24px and a coarse pointer gets a 44px-tall hit area by transparent
+ * border, painted on the padding box only, exactly as the pill does.
+ */
+.save-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    max-width: 100%;
+    margin: 0 4px;
+    padding: 3px 10px;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.28);
+    color: #fff;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.4;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.save-chip:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+}
+
+.save-chip-dot {
+    flex: 0 0 auto;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--ion-color-medium, #92949c);
+}
+
+.save-chip[data-tone='ok'] .save-chip-dot {
+    background: #2dd36f;
+}
+
+.save-chip[data-tone='busy'] .save-chip-dot {
+    background: #ffc409;
+    animation: mp-status-breathe 0.8s ease-in-out infinite;
+}
+
+// Amber on the chip over the navy toolbar is 10.4:1 (9.0:1 on the bare toolbar), so the warning is
+// readable and not just coloured.
+.save-chip[data-tone='warn'] {
+    color: #ffc409;
+}
+
+.save-chip[data-tone='warn'] .save-chip-dot {
+    background: #ffc409;
+}
+
+.save-chip-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@media (pointer: coarse) {
+    .save-chip {
+        border-top: 10px solid transparent;
+        border-bottom: 10px solid transparent;
+        border-radius: 12px / 22px;
+        background-clip: padding-box;
+    }
+
+    .save-chip:focus-visible {
+        outline-offset: -8px;
+    }
+}
+
+// A phone in portrait has the room for the time and not for the sentence around it.
+@media (max-width: 420px) {
+    .save-chip {
+        padding: 3px 8px;
+        font-size: 12px;
+    }
+}
+
+// While a room is live the pill needs the title slot (119px of pill in a title with 20px of padding
+// each side, measured), and on a phone there is no room for both with words: the chip keeps its dot,
+// its tone and its accessible name, and loses the text. The dot with its 44px hit area still leaves
+// the pill too little under about 400px (at 360 the pill is cut to 78px and the code with it), so
+// there the chip steps aside until the room closes: the menu's "Salvar agora" says the same words
+// and the pill is the one thing a host must see.
+@media (max-width: 401px) {
+    .save-chip--compact {
+        display: none;
+    }
+}
+
+@media (max-width: 599px) {
+    .save-chip--compact .save-chip-text {
+        display: none;
+    }
+
+    .save-chip--compact {
+        padding: 3px 8px;
+        margin: 0 2px;
+    }
+
+    .save-chip--compact .save-chip-dot {
+        width: 10px;
+        height: 10px;
+    }
+}
+
+@media (max-width: 599px) and (pointer: coarse) {
+    // The hit area stays 44px wide as well as tall, by the same transparent-border trick.
+    .save-chip--compact {
+        border-left: 10px solid transparent;
+        border-right: 10px solid transparent;
+        border-radius: 22px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .save-chip[data-tone='busy'] .save-chip-dot {
+        animation: none;
+    }
+}
+
+/*
+ * The one-time toasts of the platform polish (the install banner and the "Gire o aparelho" hint,
+ * `cssClass: 'platform-toast'`): flat shell, so Ionic's own toast, with one change. A toast button
+ * takes the theme's primary colour, which here is the Elifoot green, and green text on the toast's dark
+ * grey is 2.5:1. White on it is 12.6:1, and the buttons stay told apart by their words.
+ */
+ion-toast.platform-toast {
+    --button-color: #fff;
+}
+
+/*
+ * "Ativar som" (SoundChipComponent): there only while the browser has put the game's audio to sleep
+ * and the page could not wake it. Shell and flat, like the save chip it sits beside in the toolbar's
+ * end slot, and for the same reason: half a retro toolbar reads as a mistake. Amber on the
+ * navy toolbar over the chip's scrim is 10.4:1, the figure the save chip's warning tone measured.
+ *
+ * Under 600 px it is the speaker alone (the words stay its accessible name): the toolbar's title
+ * slot holds the room pill while a host is live, and a chip with words costs that pill the width it
+ * needs (119px, in a title with 20px of padding each side). The icon-only chip is ~34px wide, and
+ * a coarse pointer gets the 44px hit area by transparent border, painted on the padding box only,
+ * exactly as the save chip does.
+ */
+.sound-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    margin: 0 4px;
+    padding: 3px 10px;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.28);
+    color: #ffc409;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.4;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.sound-chip ion-icon {
+    flex: 0 0 auto;
+    font-size: 18px;
+}
+
+.sound-chip:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+}
+
+.sound-chip-text {
+    white-space: nowrap;
+}
+
+@media (pointer: coarse) {
+    .sound-chip {
+        border-top: 10px solid transparent;
+        border-bottom: 10px solid transparent;
+        border-radius: 12px / 22px;
+        background-clip: padding-box;
+    }
+
+    .sound-chip:focus-visible {
+        outline-offset: -8px;
+    }
+}
+
+@media (max-width: 599px) {
+    .sound-chip {
+        padding: 3px 8px;
+        margin: 0 2px;
+    }
+
+    .sound-chip-text {
+        display: none;
+    }
+}
+
+@media (max-width: 599px) and (pointer: coarse) {
+    // The hit area stays 44px wide as well as tall, by the same transparent-border trick.
+    .sound-chip {
+        border-left: 10px solid transparent;
+        border-right: 10px solid transparent;
+        border-radius: 22px;
+    }
+}
+
+/*
+ * The deck's launcher when the page has a toolbar (landscape tablets and laptops, or a portrait
+ * window with no band under the picture). Shell, flat, like everything else in the toolbar: it only
+ * opens the Win9x sheet. A native button (with DeckKeyDirective) and not an ion-button, because an
+ * ion-button takes the focus when tapped and a tablet's physical keyboard would stop reaching the
+ * game.
+ */
+.toolbar-launcher {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 44px;
+    height: 44px;
+    margin: 0 4px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.toolbar-launcher ion-icon {
+    font-size: 22px;
+}
+
+.toolbar-launcher[aria-pressed='true'],
+.toolbar-launcher.deck-key--down {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/*
+ * js-dos builds a keyboard (63 keys 19px wide, over 60% of a portrait picture) inside the picture's
+ * overlay and starts it hidden. The app never shows it: `game.js` hands Dos() a detached element
+ * to build it in, so it is not in the page at all, and this is the net under that if a js-dos
+ * update ever stops honouring the option. Its keys press through `simulateKeyPress`, which wedges
+ * the guest keyboard when two land within 16ms; the control deck replaced it.
+ */
+.emulator-keyboard {
+    display: none !important;
 }

@@ -1,0 +1,142 @@
+/*
+ * Fixed over the page and out of its layout: the game's container is behind it with the box it will have. Under Ionic's overlays
+ * (z-index 20000), so the room dialog that ?host=1 opens while this is up sits above it.
+ */
+.boot-screen {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) calc(16px + env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px));
+  overflow-y: auto;
+  background: #008000;
+  color: #fff;
+  text-align: center;
+}
+
+.boot-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 360px;
+}
+
+.boot-logo {
+  border-radius: 14px;
+}
+
+.boot-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.boot-bar {
+  position: relative;
+  width: 100%;
+  height: 10px;
+  overflow: hidden;
+  border: 2px solid #fff;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.boot-bar-fill {
+  height: 100%;
+  background: #fff;
+}
+
+/* No figure to show: a segment that travels, so the bar says "working" and not "nearly there". */
+.boot-bar--moving .boot-bar-fill {
+  width: 30%;
+  animation: boot-bar-travel 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes boot-bar-travel {
+  from { transform: translateX(0); }
+  to { transform: translateX(233%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boot-bar--moving .boot-bar-fill {
+    animation: none;
+    transform: translateX(116%);
+  }
+}
+
+.boot-message {
+  margin: 0;
+  min-height: 1.4em;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* Never dimmed: white at any opacity is under 4.5:1 on this green, so the state is the marker and the weight. */
+.boot-steps {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.boot-step::before {
+  content: '\25CB\00a0';
+}
+
+.boot-step[data-state='done']::before {
+  content: '\2713\00a0';
+}
+
+.boot-step[data-state='active'] {
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.boot-step[data-state='active']::before {
+  content: '\25CF\00a0';
+}
+
+.boot-note,
+.boot-hint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.boot-leave {
+  min-width: 160px;
+  min-height: 44px;
+  margin-top: 4px;
+  padding: 0 20px;
+  border: 2px solid #fff;
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.boot-leave:focus-visible {
+  outline: 3px solid #ffe119;
+  outline-offset: 2px;
+}
+
+/* A landscape phone: the card is wider than tall and everything has to fit 390px. */
+@media (max-height: 460px) {
+  .boot-card { gap: 8px; }
+  .boot-logo { width: 40px; height: 40px; }
+  .boot-title { font-size: 17px; }
+}

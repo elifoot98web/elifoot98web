@@ -1,0 +1,8 @@
+/*
+ * The Win9x design language this modal uses now lives in src/theme/_win9x.scss and is
+ * loaded globally. Only rules that must NOT leak outside this component remain here.
+ */
+
+.buttons-padding-end {
+  padding-right: 4px !important;
+}
