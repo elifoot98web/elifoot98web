@@ -5,7 +5,7 @@ import { lastValueFrom } from 'rxjs';
 import { BASE_SAVEGAME_DIR, DISPLAY_MODE } from '../../models/constants';
 import { DisplayMode } from '../../helpers/display-mode.helper';
 import { GuestAccessHelper } from '../../helpers/guest-access.helper';
-import { BackupInput, BackupReading, BackupSave, SaveBackupHelper } from '../../helpers/save-backup.helper';
+import { type BackupInput, type BackupReading, type BackupSave, SaveBackupHelper } from '../../helpers/save-backup.helper';
 import JSZip from 'jszip';
 
 /** What an import will do, ready to be shown and then applied. */
