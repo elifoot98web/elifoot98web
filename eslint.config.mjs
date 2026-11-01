@@ -48,6 +48,24 @@ export default defineConfig([globalIgnores(["projects/**/*"]), {
         }],
         
         "@angular-eslint/prefer-standalone": "off",
+
+        // `dosCI.simulateKeyPress` stamps the key's release 16 ms in the future, so a second call
+        // within 16 ms loses its key and leaves the guest keyboard dead until a reload. The key
+        // queue (GuestKeyQueueService) sends raw sendKeyEvent pairs with a gap and is the ONLY
+        // sender; js-dos's own on-screen keyboard was the last other caller and is gone, so this
+        // is now enforced, not just documented. The typing in core/typings/jsdos.d.ts is a
+        // property SIGNATURE, which none of these selectors match; it is how the name stays
+        // declared (and @deprecated) without being callable from app code.
+        "no-restricted-syntax": ["error",
+            {
+                selector: "MemberExpression[property.name='simulateKeyPress'], MemberExpression[property.value='simulateKeyPress']",
+                message: "Never call dosCI.simulateKeyPress: two calls within 16 ms wedge the guest keyboard. Send keys through GuestKeyQueueService (EmulatorControlService.sendKey / sendString).",
+            },
+            {
+                selector: "Property[key.name='simulateKeyPress'], Property[key.value='simulateKeyPress']",
+                message: "Do not provide or destructure simulateKeyPress: it wedges the guest keyboard. Send keys through GuestKeyQueueService.",
+            },
+        ],
     },
 }, {
     files: ["src/**/*.html"],

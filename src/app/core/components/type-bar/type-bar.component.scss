@@ -1,0 +1,3 @@
+// Intentionally empty. The type bar's layout and its few Win9x seams are src/theme/_type-bar.scss, and
+// its keys and face are the deck's (`.deck-key`, `.deck-face` in _win9x.scss): all global, because a
+// component stylesheet is budgeted at 2 kB and the skin has to be one flip, not scattered.

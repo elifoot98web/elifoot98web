@@ -1,0 +1,39 @@
+<!--
+  The camera's panel. Text on every key (no icon to fetch): the arrows are the plain arrow characters, not the emoji ones.
+  Ajustar is the picture as it is without a camera; the lit key is the preset in force.
+-->
+<div *ngIf="view$ | async as view" class="camera-panel" role="group" aria-label="Zoom e movimento">
+  <div class="camera-row camera-row--zoom">
+    <button type="button" class="deck-key camera-key" appDeckKey deckKeyOn="up" [deckKeyDisabled]="!view.enabled"
+      [attr.aria-pressed]="!view.zoomed" aria-label="Ajustar: ver a imagem inteira" (deckPress)="fit()">
+      <span class="deck-key-label" aria-hidden="true">Ajustar</span>
+    </button>
+    <button *ngFor="let preset of presets" type="button" class="deck-key camera-key" appDeckKey deckKeyOn="up"
+      [deckKeyDisabled]="!view.enabled" [attr.aria-pressed]="isPreset(view, preset)"
+      [attr.aria-label]="'Ampliar ' + presetLabel(preset)" (deckPress)="zoomTo(preset)">
+      <span class="deck-key-label" aria-hidden="true">{{ presetLabel(preset) }}</span>
+    </button>
+    <button type="button" class="deck-key camera-key camera-key--sign" appDeckKey deckKeyOn="up"
+      [deckKeyDisabled]="!view.canZoomOut" aria-label="Diminuir o zoom" (deckPress)="zoomStep(-1)">
+      <span class="deck-key-label" aria-hidden="true">&minus;</span>
+    </button>
+    <button type="button" class="deck-key camera-key camera-key--sign" appDeckKey deckKeyOn="up"
+      [deckKeyDisabled]="!view.canZoomIn" aria-label="Aumentar o zoom" (deckPress)="zoomStep(1)">
+      <span class="deck-key-label" aria-hidden="true">+</span>
+    </button>
+  </div>
+
+  <!-- The pad moves the VIEW: "→" looks further right. A held key repeats; it presses as the finger lands, like the deck's arrows. -->
+  <div class="camera-pad" role="group" aria-label="Mover a imagem">
+    <button *ngFor="let key of pad" type="button" class="deck-key camera-key camera-pad-key" appDeckKey
+      [deckKeyDisabled]="!view.enabled || !view.zoomed" [attr.aria-label]="key.label"
+      (deckPress)="padDown(key.direction)" (deckRelease)="padUp(key.direction)">
+      <span class="deck-key-label" aria-hidden="true">{{ key.glyph }}</span>
+    </button>
+  </div>
+
+  <p class="camera-note">
+    Pince com dois dedos na imagem para ampliar e arraste com dois dedos para mover.
+    <ng-container *ngIf="hosting">Quem assiste à sala sempre vê o jogo inteiro.</ng-container>
+  </p>
+</div>

@@ -1,18 +1,7 @@
 /*
  * Win9x chrome comes from src/theme/_win9x.scss and the roster from app-participant-list.
  * Only this panel's own layout lives here.
- *
- * `ion-toolbar ion-button` is restated deliberately: the unqualified selector is kept out of
- * the shared partial so it cannot restyle toolbars app-wide.
  */
-
-ion-toolbar ion-button {
-  --padding-start: 0px !important;
-  --padding-end: 0px !important;
-  --padding-top: 4px !important;
-  --padding-bottom: 4px !important;
-  padding: 0 8px !important;
-}
 
 .buttons-padding-end {
   padding-right: 4px !important;
@@ -38,7 +27,7 @@ ion-toolbar ion-button {
 .panel-code-lock {
   flex: 0 0 auto;
   font-size: 11px;
-  color: var(--win9x-shadow);
+  color: var(--win9x-ink-muted);
 }
 
 .panel-actions {
@@ -62,7 +51,7 @@ ion-toolbar ion-button {
 
 /* Colour is not the only signal: the label itself says "Encerrar" or "Sair". */
 .panel-danger {
-  color: #a11;
+  color: #800000;
 }
 
 .panel-section-label {

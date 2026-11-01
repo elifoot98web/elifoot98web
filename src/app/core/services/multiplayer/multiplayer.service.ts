@@ -107,6 +107,16 @@ export class MultiplayerService {
     return this.room !== undefined;
   }
 
+  /**
+   * True while this browser holds a room it is broadcasting, from the moment the room is
+   * entered as host until it is left. A reload ends such a room for every spectator in it.
+   * A spectator has nothing comparable to lose: its page keeps no emulator and no save
+   * state, which is why JoinGamePage.reloadSpectator may reload it freely.
+   */
+  get isHosting(): boolean {
+    return this.room !== undefined && this.playerRole === MultiplayerUserRole.HOST;
+  }
+
   /** True while a previous room is still tearing down. Callers may show a hint. */
   get isDraining(): boolean {
     return this.leavingPromise !== undefined;

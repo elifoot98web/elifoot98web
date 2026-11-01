@@ -29,14 +29,27 @@
     },
     {
       "name": "jsdos",
-      "installMode": "lazy",
+      "installMode": "prefetch",
       "updateMode": "prefetch",
       "resources": {
         "files": [
-          "/assets/js-dos/js-dos*",
-          "/assets/js-dos/*.wasm",
-          "/assets/js-dos/*.png"
+          "/assets/js-dos/js-dos.js",
+          "/assets/js-dos/js-dos.css",
+          "/assets/js-dos/wdosbox.js",
+          "/assets/js-dos/wdosbox.wasm",
+          "/assets/js-dos/emulators-ui-loader.png"
         ]
+      }
+    }
+  ],
+  "dataGroups": [
+    {
+      "name": "icons",
+      "urls": ["/svg/**"],
+      "cacheConfig": {
+        "strategy": "performance",
+        "maxSize": 300,
+        "maxAge": "365d"
       }
     }
   ]

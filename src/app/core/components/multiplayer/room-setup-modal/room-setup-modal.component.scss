@@ -1,17 +1,4 @@
-/*
- * Win9x chrome comes from src/theme/_win9x.scss. Only this dialog's own layout lives here.
- *
- * `ion-toolbar ion-button` is deliberately restated — that unqualified selector stays
- * local so it cannot restyle toolbars app-wide. while still restyle ours to make the button square-ish
- */
-
- ion-toolbar ion-button {
-  --padding-start: 0px !important;
-  --padding-end: 0px !important;
-  --padding-top: 4px !important;
-  --padding-bottom: 4px !important;
-  padding: 0 8px !important;
-}
+/* Win9x chrome comes from src/theme/_win9x.scss. Only this dialog's own layout lives here. */
 
 .buttons-padding-end {
   padding-right: 4px !important;
@@ -40,7 +27,7 @@
 input.win9x-input {
   padding-top: 6px;
   padding-bottom: 6px;
-  font-size: 13px;
+  font-size: var(--win9x-input-font-size); // 13px, 16px for a finger: see _win9x.scss
   border: none; // the bevel comes from .win9x-element-bevel
 }
 
@@ -59,12 +46,12 @@ input.win9x-input:focus {
 
 .field-error {
   // Not the Ionic danger red: that is a flat modern hue next to Win9x greys.
-  color: #a11;
+  color: #800000;
   font-weight: bold;
 }
 
 .field-hint {
-  color: var(--win9x-shadow);
+  color: var(--win9x-ink-muted);
 }
 
 /* A real fieldset/legend: the Win9x group box, and it is the correct semantics for a

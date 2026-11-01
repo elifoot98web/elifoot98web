@@ -10,6 +10,11 @@ import { LayoutHelperService } from 'src/app/core/services/shared';
 })
 export class AboutComponent {
 
+  /** The year the project started. */
+  readonly firstYear = 2023
+  /** Read when the modal opens, so the notice never needs a release to stay current. */
+  readonly currentYear = new Date().getFullYear()
+
   constructor(
     private modalController: ModalController, 
     private layoutHelper: LayoutHelperService) { }

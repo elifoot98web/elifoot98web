@@ -1,0 +1,137 @@
+#!/usr/bin/env node
+/**
+ * Turns real frames of the guest into the fixtures GameExitHelper is specced on.
+ *
+ *   node scripts/frame-fixtures/make-fixtures.mjs <out.ts> name=frame.png::where it was taken [...]
+ *
+ * Each input is a PNG of the guest's framebuffer exactly as `dosCI.screenshot()` returns it: the
+ * touch harness writes them (`dosShot` in scripts/touch-harness/lib.mjs, `s.shot(name)` in nav.mjs).
+ * The guest draws at most a few dozen colours, so a frame is stored as a palette plus one index per
+ * pixel, deflated (raw) and base64'd: 1 to 9 KB a frame instead of a megabyte, and exact. The spec
+ * inflates them with `DecompressionStream`, which the karma Chrome has.
+ *
+ * Nothing here reaches the bundle: the output is imported by specs only, and `scripts/` is not in
+ * angular.json's inputs. No dependencies; node's zlib does the compression and a small decoder does
+ * the PNGs (8-bit, non-interlaced, which is what the harness writes).
+ */
+import fs from 'node:fs';
+import zlib from 'node:zlib';
+
+function decodePng(file) {
+  const buf = fs.readFileSync(file);
+  let pos = 8, width = 0, height = 0, depth = 0, colourType = 0, palette = null;
+  const parts = [];
+  while (pos < buf.length) {
+    const length = buf.readUInt32BE(pos), type = buf.toString('ascii', pos + 4, pos + 8), body = buf.subarray(pos + 8, pos + 8 + length);
+    if (type === 'IHDR') { width = body.readUInt32BE(0); height = body.readUInt32BE(4); depth = body[8]; colourType = body[9]; if (body[12]) throw new Error('interlaced PNG'); }
+    else if (type === 'PLTE') palette = body;
+    else if (type === 'IDAT') parts.push(body);
+    pos += 12 + length;
+  }
+  const channels = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 }[colourType];
+  const bytesPerPixel = Math.max(1, Math.floor(channels * depth / 8));
+  const stride = Math.ceil(width * channels * depth / 8);
+  const raw = zlib.inflateSync(Buffer.concat(parts));
+  const out = Buffer.alloc(height * stride);
+  for (let y = 0; y < height; y++) {
+    const filter = raw[y * (stride + 1)];
+    for (let x = 0; x < stride; x++) {
+      const current = raw[y * (stride + 1) + 1 + x];
+      const a = x >= bytesPerPixel ? out[y * stride + x - bytesPerPixel] : 0;
+      const b = y > 0 ? out[(y - 1) * stride + x] : 0;
+      const c = x >= bytesPerPixel && y > 0 ? out[(y - 1) * stride + x - bytesPerPixel] : 0;
+      let value;
+      if (filter === 0) value = current;
+      else if (filter === 1) value = current + a;
+      else if (filter === 2) value = current + b;
+      else if (filter === 3) value = current + ((a + b) >> 1);
+      else { const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c); value = current + (pa <= pb && pa <= pc ? a : pb <= pc ? b : c); }
+      out[y * stride + x] = value & 255;
+    }
+  }
+  const pixels = new Uint8Array(width * height * 3);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const o = (y * width + x) * 3;
+      if (colourType === 2 || colourType === 6) {
+        const i = y * stride + x * channels * depth / 8;
+        pixels[o] = out[i]; pixels[o + 1] = out[i + 1]; pixels[o + 2] = out[i + 2];
+      } else if (colourType === 3) {
+        const bit = x * depth;
+        const index = depth === 8 ? out[y * stride + x] : (out[y * stride + (bit >> 3)] >> (8 - depth - (bit & 7))) & ((1 << depth) - 1);
+        pixels[o] = palette[index * 3]; pixels[o + 1] = palette[index * 3 + 1]; pixels[o + 2] = palette[index * 3 + 2];
+      } else throw new Error(`unsupported PNG colour type ${colourType}`);
+    }
+  }
+  return { width, height, pixels };
+}
+
+const [outFile, ...inputs] = process.argv.slice(2);
+if (!outFile || inputs.length === 0) {
+  console.error('usage: make-fixtures.mjs <out.ts> name=frame.png::note [...]');
+  process.exit(1);
+}
+
+const frames = [];
+for (const input of inputs) {
+  const [spec, note = ''] = input.split('::');
+  const [name, file] = spec.split('=');
+  const { width, height, pixels } = decodePng(file);
+  const palette = new Map();
+  const indices = Buffer.alloc(width * height);
+  for (let i = 0; i < width * height; i++) {
+    const key = (pixels[i * 3] << 16) | (pixels[i * 3 + 1] << 8) | pixels[i * 3 + 2];
+    if (!palette.has(key)) palette.set(key, palette.size);
+    indices[i] = palette.get(key);
+  }
+  if (palette.size > 256) throw new Error(`${name}: ${palette.size} colours do not fit an index byte`);
+  const data = zlib.deflateRawSync(indices, { level: 9 }).toString('base64');
+  frames.push({ name, note, width, height, palette: [...palette.keys()].flatMap(key => [(key >> 16) & 255, (key >> 8) & 255, key & 255]), data });
+  console.log(`${name}: ${width}x${height}, ${palette.size} colours, ${data.length} base64 characters`);
+}
+
+const body = frames.map(frame => `  ${frame.name}: {
+    // ${frame.note}
+    width: ${frame.width},
+    height: ${frame.height},
+    palette: [${frame.palette.join(', ')}],
+    data: '${frame.data}',
+  },`).join('\n');
+
+fs.writeFileSync(outFile, `// GENERATED by scripts/frame-fixtures/make-fixtures.mjs from real frames of the guest. Do not edit.
+// Used by specs only; nothing in the app imports this file.
+
+export interface FrameFixture {
+  width: number;
+  height: number;
+  /** r, g, b of each colour the frame uses, in order. */
+  palette: number[];
+  /** One palette index per pixel, deflated (raw) and base64'd. */
+  data: string;
+}
+
+export const FRAME_FIXTURES = {
+${body}
+} satisfies Record<string, FrameFixture>;
+
+export type FrameName = keyof typeof FRAME_FIXTURES;
+
+/** A fixture as the \`ImageData\`-shaped frame the app's helpers read: RGBA, alpha 255. */
+export async function loadFrame(name: FrameName): Promise<{ width: number; height: number; data: Uint8ClampedArray }> {
+  const fixture: FrameFixture = FRAME_FIXTURES[name];
+  const compressed = Uint8Array.from(atob(fixture.data), character => character.charCodeAt(0));
+  const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  const indices = new Uint8Array(await new Response(stream).arrayBuffer());
+
+  const data = new Uint8ClampedArray(fixture.width * fixture.height * 4);
+  for (let i = 0; i < indices.length; i++) {
+    const colour = indices[i] * 3;
+    data[i * 4] = fixture.palette[colour];
+    data[i * 4 + 1] = fixture.palette[colour + 1];
+    data[i * 4 + 2] = fixture.palette[colour + 2];
+    data[i * 4 + 3] = 255;
+  }
+  return { width: fixture.width, height: fixture.height, data };
+}
+`);
+console.log(`wrote ${outFile}`);

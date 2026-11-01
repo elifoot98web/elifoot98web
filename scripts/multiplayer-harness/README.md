@@ -68,7 +68,7 @@ Each of these cost an hour the first time.
 
 1. **A covered window is a broken window.** Chrome reports an occluded window as
    `visibilityState: 'hidden'`, which throttles its timers *and* suspends its animation
-   frames. Throttling turns the 13 s host grace, the 20 s stream wait and the 1.5 s
+   frames. Throttling turns the 13 s host grace, the 20 s stream wait and the 0.3 s
    auto-saver tick into noise — one game boot took 112 s. Suspended frames leave Ionic
    overlays mid-animation, so an awaited `modalController.dismiss()` never settles: the room
    dialog sits there and the join never starts, with nothing in the console.

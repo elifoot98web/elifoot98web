@@ -93,7 +93,7 @@
 
 .chat-time {
   font-weight: normal;
-  color: var(--win9x-shadow);
+  color: var(--win9x-ink-muted);
   font-size: 11px;
   margin-inline-start: 4px;
 }
@@ -110,17 +110,15 @@
   text-align: center;
 }
 
-.chat-system-text {
-  color: var(--win9x-shadow);
+.chat-system-text,
+.chat-empty {
+  color: var(--win9x-ink-muted);
   font-style: italic;
   font-size: 12px;
 }
 
 .chat-empty {
   text-align: center;
-  color: var(--win9x-shadow);
-  font-style: italic;
-  font-size: 12px;
   margin: 1rem 0.5rem;
 }
 
@@ -141,7 +139,7 @@
   border: none; // the bevel comes from .win9x-element-bevel
   padding: 6px 8px;
   font-family: var(--win9x-font);
-  font-size: 13px;
+  font-size: var(--win9x-input-font-size);
   color: var(--win9x-ink);
   background: var(--win9x-field);
 }

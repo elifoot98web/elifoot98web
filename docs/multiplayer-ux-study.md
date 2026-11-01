@@ -20,6 +20,12 @@
 > the game. Phase 2 is now DOCKED — the letterbox margin is a free docking budget, because
 > a 4:3 frame in a non-4:3 box always leaves slack on one axis and spending it costs the
 > canvas nothing. Read §4 Phase 2 "As built" before trusting §3(b).
+>
+> **The landscape half of Phase 2 changed again in the mobile UX work (§8.10).** In landscape the picture's
+> container is now exactly the picture (an explicit size from one pure plan), a landscape phone's gutters
+> hold rails instead of an overlay, the chat replaces the right rail, and the spectator's page lost its
+> toolbar on a landscape phone. Where §4 Phase 2, §7 or §8.7 say the landscape container is `flex: 1`, that
+> the chat is "welded to the container's right edge", or that the guest keeps a header, §8.10 wins.
 
 ## 1. Where it stands
 
@@ -1052,3 +1058,60 @@ TURN URLs, and every spectator retry reloads the page and does it again.
 allocates and then drops relayed traffic would still read as `ok`. Firefox has no
 `icecandidateerror`, so the verdict never depends on it. And the host's own network blocking the
 relay is indistinguishable from the provider cutting it off, by design.
+
+### 8.10 The stage: the landscape container is the picture (post-§8.9, from the mobile UX work)
+
+Recorded here because it changes facts this study states about Phase 2, and because the multiplayer harness
+was re-run for it. The design and the contract are CLAUDE.md's *The stage*; the numbers are
+[docs/mobile-ux-study.md](mobile-ux-study.md) item 13.
+
+**What changed in the layout.** In landscape `.game-stream-container` is no longer `flex: 1` with the canvas
+letterboxed inside it by js-dos: it has the size `--stage-w` x `--stage-h` (a 4:3 box in whole pixels, written by
+`StageLayoutService` from `StageHelper.plan`) at an integer offset, so `#game-container` IS the picture and the
+canvas fills it. The gutters beside a height-fitted picture are siblings in the flex row. On a landscape phone
+(a viewport at most 500 px tall) they are **rails**: the left one holds the controls the missing toolbar held
+(the menu, the room code, "Ativar som", the chat button) and, on the host, the deck's keys; the right one is the
+host's Táticas or navigation keys. The chat is docked in the right slot and REPLACES the right rail, and the
+left rail folds to 56 px of icons while it is open. The picture is the one thing that may shrink for the chat.
+A tablet or laptop has no rails and keeps the old chat widths (320 px, or 40% of the window up to 300 px under 900 px).
+The width of the docked chat is the plan's (`--chat-dock-w`) and the plan waits the 220 ms of the slide-out before it
+gives it back, which the CSS used to do with a delayed transition. `--chat-panel-width` is still the width the chat has
+when open and still what the slide-out travels, but it is written by the plan and no longer set by a media query.
+
+**What changed on the spectator's page.** A landscape phone that is watching has no toolbar (it had a 56 px one, so
+its picture was 14 to 18% smaller than the host's); the pill, the people button and "Sair" moved into a left rail
+with the chat and sound buttons, "Sair" pinned to the bottom. The cards of joining, waiting and failing keep the toolbar and
+its way back. Everything else about the page is unchanged: the picture is still fitted from the frame's RATIO
+(`fitVideoToContainer`; the intrinsic-pixel fit that made the picture grow on every join stays rejected), `#stream-target`'s
+border box is still exactly the picture, `OverlaySyncHelper` still reads `offset*`, and a spectator still only ever joins
+from a fresh page load, so leaving still reloads. The chat and sound buttons are children of the page's row now, not of
+the picture's container (the container is the picture, so a child of it is on the picture).
+
+**Measured with two browsers** (headless Chrome 143, the host a phone emulation, the spectator another, the public nostr relays;
+`scripts/touch-harness/stage.mjs guest`, `room` and `leave`, `room.mjs` to set it up):
+
+| Check | Observed |
+| --- | --- |
+| The guest's picture against the host's at the same window (9 windows: phones both ways, a notch, tablet, laptop) | the same size to 1 px, in the same place; `#stream-target`'s border box equals the stage; the cursor overlay equals the picture |
+| A remote cursor | the guest pointed at 30% x 60% of its picture; the host's overlay cursor was within 0.5 px of 30% x 60% of the canvas, at 7 windows |
+| The chat both ways | a message from the guest reached the host as an unread count on its Chat control and in its transcript, through the rail's key and through the floating tab |
+| Each picture with its chat docked | the box the plan says (for example 520x390 to 492x369 with a 47 px notch), and exactly the old box back on closing, host and guest |
+| Leaving | "Sala" opens the room window, "Sair" asks, a confirmed leave reloads the spectator to `#/join-game` and the host's roster is the host again |
+
+**Corrected after the review.** The spectator's rail is ALWAYS one column (56 px), so the room's pill wrapped
+`ELI-` over `RVWA` inside a capsule painted for one line, with the dot above it and the second line below it; the pill in a
+one-column rail now paints the whole 44 px row with the dot and the lock in its corners (checked on the spectator's rail at
+844x390, 667x375 and 932x430, and on the host's at five windows). The stage no longer follows a browser that resizes its layout
+viewport for the OS keyboard: a spectator at 844x390 with a 47 px notch and at 915x412, chat open and its field focused, kept
+the same `#stream-target` box (492x369, 548x411) when the window was halved and when it came back; the remote cursors, which
+are placed from that box, therefore do not move either.
+
+**Found on the way, not fixed.** The same room code, reused by a fresh host within minutes, failed to join five
+times in a row (`state 6` on the guest, "Multiplayer join error reported by trystero" on the host) and joined at once
+under a new code; the relays seem to remember the last host's offers. Two browsers on one machine also need
+`--disable-features=WebRtcHideLocalIpsWithMdns`, or the pair never connects (the host candidates are hidden behind `.local`
+names that a sandbox cannot resolve). In dev mode a host with unread messages that opens the chat logs NG0100, because
+the chat panel's input setter resets the count in the middle of a change-detection pass, after a parent-level binding read it;
+it predates this change and is not in a production build. **Not run:** a real pair of phones, the host grace period and
+a dropped link with the new layout (the rail's pill carries the reconnecting state, not exercised), Firefox or Safari as
+the spectator.

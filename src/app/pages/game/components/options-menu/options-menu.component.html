@@ -1,0 +1,76 @@
+<!--
+  The sections of the options menu, as MenuHelper made them. A row is one `ion-item` with one control: an action is a button row, a
+  switch is the row itself (the label is INSIDE the ion-toggle, so the whole 48px is the target and not the switch at the end), and the
+  volume is a label row over a slider row. Every control keeps its aria-label: Ionic moves it from the host to the native input.
+-->
+<ion-list class="options-menu ion-no-padding" lines="full" aria-label="Opções">
+  <ng-container *ngFor="let section of sections; trackBy: trackSection">
+    <ion-list-header class="options-section ion-no-padding" color="light">
+      <ion-label>{{ section.title }}</ion-label>
+      <ion-button *ngIf="section.help as topic" fill="clear" class="options-help" [attr.aria-label]="'Ajuda: ' + section.title"
+        (click)="help.emit(topic)">
+        <ion-icon slot="icon-only" name="help-circle-outline" aria-hidden="true"></ion-icon>
+      </ion-button>
+    </ion-list-header>
+
+    <ng-container *ngFor="let entry of section.entries; trackBy: trackEntry">
+      <ng-container [ngSwitch]="entry.kind">
+
+        <ion-item *ngSwitchCase="'action'" button detail="false" [disabled]="!!entry.disabled" (click)="act.emit({ id: entry.id })">
+          <ion-label class="ion-text-wrap">
+            {{ entry.label }}
+            <p *ngIf="entry.subtitle">{{ entry.subtitle }}</p>
+          </ion-label>
+          <ion-badge *ngIf="entry.badge" slot="end" color="danger" class="options-badge">{{ entry.badge }}</ion-badge>
+          <ion-icon *ngIf="entry.icon" slot="end" [name]="entry.icon" aria-hidden="true"></ion-icon>
+        </ion-item>
+
+        <ion-item *ngSwitchCase="'toggle'" detail="false">
+          <ion-toggle justify="space-between" [checked]="!!entry.checked" [attr.aria-label]="entry.label" (ionChange)="onSwitch(entry, $event)">
+            <span class="options-label">{{ entry.label }}</span>
+            <span *ngIf="entry.subtitle" class="options-sub">{{ entry.subtitle }}</span>
+          </ion-toggle>
+        </ion-item>
+
+        <ng-container *ngSwitchCase="'range'">
+          <ion-item detail="false" lines="none" class="options-range-label">
+            <ion-label class="ion-text-wrap">
+              {{ entry.label }}
+              <p *ngIf="entry.subtitle">{{ entry.subtitle }}</p>
+            </ion-label>
+          </ion-item>
+          <ion-item detail="false">
+            <ion-range [attr.aria-label]="entry.label" min="0" max="100" [step]="volumeStep" [value]="entry.value"
+              (ionInput)="onRange(entry, $event, 'input')" (ionChange)="onRange(entry, $event, 'change')">
+              <ion-icon slot="start" name="volume-low-outline" aria-hidden="true"></ion-icon>
+              <ion-icon slot="end" name="volume-high-outline" aria-hidden="true"></ion-icon>
+            </ion-range>
+          </ion-item>
+        </ng-container>
+
+        <!--
+          The camera's keys, for a hand that cannot pinch and for the deck turned off (WCAG 2.5.1). The words are the deck's Zoom tab's,
+          and so are the effects (CameraService); only the place differs. They leave the menu open, because the person is looking for
+          the size that suits them, one rung at a time.
+        -->
+        <ion-item *ngSwitchCase="'zoom'" detail="false" class="options-zoom">
+          <div class="options-zoom-body">
+            <ion-label class="ion-text-wrap">
+              {{ entry.label }}
+              <p *ngIf="entry.subtitle">{{ entry.subtitle }}</p>
+            </ion-label>
+            <div class="options-zoom-keys" role="group" aria-label="Zoom da imagem">
+              <ion-button fill="outline" [disabled]="!entry.zoom?.zoomed" aria-label="Ajustar: ver a imagem inteira"
+                (click)="act.emit({ id: entry.id, zoom: 'fit' })">Ajustar</ion-button>
+              <ion-button fill="outline" [disabled]="!entry.zoom?.canZoomOut" aria-label="Diminuir o zoom"
+                (click)="act.emit({ id: entry.id, zoom: 'out' })">&minus;</ion-button>
+              <ion-button fill="outline" [disabled]="!entry.zoom?.canZoomIn" aria-label="Aumentar o zoom"
+                (click)="act.emit({ id: entry.id, zoom: 'in' })">+</ion-button>
+            </div>
+          </div>
+        </ion-item>
+
+      </ng-container>
+    </ng-container>
+  </ng-container>
+</ion-list>

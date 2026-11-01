@@ -29,12 +29,14 @@ export class MultiplayerUiService {
   ) { }
 
   /**
+   * @param options.help when given, the dialog shows a "?" in its title bar and calls this when it is pressed. Lent by the caller
+   * because the guide is a window of the game page's module, which the spectator's page does not carry.
    * @returns the collected room details, or null if the user cancelled.
    */
-  async promptRoomSetup(mode: 'host' | 'guest', presetRoomCode = ''): Promise<RoomSetupResult | null> {
+  async promptRoomSetup(mode: 'host' | 'guest', presetRoomCode = '', options: { help?: () => void } = {}): Promise<RoomSetupResult | null> {
     const modal = await this.modalController.create({
       component: RoomSetupModalComponent,
-      componentProps: { mode, presetRoomCode },
+      componentProps: { mode, presetRoomCode, help: options.help },
       cssClass: 'win9x-modal multiplayer-room-setup-modal',
     });
     await modal.present();

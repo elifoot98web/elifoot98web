@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { DosCI } from '../../typings/jsdos';
 import { EMULATOR_RAM_SIZE, Endianness, MEMORY_SEARCH_PARAMS } from '../../models/constants';
 import { DataType, SavedCheat, SearchState } from '../../models/game';
+import { GuestAccessHelper } from '../../helpers/guest-access.helper';
 
 @Injectable({
   providedIn: 'root'
@@ -134,11 +135,15 @@ export class CheatOmaticService {
       }
       parsedValue = paddedValue;
     }
+    // A value written into a guest that is asleep is not seen until it wakes (it never draws).
+    const release = GuestAccessHelper.hold('omatic write');
     try {
       await this.dosCI.writeMemory(address, parsedValue);
     } catch (error) {
       console.error('Error setting value:', error);
       throw error;
+    } finally {
+      release();
     }
   }
 
@@ -172,26 +177,33 @@ export class CheatOmaticService {
     const memorySize = EMULATOR_RAM_SIZE;
     const valueLength = value.length;
     
-    const foundResults = [];
-    for (let address = 0; address <= memorySize - valueLength; address += chunkSize) {
-      const readSize = Math.min(chunkSize + valueLength - 1, memorySize - address);
-      const chunk = await dosCI.readMemory(address, readSize);
+    // The sweep is eight round trips and a scan of 8 MB, seconds on a phone; the guest stays awake
+    // for all of it, so the memory it reads is the memory of a running machine.
+    const release = GuestAccessHelper.hold('omatic search');
+    try {
+      const foundResults = [];
+      for (let address = 0; address <= memorySize - valueLength; address += chunkSize) {
+        const readSize = Math.min(chunkSize + valueLength - 1, memorySize - address);
+        const chunk = await dosCI.readMemory(address, readSize);
 
-      for (let offset = 0; offset <= chunk.length - valueLength; offset++) {
-        let match = true;
-        for (let i = 0; i < valueLength; i++) {
-          if (chunk[offset + i] !== value[i]) {
-            match = false;
-            break;
+        for (let offset = 0; offset <= chunk.length - valueLength; offset++) {
+          let match = true;
+          for (let i = 0; i < valueLength; i++) {
+            if (chunk[offset + i] !== value[i]) {
+              match = false;
+              break;
+            }
+          }
+          if (match) {
+            foundResults.push(address + offset);
           }
         }
-        if (match) {
-          foundResults.push(address + offset);
-        }
       }
-    }
 
-    return foundResults;
+      return foundResults;
+    } finally {
+      release();
+    }
   }
 
   saveCheat(name: string): void {

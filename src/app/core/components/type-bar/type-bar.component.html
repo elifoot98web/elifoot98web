@@ -1,0 +1,52 @@
+<!--
+  The live type bar (see TypeBarComponent). One DOM for both layouts: the full window and the single
+  row differ only by the `type-bar--compact` class, because the field must never be re-created while
+  the OS keyboard is up (it would lose the focus and close the keyboard). Every key is a keycap
+  (`appDeckKey`): it takes no focus, so a tap on it leaves the keyboard open.
+-->
+<div *ngIf="isOpen" class="type-bar deck-face" [class.type-bar--compact]="compact" role="group" aria-label="Teclado ao vivo">
+
+  <div class="type-bar-title">
+    <span class="type-bar-title-text">Teclado ao vivo</span>
+    <span class="type-bar-badge" [class.type-bar-badge--on]="hint === 'field'" aria-hidden="true">{{ hintLabel }}</span>
+  </div>
+  <!-- What the badge says, read aloud once and in both layouts (the one-row layout has no title). -->
+  <span class="deck-sr-only" role="status">{{ hintLabel }}</span>
+
+  <div class="type-bar-row">
+    <!-- The one-row layout has no title to carry the badge; this lamp is it. Decoration: the status above is what is read aloud. -->
+    <span class="type-bar-lamp" [class.type-bar-lamp--on]="hint === 'field'" aria-hidden="true"></span>
+
+    <!--
+      Real and visible, so the player sees what is being written. The attributes are static on
+      purpose: Angular writes a static attribute with setAttribute, and `autocorrect` is a boolean
+      PROPERTY in WebKit and Chromium where "off" would be truthy (see the compose dialog).
+      16px (the stylesheet) so that iOS does not zoom the page on focus; enterkeyhint is "enter"
+      because the key sends Enter to the game.
+    -->
+    <input #field class="type-bar-field win9x-input win9x-element-bevel" type="text"
+      autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" enterkeyhint="enter"
+      [attr.inputmode]="numeric ? 'numeric' : 'text'" [attr.maxlength]="maxLength" [attr.placeholder]="placeholder"
+      aria-label="Campo do teclado ao vivo. O que você digitar aparece no jogo."
+      (focus)="onFocus()" (blur)="onBlur()">
+
+    <button type="button" class="deck-key type-bar-key type-bar-key--t2 type-bar-numeric" appDeckKey [attr.aria-pressed]="numeric"
+      aria-label="Teclado numérico" (deckPress)="toggleNumeric()">123</button>
+    <button type="button" class="deck-key type-bar-key type-bar-close" appDeckKey deckKeyOn="up"
+      aria-label="Fechar o teclado ao vivo" (deckPress)="close()">×</button>
+  </div>
+
+  <div class="type-bar-strip" role="toolbar" aria-label="Teclas do jogo">
+    <button *ngFor="let key of strip" type="button" class="deck-key type-bar-key" appDeckKey
+      [ngClass]="'type-bar-key--t' + key.tier" [attr.aria-label]="key.aria"
+      (deckPress)="onKey(key)" (deckRelease)="onKeyUp(key)">{{ key.label }}</button>
+    <button type="button" class="deck-key type-bar-key type-bar-key--t3" appDeckKey deckKeyOn="up"
+      aria-label="Colar uma lista de nomes" (deckPress)="requestList()">Lista</button>
+  </div>
+
+  <!-- A paste is a long send; it shows how far along it is and can be stopped. Above the bar, so it never moves the field. -->
+  <div *ngIf="progress" class="type-bar-progress deck-face" role="status">
+    <span>Enviando {{ progress.done }}/{{ progress.total }}</span>
+    <button type="button" class="deck-key type-bar-key" appDeckKey aria-label="Cancelar o envio" (deckPress)="cancelSend()">Cancelar</button>
+  </div>
+</div>

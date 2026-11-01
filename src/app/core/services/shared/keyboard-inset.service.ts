@@ -1,4 +1,5 @@
 import { Injectable, OnDestroy } from '@angular/core';
+import { BehaviorSubject, distinctUntilChanged, Observable } from 'rxjs';
 
 /** Anything shorter than this is collapsing browser chrome or rounding noise. */
 const MIN_KEYBOARD_INSET_PX = 60;
@@ -12,11 +13,17 @@ const MIN_KEYBOARD_INSET_PX = 60;
  *                `env(safe-area-inset-bottom)` padding the keyboard already covers,
  *                which cannot be derived from --kb-inset in plain CSS.
  *
+ * and the class `kb-open` on <html> while that inset is non-zero, for CSS that needs a selector.
+ *
  * Why measure instead of letting the layout resize: iOS Safari never shrinks the layout
  * viewport for the keyboard, and we must not make it. `interactive-widget=resizes-content`
  * or an Ionic scroll would resize `#game-container`, and js-dos re-lays-out its canvas
  * whenever that box changes — the exact jump the overlay chat exists to remove.
  * visualViewport reports the occlusion with zero layout effect.
+ *
+ * The same number is also `inset$`, for the one consumer that has to decide something from it and
+ * not only lift itself by it (the live type bar folds into one row when the keyboard leaves it no
+ * room). Subscribing starts nothing: the measuring is still `start()` and `stop()`.
  *
  * `offsetTop` is added to `height` because Safari may also shift the visual viewport down
  * while scrolling a field into view; innerHeight minus that bottom edge is the strip the
@@ -28,6 +35,10 @@ export class KeyboardInsetService implements OnDestroy {
   private consumers = 0;
   private frame: number | null = null;
   private published = -1;
+  private readonly insetSubject = new BehaviorSubject<number>(0);
+
+  /** The occluded strip in px, `0` with no keyboard. Emits only on a change. */
+  readonly inset$: Observable<number> = this.insetSubject.pipe(distinctUntilChanged());
 
   private readonly viewport: VisualViewport | null =
     typeof window === 'undefined' ? null : window.visualViewport;
@@ -89,5 +100,12 @@ export class KeyboardInsetService implements OnDestroy {
     const style = document.documentElement.style;
     style.setProperty('--kb-inset', `${inset}px`);
     style.setProperty('--kb-open', inset > 0 ? '1' : '0');
+    // The same fact as a class, for the rules that need a selector and not a number: a custom property
+    // cannot be tested by a selector, and the compose dialog changes its LAYOUT (not only its offset) while
+    // the keyboard is up (_win9x.scss, "An alert while the OS keyboard is up").
+    document.documentElement.classList.toggle('kb-open', inset > 0);
+    // Last, so that a subscriber that measures the page when it is told (the type bar logs where it
+    // sits) reads the layout of the new inset and not of the one before it.
+    this.insetSubject.next(inset);
   }
 }

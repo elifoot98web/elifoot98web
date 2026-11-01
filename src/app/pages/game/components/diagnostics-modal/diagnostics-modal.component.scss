@@ -1,0 +1,139 @@
+/*
+ * Win9x chrome comes from src/theme/_win9x.scss; only this window's layout lives here. The log
+ * pane takes the height the rest leaves, and the buttons sit at the bottom, where a thumb is.
+ */
+
+.buttons-padding-end {
+  padding-right: 4px !important;
+}
+
+.diag-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  /* A definite height, so the log pane can take what is left and scroll inside itself. With only
+     a min-height the pane grew to fit its text and the whole window scrolled instead, taking the
+     buttons off the bottom edge. A short viewport overflows this box and ion-content scrolls it. */
+  height: 100%;
+  font-family: var(--win9x-font);
+  font-size: 13px;
+  color: var(--win9x-ink);
+}
+
+p {
+  margin: 0;
+}
+
+.diag-note {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.diag-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: bold;
+}
+
+.diag-switch input {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #000080;
+}
+
+.diag-state,
+.diag-count {
+  font-size: 12px;
+  color: var(--win9x-ink-muted);
+}
+
+.diag-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.diag-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--win9x-font);
+  font-size: var(--win9x-input-font-size);
+  padding: 2px 20px 2px 6px;
+}
+
+.diag-log {
+  flex: 1 1 0;
+  min-height: 140px;
+  margin: 0;
+  padding: 4px 6px;
+  overflow: auto;
+  background: var(--win9x-field);
+  color: var(--win9x-ink);
+  font: 11px/1.35 'Courier New', monospace;
+  white-space: pre-wrap;
+  /* Long JSON runs have no spaces to wrap at; ordinary words must still wrap at spaces. */
+  overflow-wrap: break-word;
+  word-break: break-word;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.diag-status {
+  min-height: 1.35em;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.diag-status--error {
+  color: #800000;
+}
+
+.diag-hint {
+  font-size: 11px;
+  color: var(--win9x-ink-muted);
+}
+
+.diag-actions {
+  display: grid;
+  /* "Compartilhar" is the widest label: a column narrower than it drops to two per row instead of
+     breaking the word, which at 96px it did. */
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  gap: 6px;
+}
+
+.diag-actions .win9x-button {
+  padding: 0 4px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.diag-actions .win9x-button:disabled {
+  color: var(--win9x-ink-disabled);
+  text-shadow: 1px 1px 0 var(--win9x-light);
+  cursor: default;
+}
+
+/* Colour is not the only signal: the label says what it does. */
+.diag-danger {
+  color: #800000;
+}
+
+/* A finger: 44px rows (the buttons already are, through .win9x-button--touch) and a box it can hit. */
+@media (pointer: coarse) {
+  .diag-switch,
+  .diag-select {
+    min-height: var(--win9x-hit-target);
+  }
+
+  .diag-switch input {
+    width: 24px;
+    height: 24px;
+  }
+
+  .diag-log {
+    font-size: 12px;
+  }
+}

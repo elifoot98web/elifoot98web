@@ -6,7 +6,9 @@
  * the multiplayer chat, roster and dialogs can share it.
  *
  * Scope rule (see CLAUDE.md): companion windows are Windows 95; the app shell stays
- * Elifoot green. Do not restyle the page toolbars, landing cards or FAB stack.
+ * Elifoot green. Do not restyle the page toolbars, landing cards or the options menu (sheet and popover). The
+ * control deck is a companion window (it is the Windows 3.1 machine's keyboard), and its whole
+ * skin is the "Control deck" block below.
  *
  * Two preconditions worth knowing before using these classes:
  *  - `.win9x-button` only reads as Win9x on an `ion-button` with `fill="clear"`.
@@ -24,13 +26,24 @@
   --win9x-bevel-light: #dfdfdf;
   --win9x-field: #fff;        // sunken input/list background
   --win9x-ink: #000;
+  // Secondary text that must still be READ: hints, timestamps, the roster's "(você)". #4a4a4a
+  // is 4.9:1 on the face and 8.9:1 on white; the --win9x-shadow grey this replaces for text was
+  // 2.2:1 and 3.95:1. Darker would stop reading as "secondary" next to --win9x-ink, and it is
+  // still a system-grey, which is why it is not simply black.
+  --win9x-ink-muted: #4a4a4a;
+  // Disabled controls ONLY. WCAG exempts them from the contrast minimum, so this is the one
+  // place #808080 may carry text; anything a person is meant to read uses --win9x-ink-muted.
   --win9x-ink-disabled: #808080;
   --win9x-titlebar-bg: linear-gradient(to right, #000080 50%, #3a6ea5 100%);
   --win9x-titlebar-ink: #fff;
   --win9x-font: 'MS Sans Serif', Tahoma, Geneva, Verdana, sans-serif;
   --win9x-font-size: 14px;
-  // Touch target for surfaces that opt in via .win9x-button--touch. Deliberately not
-  // a floor on .win9x-button: it would resize the existing omatic controls.
+  // Font size of the chat and room-dialog text fields (the O Matic's inherits 16px already).
+  // A token so the 16px floor for coarse pointers at the end of this file is one declaration,
+  // not a specificity fight with two component stylesheets that set their own size.
+  --win9x-input-font-size: 13px;
+  // Touch target. Applied to .win9x-button automatically under (pointer: coarse) (see the end
+  // of this file) and to any surface that opts in via .win9x-button--touch.
   --win9x-hit-target: 44px;
 }
 
@@ -172,13 +185,34 @@ ion-button.win9x-button:focus {
 }
 
 /*
- * Opt-in touch sizing. NOT applied to .win9x-button itself: authentic Win9x controls
- * are ~16px tall, and forcing a floor on the existing omatic buttons grew them enough
- * to overflow the modal into a scrollbar. New retro surfaces that need a thumb target
- * add this class deliberately.
+ * Touch sizing that is opt-in on every pointer. NOT applied to .win9x-button itself for a
+ * mouse: authentic Win9x controls are ~16px tall, and forcing a floor on the existing omatic
+ * buttons grew them enough to overflow the desktop modal (480px) into a scrollbar. A finger
+ * is the other case, and the `(pointer: coarse)` block at the end of this file gives every
+ * .win9x-button the same floor there; surfaces that want it under a mouse too add this class.
  */
 .win9x-button--touch {
   min-height: var(--win9x-hit-target);
+}
+
+/*
+ * The close button of a Win9x titlebar, shared by the O Matic modal, the room dialog and the
+ * multiplayer panel, which each used to carry their own copy of an `ion-toolbar ion-button`
+ * override. Put it beside .win9x-button on the `ion-button` that closes the window.
+ *
+ * It is an opt-in class qualified by element on purpose. The copies were unqualified, and
+ * hoisted as they were into a global sheet they would restyle the toolbar buttons of every
+ * page in the shell. The `!important`s come with the copies, and they are needed: inside
+ * `ion-buttons`, Ionic's `.sc-ion-buttons-md-s ion-button` sets the same `--padding-*` at the
+ * same specificity and is injected after this sheet. The thumb-sized hit area for coarse
+ * pointers is at the end of this file.
+ */
+ion-button.win9x-titlebar-close {
+  --padding-start: 0px !important;
+  --padding-end: 0px !important;
+  --padding-top: 4px !important;
+  --padding-bottom: 4px !important;
+  padding: 0 8px !important;
 }
 
 ion-button.win9x-button {
@@ -247,7 +281,7 @@ ion-button.win9x-button.button-disabled::part(native) {
 .win9x-roster-self {
   margin-inline-start: 4px;
   font-weight: bold;
-  color: var(--win9x-shadow);
+  color: var(--win9x-ink-muted);
 }
 
 /*
@@ -258,7 +292,7 @@ ion-button.win9x-button.button-disabled::part(native) {
   margin-inline-start: 3px;
   font-family: 'Courier New', monospace;
   font-size: 10px;
-  color: var(--win9x-shadow);
+  color: var(--win9x-ink-muted);
 }
 
 /*
@@ -282,7 +316,7 @@ ion-button.win9x-button.button-disabled::part(native) {
 .win9x-roster-meta {
   flex: 0 0 auto;
   font-size: 11px;
-  color: var(--win9x-shadow);
+  color: var(--win9x-ink-muted);
 }
 
 /*
@@ -291,14 +325,14 @@ ion-button.win9x-button.button-disabled::part(native) {
  */
 .win9x-roster-meta[data-quality='success'] { color: #0a7a0a; }
 .win9x-roster-meta[data-quality='warning'] { color: #8a6100; }
-.win9x-roster-meta[data-quality='danger']  { color: #a11; }
+.win9x-roster-meta[data-quality='danger']  { color: #800000; }
 
 .win9x-roster-empty {
   text-align: center;
   font-family: var(--win9x-font);
   font-size: 12px;
   font-style: italic;
-  color: var(--win9x-shadow);
+  color: var(--win9x-ink-muted);
   margin: 1rem 0.5rem;
 }
 
@@ -371,8 +405,9 @@ ion-button.win9x-button.button-disabled::part(native) {
  * The app pins `mode: 'md'` globally (app.module.ts), so only alert.md.css is ever in
  * play — none of this has to reconcile with the iOS alert layout.
  *
- * Hit targets are deliberately Ionic-sized rather than authentic, for the same reason
- * .win9x-button--touch above exists.
+ * Hit targets are deliberately Ionic-sized (36px) rather than authentic, for the same reason
+ * .win9x-button--touch above exists, and a finger gets the full 44px floor from the
+ * `(pointer: coarse)` block at the end of this file.
  */
 
 ion-alert.win9x-alert {
@@ -484,10 +519,14 @@ ion-alert.win9x-alert .alert-input::placeholder {
 }
 
 /* (0,2,2) beats Ionic's `textarea.alert-input` (0,2,1). The free-text box that sends a
-   whole string into the emulator is a textarea for a reason; one line of room isn't it. */
+   whole string into the emulator is a textarea for a reason; one line of room isn't it.
+   16px is a floor, not a style: iOS Safari zooms the page when a focused field is smaller,
+   and this is the one field in the app a phone user is sent to type a long text into. It is
+   above `--win9x-font-size` on purpose; the other alert inputs stay at 14px. */
 ion-alert.win9x-alert textarea.alert-input {
   min-height: 88px;
   resize: none;
+  font-size: 16px;
 }
 
 /* Ionic's focus rule swaps to a 2px primary bottom border and shaves 1px off the margin,
@@ -674,4 +713,563 @@ ion-alert.win9x-alert ion-ripple-effect {
  */
 ion-alert.win9x-alert .alert-button.alert-danger {
   color: #800000 !important;
+}
+
+/*
+ * An alert while the OS keyboard is up.
+ *
+ * Ionic centres `ion-alert` in the layout viewport (position: absolute, all four insets 0) and caps its wrapper at
+ * `min(100vh - 96px, 560px)`; iOS resizes neither for the keyboard (`vh` is the page without it). On a landscape iPhone in
+ * Chrome the page was 352px tall and 117px of it were left above the keyboard and its autofill strip, so the compose dialog,
+ * 256px tall and centred, showed its title bar and kept its text field and its buttons underneath the keyboard (the first
+ * device pass). --kb-inset is the strip the keyboard covers, measured by KeyboardInsetService (started for an alert that has a
+ * text field by AlertKeyboardService, and by the chat and the type bar) and 0 without a keyboard, so this costs nothing then.
+ * `bottom` is a longhand, which Safari 14.1 has; `inset` is not. 100% in --max-height is the shrunk overlay, which is what the
+ * wrapper has to fit in now. (0,1,1) beats Ionic's host rule (0,1,0); the second rule is (0,2,2) against its custom property.
+ */
+ion-alert.win9x-alert {
+  bottom: var(--kb-inset, 0px);
+}
+
+html.kb-open ion-alert.win9x-alert {
+  --max-height: 100%;
+}
+
+/*
+ * An alert with a text field (`alert-text-field`, put on it by AlertKeyboardService; the compose dialog is the one that matters
+ * most) cannot just be shrunk. Stacked, the compose dialog needs about 125px (title 23, text field 88, buttons 68, frame 10)
+ * and a landscape phone with the keyboard up leaves 117 or fewer; shrunk by the rules above alone, Ionic squeezes the field to
+ * a sliver and the buttons run off the bottom edge under the keyboard. And a field the person cannot see is a field they cannot
+ * type into. So in a short window, while the keyboard is up, such an alert becomes one row under its title bar: the fields on
+ * the left, the buttons on the right, the message gone (the title and the placeholder remain). That is ~93px, and the buttons
+ * keep their 44px height. `max-height` is the LAYOUT viewport's, which iOS leaves at the full page: a portrait phone (700px+)
+ * keeps the stacked dialog, which fits there. Each rule names `.alert-text-field` and `html.kb-open` so it beats the earlier
+ * alert rules (0,2,1)-(0,2,2) outright.
+ */
+@media screen and (max-height: 460px) {
+  html.kb-open ion-alert.win9x-alert.alert-text-field .alert-wrapper {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+  }
+
+  html.kb-open ion-alert.win9x-alert.alert-text-field .alert-head {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  html.kb-open ion-alert.win9x-alert.alert-text-field .alert-message {
+    display: none;
+  }
+
+  html.kb-open ion-alert.win9x-alert.alert-text-field .alert-input-group {
+    grid-column: 1;
+    grid-row: 2;
+    padding: 4px;
+  }
+
+  /* Two lines of 16px text. 16px stays: iOS zooms the page when a focused field is smaller. */
+  html.kb-open ion-alert.win9x-alert.alert-text-field textarea.alert-input {
+    min-height: 52px;
+    height: 52px;
+  }
+
+  html.kb-open ion-alert.win9x-alert.alert-text-field .alert-button-group {
+    grid-column: 2;
+    grid-row: 2;
+    flex-wrap: nowrap;
+    align-items: center;
+    padding: 4px 8px 4px 4px;
+  }
+}
+
+/*
+ * Control deck skin.
+ * ---------------------------------------------------------------------------
+ * The Win9x look of the deck (DockComponent, layout in _deck.scss) lives here, on purpose: decision
+ * D3 chose Win9x for the deck's keys over a flat shell look, and asked that the choice be a
+ * CSS-only flip. `.deck-key` is every keycap and every taskbar button (a bevelled 4-layer edge,
+ * bold system font); `.deck-face` is the grey that panels, the taskbar and the sheet stand on. To
+ * go flat, rewrite these two rules and the states beneath them, AND the few declarations in
+ * _deck.scss that name a Win9x token (`grep -n 'win9x-' src/theme/_deck.scss`: the band's face and
+ * seam, the taskbar's seam, the sheet's title bar and border, the unread flash). Those stay in the
+ * layout sheet because they are seams and a title bar, not a key or a face.
+ *
+ * They are native <button>s, not ion-buttons, so the "fill=clear" precondition of .win9x-button
+ * does not apply and Ionic's shadow-encapsulated button cannot paint over them. The pressed look
+ * is the class DeckKeyDirective sets on pointerdown (`deck-key--down`), not `:active`: iOS Safari
+ * applies `:active` to a touched button only if something on the page listens for touches.
+ */
+.deck-face {
+  background: var(--win9x-face);
+  color: var(--win9x-ink);
+  font-family: var(--win9x-font);
+}
+
+.deck-key {
+  background: var(--win9x-face);
+  color: var(--win9x-ink);
+  border: none;
+  border-radius: 0;
+  box-shadow:
+    inset -1px -1px var(--win9x-dark),
+    inset 1px 1px var(--win9x-light),
+    inset -2px -2px var(--win9x-shadow),
+    inset 2px 2px var(--win9x-bevel-light);
+  box-sizing: border-box;
+  font-family: var(--win9x-font);
+  font-weight: bold;
+  cursor: pointer;
+}
+
+// Pressed, and the lit states of a toggle: the bevel inverts. A latched modifier and the open
+// panel's tab are "pressed in" the way a Windows taskbar button of the active window is.
+.deck-key--down,
+.deck-key[aria-pressed='true'],
+.deck-tab--on {
+  background: var(--win9x-bevel-light);
+  box-shadow:
+    inset -1px -1px var(--win9x-light),
+    inset 1px 1px var(--win9x-dark),
+    inset -2px -2px var(--win9x-bevel-light),
+    inset 2px 2px var(--win9x-shadow);
+}
+
+// A locked modifier is told from a one-shot by the dotted ring Win9x used for focus: shape, not colour.
+.deck-key--locked {
+  outline: 1px dotted var(--win9x-ink);
+  outline-offset: -5px;
+}
+
+// The "Mais" tab says there is a modifier waiting while its panel is not the one on screen.
+.deck-tab--latched {
+  background: var(--win9x-titlebar-bg);
+  color: var(--win9x-titlebar-ink);
+}
+
+// Maroon, as .alert-danger inside .win9x-alert: the red of Ionic's danger is 2.1:1 on this face.
+.deck-key--danger {
+  color: #800000;
+}
+
+.deck-key:disabled {
+  color: var(--win9x-ink-disabled);
+  text-shadow: 1px 1px 0 var(--win9x-light);
+  cursor: default;
+}
+
+/*
+ * Windows made of rows: "Dados e avançado" and the first-run coach.
+ * ---------------------------------------------------------------------------
+ * A window of group boxes (`fieldset.win9x-group`, sunken, with a legend), each row a button or a switch and a sentence about what
+ * it does. The last group may be the danger zone (`.win9x-group--danger`): the same box in maroon with a dashed edge, so that what cannot
+ * be taken back is a different SHAPE as well as a different colour. Native elements, like the room dialog's: an `ion-button` here would
+ * need the `fill="clear"` precondition above and a shadow part to fight. The 44px floor for a finger is the coarse block at the end.
+ */
+.win9x-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  font-family: var(--win9x-font);
+  font-size: 13px;
+  color: var(--win9x-ink);
+}
+
+.win9x-group {
+  min-width: 0;
+  margin: 0;
+  padding: 6px 8px 10px;
+  background: var(--win9x-face);
+}
+
+.win9x-legend {
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.win9x-group.win9x-group--danger {
+  border-style: dashed;
+  border-color: #800000;
+}
+
+.win9x-group--danger .win9x-legend {
+  color: #800000;
+}
+
+.win9x-row {
+  margin-top: 10px;
+}
+
+.win9x-row:first-of-type {
+  margin-top: 4px;
+}
+
+.win9x-label {
+  display: block;
+  font-weight: bold;
+}
+
+.win9x-desc {
+  display: block;
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--win9x-ink-muted);
+}
+
+.win9x-action {
+  display: block;
+  width: 100%;
+  padding: 4px 12px;
+  text-align: center;
+}
+
+.win9x-action--danger {
+  color: #800000;
+}
+
+button.win9x-button:disabled {
+  color: var(--win9x-ink-disabled);
+  text-shadow: 1px 1px 0 var(--win9x-light);
+  cursor: default;
+}
+
+.win9x-switch {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.win9x-switch input {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 1px 0 0;
+  accent-color: #000080;
+}
+
+.win9x-close {
+  align-self: flex-end;
+  min-width: 96px;
+}
+
+/* The "?" of a group: a small square button, authentic to a Win9x dialog's help, beside the group's title. */
+.win9x-help {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  margin-inline-start: 6px;
+  padding: 0;
+  border: none;
+  background: var(--win9x-face);
+  color: var(--win9x-ink);
+  font: bold 11px/16px var(--win9x-font);
+  text-align: center;
+  cursor: pointer;
+  box-shadow:
+    inset -1px -1px var(--win9x-dark),
+    inset 1px 1px var(--win9x-light),
+    inset -2px -2px var(--win9x-shadow),
+    inset 2px 2px var(--win9x-bevel-light);
+}
+
+.win9x-help:active {
+  box-shadow:
+    inset -1px -1px var(--win9x-light),
+    inset 1px 1px var(--win9x-dark),
+    inset -2px -2px var(--win9x-bevel-light),
+    inset 2px 2px var(--win9x-shadow);
+}
+
+.win9x-help:focus-visible {
+  outline: 1px dotted var(--win9x-ink);
+  outline-offset: 1px;
+}
+
+/* A line of summary under a dialog's title (the host's "ELI-XK3P · sem senha · até 6 espectadores"), as a sunken read-out. */
+.win9x-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-family: var(--win9x-font);
+  font-size: 13px;
+  color: var(--win9x-ink);
+}
+
+.win9x-summary--room {
+  padding: 6px 8px;
+  border: 2px solid;
+  border-color: var(--win9x-shadow) var(--win9x-light) var(--win9x-light) var(--win9x-shadow);
+  background: var(--win9x-field);
+  font-weight: bold;
+  line-height: 1.35;
+}
+
+.win9x-summary-swatch {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--win9x-shadow);
+  box-shadow: inset -1px -1px var(--win9x-shadow), inset 1px 1px var(--win9x-light);
+}
+
+/* An expander that reads as a button: "Alterar" under the host's summary. */
+.win9x-expander--box {
+  margin: 0 0 12px;
+  padding: 6px 10px;
+  box-shadow:
+    inset -1px -1px var(--win9x-dark),
+    inset 1px 1px var(--win9x-light),
+    inset -2px -2px var(--win9x-shadow),
+    inset 2px 2px var(--win9x-bevel-light);
+  font-weight: bold;
+}
+
+.win9x-expander--box ion-icon {
+  font-size: 12px;
+}
+
+/*
+ * The first-run coach (FirstRunCoachComponent): three cards in a small Win9x dialog. Auto-height, so it is made of divs, and the modal
+ * sizes itself to the card (`.first-run-modal` in global.scss).
+ */
+.coach {
+  display: flex;
+  flex-direction: column;
+  height: auto;
+  max-height: inherit;
+}
+
+/*
+ * The title and the buttons stay where they are and the card between them scrolls: on a landscape phone (390px tall) the card is taller
+ * than the window, and "Próximo" is the one control that must never be off the screen.
+ */
+.coach-frame {
+  align-items: stretch;
+  justify-content: flex-start;
+  min-height: 0;
+  height: auto;
+  max-height: inherit;
+  overflow: hidden;
+}
+
+.coach-titlebar-end {
+  padding-right: 4px;
+}
+
+.coach-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 14px 14px 6px;
+  overflow-y: auto;
+  font-family: var(--win9x-font);
+  font-size: 14px;
+  color: var(--win9x-ink);
+  text-align: center;
+}
+
+.coach-steps,
+.coach-actions {
+  flex: 0 0 auto;
+}
+
+.coach-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  background: var(--win9x-field);
+  font-size: 40px;
+  color: #000080;
+}
+
+/* The tap card's ring, the same one the touch layer draws where a tap landed: a looping hint of "touch here". */
+.coach-icon--tap::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 36px;
+  height: 36px;
+  margin: -18px 0 0 -18px;
+  border: 3px solid #000080;
+  border-radius: 50%;
+  opacity: 0;
+  animation: coach-tap 1.6s ease-out infinite;
+}
+
+@keyframes coach-tap {
+  from { transform: scale(0.3); opacity: 0.9; }
+  to { transform: scale(1.5); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coach-icon--tap::after {
+    animation: none;
+  }
+}
+
+.coach-title {
+  margin: 10px 0 8px;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.coach-line {
+  margin: 0 0 8px;
+  line-height: 1.4;
+  text-align: start;
+}
+
+.coach-more {
+  justify-content: center;
+  width: auto;
+  margin: 2px auto 4px;
+  text-decoration: underline;
+  color: #000080;
+}
+
+.coach-footer {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--win9x-ink-muted);
+}
+
+.coach-steps {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.coach-step {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--win9x-shadow);
+  background: var(--win9x-face);
+}
+
+.coach-step--on {
+  border-color: #000080;
+  background: #000080;
+}
+
+.coach-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 6px 12px 12px;
+}
+
+.coach-actions .win9x-button {
+  min-width: 84px;
+}
+
+.coach-next {
+  min-width: 96px;
+}
+
+/* A short window: the same card, tighter. */
+@media (max-height: 460px) {
+  .coach-body {
+    padding-top: 8px;
+  }
+
+  .coach-icon {
+    width: 48px;
+    height: 48px;
+    font-size: 28px;
+  }
+
+  .coach-title {
+    margin: 6px 0;
+    font-size: 15px;
+  }
+
+  .coach-line {
+    font-size: 13px;
+  }
+
+  .coach-actions {
+    padding-bottom: 8px;
+  }
+}
+
+/*
+ * Coarse pointers: a finger gets thumb-sized controls, a mouse keeps the authentic ones.
+ * ---------------------------------------------------------------------------
+ * Keyed to the input device, not the viewport. A 1024px iPad needs the floor and a narrow
+ * desktop window must not get it, which is what a width query would have done the other way
+ * round. The omatic modal's original overflow is why this is not simply on for everyone: the
+ * 44px floor was first applied to .win9x-button for every pointer, and the modal (a fixed 480px
+ * box on desktop) grew a scrollbar. A mouse still gets the 36px buttons that fit that box. A
+ * phone's modal scrolls inside its box anyway, so the floor costs nothing there; a touch tablet
+ * is the case in between, a 768px+ viewport that gets the desktop box with 44px buttons, and
+ * global.scss makes that box 520px for it. Re-check the modal at 844x390 (phone), 820x1180 and
+ * 1024x768 (tablets, touch emulation on) and 1280x800 (mouse) after touching this.
+ *
+ * It sits at the end of the file on purpose: the alert button's 36px is a rule of the same
+ * specificity further up, and the later one wins.
+ *
+ * `.recent-room` (the spectator's one-tap rejoin) is a `.win9x-button`, so it is covered by
+ * the first rule without being named. The status pill is NOT here: it is shell, not Win9x,
+ * and keeps its own coarse rule beside it in global.scss.
+ */
+@media (pointer: coarse) {
+  :root {
+    // iOS Safari zooms the page when a focused field is under 16px, and the viewport meta
+    // (maximum-scale=1) is the only thing hiding that today.
+    --win9x-input-font-size: 16px;
+  }
+
+  .win9x-button,
+  .win9x-expander,
+  ion-alert.win9x-alert .alert-button {
+    min-height: var(--win9x-hit-target);
+  }
+
+  // The text/password inputs of an alert (the textarea is already 16px above).
+  ion-alert.win9x-alert .alert-input {
+    font-size: 16px;
+  }
+
+  // Its own rule, not left to `.win9x-button` above: inside `ion-buttons` Ionic's
+  // `.sc-ion-buttons-md-s ion-button { min-height: 32px }` is (0,1,1) and beats a bare class.
+  // Written as (0,1,2) rather than a tie at (0,1,1), because Stencil injects that sheet after
+  // this one and source order would hand it the win in a production build.
+  ion-buttons ion-button.win9x-titlebar-close {
+    min-width: var(--win9x-hit-target);
+    min-height: var(--win9x-hit-target);
+  }
+
+  // Not the compact strip in the chat: its rows are not controls, and every extra pixel there
+  // comes straight out of the transcript.
+  .win9x-roster:not(.win9x-roster--compact) .win9x-roster-row {
+    min-height: 40px;
+  }
+
+  // A switch row is a 44px target and its box is one a thumb can hit. The "?" of a group stays a small square to look at and takes a
+  // 44px square to touch, by a pseudo-element: the legend does not clip, unlike the title the room pill sits in.
+  .win9x-switch {
+    min-height: var(--win9x-hit-target);
+  }
+
+  .win9x-switch input {
+    width: 24px;
+    height: 24px;
+  }
+
+  .win9x-help::after {
+    content: '';
+    position: absolute;
+    top: -13px;
+    right: -13px;
+    bottom: -13px;
+    left: -13px;
+  }
 }

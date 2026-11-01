@@ -1,0 +1,41 @@
+<!--
+  A Win9x dialog with three cards. Plain divs and no ion-content, on purpose: the modal sizes itself to the card (global.scss,
+  `.first-run-modal`), and an ion-content has no height of its own to give it. The card is announced when it changes.
+-->
+<div class="win9x-element-border win9x-outer-window coach">
+  <div class="win9x-modal-container coach-frame">
+    <ion-header class="ion-no-border">
+      <ion-toolbar class="win9x-titlebar">
+        <ion-title>Primeiros passos</ion-title>
+        <ion-buttons slot="end" class="coach-titlebar-end">
+          <ion-button fill="clear" class="win9x-button win9x-titlebar-close" (click)="close('skip')" aria-label="Fechar">
+            <ion-icon name="close" slot="icon-only"></ion-icon>
+          </ion-button>
+        </ion-buttons>
+      </ion-toolbar>
+    </ion-header>
+
+    <div class="coach-body" role="group" aria-live="polite" [attr.aria-label]="'Passo ' + (index + 1) + ' de ' + cards.length">
+      <div class="coach-icon win9x-element-bevel" [class.coach-icon--tap]="!!card.pulse">
+        <ion-icon [name]="card.icon" aria-hidden="true"></ion-icon>
+      </div>
+      <h2 class="coach-title">{{ card.title }}</h2>
+      <p *ngFor="let line of card.lines" class="coach-line">{{ line }}</p>
+      <button *ngIf="help" type="button" class="win9x-expander coach-more" (click)="more()">
+        <ion-icon name="help-circle-outline" aria-hidden="true"></ion-icon>
+        <span>Saiba mais</span>
+      </button>
+      <p *ngIf="last" class="coach-footer">{{ footer }}</p>
+    </div>
+
+    <div class="coach-steps" aria-hidden="true">
+      <span *ngFor="let card of cards; let i = index" class="coach-step" [class.coach-step--on]="i === index"></span>
+    </div>
+
+    <div class="coach-actions">
+      <button type="button" class="win9x-button win9x-button--touch" (click)="close('skip')" [hidden]="last">Pular</button>
+      <button type="button" class="win9x-button win9x-button--touch" (click)="back()" [disabled]="first">Voltar</button>
+      <button type="button" class="win9x-button win9x-button--touch coach-next" (click)="next()">{{ last ? 'Entendi' : 'Próximo' }}</button>
+    </div>
+  </div>
+</div>

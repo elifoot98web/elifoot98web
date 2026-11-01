@@ -1,0 +1,288 @@
+<!--
+  The control deck. Three presentations of the same keys (see DockComponent):
+
+    band      a panel of keys, or nothing, above a taskbar, in the free band under the picture
+    launcher  the same panels in a sheet that the page's "Teclas" button opens over the page
+    rails     a landscape phone: the keys in the two gutters beside the picture, one rail each, and the same sheet for
+              what does not fit
+
+  Every keycap is `appDeckKey` (pointerdown, never takes the focus, exactly one release) and the
+  skin is `.deck-key` and `.deck-face`, so a flat look changes the stylesheets and not this file.
+-->
+
+<!--
+  One keycap. `on` is when it presses: as the finger lands, or as it lifts, for keys inside a panel
+  that can scroll (a scroll gesture starts as a touch on a key, and a key that has already pressed
+  would type on every attempt). Keys that repeat need the landing and keep it; they take no part in
+  panning instead (the directive's `deck-key--landing`), so a drag that starts on one is that key's.
+-->
+<ng-template #keycap let-key let-extra="extra" let-on="on" let-short="short">
+  <button class="deck-key" [ngClass]="extra" appDeckKey [deckKeyOn]="on || 'down'" [deckKeyDisabled]="keysDisabled"
+    [attr.aria-label]="key.aria" (deckPress)="keyDown(key)" (deckRelease)="keyUp(key)">
+    <ion-icon *ngIf="key.icon" [name]="key.icon" aria-hidden="true"></ion-icon>
+    <span *ngIf="!key.iconOnly" class="deck-key-label" aria-hidden="true">{{ key.label }}</span>
+    <span *ngIf="key.caption" class="deck-key-caption" aria-hidden="true">{{ (short && key.shortCaption) || key.caption }}</span>
+  </button>
+</ng-template>
+
+<ng-template #modifier let-entry>
+  <button class="deck-key deck-key--modifier" appDeckKey [deckKeyOn]="'up'" [deckKeyDisabled]="keysDisabled"
+    [class.deck-key--latched]="latch.state(entry.modifier) !== 'off'"
+    [class.deck-key--locked]="latch.state(entry.modifier) === 'locked'"
+    [attr.aria-pressed]="latch.state(entry.modifier) !== 'off'"
+    [attr.aria-label]="entry.label + (latch.state(entry.modifier) === 'locked' ? ', travado' : latch.state(entry.modifier) === 'once' ? ', para a próxima tecla' : '')"
+    (deckPress)="modifierDown(entry.modifier)">
+    <span class="deck-key-label" aria-hidden="true">{{ entry.label }}</span>
+  </button>
+</ng-template>
+
+<!-- The panels of keys, shared by the band and the sheet. -->
+<ng-template #keys let-panel>
+  <ng-container [ngSwitch]="panel">
+
+    <!-- Táticas: the twelve formations as 6x2, then the two Seleccionar shortcuts. -->
+    <div *ngSwitchCase="'tactics'" class="deck-tactics">
+      <div class="deck-grid deck-grid--6">
+        <ng-container *ngFor="let key of formations; trackBy: trackKey">
+          <ng-container *ngTemplateOutlet="keycap; context: { $implicit: key, extra: 'deck-key--formation' }"></ng-container>
+        </ng-container>
+      </div>
+      <div class="deck-grid deck-grid--2">
+        <ng-container *ngFor="let key of shortcuts; trackBy: trackKey">
+          <ng-container *ngTemplateOutlet="keycap; context: { $implicit: key, extra: 'deck-key--shortcut' }"></ng-container>
+        </ng-container>
+      </div>
+    </div>
+
+    <!-- Zoom: the camera's own controls (CameraPanelComponent), for the hand that does not pinch. -->
+    <app-camera-panel *ngSwitchCase="'camera'" [hosting]="chatAvailable"></app-camera-panel>
+
+    <!-- Setas: the cross on the left thumb, Enter and Esc and Tab on the right. -->
+    <div *ngSwitchCase="'arrows'" class="deck-arrows">
+      <ng-container *ngTemplateOutlet="keycap; context: { $implicit: arrows.up, extra: 'deck-area-up' }"></ng-container>
+      <ng-container *ngTemplateOutlet="keycap; context: { $implicit: arrows.left, extra: 'deck-area-left' }"></ng-container>
+      <ng-container *ngTemplateOutlet="keycap; context: { $implicit: arrows.down, extra: 'deck-area-down' }"></ng-container>
+      <ng-container *ngTemplateOutlet="keycap; context: { $implicit: arrows.right, extra: 'deck-area-right' }"></ng-container>
+      <ng-container *ngTemplateOutlet="keycap; context: { $implicit: arrows.esc, extra: 'deck-area-esc' }"></ng-container>
+      <ng-container *ngTemplateOutlet="keycap; context: { $implicit: arrows.tab, extra: 'deck-area-tab' }"></ng-container>
+      <ng-container *ngTemplateOutlet="keycap; context: { $implicit: arrows.enter, extra: 'deck-area-enter' }"></ng-container>
+    </div>
+
+    <!--
+      Mais teclas. Five short rows that fit a 360x640 phone without scrolling, and scroll on a
+      viewport too short for them: from the gaps and from the keys that press on release. The ones
+      that repeat (Apagar, Del, PgUp, PgDn) press as the finger lands and are not part of the scroll.
+    -->
+    <div *ngSwitchCase="'more'" class="deck-more">
+      <div class="deck-grid deck-grid--6">
+        <ng-container *ngFor="let entry of modifierKeys">
+          <ng-container *ngTemplateOutlet="modifier; context: { $implicit: entry }"></ng-container>
+        </ng-container>
+        <ng-container *ngTemplateOutlet="keycap; context: { $implicit: space, on: 'up' }"></ng-container>
+        <ng-container *ngTemplateOutlet="keycap; context: { $implicit: backspace }"></ng-container>
+        <ng-container *ngTemplateOutlet="keycap; context: { $implicit: del }"></ng-container>
+        <ng-container *ngFor="let key of navigation; trackBy: trackKey">
+          <ng-container *ngTemplateOutlet="keycap; context: { $implicit: key, on: key.repeat ? 'down' : 'up' }"></ng-container>
+        </ng-container>
+        <ng-container *ngFor="let key of functionKeys; trackBy: trackKey">
+          <ng-container *ngTemplateOutlet="keycap; context: { $implicit: key, on: 'up' }"></ng-container>
+        </ng-container>
+      </div>
+      <div class="deck-grid deck-grid--4">
+        <ng-container *ngFor="let key of keypad; trackBy: trackKey">
+          <ng-container *ngTemplateOutlet="keycap; context: { $implicit: key, extra: 'deck-key--wide', on: 'up' }"></ng-container>
+        </ng-container>
+        <button class="deck-key deck-key--wide" appDeckKey deckKeyOn="up" [deckKeyDisabled]="keysDisabled" aria-label="Abrir o 'O Matic, a ferramenta de trapaças"
+          (deckPress)="openOmatic()">
+          <ion-icon src="../../assets/icon/cheese.svg" aria-hidden="true"></ion-icon>
+          <span class="deck-key-label" aria-hidden="true">O Matic</span>
+        </button>
+        <ng-container *ngTemplateOutlet="keycap; context: { $implicit: quit, extra: 'deck-key--wide deck-key--danger', on: 'up' }"></ng-container>
+      </div>
+    </div>
+  </ng-container>
+</ng-template>
+
+<!--
+  What the next key will carry, said to a screen reader only. It is deliberately NOT a bar in the
+  layout: a bar that appeared when a modifier was tapped moved every key above it, and the click the
+  browser makes of the tap then landed on a different key (measured: Shift sent Shift+Tab). The
+  sighted cue is the lit modifier key and the "Mais" tab, which names what is latched.
+-->
+<ng-template #latchStatus>
+  <span class="deck-sr-only" role="status">{{ latch.any ? 'Próxima tecla com ' + latchSummary : '' }}</span>
+</ng-template>
+
+<!-- ======================= band ======================= -->
+<ng-container *ngIf="presentation === 'band'">
+  <div *ngIf="shownKeys as panel" class="deck-panel deck-face" [class.deck-panel--scroll]="panel === 'more'"
+    [class.deck-panel--camera]="panel === 'camera'" role="group" [attr.aria-label]="panelLabel(panel)">
+    <ng-container *ngTemplateOutlet="keys; context: { $implicit: panel }"></ng-container>
+  </div>
+
+  <ng-container *ngTemplateOutlet="latchStatus"></ng-container>
+
+  <div class="deck-taskbar deck-face" role="toolbar" aria-label="Painel de teclas">
+    <button *ngFor="let panel of panels; trackBy: trackTab" class="deck-key deck-tab" appDeckKey (deckPress)="onPanelTab(panel.id)"
+      [class.deck-tab--on]="shownKeys === panel.id" [attr.aria-pressed]="shownKeys === panel.id" [attr.aria-label]="panel.aria">
+      <ion-icon [name]="panel.icon" aria-hidden="true"></ion-icon>
+      <span class="deck-tab-label">{{ panel.label }}</span>
+    </button>
+    <button class="deck-key deck-tab" appDeckKey [deckKeyOn]="liveKeyboard ? 'up' : 'down'" (deckPress)="onTextTab()"
+      [deckKeyDisabled]="keysDisabled" [class.deck-tab--field]="textPulses" [attr.aria-label]="textAriaLabel">
+      <ion-icon name="terminal-outline" aria-hidden="true"></ion-icon>
+      <span class="deck-tab-label">Texto</span>
+    </button>
+    <!--
+      The chat's toggle, as a taskbar button. The panel it opens is mounted by the page above this
+      deck, so it keeps the id, the aria wiring and the unread badge it always had; the flash on
+      unread is the taskbar's own, exactly as a background window flashed in Windows.
+    -->
+    <button *ngIf="chatAvailable" class="deck-key deck-tab chat-toggle-tab" appDeckKey data-chat-toggle (deckPress)="onChatTab()"
+      [class.deck-tab--on]="chatOpen" [class.deck-tab--unread]="!chatOpen && unread > 0"
+      [attr.aria-pressed]="chatOpen" [attr.aria-controls]="chatPanelId" [attr.aria-label]="chatLabel">
+      <ion-icon [name]="chatOpen ? 'close-outline' : 'chatbubble-ellipses-outline'" aria-hidden="true"></ion-icon>
+      <span class="deck-tab-label" aria-hidden="true">Chat</span>
+      <span *ngIf="!chatOpen && unread > 0" class="deck-tab-badge" aria-hidden="true">{{ unread }}</span>
+    </button>
+    <button class="deck-key deck-tab" appDeckKey (deckPress)="onPanelTab('more')"
+      [class.deck-tab--on]="shownKeys === 'more'" [class.deck-tab--latched]="latch.any && shownKeys !== 'more'"
+      [class.deck-key--locked]="latch.any && shownKeys !== 'more' && latch.locked"
+      [attr.aria-pressed]="shownKeys === 'more'" [attr.aria-label]="moreAriaLabel">
+      <ion-icon name="ellipsis-horizontal-outline" aria-hidden="true"></ion-icon>
+      <span class="deck-tab-label">{{ moreTabLabel(shownKeys === 'more') }}</span>
+    </button>
+  </div>
+</ng-container>
+
+<!-- ======================= rails ======================= -->
+<!--
+  A landscape phone has no toolbar and a picture that takes the whole height, so the gutters on either side of it are the
+  free room. They are SIBLINGS of the picture's container in the page's flex row (this host is `display: contents`), sized
+  by the stage plan so that they never cost the picture. Left: the controls the missing toolbar held, projected by the
+  page (the menu, the sound chip, the room), then the deck's own Texto and Chat, and with two columns the arrows, Enter,
+  Esc, Tab and the sheet's key. Right: Táticas with two columns, the navigation keys with one. A key never moves when the
+  room, the sound chip or the chat comes and goes: the page's block grows down from the top, the deck's block is pinned to
+  the bottom, and together they are never more than seven rows.
+-->
+<ng-container *ngIf="presentation === 'rails'">
+  <aside class="stage-rail stage-rail--left deck-face" [class.stage-rail--folded]="leftFolded" [attr.data-cols]="leftColumns" role="group"
+    aria-label="Controles da tela">
+    <!-- The page's own: the toolbar's menu, "Ativar som" and the room. They grow down from the top. -->
+    <div class="rail-grid rail-grid--top">
+      <ng-content select="[railMenu]"></ng-content>
+      <ng-content select="[railSound]"></ng-content>
+      <ng-content select="[railRoom]"></ng-content>
+    </div>
+
+    <!-- The deck's, pinned to the bottom where the thumbs rest, so a key never moves when the room or the chat appears above it. -->
+    <div *ngIf="keysShown || chatAvailable" class="rail-grid rail-grid--bottom">
+      <ng-container *ngIf="leftColumns === 2; else oneColumn">
+        <button class="deck-key rail-key" appDeckKey deckKeyOn="up" [deckKeyDisabled]="keysDisabled"
+          [class.deck-tab--field]="textPulses" [attr.aria-label]="textAriaLabel" (deckPress)="onTextTab()">
+          <ion-icon name="terminal-outline" aria-hidden="true"></ion-icon>
+          <span class="deck-key-label" aria-hidden="true">Texto</span>
+        </button>
+        <ng-container *ngIf="chatAvailable; else noChat">
+          <ng-container *ngTemplateOutlet="chatKey"></ng-container>
+        </ng-container>
+        <ng-template #noChat><span aria-hidden="true"></span></ng-template>
+        <ng-container *ngTemplateOutlet="keycap; context: { $implicit: arrows.up, extra: 'rail-key rail-key--arrow', on: 'down' }"></ng-container>
+        <ng-container *ngTemplateOutlet="keycap; context: { $implicit: arrows.enter, extra: 'rail-key rail-key--word', on: 'up' }"></ng-container>
+        <ng-container *ngTemplateOutlet="keycap; context: { $implicit: arrows.left, extra: 'rail-key rail-key--arrow', on: 'down' }"></ng-container>
+        <ng-container *ngTemplateOutlet="keycap; context: { $implicit: arrows.right, extra: 'rail-key rail-key--arrow', on: 'down' }"></ng-container>
+        <ng-container *ngTemplateOutlet="keycap; context: { $implicit: arrows.down, extra: 'rail-key rail-key--arrow', on: 'down' }"></ng-container>
+        <ng-container *ngTemplateOutlet="keycap; context: { $implicit: arrows.esc, extra: 'rail-key rail-key--word', on: 'up' }"></ng-container>
+        <ng-container *ngTemplateOutlet="sheetKey"></ng-container>
+        <ng-container *ngTemplateOutlet="keycap; context: { $implicit: arrows.tab, extra: 'rail-key rail-key--word', on: 'up' }"></ng-container>
+      </ng-container>
+      <!-- One column has no room for the arrows: the chat, Texto and the sheet's key, in the order they appear in. -->
+      <ng-template #oneColumn>
+        <ng-container *ngIf="chatAvailable"><ng-container *ngTemplateOutlet="chatKey"></ng-container></ng-container>
+        <ng-container *ngIf="keysShown">
+          <button class="deck-key rail-key" appDeckKey deckKeyOn="up" [deckKeyDisabled]="keysDisabled"
+            [class.deck-tab--field]="textPulses" [attr.aria-label]="textAriaLabel" (deckPress)="onTextTab()">
+            <ion-icon name="terminal-outline" aria-hidden="true"></ion-icon>
+            <span class="deck-key-label" aria-hidden="true">Texto</span>
+          </button>
+          <ng-container *ngTemplateOutlet="sheetKey"></ng-container>
+        </ng-container>
+      </ng-template>
+    </div>
+
+    <ng-template #chatKey>
+      <button class="deck-key rail-key chat-toggle-tab" appDeckKey deckKeyOn="up" data-chat-toggle
+        [class.deck-tab--on]="chatOpen" [class.deck-tab--unread]="!chatOpen && unread > 0"
+        [attr.aria-pressed]="chatOpen" [attr.aria-controls]="chatPanelId" [attr.aria-label]="chatLabel" (deckPress)="onChatTab()">
+        <ion-icon [name]="chatOpen ? 'close-outline' : 'chatbubble-ellipses-outline'" aria-hidden="true"></ion-icon>
+        <span class="deck-key-label" aria-hidden="true">Chat</span>
+        <span *ngIf="!chatOpen && unread > 0" class="deck-tab-badge" aria-hidden="true">{{ unread }}</span>
+      </button>
+    </ng-template>
+    <ng-template #sheetKey>
+      <button class="deck-key rail-key" appDeckKey deckKeyOn="up" [class.deck-tab--on]="sheetOpen" [attr.aria-pressed]="sheetOpen"
+        aria-label="Painel de teclas" (deckPress)="toggleSheet()">
+        <ion-icon name="keypad-outline" aria-hidden="true"></ion-icon>
+        <span class="deck-key-label" aria-hidden="true">Teclas</span>
+      </button>
+    </ng-template>
+  </aside>
+
+  <aside *ngIf="keysShown && rightColumns > 0" class="stage-rail stage-rail--right deck-face" [attr.data-cols]="rightColumns" role="group"
+    [attr.aria-label]="rightColumns === 2 ? 'Táticas' : 'Teclas de navegação'">
+    <!-- Two columns: the whole of Táticas, seven rows of two. -->
+    <div *ngIf="rightColumns === 2" class="rail-grid rail-grid--fill">
+      <ng-container *ngFor="let key of formations; trackBy: trackKey">
+        <ng-container *ngTemplateOutlet="keycap; context: { $implicit: key, extra: 'rail-key deck-key--formation', on: 'up' }"></ng-container>
+      </ng-container>
+      <ng-container *ngFor="let key of shortcuts; trackBy: trackKey">
+        <ng-container *ngTemplateOutlet="keycap; context: { $implicit: key, extra: 'rail-key deck-key--shortcut', on: 'up', short: true }"></ng-container>
+      </ng-container>
+    </div>
+    <!-- One column: the keys a thumb reaches for most; Táticas is a tap away in the sheet. -->
+    <div *ngIf="rightColumns === 1" class="rail-grid rail-grid--fill">
+      <ng-container *ngTemplateOutlet="keycap; context: { $implicit: arrows.enter, extra: 'rail-key rail-key--word', on: 'up' }"></ng-container>
+      <ng-container *ngTemplateOutlet="keycap; context: { $implicit: arrows.esc, extra: 'rail-key rail-key--word', on: 'up' }"></ng-container>
+      <ng-container *ngTemplateOutlet="keycap; context: { $implicit: arrows.tab, extra: 'rail-key rail-key--word', on: 'up' }"></ng-container>
+      <ng-container *ngTemplateOutlet="keycap; context: { $implicit: arrows.up, extra: 'rail-key rail-key--arrow', on: 'down' }"></ng-container>
+      <ng-container *ngTemplateOutlet="keycap; context: { $implicit: arrows.down, extra: 'rail-key rail-key--arrow', on: 'down' }"></ng-container>
+      <ng-container *ngTemplateOutlet="keycap; context: { $implicit: arrows.left, extra: 'rail-key rail-key--arrow', on: 'down' }"></ng-container>
+      <ng-container *ngTemplateOutlet="keycap; context: { $implicit: arrows.right, extra: 'rail-key rail-key--arrow', on: 'down' }"></ng-container>
+    </div>
+  </aside>
+</ng-container>
+
+<!-- ======================= launcher's sheet ======================= -->
+<div *ngIf="(presentation === 'launcher' || presentation === 'rails') && sheetOpen" class="deck-sheet deck-face"
+  [class.deck-sheet--rails]="presentation === 'rails'" role="group" aria-label="Painel de teclas">
+  <div class="deck-sheet-title">
+    <span class="deck-sheet-title-text">Teclas</span>
+    <button class="deck-key deck-sheet-close" appDeckKey (deckPress)="closeSheet()" aria-label="Fechar o painel de teclas">×</button>
+  </div>
+
+  <div class="deck-sheet-tabs" role="toolbar" aria-label="Painéis">
+    <button *ngFor="let panel of panels; trackBy: trackTab" class="deck-key deck-tab" appDeckKey (deckPress)="onSheetTab(panel.id)"
+      [class.deck-tab--on]="sheetKeys === panel.id" [attr.aria-pressed]="sheetKeys === panel.id" [attr.aria-label]="panel.aria">
+      <ion-icon [name]="panel.icon" aria-hidden="true"></ion-icon>
+      <span class="deck-tab-label">{{ panel.label }}</span>
+    </button>
+    <button class="deck-key deck-tab" appDeckKey [deckKeyOn]="liveKeyboard ? 'up' : 'down'" (deckPress)="onTextTab()"
+      [deckKeyDisabled]="keysDisabled" [class.deck-tab--field]="textPulses" [attr.aria-label]="textAriaLabel">
+      <ion-icon name="terminal-outline" aria-hidden="true"></ion-icon>
+      <span class="deck-tab-label">Texto</span>
+    </button>
+    <button class="deck-key deck-tab" appDeckKey (deckPress)="onSheetTab('more')"
+      [class.deck-tab--on]="sheetKeys === 'more'" [class.deck-tab--latched]="latch.any && sheetKeys !== 'more'"
+      [class.deck-key--locked]="latch.any && sheetKeys !== 'more' && latch.locked"
+      [attr.aria-pressed]="sheetKeys === 'more'" [attr.aria-label]="moreAriaLabel">
+      <ion-icon name="ellipsis-horizontal-outline" aria-hidden="true"></ion-icon>
+      <span class="deck-tab-label">{{ moreTabLabel(sheetKeys === 'more') }}</span>
+    </button>
+  </div>
+
+  <ng-container *ngTemplateOutlet="latchStatus"></ng-container>
+
+  <div class="deck-panel" [class.deck-panel--scroll]="true">
+    <ng-container *ngTemplateOutlet="keys; context: { $implicit: sheetKeys }"></ng-container>
+  </div>
+</div>

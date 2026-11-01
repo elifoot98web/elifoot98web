@@ -1,0 +1,66 @@
+/*
+ * The options menu, flat: Ionic's own list in the navy/light family of the toolbar that opens it. Only what Ionic does not give.
+ * The rows are 48px (ion-item's md height) and a switch is the whole row; the help button is the one icon-only control and gets the
+ * 44px floor a finger needs.
+ */
+.options-section {
+  min-height: 40px;
+  padding-inline-start: 16px !important;
+  text-transform: none;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.options-help {
+  --padding-start: 0;
+  --padding-end: 0;
+  min-width: 44px;
+  min-height: 44px;
+  margin: 0;
+}
+
+.options-label {
+  display: block;
+  white-space: normal;
+}
+
+.options-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--ion-color-step-600, #666);
+  white-space: normal;
+}
+
+.options-badge {
+  margin-inline-end: 8px;
+}
+
+.options-range-label {
+  --min-height: 40px;
+}
+
+/* The label over a row of keys, and the keys wrapping under it on a narrow phone. */
+.options-zoom-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  width: 100%;
+  padding: 6px 0;
+}
+
+.options-zoom-keys {
+  display: flex;
+  gap: 6px;
+}
+
+.options-zoom-keys ion-button {
+  --padding-start: 12px;
+  --padding-end: 12px;
+  min-width: 48px;
+  min-height: 44px;
+  margin: 0;
+}
