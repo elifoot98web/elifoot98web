@@ -2,3 +2,4 @@ declare function elifootMain(pathPrefix: string, gameBundleURL: string): Promise
 declare function saveGameFileSystem(): Promise<void>; 
 declare function toggleSoftKeyboard(): void;
 declare var dosInstance: any;
+declare function getDosAudioNode(): ScriptProcessorNode | null;

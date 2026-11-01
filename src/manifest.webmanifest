@@ -5,7 +5,27 @@
   "background_color": "#252329",
   "display": "standalone",
   "scope": "./",
-  "start_url": "/#/game",
+  "start_url": "/#/main",
+  "shortcuts": [
+    {
+      "name": "Jogar sozinho",
+      "short_name": "Jogar",
+      "url": "/#/game",
+      "icons": [{ "src": "assets/pwaicons/android/android-launchericon-96-96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Criar sala multiplayer",
+      "short_name": "Hospedar",
+      "url": "/#/game?host=1",
+      "icons": [{ "src": "assets/pwaicons/android/android-launchericon-96-96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Assistir a uma partida",
+      "short_name": "Assistir",
+      "url": "/#/join-game",
+      "icons": [{ "src": "assets/pwaicons/android/android-launchericon-96-96.png", "sizes": "96x96" }]
+    }
+  ],
   "icons": [
     {
       "src": "assets/pwaicons/windows11/SmallTile.scale-100.png",

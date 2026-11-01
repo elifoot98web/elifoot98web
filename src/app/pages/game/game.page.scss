@@ -1,0 +1,76 @@
+.hidden {
+    opacity: 0.0001;
+}
+
+.full {
+    width: 100%;
+    height: 100%;
+    background-color: #008000;
+}
+
+// The cursor overlay is an absolutely-positioned child of #game-container, and it is
+// aligned using the canvas's offsetLeft/offsetTop. Making the container the positioned
+// ancestor means both resolve against the same box.
+#game-container {
+    position: relative;
+}
+
+ion-fab-list.labeled ion-fab-button {
+    overflow: visible;
+    position: relative;
+    contain: layout;
+}
+
+ion-fab-list.labeled ion-fab-button ion-label {
+    position: absolute;
+    color: var(--ion-color-tertiary-contrast);
+    background: var(--ion-color-tertiary);
+    line-height: 1rem;
+    padding: 4px 8px;
+    border-radius: 8px;
+    box-shadow: var(--box-shadow);
+    height: 40px;
+    width: max-content;
+    display: flex;
+    align-items: center;
+}
+
+ion-fab-list.labeled.landscape ion-fab-button ion-label {
+    bottom: 50px;
+    font-size: x-small;
+}
+
+ion-fab-list.labeled.portrait ion-fab-button ion-label {
+    left: 50px;
+}
+
+ion-fab-list.labeled ion-fab-button::part(native) {
+    contain: initial;
+    overflow: visible;
+}
+
+/*
+ * While the js-dos virtual keyboard is up it owns the bottom of the game surface
+ * (.emulator-keyboard is position:absolute; bottom:0; z-index:999 inside #game-container),
+ * so the bottom-centre pill would sit on its top key row and eat taps meant for keys. Park
+ * it top-right, which is free in portrait: the menu fab only exists in mobile landscape and
+ * the header lives outside the content. Opening the chat closes the keyboard, which brings
+ * the handle straight back to the panel's edge. Landscape needs nothing — the tab is
+ * already a right-edge control above the keyboard.
+ * Component styles are appended after the global sheet and carry the _ngcontent attribute,
+ * so these win without !important.
+ */
+@media (orientation: portrait) {
+    .chat-toggle-btn.chat-toggle-btn--kb-up {
+        top: 8px;
+        right: 8px;
+        bottom: auto;
+        left: auto;
+        transform: none;
+    }
+}
+
+/* Keeps the unread count off the popover item's trailing icon. */
+.chat-menu-badge {
+    margin-inline-end: 8px;
+}

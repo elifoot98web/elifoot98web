@@ -1,0 +1,10 @@
+/*
+ * Layout only. The pill's visual identity lives in src/global.scss (`.mp-status-pill`),
+ * because two pages render it and the landscape instance is positioned by page-level rules
+ * that have to know about the game container.
+ */
+:host {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+}
