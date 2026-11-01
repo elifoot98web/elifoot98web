@@ -125,7 +125,7 @@ describe('RoomCodeHelper', () => {
     it('extracts the code from a full share link', () => {
       expect(RoomCodeHelper.sanitize(`https://host/app/#/join-game?room=${CODE}`)).toBe(CODE);
       expect(RoomCodeHelper.sanitize(`https://host/app/#/join-game?room=${CODE.toLowerCase()}&x=1`)).toBe(CODE);
-      expect(RoomCodeHelper.sanitize(`?room=${CODE.replace('-', '%2D')}`)).toBe(CODE);
+      expect(RoomCodeHelper.sanitize(`?room=${CODE.replace(/-/g, '%2D')}`)).toBe(CODE);
     });
 
     it('drops characters outside the alphabet', () => {
