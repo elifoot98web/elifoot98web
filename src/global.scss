@@ -1167,8 +1167,12 @@ ion-toast.platform-toast {
  * opens the Win9x sheet. A native button (with DeckKeyDirective) and not an ion-button, because an
  * ion-button takes the focus when tapped and a tablet's physical keyboard would stop reaching the
  * game.
+ *
+ * `.toolbar-shortcut` is the same button for the Cheat 'O Matic, shown where a mouse is the pointer and the deck (which holds
+ * the O Matic's key on a touch device) is off.
  */
-.toolbar-launcher {
+.toolbar-launcher,
+.toolbar-shortcut {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -1187,13 +1191,34 @@ ion-toast.platform-toast {
     -webkit-tap-highlight-color: transparent;
 }
 
-.toolbar-launcher ion-icon {
+.toolbar-launcher ion-icon,
+.toolbar-shortcut ion-icon {
     font-size: 22px;
 }
 
 .toolbar-launcher[aria-pressed='true'],
-.toolbar-launcher.deck-key--down {
+.toolbar-launcher.deck-key--down,
+.toolbar-shortcut.deck-key--down {
     background: rgba(255, 255, 255, 0.2);
+}
+
+.toolbar-shortcut:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+// Only where something hovers: a mouse is the one pointer that shows where the click will land.
+@media (hover: hover) {
+    .toolbar-shortcut:not(:disabled):hover {
+        background: rgba(255, 255, 255, 0.12);
+    }
+}
+
+// The label is what makes the button findable; the icon alone is enough only where the toolbar has no room to spare.
+@media (max-width: 599px) {
+    .toolbar-shortcut-label {
+        display: none;
+    }
 }
 
 /*

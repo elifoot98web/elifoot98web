@@ -139,6 +139,11 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   /** `(any-pointer: coarse)`: only to tell, in the menu, why an automatic deck is hidden on a device that has a touch screen. */
   anyCoarse = false;
   /**
+   * `(pointer: coarse)`: a finger is how this device is used. Where it is not, the deck is off by default and its O Matic key
+   * is out of reach, so the toolbar carries a button of its own for the O Matic (a stream, because a convertible changes).
+   */
+  touchPrimary = false;
+  /**
    * "Economizar bateria quando parado" (STORAGE_KEY.IDLE_PAUSE): the emulator sleeps while the
    * screen is still. What the person chose, or {@link EMULATOR_POWER.DEFAULT_ENABLED} for one who never did.
    */
@@ -280,9 +285,10 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     // The menu model is a pure function of plain values, so what the template reads through async pipes is kept as numbers as well.
     this.pageSubscriptions.add(this.unreadCount$.subscribe(count => { this.unreadMessages = count; }));
     this.pageSubscriptions.add(this.participantCount$.subscribe(count => { this.participantCount = count; }));
+    this.touchPrimary = this.layoutHelperService.isTouchPrimary;
     this.layout = DeckLayoutHelper.presentation({
       viewport: { width: window.innerWidth, height: window.innerHeight },
-      touchPrimary: this.layoutHelperService.isTouchPrimary,
+      touchPrimary: this.touchPrimary,
       setting: this.deckSetting,
     });
     this.pageSubscriptions.add(combineLatest([
@@ -305,6 +311,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     this.pageSubscriptions.add(this.stageLayout.plan$.subscribe(plan => { this.stagePlan = plan; }));
     this.pageSubscriptions.add(this.camera.view$.subscribe(view => { this.cameraView = view; }));
     this.pageSubscriptions.add(this.layoutHelperService.anyCoarse$.subscribe(coarse => { this.anyCoarse = coarse; }));
+    this.pageSubscriptions.add(this.layoutHelperService.isTouchPrimary$.subscribe(coarse => { this.touchPrimary = coarse; }));
     this.pageSubscriptions.add(this.fieldHintService.hint$.subscribe(hint => { this.fieldHint = hint; }));
     this.pageSubscriptions.add(this.install.mode$.subscribe(mode => { this.installMode = mode; }));
     this.pageSubscriptions.add(this.fullscreen.active$.subscribe(active => { this.fullscreenActive = active; }));
