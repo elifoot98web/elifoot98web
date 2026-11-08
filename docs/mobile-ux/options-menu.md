@@ -46,7 +46,8 @@ only evaluated, and only changes, while the menu is open. The rules `menu.helper
 - **"Salvar agora" is the first row of the first section.** "Voltar ao menu" is in that section too, so it comes before every other section's rows; it is the sixth row (the seventh where the iPhone's silent-mode switch is offered), so on a 390 px tall
   landscape phone (where the sheet opens at the top and shows about four rows) it needs a scroll (`menu.mjs layout`, 844x390).
 - **No row is in two places in the menu, and nothing of "Dados e avançado" is in it** (its window is one row, the second of Jogo). The deck may repeat "Digitar texto" and the O Matic key; the menu repeats neither
-  (the O Matic is in the window and the deck's "Mais": two places).
+  (the O Matic is in the window, the deck's "Mais" and, where a mouse is the primary pointer, the toolbar's own "O Matic" button: the deck is off there by default, and the tool's workflow reopens it
+  after every change in the game, so "⋮" > "Dados e avançado" > "Ferramentas" each time was too far; the button is `.toolbar-shortcut`, a keycap that takes no focus from the game).
 - **A row that cannot work on this browser is not there** (fullscreen, install, the touch mode, vibration, the wake lock, the iPhone's silent-mode sound, the rails' size, the zoom row), **and a row that cannot work *now* says why**
   ("Resolução do jogo": "Encerre a sala para trocar"). Nothing in it is destructive; "Salvar e recarregar" and "Voltar ao menu" ask first, in the page.
 - **Only an `action` row closes the menu**; a switch, the volume slider and the zoom keys change a setting where it stands, because the person is usually about to change the next one.

@@ -34,6 +34,18 @@
 
     <ion-buttons slot="end">
       <!--
+        The Cheat 'O Matic, one click from the toolbar where a mouse is the pointer. A touch device reaches it from the deck ("Mais"),
+        but the deck is off by default on a desktop, which left "⋮" > "Dados e avançado" > "Ferramentas" as the way in: three
+        steps, and again every time, since the tool's own workflow is to search, go back to the game, change the value and reopen it.
+        Shell, flat, like "Teclas": it only opens a Win9x window. A keycap, so a click does not take the keyboard from the game and
+        the focus is still there when the window closes.
+      -->
+      <button *ngIf="!touchPrimary" type="button" class="toolbar-shortcut" appDeckKey deckKeyOn="up" [deckKeyDisabled]="deckDisabled"
+        (deckPress)="showOmaticModal()" aria-label="Abrir o 'O Matic, a ferramenta de trapaças">
+        <ion-icon src="../../assets/icon/cheese.svg" aria-hidden="true"></ion-icon>
+        <span class="toolbar-shortcut-label" aria-hidden="true">O Matic</span>
+      </button>
+      <!--
         What the player's progress looks like from the outside ("Salvo às 14:32"); a tap saves
         now. Shell, not Win9x: it sits in the toolbar, like the room pill. Mobile landscape has
         no toolbar, so the menu's "Salvar agora" carries the same words there.

@@ -633,8 +633,8 @@ the chat toggle's rules in `global.scss`), the Cheat 'O Matic modal, the diagnos
 windows, P13), the **control deck** (keycaps, taskbar, panels, a landscape phone's rails and the launcher's sheet: it is the Windows 3.1 machine's keyboard, so it
 is a companion window, decision D3), the live type bar (the deck's keys and face under a title bar, same decision) and every `AlertController` dialog. It does
 **not** apply to the page toolbars (`ion-toolbar color="tertiary"`), the landing cards, the
-toolbar's "Teclas" button and the round menu button in a landscape phone's rail (they are app chrome, and the first only
-opens the Win9x sheet), the options menu (the bottom sheet and the desktop popover: the app's own menu), the boot screen, the spectator's waiting card and the
+toolbar's "Teclas" and "O Matic" buttons and the round menu button in a landscape phone's rail (they are app chrome, and the first two only
+open a Win9x window; the "O Matic" one is there where a mouse is the primary pointer), the options menu (the bottom sheet and the desktop popover: the app's own menu), the boot screen, the spectator's waiting card and the
 loaders (`ion-loading`: a state indicator, not a window; see *The options menu, "Dados e avançado", and the first minute*) — the navy `#092469` in
 [variables.scss](src/theme/variables.scss) is close enough to `#000080` that shell and retro
 windows read as deliberately related. A retro treatment without an explicit boundary reads
